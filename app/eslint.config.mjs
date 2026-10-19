@@ -39,7 +39,9 @@ export default defineConfig([
   },
   {
     files: ["src/**/*.{ts,tsx}"],
-    ignores: ["src/db/**"],
+    // Better Auth's tables key the org as organization_id, so forOrg can't reach them. The orgs
+    // feature owns them and queries them directly (docs/conventions.md, "Data access").
+    ignores: ["src/db/**", "src/features/orgs/lib/**"],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -49,6 +51,11 @@ export default defineConfig([
               group: ["@/db/client", "**/db/client"],
               message:
                 "Only src/db may use the raw database client. Query org data through forOrg(ctx).",
+            },
+            {
+              group: ["@/db/auth-schema", "**/db/auth-schema"],
+              message:
+                "Better Auth's tables belong to the orgs feature. Call its server.ts instead.",
             },
             {
               group: [

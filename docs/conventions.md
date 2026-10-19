@@ -14,17 +14,18 @@ Every `app/src/features/<name>/` has the same shape. Root files are the public e
 | `jobs.ts`    | the feature's Inngest functions                | the single Inngest route                |
 | `types.ts`   | public types and Zod schemas                   | anyone                                  |
 
+- `server.ts` functions that exist before any `ctx` does (sign-in, resolving the session to `ctx`, the auth route) are the only ones that don't take it first; they live in `orgs`.
 - `lib/`: implementation, including `lib/schema.ts` for the feature's tables.
 - `tests/`: tests that import only the feature's entry files.
 - `tests/isolation-cases.ts`: a case for every function `server.ts` exports, proving it stays inside the caller's org (see "Tests" below).
 - **Tables are private to their feature (ADR-0005).** A feature that needs another feature's data calls that feature's `server.ts`, which also exposes any join a screen needs.
 - Import from the file that owns the thing. A directory has no `index.ts` re-exporting it.
 
-`src/app/` holds routes only (pages, layouts, route handlers), kept thin: they call features. `src/db/` holds the Drizzle client, migrations, `forOrg(ctx)`, Better Auth's generated schema (`auth-schema.ts`), and the shared test fixtures in `testing/`, and no feature tables. `src/components/ui/` holds shadcn/ui components and `src/lib/` holds shared helpers that belong to no feature. `src/features/example/` is the copy-me template; delete it once a real feature exists to copy from.
+`src/app/` holds routes only (pages, layouts, route handlers), kept thin: they call features. `src/db/` holds the Drizzle client, migrations, `forOrg(ctx)`, Better Auth's generated schema (`auth-schema.ts`), and the shared test fixtures in `testing/`, and no feature tables. `src/components/ui/` holds shadcn/ui components and `src/lib/` holds shared helpers that belong to no feature. To start a feature, copy the shape of an existing one, but not the data access of `orgs`, which is the one feature that skips `forOrg` (see below).
 
 ## Data access and config
 
-- **Tenant data (ADR-0003):** feature code queries through `forOrg(ctx)`, which always filters by `org_id` and sets it on inserts from `ctx`, never from caller input. A tenant table names its column `orgId` (`org_id` in SQL). Importing the raw Drizzle client outside `src/db/` is a lint error. There is no Postgres RLS. Better Auth's tables are the one exception: they key the org as `organization_id`, aren't reached through `forOrg`, and only the `orgs` feature touches them.
+- **Tenant data (ADR-0003):** feature code queries through `forOrg(ctx)`, which always filters by `org_id` and sets it on inserts from `ctx`, never from caller input. A tenant table names its column `orgId` (`org_id` in SQL). Importing the raw Drizzle client outside `src/db/` is a lint error. There is no Postgres RLS. Better Auth's tables are the one exception: they key the org as `organization_id`, aren't reached through `forOrg`, and only the `orgs` feature touches them. Lint lets `src/features/orgs/lib/` import the raw client and `@/db/auth-schema`, and nothing else outside `src/db/`.
 - **Request context:** `ctx` is passed explicitly. There is no AsyncLocalStorage or other hidden request state.
 - **Server boundary:** reads and writes go through Server Components and Server Actions. Add tRPC, a REST layer, or a client-side data cache only when a real need appears, and record it as an ADR.
 - **Local database:** `pnpm db:up` starts Postgres with pgvector in Docker on port 5433 (`pnpm db:down` stops it). Copy `app/.env.example` to `app/.env`.

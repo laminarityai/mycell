@@ -9,6 +9,11 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: postgres://mycel:mycel@localhost:5433/mycel
+      # Placeholders: CI builds and tests but never signs anyone in, so it needs no secrets.
+      BETTER_AUTH_SECRET: ci-placeholder-secret-of-at-least-32-chars
+      BETTER_AUTH_URL: http://localhost:3000
+      GOOGLE_CLIENT_ID: ci-placeholder
+      GOOGLE_CLIENT_SECRET: ci-placeholder
     # The same image as docker-compose.yml, so database tests run against the same Postgres.
     services:
       postgres:

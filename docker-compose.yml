@@ -1,0 +1,21 @@
+# Local Postgres with pgvector: `pnpm db:up`. CI starts the same image as a service container.
+# Host port 5433 leaves 5432 to any Postgres already installed on the machine.
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.7-pg17
+    environment:
+      POSTGRES_USER: mycel
+      POSTGRES_PASSWORD: mycel
+      POSTGRES_DB: mycel
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mycel -d mycel"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  postgres-data:

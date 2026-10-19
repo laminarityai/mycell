@@ -16,17 +16,19 @@ Every `app/src/features/<name>/` has the same shape. Root files are the public e
 
 - `lib/`: implementation, including `lib/schema.ts` for the feature's tables.
 - `tests/`: tests that import only the feature's entry files.
+- `tests/isolation-cases.ts`: a case for every function `server.ts` exports, proving it stays inside the caller's org (see "Tests" below).
 - **Tables are private to their feature (ADR-0005).** A feature that needs another feature's data calls that feature's `server.ts`, which also exposes any join a screen needs.
 - Import from the file that owns the thing. A directory has no `index.ts` re-exporting it.
 
-`src/app/` holds routes only (pages, layouts, route handlers), kept thin: they call features. `src/db/` holds the Drizzle client, migrations, and `forOrg(ctx)`, and no feature tables. `src/components/ui/` holds shadcn/ui components and `src/lib/` holds shared helpers that belong to no feature. `src/features/example/` is the copy-me template; delete it once a real feature exists to copy from.
+`src/app/` holds routes only (pages, layouts, route handlers), kept thin: they call features. `src/db/` holds the Drizzle client, migrations, `forOrg(ctx)`, Better Auth's generated schema (`auth-schema.ts`), and the shared test fixtures in `testing/`, and no feature tables. `src/components/ui/` holds shadcn/ui components and `src/lib/` holds shared helpers that belong to no feature. `src/features/example/` is the copy-me template; delete it once a real feature exists to copy from.
 
 ## Data access and config
 
-- **Tenant data (ADR-0003):** feature code queries through `forOrg(ctx)`, which always filters by `org_id`. Importing the raw Drizzle client outside `src/db/` is a lint error. There is no Postgres RLS.
+- **Tenant data (ADR-0003):** feature code queries through `forOrg(ctx)`, which always filters by `org_id` and sets it on inserts from `ctx`, never from caller input. A tenant table names its column `orgId` (`org_id` in SQL). Importing the raw Drizzle client outside `src/db/` is a lint error. There is no Postgres RLS. Better Auth's tables are the one exception: they key the org as `organization_id`, aren't reached through `forOrg`, and only the `orgs` feature touches them.
 - **Request context:** `ctx` is passed explicitly. There is no AsyncLocalStorage or other hidden request state.
 - **Server boundary:** reads and writes go through Server Components and Server Actions. Add tRPC, a REST layer, or a client-side data cache only when a real need appears, and record it as an ADR.
-- **Migrations:** `drizzle-kit generate` writes SQL files, which are committed and applied with `drizzle-kit migrate`. Every schema change goes through a reviewed migration file; `drizzle-kit push` is not used.
+- **Local database:** `pnpm db:up` starts Postgres with pgvector in Docker on port 5433 (`pnpm db:down` stops it). Copy `app/.env.example` to `app/.env`.
+- **Migrations:** `pnpm db:generate` (`drizzle-kit generate`) writes SQL files to `src/db/migrations/`, which are committed and applied with `pnpm db:migrate` (`drizzle-kit migrate`). Every schema change goes through a reviewed migration file; `drizzle-kit push` is not used. SQL Drizzle can't express (extensions) goes in a `drizzle-kit generate --custom` migration.
 - **Config:** environment variables are parsed once by a Zod schema in `src/env.ts`, and everything else imports from there. Reading `process.env` elsewhere is a lint error.
 - **Errors:** a small set of typed error classes (`NotFoundError`, `ForbiddenError`, `OutOfCreditsError`, …) is thrown and caught at the Server Action or route boundary. Plain `throw`, no Result/Either types, no Effect.
 
@@ -40,7 +42,8 @@ Tailwind plus shadcn/ui, with component source copied into the repo. shadcn/ui i
 - **ESLint:** typescript-eslint `strict-type-checked`, plus the Next.js config. It catches bugs and never formats. `max-lines` caps files at 300 lines, and `import/no-default-export` enforces named exports outside the Next.js special files.
 - **Version pins:** ESLint stays on 9 and TypeScript on 6.0 until `eslint-config-next`'s plugins support ESLint 10 and typescript-eslint supports TypeScript 7.
 - **Prettier:** the only formatter.
-- **Tests:** Vitest. Database tests run against real Postgres with pgvector (Docker locally, a service container in CI). Playwright comes later.
+- **Tests:** Vitest. Database tests run against real Postgres with pgvector (Docker locally, a service container in CI), in a separate `mycel_test` database that the test run creates and migrates. Each test file starts from an empty database, so files run one at a time. Playwright comes later.
+- **Isolation tests:** `seedTwoOrgs()` from `src/db/testing/two-org-fixture.ts` seeds org A and org B, each with an admin and a member and a `ctx` for each. Each feature's `tests/isolation-cases.ts` passes `defineIsolationCases(server, { … })` a case for every `server.ts` export. `src/db/tests/isolation.test.ts` runs every case and fails, as does typecheck, when an export has none. It checks `server.ts` only, so `actions.ts` and `jobs.ts` stay thin and call `server.ts`. Mark a function that touches no org data `notTenantScoped("why")`.
 - **Pre-commit (Husky + lint-staged):** Prettier and ESLint `--fix` on staged files, then typecheck. Tests stay out of the hook.
 - **Pre-push:** `pnpm verify`.
 - **CI:** the GitHub Actions workflow runs `pnpm verify` and nothing else, so a laptop and CI always check the same things.

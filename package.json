@@ -8,6 +8,10 @@
   "scripts": {
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm boundaries && pnpm test && pnpm build",
     "dev": "pnpm --filter app dev",
+    "db:up": "docker compose up --detach --wait",
+    "db:down": "docker compose down",
+    "db:generate": "pnpm --filter app db:generate",
+    "db:migrate": "pnpm --filter app db:migrate",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "pnpm --filter app lint",

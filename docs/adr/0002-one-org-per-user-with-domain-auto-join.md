@@ -1,0 +1,3 @@
+# One org per user, joined automatically by Google Workspace domain
+
+In v1 a user belongs to exactly one org, and sign-in is Google only. The first person to sign in from a Workspace domain creates the org and becomes its admin; later sign-ins from the same domain join it as members. We chose this over multi-org membership and invitations because it removes onboarding steps for non-technical customers, and because one org per user lets every tenant-owned table (users included) carry a single `org_id`. Supporting consultants or agencies who work across several orgs would mean revisiting tenancy, so it is deliberately out of scope.

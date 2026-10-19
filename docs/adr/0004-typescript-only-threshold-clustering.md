@@ -1,0 +1,3 @@
+# TypeScript only, with threshold clustering instead of HDBSCAN
+
+The whole codebase is TypeScript; there is no Python service. For v1, discovery clusters events by linking those whose pgvector similarity is above a threshold and taking each connected group as a cluster, behind a single `clusterEvents` function. HDBSCAN (the original plan) only exists in TypeScript as a one-maintainer package that is Euclidean-only and builds a full n×n matrix (about 200 MB at 5,000 events, inside a serverless function), and a Python service would add a second language, toolchain, and deployable. At dogfood scale, suggestion quality is limited by labelling and ranking, not by the clustering algorithm.

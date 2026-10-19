@@ -1,0 +1,5 @@
+{
+  "name": "nango-integrations",
+  "private": true,
+  "description": "Custom Nango functions, deployed with the Nango CLI. Arrives in M1."
+}

@@ -1,0 +1,7 @@
+packages:
+  - app
+  - nango-integrations
+
+ignoredBuiltDependencies:
+  - sharp
+  - unrs-resolver

@@ -1,0 +1,3 @@
+# Tenant isolation is enforced in application code, not Postgres row-level security
+
+Feature code reaches tenant data only through an org-scoped handle (`forOrg(ctx)`) that always filters by `org_id`, with `ctx` passed explicitly as the first argument. A lint rule bans importing the raw Drizzle client outside the db module, and the M0 isolation tests prove two orgs can't read each other's rows. We chose this over Postgres RLS because RLS with Neon's serverless driver needs per-transaction session setup, and a second enforcement mechanism adds a second way to get tenancy wrong. Adding RLS later as a backstop remains possible; replacing the handle with RLS would not be a small change.

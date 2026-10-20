@@ -206,12 +206,16 @@ The catalog is code (`features/policy/catalog.ts`), each action with its risk le
 - Jev is called through the AI SDK's experimental `experimental_decide`, so its version is pinned exactly. An adapter normalises Jev's two output shapes into one `{ label, p }`. Specs never see Jev's own format.
 - Use Jev's probabilities as confidence gates: high confidence proceeds, low confidence goes to a human. Treat a gate threshold (e.g. `0.85`) as a number tuned per workflow by shadow eval, not as a trusted calibrated probability.
 - The per-org role→model table lives in the DB, with a global default table in config.
+- Every call goes through one gateway client (`callModel` and `classify` in `runtime`), which resolves the role, checks credits, calls with the SDK's retries off (the run's step retries instead), records the cost, and turns any failure into a `ModelCallError` holding only codes, never the model's output (invariant 8).
+- `classify` falls back to a structured-output call on `fast` when Jev fails, refuses, answers without probabilities or with a label it wasn't offered, or when the org's classify model isn't a decision model. The answer is marked as a fallback, and its `p` is the model's stated confidence.
 
 ## Credits (`features/credits`)
 
 - Every org has a credit balance. All model calls, discovery jobs, and evals debit the ledger.
 - When the org balance is exhausted, **hard stop**: workflows pause and admins get an email.
 - Admins can set **per-workflow monthly budgets**. A workflow that reaches its budget pauses on its own.
+- **M3's thin slice** (ADR-0010): `credit_ledger` holds grants and one usage entry per model call; the balance is their sum. Before each call, `checkCredits` needs the balance to cover a per-role estimate from config, or throws `OutOfCreditsError` and nothing is sent. After it, the call's gateway cost (`providerMetadata.gateway.cost`, US dollars) is converted at the config's credits-per-dollar ratio and recorded, failed calls included. Our team grants credits with `pnpm credits:grant <orgId> <credits>`.
+- **Known gap:** a call that fails with a gateway error carries no cost, so it's recorded at 0 with its `generationId`. The gateway reports that cost later, asynchronously, by generation ID; reconciling it is M7's job.
 
 ## Versioning
 

@@ -1,0 +1,166 @@
+// The fake AI Gateway: Vercel's AI Gateway behind msw's fetch interception, so model calls run
+// the real AI SDK without network or keys. Each test scripts the answers it expects, in order:
+// a Jev decision, a structured output, a text, or a failure, each with the cost the gateway
+// reports. A request with no script left (or the wrong key) fails the test after it ends.
+import { http, HttpResponse } from "msw";
+import { env } from "@/env";
+
+const BASE_URL = "https://ai-gateway.vercel.sh/v4/ai";
+
+export type FakeGatewayEndpoint = "decision" | "language";
+
+/** A request the fake received: which endpoint, for which model, with what body. */
+export type FakeGatewayRequest = {
+  endpoint: FakeGatewayEndpoint;
+  modelId: string;
+  body: Record<string, unknown>;
+};
+
+type ScriptOptions = {
+  /** The cost the gateway reports, in US dollars (sent as a string, like the real one). */
+  costUsd?: number;
+  /** Answer only a request for this model; by default, the next request to the endpoint. */
+  model?: string;
+};
+
+type FailureOptions = {
+  status?: number;
+  /** The generation ID a billed failure carries. */
+  generationId?: string;
+  model?: string;
+};
+
+type Script = {
+  endpoint: FakeGatewayEndpoint;
+  model?: string;
+  respond: () => Response;
+};
+
+class FakeAiGateway {
+  private scripts: Script[] = [];
+  private received: FakeGatewayRequest[] = [];
+  private unexpected: string[] = [];
+
+  reset(): void {
+    this.scripts = [];
+    this.received = [];
+    this.unexpected = [];
+  }
+
+  /** Jev's answer to the next decision: a choice and its probabilities, or a refusal. */
+  decision(
+    answer: { choice: string; probabilities?: Record<string, number> } | "refusal",
+    options: ScriptOptions = {},
+  ): void {
+    this.script("decision", options.model, () => {
+      const questionAnswer =
+        answer === "refusal" ? { type: "refusal" } : { type: "choice", ...answer };
+      return HttpResponse.json({
+        // Every request asks one question, under one ID; the fake answers that ID.
+        answers: { [this.lastQuestionId()]: questionAnswer },
+        usage: { inputTokens: 40, outputTokens: 0 },
+        providerMetadata: costMetadata(options.costUsd),
+      });
+    });
+  }
+
+  /** A structured output: `value` as JSON text. Pass a value off the schema to test that. */
+  object(value: unknown, options: ScriptOptions = {}): void {
+    this.text(JSON.stringify(value), options);
+  }
+
+  /** A text answer. */
+  text(text: string, options: ScriptOptions = {}): void {
+    this.script("language", options.model, () =>
+      HttpResponse.json({
+        content: [{ type: "text", text }],
+        finishReason: { unified: "stop", raw: "stop" },
+        usage: {
+          inputTokens: { total: 10, noCache: 10, cacheRead: 0, cacheWrite: 0 },
+          outputTokens: { total: 5, text: 5, reasoning: 0 },
+        },
+        providerMetadata: costMetadata(options.costUsd),
+        warnings: [],
+      }),
+    );
+  }
+
+  /** The next request to the endpoint fails, as the gateway reports errors. */
+  fail(endpoint: FakeGatewayEndpoint, options: FailureOptions = {}): void {
+    const status = options.status ?? 500;
+    this.script(endpoint, options.model, () =>
+      HttpResponse.json(
+        {
+          error: { message: "Upstream provider failed", type: "internal_server_error" },
+          ...(options.generationId === undefined ? {} : { generationId: options.generationId }),
+        },
+        { status },
+      ),
+    );
+  }
+
+  /** The requests received so far, oldest first, optionally for one endpoint. */
+  requests(endpoint?: FakeGatewayEndpoint): FakeGatewayRequest[] {
+    return this.received.filter(
+      (request) => endpoint === undefined || request.endpoint === endpoint,
+    );
+  }
+
+  /** Requests nothing was scripted for. The setup file fails the test if there are any. */
+  unscripted(): string[] {
+    return this.unexpected;
+  }
+
+  readonly handlers = [
+    http.post(`${BASE_URL}/decision-model`, ({ request }) => this.handle("decision", request)),
+    http.post(`${BASE_URL}/language-model`, ({ request }) => this.handle("language", request)),
+  ];
+
+  private script(
+    endpoint: FakeGatewayEndpoint,
+    model: string | undefined,
+    respond: () => Response,
+  ) {
+    this.scripts.push({ endpoint, model, respond });
+  }
+
+  private lastQuestionId(): string {
+    const questions = this.received.at(-1)?.body.questions;
+    return Object.keys(questions ?? {}).at(0) ?? "question";
+  }
+
+  private async handle(endpoint: FakeGatewayEndpoint, request: Request): Promise<Response> {
+    if (request.headers.get("authorization") !== `Bearer ${env.AI_GATEWAY_API_KEY}`) {
+      return HttpResponse.json(
+        { error: { message: "Invalid API key", type: "authentication_error" } },
+        { status: 401 },
+      );
+    }
+    const modelId =
+      request.headers.get(endpoint === "decision" ? "ai-model-id" : "ai-language-model-id") ?? "";
+    this.received.push({
+      endpoint,
+      modelId,
+      body: (await request.json()) as Record<string, unknown>,
+    });
+    const index = this.scripts.findIndex(
+      (script) =>
+        script.endpoint === endpoint && (script.model === undefined || script.model === modelId),
+    );
+    const script = index === -1 ? undefined : this.scripts.splice(index, 1).at(0);
+    if (script === undefined) {
+      this.unexpected.push(`${endpoint} request for ${modelId}`);
+      return HttpResponse.json(
+        { error: { message: "Nothing scripted", type: "internal_server_error" } },
+        { status: 500 },
+      );
+    }
+    return script.respond();
+  }
+}
+
+function costMetadata(costUsd: number | undefined) {
+  return costUsd === undefined ? undefined : { gateway: { cost: String(costUsd) } };
+}
+
+export const fakeAiGateway = new FakeAiGateway();

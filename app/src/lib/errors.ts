@@ -44,6 +44,17 @@ export class ValidationError extends Error {
   }
 }
 
+/**
+ * The org's credit balance can't cover the call it was about to make (invariant 7). Nothing was
+ * called and nothing was spent.
+ */
+export class OutOfCreditsError extends Error {
+  constructor() {
+    super("Your organization is out of credits.");
+    this.name = "OutOfCreditsError";
+  }
+}
+
 /** What a Server Action returns: `error` holds a message for the user when the write failed. */
 export type ActionResult = { error?: string };
 
@@ -56,7 +67,8 @@ export function actionError(error: unknown): ActionResult {
     error instanceof ForbiddenError ||
     error instanceof NotFoundError ||
     error instanceof ConflictError ||
-    error instanceof ValidationError
+    error instanceof ValidationError ||
+    error instanceof OutOfCreditsError
   ) {
     return { error: error.message };
   }

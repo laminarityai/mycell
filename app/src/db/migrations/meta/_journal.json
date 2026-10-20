@@ -50,6 +50,13 @@
       "when": 1792479595840,
       "tag": "0006_drive-events",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792521543947,
+      "tag": "0007_credits-and-model-roles",
+      "breakpoints": true
     }
   ]
 }

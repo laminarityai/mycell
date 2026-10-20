@@ -14,6 +14,8 @@ jobs:
       BETTER_AUTH_URL: http://localhost:3000
       GOOGLE_CLIENT_ID: ci-placeholder
       GOOGLE_CLIENT_SECRET: ci-placeholder
+      NANGO_API_KEY: ci-placeholder
+      NANGO_WEBHOOK_SIGNING_KEY: ci-placeholder
     # The same image as docker-compose.yml, so database tests run against the same Postgres.
     services:
       postgres:

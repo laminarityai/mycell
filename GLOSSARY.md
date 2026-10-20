@@ -111,6 +111,10 @@ _Avoid_: Draft spec, draft (a draft is outgoing mail)
 One member's switch-on of one member-credential workflow, following its latest version.
 _Avoid_: Instance, subscription, install, activation
 
+**Org switch**:
+The one on/off switch of a workflow that uses an org connection, such as a support@ inbox. An admin turns it on for that connection, and the workflow then runs on new mail there for the whole org.
+_Avoid_: Org enablement, global toggle
+
 **Run**:
 One execution of one workflow version on one trigger, such as one incoming email.
 _Avoid_: Execution, job, invocation

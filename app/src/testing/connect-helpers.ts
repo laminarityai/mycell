@@ -26,8 +26,8 @@ export type ConnectGoogleOptions = {
 
 /**
  * Connects `emailAddress`'s Google account, seeds its mailbox and Drive, and returns Mycel's
- * connection ID, Nango's, the fake mailbox and Drive, and the seeded files. Throws if the
- * connection wasn't recorded (the account was refused).
+ * connection ID, Nango's, the fake mailbox, Drive and spreadsheets, and the seeded files.
+ * Throws if the connection wasn't recorded (the account was refused).
  */
 export async function connectGoogle(
   ctx: Ctx,
@@ -43,7 +43,15 @@ export async function connectGoogle(
   for (const message of options.messages ?? []) mailbox.add(message);
   const drive = fakeNango.drive(webhook.connectionId);
   const files = (options.files ?? []).map((file) => drive.add(file));
-  return { id: connection.id, nangoConnectionId: webhook.connectionId, mailbox, drive, files };
+  const sheets = fakeNango.sheets(webhook.connectionId);
+  return {
+    id: connection.id,
+    nangoConnectionId: webhook.connectionId,
+    mailbox,
+    drive,
+    files,
+    sheets,
+  };
 }
 
 /** connectGoogle, seeding only the mailbox: for tests about mail. */

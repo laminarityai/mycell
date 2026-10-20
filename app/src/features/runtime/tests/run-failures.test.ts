@@ -101,7 +101,7 @@ describe("a failing step", () => {
     ]);
   });
 
-  it("fails a step whose executor isn't built yet, naming why", async () => {
+  it("fails without retrying when the spreadsheet isn't there", async () => {
     const spec = threadSpec({
       steps: [
         {
@@ -118,7 +118,7 @@ describe("a failing step", () => {
       status: "failed",
     });
     expect((await getRun(admin, runId)).steps).toMatchObject([
-      { stepId: "prices", status: "failed", attempts: 1, errorCode: "not_available" },
+      { stepId: "prices", status: "failed", attempts: 1, errorCode: "source_item_missing" },
     ]);
   });
 });

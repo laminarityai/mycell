@@ -4,10 +4,10 @@ import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { startReconnect } from "@/features/connections/server";
 import { GOOGLE_APP_SCOPES } from "@/features/connections/types";
 import { SpecInvalidError } from "@/lib/errors";
-import { connectOldConnection, deliver } from "@/testing/connect-helpers";
+import { connectGoogle, connectOldConnection, deliver } from "@/testing/connect-helpers";
 import { fakeNango } from "@/testing/fake-nango";
 import { saveWorkflow } from "../server";
-import { draftSpec, labelSpec } from "./specs";
+import { draftSpec, labelSpec, sheetSpec } from "./specs";
 
 beforeEach(resetDatabase);
 
@@ -85,6 +85,56 @@ describe("saveWorkflow's scope check", () => {
       expect.objectContaining({
         message: expect.stringContaining(`which ${email} wasn't granted`) as string,
       }),
+    ]);
+  });
+});
+
+describe("saveWorkflow with Sheets actions", () => {
+  const readOnly = sheetSpec({ steps: (sheetSpec().steps as unknown[]).slice(0, 1) });
+
+  it("refuses them without a Google connection", async () => {
+    const { orgA } = await seedTwoOrgs();
+
+    expect(
+      await issuesOf(saveWorkflow(orgA.admin.ctx, { name: "Log", spec: sheetSpec() })),
+    ).toEqual([expect.objectContaining({ path: ["credentials"] })]);
+  });
+
+  it("refuses append-row on a connection without spreadsheets, to grant write access", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const scopes = [GOOGLE_APP_SCOPES.gmail, GOOGLE_APP_SCOPES.drive];
+    await connectGoogle(orgA.admin.ctx, orgA.admin.email, { scopes });
+
+    expect(
+      await issuesOf(saveWorkflow(orgA.admin.ctx, { name: "Log", spec: sheetSpec() })),
+    ).toEqual([
+      {
+        path: ["steps", 1, "action"],
+        message: `google-sheet.append-row needs the spreadsheets scope, which ${orgA.admin.email} wasn't granted. Reconnect it to grant write access.`,
+      },
+    ]);
+  });
+
+  it("saves read-range on Drive's read-only scope alone", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const scopes = [GOOGLE_APP_SCOPES.gmail, GOOGLE_APP_SCOPES.drive];
+    await connectGoogle(orgA.admin.ctx, orgA.admin.email, { scopes });
+
+    const saved = await saveWorkflow(orgA.admin.ctx, { name: "Prices", spec: readOnly });
+
+    expect(saved.maxRisk).toBe("read");
+  });
+
+  it("checks an org spec against the org's connection, not the admin's own", async () => {
+    const { orgA } = await seedTwoOrgs();
+    await connectGoogle(orgA.admin.ctx, orgA.admin.email);
+    const scopes = [GOOGLE_APP_SCOPES.gmail];
+    await connectGoogle(orgA.admin.ctx, "support@org-a.test", { kind: "org", scopes });
+
+    const spec = sheetSpec({ credentials: "org" });
+    expect(await issuesOf(saveWorkflow(orgA.admin.ctx, { name: "Log", spec }))).toEqual([
+      expect.objectContaining({ path: ["steps", 0, "action"] }),
+      expect.objectContaining({ path: ["steps", 1, "action"] }),
     ]);
   });
 });

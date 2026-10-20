@@ -12,6 +12,8 @@ import { callModel } from "./call-model";
 import { RunStepError } from "./failures";
 import { messageRef, messageText, threadText } from "./gmail";
 import type { DraftInput } from "./gmail-drafts";
+import { resolveInput } from "./references";
+import { rangeText } from "./sheets";
 import type { StepContext, StepExecution } from "./step-context";
 
 type StepOf<T extends Step["type"]> = Extract<Step, { type: T }>;
@@ -35,7 +37,6 @@ export async function draftStep(
   let model: StepExecution["model"];
   const input: DraftInput = {
     messageId: run.sourceRef,
-    marker: `${run.id}/${step.id}`,
     compose: async () => {
       const result = await callModel(ctx, step.role, {
         system: `${SYSTEM}\n\n${step.instructions}`,
@@ -47,7 +48,9 @@ export async function draftStep(
       return result.output;
     },
   };
-  const output = action.output.safeParse(await executor.run(ctx, run.connectionId, input as never));
+  const marker = `${run.id}/${step.id}`;
+  const result = await executor.run(ctx, run.connectionId, input as never, marker);
+  const output = action.output.safeParse(result);
   if (!output.success) {
     throw new RunStepError("invalid_output", `${step.output} returned an unexpected result.`);
   }
@@ -71,10 +74,31 @@ async function contextText(step: StepOf<"draft">, context: StepContext): Promise
       if (output === undefined) {
         throw new RunStepError("bad_reference", `The step ${name} has no output.`);
       }
-      parts.push(`What the step "${name}" found: ${JSON.stringify(output)}`);
+      const sheet = await sheetText(name, context);
+      parts.push(sheet ?? `What the step "${name}" found: ${JSON.stringify(output)}`);
     }
   }
   return parts.join("\n\n");
+}
+
+const RANGE_READ = findAction("google-sheet.read-range");
+
+/**
+ * The values an earlier read-range step read, re-read here: that step handed on only the
+ * range's counts, so the values never crossed a step boundary. Undefined for any other step.
+ */
+async function sheetText(name: string, context: StepContext): Promise<string | undefined> {
+  const step = context.spec.steps.find((candidate) => candidate.id === name);
+  if (step?.type !== "tool" || RANGE_READ === undefined || step.action !== RANGE_READ.name) {
+    return undefined;
+  }
+  const input = RANGE_READ.input.safeParse(await resolveInput(context, step.input));
+  if (!input.success) {
+    throw new RunStepError("invalid_input", `The input to ${step.action} is invalid.`);
+  }
+  const range = input.data as { spreadsheetId: string; range: string };
+  const values = await rangeText(context.ctx, context.run.connectionId, range);
+  return `What the sheet range ${range.range} holds, one row per line, cells separated by tabs:\n\n${values}`;
 }
 
 const draftOutput = z.object({ draftId: z.string() });

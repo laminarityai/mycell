@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { resetDatabase } from "@/db/testing/reset";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import { fakeNango } from "@/testing/fake-nango";
+import type { FakeSheets } from "@/testing/fake-sheets";
 import { executeRun, getRun, listRuns } from "../server";
 import {
   classifyWith,
@@ -49,10 +50,17 @@ const thrice = (script: () => void) => () => {
   for (let attempt = 0; attempt < 3; attempt++) script();
 };
 
+const readPrices = {
+  id: "prices",
+  type: "tool",
+  action: "google-sheet.read-range",
+  input: { spreadsheetId: "sheet-1", range: "oak chairs!A1:B2" },
+};
+
 type Case = {
   name: string;
   steps: Record<string, unknown>[];
-  script?: () => void;
+  script?: (sheets: FakeSheets) => void;
   credits?: number;
   code: string;
 };
@@ -125,16 +133,52 @@ const cases: Case[] = [
   },
   { name: "no credits", steps: [extractWith()], credits: 0, code: "out_of_credits" },
   {
-    name: "an action that isn't built yet",
+    name: "a spreadsheet Sheets won't let the account open",
+    steps: [readPrices],
+    script: (sheets) => {
+      sheets.add("sheet-1", "oak chairs", [["Leeds", "Hull"]]);
+      sheets.deny("sheet-1");
+    },
+    code: "source_forbidden",
+  },
+  {
+    name: "a row append Sheets keeps failing",
     steps: [
       {
-        id: "prices",
+        id: "log",
         type: "tool",
-        action: "google-sheet.read-range",
-        input: { spreadsheetId: "sheet-1", range: "oak chairs" },
+        action: "google-sheet.append-row",
+        input: {
+          spreadsheetId: "sheet-1",
+          range: "oak chairs!A:B",
+          values: ["Leeds", { from: "trigger.messageId" }],
+        },
       },
     ],
-    code: "not_available",
+    script: (sheets) => {
+      sheets.add("sheet-1", "oak chairs", [["Hull"]]);
+      fakeNango.failWrites(3);
+    },
+    code: "source_error",
+  },
+  {
+    name: "a draft with sheet context whose write Gmail keeps failing",
+    // The range is the spec's own pointer, and its read-range step hands it on.
+    steps: [
+      { ...readPrices, input: { spreadsheetId: "sheet-1", range: "Prices!A1:B2" } },
+      { ...replyDraft, context: ["trigger.message", "prices"] },
+    ],
+    script: (sheets) => {
+      sheets.add("sheet-1", "Prices", [
+        ["oak chairs", "Leeds"],
+        ["Hull", "free"],
+      ]);
+      fakeNango.failWrites(3);
+      thrice(() => {
+        fakeAiGateway.text("Delivery of the oak chairs to Hull is free.");
+      })();
+    },
+    code: "source_error",
   },
   {
     name: "a label write Gmail keeps failing",
@@ -174,8 +218,11 @@ const cases: Case[] = [
 
 describe("a failed step", () => {
   it.each(cases)("hands on and records no content: $name", async (failure) => {
-    const { admin, system, runId, workflowId } = await runOn(failure.steps, failure.credits);
-    failure.script?.();
+    const { admin, system, runId, workflowId, sheets } = await runOn(
+      failure.steps,
+      failure.credits,
+    );
+    failure.script?.(sheets);
     const recorder = stepStateRecorder();
 
     const outcome = await executeRun(system, runId, recorder.runStep, recordedBackoff());

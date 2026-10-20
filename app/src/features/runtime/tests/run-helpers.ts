@@ -6,6 +6,7 @@ import { getWorkflow, publishWorkflow, saveWorkflow } from "@/features/workflows
 import { systemCtx, type Ctx } from "@/lib/ctx";
 import { connectMailbox } from "@/testing/connect-helpers";
 import type { FakeMessageInput } from "@/testing/fake-gmail";
+import { fakeNango } from "@/testing/fake-nango";
 import { startRun } from "../server";
 import type { RetryPolicy, RunStep } from "../types";
 
@@ -58,7 +59,7 @@ export function recordingStepRunner() {
 
 /**
  * Starts a run of `steps` on a pricing question in org A's admin's inbox, with `credits`
- * granted first.
+ * granted first. Returns the account's fake spreadsheets too, for seeding sheets.
  */
 export async function runOn(steps: Record<string, unknown>[], credits = 100) {
   const { orgA } = await seedTwoOrgs();
@@ -68,7 +69,7 @@ export async function runOn(steps: Record<string, unknown>[], credits = 100) {
   const inbox = await connectInbox(admin, orgA.admin.email, [pricingQuestion()]);
   const workflowId = await publish(admin, threadSpec({ steps }));
   const { runId } = await startRun(admin, workflowId, inbox.connectionId, inbox.messages[0].id);
-  return { admin, system, runId, workflowId };
+  return { admin, system, runId, workflowId, sheets: fakeNango.sheets(inbox.nangoConnectionId) };
 }
 
 /**

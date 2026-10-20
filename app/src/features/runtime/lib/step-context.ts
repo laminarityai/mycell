@@ -1,12 +1,16 @@
 // What executors take and give back.
-import type { ModelRole, Step } from "@/features/spec/types";
+import type { ModelRole, Spec, Step } from "@/features/spec/types";
 import type { Ctx } from "@/lib/ctx";
 import type { Json } from "../types";
 
-/** What a step sees: the run it's in and the outputs of the steps before it. */
+/**
+ * What a step sees: the run it's in, the version's spec (so a draft can re-read a range an
+ * earlier step read) and the outputs of the steps before it.
+ */
 export type StepContext = {
   ctx: Ctx;
   run: { id: string; workflowId: string; connectionId: string; sourceRef: string };
+  spec: Spec;
   outputs: Readonly<Record<string, Json>>;
 };
 
@@ -21,8 +25,16 @@ export type StepExecution = {
   model?: { role: ModelRole; modelId: string; costUsd: number };
 };
 
-/** One catalog action: a Nango proxy call with the action's validated input. */
-export type ActionRun = (ctx: Ctx, connectionId: string, input: never) => Promise<Json>;
+/**
+ * One catalog action: a Nango proxy call with the action's validated input. `marker` names the
+ * run and step (`<runId>/<stepId>`), for a write to find what an earlier try already did.
+ */
+export type ActionRun = (
+  ctx: Ctx,
+  connectionId: string,
+  input: never,
+  marker: string,
+) => Promise<Json>;
 
 export type StepRun<S extends Step> = (step: S, context: StepContext) => Promise<StepExecution>;
 

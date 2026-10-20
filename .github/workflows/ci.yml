@@ -18,6 +18,11 @@ jobs:
       NANGO_WEBHOOK_SIGNING_KEY: ci-placeholder
       INNGEST_EVENT_KEY: ci-placeholder
       INNGEST_SIGNING_KEY: signkey-ci-00000000000000000000000000000000
+      AI_GATEWAY_API_KEY: ci-placeholder
+      MODEL_CLASSIFY: typesafe-ai/jev-1.14.0
+      MODEL_FAST: ci/fast
+      MODEL_SMART: ci/smart
+      MODEL_JUDGE: ci/judge
     # The same image as docker-compose.yml, so database tests run against the same Postgres.
     services:
       postgres:

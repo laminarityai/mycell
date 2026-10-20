@@ -1,6 +1,6 @@
 {
-  "id": "14764252-12c5-4fb9-ab37-99267f3437c7",
-  "prevId": "402c5aae-1758-42da-8612-36bbf4487cb6",
+  "id": "524de597-9840-4724-a370-b7fccf580e53",
+  "prevId": "99c04fb8-f3f4-4b0f-ba67-1bcd12563451",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -100,24 +100,24 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "account_user_id_user_id_fk": {
           "name": "account_user_id_user_id_fk",
           "tableFrom": "account",
-          "tableTo": "user",
           "columnsFrom": [
             "user_id"
           ],
+          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {},
@@ -193,9 +193,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "invitation_email_idx": {
           "name": "invitation_email_idx",
@@ -208,37 +208,37 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "invitation_organization_id_organization_id_fk": {
           "name": "invitation_organization_id_organization_id_fk",
           "tableFrom": "invitation",
-          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
+          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "invitation_inviter_id_user_id_fk": {
           "name": "invitation_inviter_id_user_id_fk",
           "tableFrom": "invitation",
-          "tableTo": "user",
           "columnsFrom": [
             "inviter_id"
           ],
+          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {},
@@ -295,55 +295,55 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "member_organization_id_organization_id_fk": {
           "name": "member_organization_id_organization_id_fk",
           "tableFrom": "member",
-          "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
           ],
+          "tableTo": "organization",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "member_user_id_user_id_fk": {
           "name": "member_user_id_user_id_fk",
           "tableFrom": "member",
-          "tableTo": "user",
           "columnsFrom": [
             "user_id"
           ],
+          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "member_user_id_unique": {
           "name": "member_user_id_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "user_id"
-          ]
+          ],
+          "nullsNotDistinct": false
         },
         "member_organizationId_userId_unique": {
           "name": "member_organizationId_userId_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "organization_id",
             "user_id"
-          ]
+          ],
+          "nullsNotDistinct": false
         }
       },
       "policies": {},
@@ -403,17 +403,17 @@
       "uniqueConstraints": {
         "organization_slug_unique": {
           "name": "organization_slug_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "slug"
-          ]
+          ],
+          "nullsNotDistinct": false
         },
         "organization_workspace_domain_unique": {
           "name": "organization_workspace_domain_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "workspace_domain"
-          ]
+          ],
+          "nullsNotDistinct": false
         }
       },
       "policies": {},
@@ -492,34 +492,34 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "session_user_id_user_id_fk": {
           "name": "session_user_id_user_id_fk",
           "tableFrom": "session",
-          "tableTo": "user",
           "columnsFrom": [
             "user_id"
           ],
+          "tableTo": "user",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "session_token_unique": {
           "name": "session_token_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "token"
-          ]
+          ],
+          "nullsNotDistinct": false
         }
       },
       "policies": {},
@@ -582,10 +582,10 @@
       "uniqueConstraints": {
         "user_email_unique": {
           "name": "user_email_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "email"
-          ]
+          ],
+          "nullsNotDistinct": false
         }
       },
       "policies": {},
@@ -647,9 +647,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {},
@@ -731,26 +731,26 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "connect_attempts_member_fk": {
           "name": "connect_attempts_member_fk",
           "tableFrom": "connect_attempts",
-          "tableTo": "member",
           "columnsFrom": [
             "org_id",
             "user_id"
           ],
+          "tableTo": "member",
           "columnsTo": [
             "organization_id",
             "user_id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {},
@@ -819,6 +819,31 @@
           "notNull": true,
           "default": false
         },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "backfilled_items": {
+          "name": "backfilled_items",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "cursor": {
+          "name": "cursor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_polled_at": {
+          "name": "last_polled_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -833,27 +858,27 @@
       "uniqueConstraints": {
         "connections_nango_connection_id_unique": {
           "name": "connections_nango_connection_id_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "nango_connection_id"
-          ]
+          ],
+          "nullsNotDistinct": false
         },
         "connections_org_id_source_account_unique": {
           "name": "connections_org_id_source_account_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "org_id",
             "source",
             "account_email"
-          ]
+          ],
+          "nullsNotDistinct": false
         },
         "connections_org_id_id_unique": {
           "name": "connections_org_id_id_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "org_id",
             "id"
-          ]
+          ],
+          "nullsNotDistinct": false
         }
       },
       "policies": {},
@@ -926,30 +951,132 @@
         "ingest_states_connection_fk": {
           "name": "ingest_states_connection_fk",
           "tableFrom": "ingest_states",
-          "tableTo": "connections",
           "columnsFrom": [
             "org_id",
             "connection_id"
           ],
+          "tableTo": "connections",
           "columnsTo": [
             "org_id",
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "ingest_states_connection_id_app_unique": {
           "name": "ingest_states_connection_id_app_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "connection_id",
             "app"
-          ]
+          ],
+          "nullsNotDistinct": false
         }
       },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.credit_ledger": {
+      "name": "credit_ledger",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "org_id": {
+          "name": "org_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount": {
+          "name": "amount",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "model_id": {
+          "name": "model_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cost_usd": {
+          "name": "cost_usd",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "generation_id": {
+          "name": "generation_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "workflow_id": {
+          "name": "workflow_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "run_id": {
+          "name": "run_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "credit_ledger_org_id_idx": {
+          "name": "credit_ledger_org_id_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -1067,36 +1194,36 @@
         "events_connection_fk": {
           "name": "events_connection_fk",
           "tableFrom": "events",
-          "tableTo": "connections",
           "columnsFrom": [
             "org_id",
             "connection_id"
           ],
+          "tableTo": "connections",
           "columnsTo": [
             "org_id",
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "events_connection_id_source_ref_unique": {
           "name": "events_connection_id_source_ref_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "connection_id",
             "source_ref"
-          ]
+          ],
+          "nullsNotDistinct": false
         },
         "events_org_id_id_unique": {
           "name": "events_org_id_id_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "org_id",
             "id"
-          ]
+          ],
+          "nullsNotDistinct": false
         }
       },
       "policies": {},
@@ -1168,9 +1295,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "object_refs_connection_id_idx": {
           "name": "object_refs_connection_id_idx",
@@ -1183,55 +1310,101 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "object_refs_connection_fk": {
           "name": "object_refs_connection_fk",
           "tableFrom": "object_refs",
-          "tableTo": "connections",
           "columnsFrom": [
             "org_id",
             "connection_id"
           ],
+          "tableTo": "connections",
           "columnsTo": [
             "org_id",
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "object_refs_event_fk": {
           "name": "object_refs_event_fk",
           "tableFrom": "object_refs",
-          "tableTo": "events",
           "columnsFrom": [
             "org_id",
             "event_id"
           ],
+          "tableTo": "events",
           "columnsTo": [
             "org_id",
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "object_refs_event_id_kind_key_unique": {
           "name": "object_refs_event_id_kind_key_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "event_id",
             "kind",
             "key"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.model_roles": {
+      "name": "model_roles",
+      "schema": "",
+      "columns": {
+        "org_id": {
+          "name": "org_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "model_id": {
+          "name": "model_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "model_roles_org_id_role_pk": {
+          "name": "model_roles_org_id_role_pk",
+          "columns": [
+            "org_id",
+            "role"
           ]
         }
       },
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -1271,32 +1444,32 @@
         "tag_assignments_tag_fk": {
           "name": "tag_assignments_tag_fk",
           "tableFrom": "tag_assignments",
-          "tableTo": "tags",
           "columnsFrom": [
             "org_id",
             "tag_id"
           ],
+          "tableTo": "tags",
           "columnsTo": [
             "org_id",
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "tag_assignments_member_fk": {
           "name": "tag_assignments_member_fk",
           "tableFrom": "tag_assignments",
-          "tableTo": "member",
           "columnsFrom": [
             "org_id",
             "user_id"
           ],
+          "tableTo": "member",
           "columnsTo": [
             "organization_id",
             "user_id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {
@@ -1349,19 +1522,19 @@
       "uniqueConstraints": {
         "tags_org_id_name_unique": {
           "name": "tags_org_id_name_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "org_id",
             "name"
-          ]
+          ],
+          "nullsNotDistinct": false
         },
         "tags_org_id_id_unique": {
           "name": "tags_org_id_id_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "org_id",
             "id"
-          ]
+          ],
+          "nullsNotDistinct": false
         }
       },
       "policies": {},
@@ -1433,36 +1606,36 @@
         "workflow_versions_workflow_fk": {
           "name": "workflow_versions_workflow_fk",
           "tableFrom": "workflow_versions",
-          "tableTo": "workflows",
           "columnsFrom": [
             "org_id",
             "workflow_id"
           ],
+          "tableTo": "workflows",
           "columnsTo": [
             "org_id",
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "workflow_versions_workflow_id_number_unique": {
           "name": "workflow_versions_workflow_id_number_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "workflow_id",
             "number"
-          ]
+          ],
+          "nullsNotDistinct": false
         },
         "workflow_versions_org_id_id_unique": {
           "name": "workflow_versions_org_id_id_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "org_id",
             "id"
-          ]
+          ],
+          "nullsNotDistinct": false
         }
       },
       "policies": {},
@@ -1530,19 +1703,19 @@
       "uniqueConstraints": {
         "workflows_org_id_spec_id_unique": {
           "name": "workflows_org_id_spec_id_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "org_id",
             "spec_id"
-          ]
+          ],
+          "nullsNotDistinct": false
         },
         "workflows_org_id_id_unique": {
           "name": "workflows_org_id_id_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "org_id",
             "id"
-          ]
+          ],
+          "nullsNotDistinct": false
         }
       },
       "policies": {},
@@ -1552,10 +1725,10 @@
   },
   "enums": {},
   "schemas": {},
+  "views": {},
   "sequences": {},
   "roles": {},
   "policies": {},
-  "views": {},
   "_meta": {
     "columns": {},
     "schemas": {},

@@ -11,3 +11,45 @@ export class WorkspaceAccountRequiredError extends Error {
     this.name = "WorkspaceAccountRequiredError";
   }
 }
+
+/** The caller's role doesn't allow this operation. */
+export class ForbiddenError extends Error {
+  constructor() {
+    super("You're not allowed to do that.");
+    this.name = "ForbiddenError";
+  }
+}
+
+/** The thing doesn't exist in the caller's org. IDs from another org land here too. */
+export class NotFoundError extends Error {
+  constructor(thing: string) {
+    super(`That ${thing} doesn't exist.`);
+    this.name = "NotFoundError";
+  }
+}
+
+/** The operation would break a rule the current state depends on; the message says which. */
+export class ConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ConflictError";
+  }
+}
+
+/** What a Server Action returns: `error` holds a message for the user when the write failed. */
+export type ActionResult = { error?: string };
+
+/**
+ * The action-boundary half of the error rule: a typed error becomes its user-facing message,
+ * and anything else is a bug, so it's rethrown for Next.js's error handling.
+ */
+export function actionError(error: unknown): ActionResult {
+  if (
+    error instanceof ForbiddenError ||
+    error instanceof NotFoundError ||
+    error instanceof ConflictError
+  ) {
+    return { error: error.message };
+  }
+  throw error;
+}

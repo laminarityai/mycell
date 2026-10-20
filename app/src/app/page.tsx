@@ -18,5 +18,5 @@ export default function OrgPage() {
 
 async function OrgUsers() {
   const ctx = await getCtx();
-  return <OrgUsersTable users={await listUsers(ctx)} />;
+  return <OrgUsersTable users={await listUsers(ctx)} viewer={ctx} />;
 }

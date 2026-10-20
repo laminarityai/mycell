@@ -1,4 +1,5 @@
 import { expect } from "vitest";
+import { NotFoundError } from "@/lib/errors";
 import { defineIsolationCases, notTenantScoped } from "@/db/testing/isolation";
 import { seedUserWithoutOrg } from "@/db/testing/seed-user";
 import * as server from "../server";
@@ -25,5 +26,21 @@ export const isolationCases = defineIsolationCases(server, {
     const users = await server.listUsers(orgA.member.ctx);
 
     expect(users.map((u) => u.id).sort()).toEqual([orgA.admin.id, orgA.member.id].sort());
+  },
+
+  setRole: async ({ orgA, orgB }) => {
+    const orgBUsers = await server.listUsers(orgB.admin.ctx);
+
+    await expect(server.setRole(orgA.admin.ctx, orgB.member.id, "admin")).rejects.toThrow(
+      NotFoundError,
+    );
+    expect(await server.listUsers(orgB.admin.ctx)).toEqual(orgBUsers);
+  },
+
+  removeUser: async ({ orgA, orgB }) => {
+    const orgBUsers = await server.listUsers(orgB.admin.ctx);
+
+    await expect(server.removeUser(orgA.admin.ctx, orgB.member.id)).rejects.toThrow(NotFoundError);
+    expect(await server.listUsers(orgB.admin.ctx)).toEqual(orgBUsers);
   },
 });

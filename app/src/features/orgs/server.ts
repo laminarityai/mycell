@@ -8,6 +8,7 @@ import { getAuth } from "./lib/auth";
 import { findCtx } from "./lib/find-ctx";
 
 export { listUsers } from "./lib/list-users";
+export { removeUser, setRole } from "./lib/manage-users";
 // Called only by Better Auth's session hook (lib/auth.ts) and tests: it trusts its profile.
 export { signIn } from "./lib/sign-in";
 

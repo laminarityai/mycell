@@ -73,7 +73,7 @@ export function ConnectionControls({ connection }: { connection: ConnectionSumma
           ? "Reconnect to grant write access"
           : undefined;
   return (
-    <div className="flex items-start justify-end gap-2">
+    <div className="flex flex-wrap items-start justify-end gap-2">
       {reconnectLabel === undefined ? null : (
         <ReconnectButton
           connectionId={connection.id}

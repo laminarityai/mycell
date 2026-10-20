@@ -133,6 +133,19 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await server.listConnections(orgs.orgB.admin.ctx)).toEqual(before);
   },
 
+  startReconnect: async (orgs) => {
+    const { before, memberBefore } = await seedOrgBConnection(orgs);
+
+    for (const id of orgBIds(before, memberBefore)) {
+      for (const ctx of [orgs.orgA.admin.ctx, orgs.orgA.member.ctx]) {
+        await expect(server.startReconnect(ctx, id)).rejects.toThrow(NotFoundError);
+      }
+    }
+
+    expect(fakeNango.reconnectSessionsCreated()).toEqual([]);
+    expect(await server.listConnections(orgs.orgB.admin.ctx)).toEqual(before);
+  },
+
   recordIngestState: async (orgs) => {
     const { before, memberBefore } = await seedOrgBConnection(orgs);
 

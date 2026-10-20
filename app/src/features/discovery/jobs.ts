@@ -1,12 +1,27 @@
-// Discovery's Inngest functions. Thin: each calls server.ts, as the connection's owner.
+// Discovery's Inngest functions. Thin: each calls server.ts. The backfill runs as the user who
+// connected the source; polling, started by a cron, as the org's system ctx (ADR-0009).
 import { connectionRecorded } from "@/features/connections/server";
-import type { Ctx } from "@/lib/ctx";
+import { systemCtx, type Ctx } from "@/lib/ctx";
 import { inngest } from "@/lib/inngest";
-import { backfillConnection, markBackfillFailed } from "./server";
+import { connectionPollDue } from "./lib/events";
+import {
+  backfillConnection,
+  markBackfillFailed,
+  pollAllConnections,
+  pollConnection,
+} from "./server";
 
-// At most this many backfills (and, with #15, polls) run at once for one org, so one org's
-// large mailboxes leave other orgs' ingest unblocked.
+// At most this many backfills and polls run at once for one org, so one org's large
+// mailboxes leave other orgs' ingest unblocked.
 const PER_ORG_LIMIT = 3;
+
+// Shared by the backfill and the poll (scope "env" keys them across functions): one ingest run
+// per connection at a time, so cursors don't race, and a few per org. Both events carry
+// `orgId` and `connectionId`.
+const INGEST_CONCURRENCY = [
+  { scope: "env", key: '"ingest-connection-" + event.data.connectionId', limit: 1 },
+  { scope: "env", key: '"ingest-org-" + event.data.orgId', limit: PER_ORG_LIMIT },
+] as const;
 
 type EventData = { orgId: string; userId: string; role: Ctx["role"]; connectionId: string };
 
@@ -16,27 +31,45 @@ const ctxOf = (data: EventData): Ctx => ({
   role: data.role,
 });
 
+// Step results are plain JSON already, so Inngest's serialized type is the same type.
+const stepRunner =
+  (step: { run: (id: string, run: () => Promise<unknown>) => Promise<unknown> }) =>
+  <T>(id: string, run: () => Promise<T>) =>
+    step.run(id, run) as Promise<T>;
+
 /** Backfills a connection once it's recorded, one page per step. */
 export const backfillJob = inngest.createFunction(
   {
     id: "backfill-connection",
     triggers: [connectionRecorded],
-    // Keyed across functions (scope "env"), so polling can share them: one run per connection
-    // at a time, so cursors don't race, and a few per org.
-    concurrency: [
-      { scope: "env", key: '"ingest-connection-" + event.data.connectionId', limit: 1 },
-      { scope: "env", key: '"ingest-org-" + event.data.orgId', limit: PER_ORG_LIMIT },
-    ],
+    concurrency: [...INGEST_CONCURRENCY],
     onFailure: async ({ event }) => {
       const data = connectionRecorded.schema.parse(event.data.event.data);
       await markBackfillFailed(ctxOf(data), data.connectionId);
     },
   },
   async ({ event, step }) =>
-    // Step results are plain JSON already, so Inngest's serialized type is the same type.
-    backfillConnection(
-      ctxOf(event.data),
-      event.data.connectionId,
-      <T>(id: string, run: () => Promise<T>) => step.run(id, run) as Promise<T>,
-    ),
+    backfillConnection(ctxOf(event.data), event.data.connectionId, stepRunner(step)),
+);
+
+/** Every minute, sends one poll event per `active` connection in every org. */
+export const pollCron = inngest.createFunction(
+  { id: "poll-connections", triggers: [{ cron: "* * * * *" }] },
+  async ({ step }) => {
+    const due = await step.run("list-connections", () => pollAllConnections());
+    if (due.length > 0) {
+      await step.sendEvent(
+        "fan-out",
+        due.map((connection) => connectionPollDue.create(connection)),
+      );
+    }
+    return { polls: due.length };
+  },
+);
+
+/** Polls one connection: what's new since its cursor, or a recovery if the cursor expired. */
+export const pollJob = inngest.createFunction(
+  { id: "poll-connection", triggers: [connectionPollDue], concurrency: [...INGEST_CONCURRENCY] },
+  async ({ event, step }) =>
+    pollConnection(systemCtx(event.data.orgId), event.data.connectionId, stepRunner(step)),
 );

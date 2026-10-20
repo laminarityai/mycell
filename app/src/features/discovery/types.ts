@@ -36,3 +36,17 @@ export type IngestedEvent = {
 
 /** How a backfill ended: it finished, or its connection was deleted while it ran. */
 export type BackfillOutcome = { outcome: "done"; items: number } | { outcome: "gone" };
+
+/**
+ * How a poll ended: it stored what was new (`items` messages read), or the cursor had expired
+ * and it backfilled from the last stored event instead, or the connection isn't `active` and
+ * was skipped, or it was deleted while the poll ran.
+ */
+export type PollOutcome =
+  | { outcome: "polled"; items: number }
+  | { outcome: "recovered"; items: number }
+  | { outcome: "skipped" }
+  | { outcome: "gone" };
+
+/** One connection the polling cron fans out a poll to, with the org its job acts in. */
+export type ConnectionToPoll = { orgId: string; connectionId: string };

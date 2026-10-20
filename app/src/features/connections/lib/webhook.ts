@@ -1,6 +1,7 @@
 // Nango's webhooks. A signed `auth` / `creation` webhook is the only thing that records a
 // connection: the browser's word that a popup finished is never trusted. Recording one sends
-// the event that starts its backfill. A signed `auth` / `deletion` webhook forgets one.
+// the event that starts its backfill. A signed `auth` / `deletion` webhook forgets one, and
+// `refresh` and `override` report on its credentials (lib/reauth.ts).
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
@@ -13,6 +14,7 @@ import { ATTEMPT_TAGS } from "./connect";
 import { forgetNangoConnection } from "./disconnect";
 import { sendConnectionRecorded } from "./events";
 import { deleteNangoConnection, isSignedByNango, NANGO_SIGNATURE_HEADER } from "./nango";
+import { recordCredentials } from "./reauth";
 import { connectAttempts, connections } from "./schema";
 import { INTEGRATIONS, readAccountEmail } from "./sources";
 
@@ -48,7 +50,14 @@ export async function handleNangoWebhook(
   const parsed = authWebhook.safeParse(parseJson(rawBody));
   if (parsed.success && parsed.data.operation === "creation") await settleAttempt(parsed.data);
   if (parsed.success && parsed.data.operation === "deletion") await forget(parsed.data);
+  if (parsed.success && isCredentialsOperation(parsed.data.operation)) {
+    await recordCredentials({ ...parsed.data, operation: parsed.data.operation });
+  }
   return { status: 200 };
+}
+
+function isCredentialsOperation(operation: string): operation is "refresh" | "override" {
+  return operation === "refresh" || operation === "override";
 }
 
 // The connection was deleted at Nango. Its signed tags name the org it was made in, which is

@@ -22,7 +22,7 @@ export async function disconnect(ctx: Ctx, connectionId: string): Promise<void> 
   });
   const connection = rows.at(0);
   if (connection === undefined) throw new NotFoundError("connection");
-  if (!mayDisconnect(ctx, connection)) throw new ForbiddenError();
+  if (!mayManage(ctx, connection)) throw new ForbiddenError();
   await deleteConnection(ctx, connection);
 }
 
@@ -60,7 +60,11 @@ export async function forgetNangoConnection(
   await forOrg(orgCtx).delete(connections, eq(connections.id, connection.id));
 }
 
-function mayDisconnect(ctx: Ctx, connection: Connection): boolean {
+/**
+ * Whether the caller may disconnect or reconnect a connection: its owner for a member
+ * connection, any admin for an org connection.
+ */
+export function mayManage(ctx: Ctx, connection: Pick<Connection, "kind" | "ownerUserId">): boolean {
   return connection.kind === "member"
     ? connection.ownerUserId === ctx.userId
     : ctx.role === "admin";

@@ -32,6 +32,22 @@ export async function createConnectSession(request: ConnectSessionRequest): Prom
   return connectSessionResponse.parse(await response.json()).data.token;
 }
 
+/**
+ * A connect session that re-authorizes an existing connection (its token was revoked or
+ * expired). Connect UI opens with it like a connect, and Nango then sends `auth` / `override`.
+ */
+export async function createReconnectSession(
+  connectionId: string,
+  integration: string,
+): Promise<string> {
+  const response = await nangoFetch("/connect/sessions/reconnect", {
+    method: "POST",
+    body: JSON.stringify({ connection_id: connectionId, integration_id: integration }),
+  });
+  if (!response.ok) throw new Error(`Nango reconnect session failed: ${String(response.status)}`);
+  return connectSessionResponse.parse(await response.json()).data.token;
+}
+
 /** Deletes the connection at Nango, revoking Mycel's access. Already gone counts as done. */
 export async function deleteNangoConnection(
   connectionId: string,

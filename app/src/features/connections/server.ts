@@ -8,6 +8,7 @@ export { listConnections } from "./lib/list";
 // Called only by the nightly reconciliation job and tests: it walks every org itself, acting
 // inside each as its system ctx (ADR-0009).
 export { reconcileConnections } from "./lib/reconcile";
+export { startReconnect } from "./lib/reconnect";
 // How other features ingest from a connection, without touching Nango or the table.
 export {
   getConnection,

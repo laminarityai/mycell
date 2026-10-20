@@ -42,6 +42,3 @@ export type Connector = {
   /** Everything new since `cursor`. */
   poll(client: SourceClient, cursor: string): Promise<PollResult>;
 };
-
-/** The part of the interface ingest uses today; polling (#15) adds `poll`. */
-export type BackfillConnector = Pick<Connector, "readStartCursor" | "backfillPage">;

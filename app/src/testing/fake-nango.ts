@@ -4,12 +4,15 @@
 import { createHmac, randomUUID } from "node:crypto";
 import { http, HttpResponse } from "msw";
 import { env } from "@/env";
-import { FakeMailbox } from "./fake-gmail";
+import { FakeMailbox, gmailError, gmailResponse } from "./fake-gmail";
 import { connectionsApiHandlers, type ListingBehaviour } from "./fake-nango-connections";
 
 const API = "https://api.nango.dev";
 
 type FakeSession = { token: string; integration: string; tags: Record<string, string> };
+
+// A reconnect session: Connect UI re-authorizes this existing connection.
+type FakeReconnectSession = { token: string; connectionId: string; integration: string };
 
 /** What the connected account looks like from inside its source. */
 export type FakeAccount = { emailAddress: string };
@@ -33,6 +36,7 @@ export type FakeWebhook = { rawBody: string; headers: Headers };
 
 class FakeNango {
   private sessions: FakeSession[] = [];
+  private reconnectSessions: FakeReconnectSession[] = [];
   private connections = new Map<string, FakeConnection>();
   private deletesFail = false;
   private rateLimitsLeft = 0;
@@ -43,6 +47,7 @@ class FakeNango {
 
   reset(): void {
     this.sessions = [];
+    this.reconnectSessions = [];
     this.connections.clear();
     this.deletesFail = false;
     this.rateLimitsLeft = 0;
@@ -122,6 +127,28 @@ class FakeNango {
     return { connectionId, ...this.authWebhook(connectionId, "creation", true) };
   }
 
+  /** The reconnect sessions Mycel has created since the last reset, oldest first. */
+  reconnectSessionsCreated(): readonly FakeReconnectSession[] {
+    return this.reconnectSessions;
+  }
+
+  /**
+   * A user finishes OAuth in Connect UI opened with a reconnect session: Nango replaces the
+   * connection's credentials and returns the `override` webhook it then sends. Choosing a
+   * different Google account than before swaps in that account's (empty) mailbox.
+   */
+  completeReconnect(token: string, account?: FakeAccount): FakeWebhook {
+    const session = this.reconnectSessions.find((s) => s.token === token);
+    if (session === undefined) throw new Error(`Unknown reconnect session token ${token}`);
+    const connection = this.connections.get(session.connectionId);
+    if (connection === undefined) throw new Error(`Unknown connection ${session.connectionId}`);
+    if (account !== undefined && account.emailAddress !== connection.account.emailAddress) {
+      connection.account = account;
+      connection.mailbox = new FakeMailbox(account.emailAddress);
+    }
+    return this.authWebhook(session.connectionId, "override", true);
+  }
+
   /**
    * The connection is deleted at Nango, not by Mycel (from Nango's dashboard, say): it's gone,
    * and Nango sends the deletion webhook.
@@ -192,6 +219,23 @@ class FakeNango {
       return HttpResponse.json({ data: { token, expires_at: expiresAt } }, { status: 201 });
     }),
 
+    http.post(`${API}/connect/sessions/reconnect`, async ({ request }) => {
+      if (!authorised(request)) return unauthorised();
+      const body = (await request.json()) as { connection_id?: string; integration_id?: string };
+      const connection = this.connections.get(body.connection_id ?? "");
+      if (connection === undefined || connection.integration !== body.integration_id) {
+        return HttpResponse.json({ error: { code: "unknown_connection" } }, { status: 400 });
+      }
+      const token = `nango_connect_session_${randomUUID()}`;
+      this.reconnectSessions.push({
+        token,
+        connectionId: connection.connectionId,
+        integration: connection.integration,
+      });
+      const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+      return HttpResponse.json({ data: { token, expires_at: expiresAt } }, { status: 201 });
+    }),
+
     http.delete(`${API}/connections/:connectionId`, ({ request, params }) => {
       if (!authorised(request)) return unauthorised();
       if (this.deletesFail) {
@@ -239,23 +283,6 @@ function authorised(request: Request): boolean {
 
 function unauthorised() {
   return HttpResponse.json({ error: { code: "unauthorized" } }, { status: 401 });
-}
-
-// The Gmail API behind the proxy, answering from the connection's mailbox.
-function gmailResponse(mailbox: FakeMailbox, path: string, params: URLSearchParams) {
-  if (path === "/gmail/v1/users/me/profile") return HttpResponse.json(mailbox.profile());
-  if (path === "/gmail/v1/users/me/messages") return HttpResponse.json(mailbox.list(params));
-  const id = /^\/gmail\/v1\/users\/me\/messages\/([^/]+)$/.exec(path)?.[1];
-  if (id === undefined) throw new Error(`The fake Gmail doesn't serve ${path}`);
-  if (params.get("format") !== "full") throw new Error("The fake Gmail serves format=full only");
-  const message = mailbox.get(decodeURIComponent(id));
-  return message === undefined ? gmailError(404, "NOT_FOUND") : HttpResponse.json(message);
-}
-
-// An error as Google's APIs return it.
-function gmailError(code: 404 | 429, status: string) {
-  const message = code === 404 ? "Requested entity was not found." : "User-rate limit exceeded.";
-  return HttpResponse.json({ error: { code, message, status } }, { status: code });
 }
 
 export const fakeNango = new FakeNango();

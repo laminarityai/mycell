@@ -13,9 +13,10 @@ export type ConnectionKind = z.infer<typeof connectionKindSchema>;
 
 /**
  * Where a connection's ingest stands: `backfilling` from when it's recorded until its first
- * backfill ends, then `active`, or `failed` if the backfill gave up.
+ * backfill ends, then `active`, or `failed` if the backfill gave up. `needs_reauth` once Nango
+ * reports Google refused to refresh its token: polling skips it until its owner reconnects.
  */
-export const connectionStatusSchema = z.enum(["backfilling", "active", "failed"]);
+export const connectionStatusSchema = z.enum(["backfilling", "active", "needs_reauth", "failed"]);
 export type ConnectionStatus = z.infer<typeof connectionStatusSchema>;
 
 /** A connection as its owner sees it. */
@@ -27,6 +28,8 @@ export type ConnectionSummary = {
   status: ConnectionStatus;
   // How many messages the current backfill has stored so far.
   backfilledItems: number;
+  // When polling last finished for it; null until the first poll.
+  lastPolledAt: Date | null;
   createdAt: Date;
 };
 
@@ -48,6 +51,7 @@ export type IngestStateUpdate = {
   status?: ConnectionStatus;
   backfilledItems?: number;
   cursor?: string;
+  lastPolledAt?: Date;
 };
 
 /** The user who made a connection, or `removed` once they're no longer a user of the org. */

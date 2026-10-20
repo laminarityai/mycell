@@ -3,7 +3,7 @@ import type { ConnectionStatus } from "../types";
 
 /**
  * Where a connection's ingest stands, with the backfill's progress when it's known: "Backfilling,
- * 120 messages so far", then "Active", or "Backfill failed".
+ * 120 messages so far", then "Active", "Needs reconnecting", or "Backfill failed".
  */
 export function StatusBadge({
   status,
@@ -13,6 +13,7 @@ export function StatusBadge({
   backfilledItems?: number;
 }) {
   if (status === "failed") return <Badge variant="destructive">Backfill failed</Badge>;
+  if (status === "needs_reauth") return <Badge variant="destructive">Needs reconnecting</Badge>;
   if (status === "active") return <Badge variant="secondary">Active</Badge>;
   return (
     <Badge variant="outline">
@@ -20,5 +21,15 @@ export function StatusBadge({
         ? "Backfilling…"
         : `Backfilling, ${String(backfilledItems)} ${backfilledItems === 1 ? "message" : "messages"} so far`}
     </Badge>
+  );
+}
+
+/** When polling last finished for a connection, or that it hasn't yet. */
+export function LastPolled({ at }: { at: Date | null }) {
+  if (at === null) return <span className="text-muted-foreground">Not yet</span>;
+  return (
+    <time dateTime={at.toISOString()} title={at.toISOString()}>
+      {at.toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" })} UTC
+    </time>
   );
 }

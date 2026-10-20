@@ -87,6 +87,24 @@ describe("backfillConnection", () => {
     expect(aliceEvents.every((event) => event.occurredAt >= daysAgo(90))).toBe(true);
   });
 
+  it("leaves out drafts, which Gmail lists like any message", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const me = orgA.member.email;
+    const draftee = "draftee@customer.example";
+    const connection = await connectMailbox(orgA.member.ctx, me, [
+      { from: me, to: [draftee], text: "Not sent yet", at: daysAgo(1), labelIds: ["DRAFT"] },
+      { from: me, to: [draftee], text: "Sent", sent: true, at: daysAgo(1) },
+    ]);
+
+    expect(await backfillConnection(orgA.member.ctx, connection.id)).toEqual({
+      outcome: "done",
+      items: 1,
+    });
+    expect(await findEventsByObject(orgA.member.ctx, "email", draftee)).toMatchObject([
+      { type: "email.sent" },
+    ]);
+  });
+
   it("finds Drive links in HTML-only bodies, Docs and Drive links included", async () => {
     const { orgA } = await seedTwoOrgs();
     const connection = await connectMailbox(orgA.member.ctx, orgA.member.email, [

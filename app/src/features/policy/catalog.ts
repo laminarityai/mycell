@@ -2,12 +2,11 @@
 // by our team, and nothing a spec or a model says changes it. v1 has six Gmail and Sheets
 // actions; no action is `financial` or `destructive`.
 import { z } from "zod";
+import { GOOGLE_HOSTS, googleScope as scope } from "@/lib/google";
 import type { CatalogAction } from "./types";
 
-const GMAIL_HOST = "https://gmail.googleapis.com";
-const SHEETS_HOST = "https://sheets.googleapis.com";
-
-const scope = (name: string) => `https://www.googleapis.com/auth/${name}`;
+const GMAIL_HOST = GOOGLE_HOSTS.gmail;
+const SHEETS_HOST = GOOGLE_HOSTS.sheets;
 const GMAIL_READ = [scope("gmail.readonly"), scope("gmail.modify")];
 const GMAIL_MODIFY = [scope("gmail.modify")];
 const GMAIL_COMPOSE = [scope("gmail.modify"), scope("gmail.compose")];

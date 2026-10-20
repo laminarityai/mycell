@@ -2,6 +2,7 @@
 // each Google API path is on, which apps its granted scopes allow, and how to read which
 // account it reached.
 import { z } from "zod";
+import { GOOGLE_HOSTS } from "@/lib/google";
 import { GOOGLE_APP_SCOPES, googleAppSchema, type GoogleApp, type Source } from "../types";
 import { NangoConnectionGoneError, nangoProxyGet, type ProxyTarget } from "./nango";
 
@@ -19,12 +20,12 @@ export const INTEGRATIONS: Record<Source, string> = {
 // Each Google API's host, by the prefix its paths start with. Every proxied call names its
 // host with Nango's Base-Url-Override, since one integration reaches them all.
 const API_HOSTS: { prefix: string; host: string }[] = [
-  { prefix: "/gmail/", host: "https://gmail.googleapis.com" },
-  { prefix: "/drive/", host: "https://www.googleapis.com" },
-  { prefix: "/v4/spreadsheets", host: "https://sheets.googleapis.com" },
-  { prefix: "/calendar/", host: "https://www.googleapis.com" },
-  { prefix: "/v1/documents", host: "https://docs.googleapis.com" },
-  { prefix: "/tasks/", host: "https://tasks.googleapis.com" },
+  { prefix: "/gmail/", host: GOOGLE_HOSTS.gmail },
+  { prefix: "/drive/", host: GOOGLE_HOSTS.www },
+  { prefix: "/v4/spreadsheets", host: GOOGLE_HOSTS.sheets },
+  { prefix: "/calendar/", host: GOOGLE_HOSTS.www },
+  { prefix: "/v1/documents", host: GOOGLE_HOSTS.docs },
+  { prefix: "/tasks/", host: GOOGLE_HOSTS.tasks },
 ];
 
 /**

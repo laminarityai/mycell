@@ -4,8 +4,7 @@
 import type { ConnectionSummary } from "@/features/connections/types";
 import { findAction } from "@/features/policy/catalog";
 import type { Spec, SpecIssue } from "@/features/spec/types";
-
-const SCOPE_PREFIX = "https://www.googleapis.com/auth/";
+import { GOOGLE_SCOPE_PREFIX as SCOPE_PREFIX } from "@/lib/google";
 
 /** An action the spec uses, where it names it, and the scopes any one of which lets it run. */
 type ActionUse = {

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { googleScope } from "@/lib/google";
 
 /**
  * What a connection reaches. `google` is one Google account, with every Google app it allows
@@ -17,12 +18,12 @@ export type GoogleApp = z.infer<typeof googleAppSchema>;
  * consent screen, so a connection may be granted only some of them.
  */
 export const GOOGLE_APP_SCOPES: Record<GoogleApp, string> = {
-  gmail: "https://www.googleapis.com/auth/gmail.modify",
-  drive: "https://www.googleapis.com/auth/drive.readonly",
-  sheets: "https://www.googleapis.com/auth/spreadsheets",
-  calendar: "https://www.googleapis.com/auth/calendar.events",
-  docs: "https://www.googleapis.com/auth/documents",
-  tasks: "https://www.googleapis.com/auth/tasks",
+  gmail: googleScope("gmail.modify"),
+  drive: googleScope("drive.readonly"),
+  sheets: googleScope("spreadsheets"),
+  calendar: googleScope("calendar.events"),
+  docs: googleScope("documents"),
+  tasks: googleScope("tasks"),
 };
 
 /** The apps discovery ingests from. Each has its own backfill, cursor and poll. */

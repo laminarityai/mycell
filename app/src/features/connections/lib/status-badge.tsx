@@ -2,8 +2,8 @@ import { Badge } from "@/components/ui/badge";
 import type { ConnectionStatus } from "../types";
 
 /**
- * Where a connection's ingest stands, with the backfill's progress when it's known: "Backfilling,
- * 120 messages so far", then "Active", "Needs reconnecting", or "Backfill failed".
+ * Where a connection's ingest stands, with its backfills' progress when it's known: "Backfilling,
+ * 120 items so far", then "Active", "Needs reconnecting", or "Backfill failed".
  */
 export function StatusBadge({
   status,
@@ -19,7 +19,7 @@ export function StatusBadge({
     <Badge variant="outline">
       {backfilledItems === undefined
         ? "Backfilling…"
-        : `Backfilling, ${String(backfilledItems)} ${backfilledItems === 1 ? "message" : "messages"} so far`}
+        : `Backfilling, ${String(backfilledItems)} ${backfilledItems === 1 ? "item" : "items"} so far`}
     </Badge>
   );
 }

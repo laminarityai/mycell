@@ -1,6 +1,7 @@
-// Reconnecting: re-authorizing a connection whose Google token was revoked or expired, through
-// a Nango reconnect session opened in Connect UI. Nango's `auth` / `override` webhook then
-// settles it (lib/reauth.ts).
+// Reconnecting: re-authorizing a connection through a Nango reconnect session opened in Connect
+// UI, because its Google token was revoked or expired, or to allow apps the account didn't
+// allow before. Any connection may be reconnected. Nango's `auth` / `override` webhook then
+// records what Google granted (lib/reauth.ts).
 import { eq } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import type { Ctx } from "@/lib/ctx";
@@ -8,7 +9,7 @@ import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import { mayManage } from "./disconnect";
 import { createReconnectSession } from "./nango";
 import { connections } from "./schema";
-import { INTEGRATIONS } from "./sources";
+import { INTEGRATIONS } from "./google";
 
 /**
  * Starts reconnecting one connection in the caller's org and returns the token Nango's Connect

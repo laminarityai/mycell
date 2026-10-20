@@ -9,8 +9,7 @@ import {
 } from "@/components/ui/table";
 import type { ConnectionOwner, ConnectionsListing } from "../types";
 import { ConnectButton } from "./connect-button";
-import { ConnectionControls, ReauthNotices } from "./connection-controls";
-import { SOURCE_NAMES } from "./source-names";
+import { ConnectionApps, ConnectionControls, ConnectionNotices } from "./connection-controls";
 import { LastPolled, StatusBadge } from "./status-badge";
 
 /** The admin-only part of the connections page: org connections, and members' connections. */
@@ -20,18 +19,17 @@ export function AdminConnections({ listing }: { listing: ConnectionsListing }) {
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-medium">Org connections</h2>
         <div className="flex gap-2">
-          <ConnectButton source="gmail" kind="org" label="Connect an org inbox" />
-          <ConnectButton source="drive" kind="org" label="Connect an org Drive" />
+          <ConnectButton kind="org" label="Connect an org Google account" />
         </div>
-        <ReauthNotices connections={listing.orgConnections} />
+        <ConnectionNotices connections={listing.orgConnections} />
         {listing.orgConnections.length === 0 ? (
           <p className="text-sm text-muted-foreground">No org connections yet.</p>
         ) : (
           <Table aria-label="Org connections">
             <TableHeader>
               <TableRow>
-                <TableHead>Source</TableHead>
                 <TableHead>Account</TableHead>
+                <TableHead>Apps</TableHead>
                 <TableHead>Connected by</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Last polled</TableHead>
@@ -41,8 +39,10 @@ export function AdminConnections({ listing }: { listing: ConnectionsListing }) {
             <TableBody>
               {listing.orgConnections.map((connection) => (
                 <TableRow key={connection.id}>
-                  <TableCell>{SOURCE_NAMES[connection.source]}</TableCell>
                   <TableCell>{connection.accountEmail}</TableCell>
+                  <TableCell>
+                    <ConnectionApps connection={connection} />
+                  </TableCell>
                   <TableCell>
                     <OwnerName owner={connection.owner} />
                   </TableCell>
@@ -73,7 +73,7 @@ export function AdminConnections({ listing }: { listing: ConnectionsListing }) {
             <TableHeader>
               <TableRow>
                 <TableHead>Member</TableHead>
-                <TableHead>Source</TableHead>
+                <TableHead>Apps</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
@@ -83,7 +83,9 @@ export function AdminConnections({ listing }: { listing: ConnectionsListing }) {
                   <TableCell>
                     <OwnerName owner={connection.owner} />
                   </TableCell>
-                  <TableCell>{SOURCE_NAMES[connection.source]}</TableCell>
+                  <TableCell>
+                    <ConnectionApps connection={connection} />
+                  </TableCell>
                   <TableCell>
                     <StatusBadge status={connection.status} />
                   </TableCell>

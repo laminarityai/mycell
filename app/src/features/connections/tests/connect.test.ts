@@ -4,11 +4,11 @@ import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { removeUser } from "@/features/orgs/server";
 import { fakeNango } from "@/testing/fake-nango";
 import { handleNangoWebhook, listConnections, startConnect } from "../server";
-import { connectGmail } from "./connect-helpers";
+import { connectGmail } from "@/testing/connect-helpers";
 
 beforeEach(resetDatabase);
 
-describe("connecting your own Gmail", () => {
+describe("connecting your own Google account", () => {
   it("records a member connection once Nango's creation webhook arrives", async () => {
     const { orgA } = await seedTwoOrgs();
 
@@ -19,7 +19,7 @@ describe("connecting your own Gmail", () => {
     expect(listing.attempts).toEqual([]);
     expect(listing.connections).toEqual([
       expect.objectContaining({
-        source: "gmail",
+        source: "google",
         kind: "member",
         accountEmail: orgA.member.email,
         status: "backfilling",
@@ -30,22 +30,22 @@ describe("connecting your own Gmail", () => {
   it("shows the attempt as connecting until the webhook arrives", async () => {
     const { orgA } = await seedTwoOrgs();
 
-    await startConnect(orgA.member.ctx, "gmail");
+    await startConnect(orgA.member.ctx, "google");
 
     const listing = await listConnections(orgA.member.ctx);
     expect(listing.connections).toEqual([]);
     expect(listing.attempts).toEqual([
-      expect.objectContaining({ source: "gmail", status: "pending", refusal: null }),
+      expect.objectContaining({ source: "google", status: "pending", refusal: null }),
     ]);
   });
 
-  it("asks Nango for a session limited to Gmail and tagged with the attempt's user and org", async () => {
+  it("asks Nango for a session on the google integration, tagged with the attempt's user and org", async () => {
     const { orgA } = await seedTwoOrgs();
 
-    await startConnect(orgA.member.ctx, "gmail");
+    await startConnect(orgA.member.ctx, "google");
 
     const session = fakeNango.lastSession();
-    expect(session.integration).toBe("google-mail");
+    expect(session.integration).toBe("google");
     expect(session.tags).toMatchObject({
       end_user_id: orgA.member.id,
       end_user_email: orgA.member.email,
@@ -103,7 +103,7 @@ describe("connecting your own Gmail", () => {
 
   it("marks the attempt refused when Nango reports the authorisation failed", async () => {
     const { orgA } = await seedTwoOrgs();
-    const { token } = await startConnect(orgA.member.ctx, "gmail");
+    const { token } = await startConnect(orgA.member.ctx, "google");
     const { connectionId } = fakeNango.completeConnect(token, { emailAddress: orgA.member.email });
     const failed = fakeNango.authWebhook(connectionId, "creation", false);
 
@@ -116,7 +116,7 @@ describe("connecting your own Gmail", () => {
 
   it("ignores a webhook for a user who was removed after starting", async () => {
     const { orgA } = await seedTwoOrgs();
-    const { token } = await startConnect(orgA.member.ctx, "gmail");
+    const { token } = await startConnect(orgA.member.ctx, "google");
     await removeUser(orgA.admin.ctx, orgA.member.id);
     const webhook = fakeNango.completeConnect(token, { emailAddress: orgA.member.email });
 
@@ -139,7 +139,7 @@ describe("connecting your own Gmail", () => {
 describe("handleNangoWebhook", () => {
   it("rejects a bad signature with 401 and changes nothing", async () => {
     const { orgA } = await seedTwoOrgs();
-    const { token } = await startConnect(orgA.member.ctx, "gmail");
+    const { token } = await startConnect(orgA.member.ctx, "google");
     const genuine = fakeNango.completeConnect(token, { emailAddress: orgA.member.email });
     const forged = fakeNango.signed(JSON.parse(genuine.rawBody), "not-the-signing-key");
 
@@ -153,13 +153,13 @@ describe("handleNangoWebhook", () => {
 
   it("ignores webhooks naming no attempt, other types, and bodies that aren't JSON", async () => {
     const { orgA } = await seedTwoOrgs();
-    await startConnect(orgA.member.ctx, "gmail");
+    await startConnect(orgA.member.ctx, "google");
     const unknownAttempt = fakeNango.signed({
       type: "auth",
       operation: "creation",
       success: true,
       connectionId: "nango-connection",
-      providerConfigKey: "google-mail",
+      providerConfigKey: "google",
       tags: { mycel_attempt_id: "nope", end_user_id: orgA.member.id, organization_id: orgA.id },
     });
     const syncWebhook = fakeNango.signed({ type: "sync", connectionId: "x" });

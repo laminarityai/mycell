@@ -1,6 +1,7 @@
 // Who is acting and in which org. Every server-side function takes it first; there is no
 // hidden request state.
 import { z } from "zod";
+import { ForbiddenError } from "./errors";
 
 // Better Auth stores the role as free text; parse it with this on the way out of the database.
 export const roleSchema = z.enum(["admin", "member"]);
@@ -24,4 +25,9 @@ export const SYSTEM_USER_ID = "system";
 /** The ctx a scheduled job acts as inside one org. Only jobs build it. */
 export function systemCtx(orgId: string): Ctx {
   return { orgId, userId: SYSTEM_USER_ID, role: "system" };
+}
+
+/** The admin check every admin-only server function starts with: anyone else is ForbiddenError. */
+export function requireAdmin(ctx: Ctx): void {
+  if (ctx.role !== "admin") throw new ForbiddenError();
 }

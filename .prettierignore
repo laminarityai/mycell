@@ -1,5 +1,6 @@
 pnpm-lock.yaml
 .claude/skills/
+.claude/worktrees/
 skills-lock.json
 **/.next/
 **/next-env.d.ts

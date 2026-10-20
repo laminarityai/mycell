@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Source } from "@/features/connections/types";
+import type { IngestedApp } from "@/features/connections/types";
 
 /** The kinds of object an object ref points at, matched on exact keys (ADR-0008). */
 export const objectRefKindSchema = z.enum(["email", "drive_file"]);
@@ -32,7 +32,8 @@ export type IngestedEvent = {
   id: string;
   connectionId: string;
   ownerScope: "member" | "org";
-  source: Source;
+  // The app the event came from: one Google connection ingests from several.
+  source: IngestedApp;
   sourceRef: string;
   type: EventType;
   occurredAt: Date;

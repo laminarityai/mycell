@@ -53,7 +53,8 @@ export function connectionsApiHandlers(
         return HttpResponse.json({ error }, { status: 404 });
       }
       // The full connection, which names its times as created_at and updated_at (the listing
-      // says `created`).
+      // says `created`). `raw` is Google's whole token response, whose `scope` lists what was
+      // granted.
       const { created, ...rest } = listed(connection);
       return HttpResponse.json({
         ...rest,
@@ -61,7 +62,17 @@ export function connectionsApiHandlers(
         created_at: created,
         updated_at: created,
         last_fetched_at: null,
-        credentials: { type: "OAUTH2", access_token: "fake-access-token" },
+        credentials: {
+          type: "OAUTH2",
+          access_token: "fake-access-token",
+          expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+          raw: {
+            access_token: "fake-access-token",
+            expires_in: 3599,
+            scope: connection.scopes.join(" "),
+            token_type: "Bearer",
+          },
+        },
       });
     }),
   ];

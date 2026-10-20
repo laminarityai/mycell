@@ -5,7 +5,7 @@ import { removeUser, setRole } from "@/features/orgs/server";
 import { ForbiddenError } from "@/lib/errors";
 import { fakeNango } from "@/testing/fake-nango";
 import { handleNangoWebhook, listConnections, startConnect } from "../server";
-import { connectGmail, connectOrgInbox } from "./connect-helpers";
+import { connectGmail, connectOrgInbox } from "@/testing/connect-helpers";
 
 beforeEach(resetDatabase);
 
@@ -22,7 +22,7 @@ describe("connecting an org inbox", () => {
     expect(listing.connections).toEqual([]);
     expect(listing.orgConnections).toEqual([
       expect.objectContaining({
-        source: "gmail",
+        source: "google",
         kind: "org",
         accountEmail: support,
         status: "backfilling",
@@ -43,7 +43,7 @@ describe("connecting an org inbox", () => {
   it("refuses a member starting one, recording nothing", async () => {
     const { orgA } = await seedTwoOrgs();
 
-    await expect(startConnect(orgA.member.ctx, "gmail", "org")).rejects.toThrow(ForbiddenError);
+    await expect(startConnect(orgA.member.ctx, "google", "org")).rejects.toThrow(ForbiddenError);
 
     const listing = await listConnections(orgA.member.ctx);
     expect(listing.attempts).toEqual([]);
@@ -81,7 +81,7 @@ describe("connecting an org inbox", () => {
     const { orgA } = await seedTwoOrgs();
     const promoted = { ...orgA.member.ctx, role: "admin" as const };
     await setRole(orgA.admin.ctx, orgA.member.id, "admin");
-    const { token } = await startConnect(promoted, "gmail", "org");
+    const { token } = await startConnect(promoted, "google", "org");
     await setRole(orgA.admin.ctx, orgA.member.id, "member");
     const webhook = fakeNango.completeConnect(token, {
       emailAddress: `support@${orgA.workspaceDomain}`,
@@ -128,7 +128,8 @@ describe("listing connections by role", () => {
     expect(listing.memberConnections).toEqual([
       {
         id: expect.any(String) as string,
-        source: "gmail",
+        source: "google",
+        apps: ["gmail", "drive", "sheets", "calendar", "docs", "tasks"],
         status: "backfilling",
         owner: { userId: orgA.member.id, removed: false, name: orgA.member.email },
         createdAt: expect.any(Date) as Date,

@@ -13,11 +13,12 @@ import {
   listConnections,
   listConnectionsForJobs,
   proxyGet,
+  proxyPost,
   recordIngestState,
   startConnect,
 } from "../server";
-import { SourceRequestError } from "../types";
-import { connectGmail, connectOrgInbox } from "./connect-helpers";
+import { GOOGLE_APP_SCOPES, SourceRequestError } from "../types";
+import { connectGmail, connectOrgInbox } from "@/testing/connect-helpers";
 
 beforeEach(resetDatabase);
 
@@ -37,20 +38,28 @@ describe("recording a connection", () => {
     await connectGmail(orgA.member.ctx, orgA.member.email);
     const id = await ownConnectionId(orgA.member.ctx);
 
-    expect(await getConnection(orgA.member.ctx, id)).toEqual({
-      id,
-      source: "gmail",
-      kind: "member",
-      ownerUserId: orgA.member.id,
+    const backfilling = {
       status: "backfilling",
       cursor: null,
+      backfilledItems: 0,
+      lastPolledAt: null,
+    };
+    expect(await getConnection(orgA.member.ctx, id)).toEqual({
+      id,
+      source: "google",
+      kind: "member",
+      ownerUserId: orgA.member.id,
+      needsReauth: false,
+      grantedScopes: Object.values(GOOGLE_APP_SCOPES),
+      apps: ["gmail", "drive", "sheets", "calendar", "docs", "tasks"],
+      ingest: { gmail: backfilling, drive: backfilling },
     });
     expect(fakeInngest.sent("connections/connection.recorded")).toHaveLength(1);
   });
 
   it("sends the event on Nango's redelivery when sending it failed the first time", async () => {
     const { orgA } = await seedTwoOrgs();
-    const { token } = await startConnect(orgA.member.ctx, "gmail");
+    const { token } = await startConnect(orgA.member.ctx, "google");
     const webhook = fakeNango.completeConnect(token, { emailAddress: orgA.member.email });
     fakeInngest.failSends();
 
@@ -128,22 +137,94 @@ describe("proxyGet", () => {
   });
 });
 
-describe("recordIngestState", () => {
-  it("shows the status and progress on the connections page", async () => {
+describe("proxyPost", () => {
+  const label = z.object({ id: z.string(), name: z.string() });
+  const labels = "/gmail/v1/users/me/labels";
+
+  it("writes to the connection's source through Nango and parses the answer", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const { connectionId: nangoId } = await connectGmail(orgA.member.ctx, orgA.member.email);
+    const id = await ownConnectionId(orgA.member.ctx);
+
+    const created = await proxyPost(orgA.member.ctx, id, labels, { name: "Pricing" }, label);
+
+    expect(created).toMatchObject({ name: "Pricing" });
+    expect(fakeNango.mailbox(nangoId).writes.madeLabels()).toEqual([created]);
+  });
+
+  it("is null for an item the source doesn't have", async () => {
     const { orgA } = await seedTwoOrgs();
     await connectGmail(orgA.member.ctx, orgA.member.email);
     const id = await ownConnectionId(orgA.member.ctx);
 
-    await recordIngestState(orgA.member.ctx, id, { backfilledItems: 40, cursor: "1234" });
+    const path = "/gmail/v1/users/me/messages/nope/modify";
+    expect(
+      await proxyPost(orgA.member.ctx, id, path, { addLabelIds: ["STARRED"] }, message),
+    ).toBeNull();
+  });
+
+  it("refuses another member's connection, and one that's gone", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const { connectionId: nangoId } = await connectGmail(orgA.member.ctx, orgA.member.email);
+    const id = await ownConnectionId(orgA.member.ctx);
+    const body = { name: "Pricing" };
+
+    await expect(proxyPost(orgA.admin.ctx, id, labels, body, label)).rejects.toThrow(
+      ForbiddenError,
+    );
+    fakeNango.deleteOutsideMycel(nangoId);
+    await expect(proxyPost(orgA.member.ctx, id, labels, body, label)).rejects.toThrow(
+      NotFoundError,
+    );
+  });
+
+  it("is a source error when the connection wasn't granted write access", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const readOnly = "https://www.googleapis.com/auth/gmail.readonly";
+    // Drive tells Mycel which account it is, since Gmail without gmail.modify isn't an app.
+    await connectGmail(orgA.member.ctx, orgA.member.email, [readOnly, GOOGLE_APP_SCOPES.drive]);
+    const id = await ownConnectionId(orgA.member.ctx);
+
+    const written = proxyPost(orgA.member.ctx, id, labels, { name: "Pricing" }, label);
+    await expect(written).rejects.toThrow(SourceRequestError);
+    await expect(written).rejects.toMatchObject({ status: 403 });
+  });
+});
+
+describe("recordIngestState", () => {
+  it("shows each app's status and progress, summed up, on the connections page", async () => {
+    const { orgA } = await seedTwoOrgs();
+    await connectGmail(orgA.member.ctx, orgA.member.email);
+    const id = await ownConnectionId(orgA.member.ctx);
+
+    await recordIngestState(orgA.member.ctx, id, "gmail", { backfilledItems: 40, cursor: "1234" });
+    await recordIngestState(orgA.member.ctx, id, "drive", { backfilledItems: 2 });
     expect((await listConnections(orgA.member.ctx)).connections).toEqual([
-      expect.objectContaining({ status: "backfilling", backfilledItems: 40 }),
+      expect.objectContaining({ status: "backfilling", backfilledItems: 42 }),
     ]);
 
-    await recordIngestState(orgA.member.ctx, id, { status: "active" });
+    await recordIngestState(orgA.member.ctx, id, "gmail", { status: "active" });
     expect(await getConnection(orgA.member.ctx, id)).toMatchObject({
-      status: "active",
-      cursor: "1234",
+      ingest: { gmail: { status: "active", cursor: "1234" }, drive: { status: "backfilling" } },
     });
+    expect((await listConnections(orgA.member.ctx)).connections).toEqual([
+      expect.objectContaining({ status: "backfilling" }),
+    ]);
+
+    await recordIngestState(orgA.member.ctx, id, "drive", { status: "failed" });
+    expect((await listConnections(orgA.member.ctx)).connections).toEqual([
+      expect.objectContaining({ status: "failed" }),
+    ]);
+  });
+
+  it("is NotFoundError for an app the connection wasn't granted", async () => {
+    const { orgA } = await seedTwoOrgs();
+    await connectGmail(orgA.member.ctx, orgA.member.email, [GOOGLE_APP_SCOPES.gmail]);
+    const id = await ownConnectionId(orgA.member.ctx);
+
+    await expect(
+      recordIngestState(orgA.member.ctx, id, "drive", { status: "active" }),
+    ).rejects.toThrow(NotFoundError);
   });
 
   it("refuses another member's connection", async () => {
@@ -151,9 +232,9 @@ describe("recordIngestState", () => {
     await connectGmail(orgA.member.ctx, orgA.member.email);
     const id = await ownConnectionId(orgA.member.ctx);
 
-    await expect(recordIngestState(orgA.admin.ctx, id, { status: "failed" })).rejects.toThrow(
-      ForbiddenError,
-    );
+    await expect(
+      recordIngestState(orgA.admin.ctx, id, "gmail", { status: "failed" }),
+    ).rejects.toThrow(ForbiddenError);
   });
 });
 
@@ -194,6 +275,6 @@ describe("scheduled jobs' system ctx", () => {
   it("passes no admin check", async () => {
     const { orgA } = await seedTwoOrgs();
 
-    await expect(startConnect(systemCtx(orgA.id), "gmail", "org")).rejects.toThrow(ForbiddenError);
+    await expect(startConnect(systemCtx(orgA.id), "google", "org")).rejects.toThrow(ForbiddenError);
   });
 });

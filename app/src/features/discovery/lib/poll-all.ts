@@ -6,13 +6,19 @@ import { listOrgIds } from "@/features/orgs/server";
 import { systemCtx } from "@/lib/ctx";
 import type { ConnectionToPoll } from "../types";
 
-/** Every `active` connection in every org, each with the org its poll acts in. */
+/**
+ * Every connection in every org with an `active` app and no reconnect pending, each with the
+ * org its poll acts in.
+ */
 export async function pollAllConnections(): Promise<ConnectionToPoll[]> {
   const due: ConnectionToPoll[] = [];
   for (const orgId of await listOrgIds()) {
     const connections = await listConnectionsForJobs(systemCtx(orgId));
     for (const connection of connections) {
-      if (connection.status === "active") due.push({ orgId, connectionId: connection.id });
+      const states = Object.values(connection.ingest);
+      if (!connection.needsReauth && states.some((state) => state.status === "active")) {
+        due.push({ orgId, connectionId: connection.id });
+      }
     }
   }
   return due;

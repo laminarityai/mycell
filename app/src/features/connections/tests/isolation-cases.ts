@@ -7,7 +7,7 @@ import { NotFoundError } from "@/lib/errors";
 import { fakeNango } from "@/testing/fake-nango";
 import * as server from "../server";
 import type { ConnectionsListing } from "../types";
-import { connectGmail, connectOrgInbox } from "./connect-helpers";
+import { connectGmail, connectOrgInbox } from "@/testing/connect-helpers";
 
 // Org B's member connects their Gmail and org B's admin a shared inbox, so every case can
 // check org B is left as it was. Org B's admin sees all of it.
@@ -32,8 +32,8 @@ export const isolationCases = defineIsolationCases(server, {
   startConnect: async (orgs) => {
     const { before } = await seedOrgBConnection(orgs);
 
-    await server.startConnect(orgs.orgA.member.ctx, "gmail");
-    await server.startConnect(orgs.orgA.admin.ctx, "gmail", "org");
+    await server.startConnect(orgs.orgA.member.ctx, "google");
+    await server.startConnect(orgs.orgA.admin.ctx, "google", "org");
 
     expect(await server.listConnections(orgs.orgB.admin.ctx)).toEqual(before);
   },
@@ -112,6 +112,26 @@ export const isolationCases = defineIsolationCases(server, {
     });
   },
 
+  getGrantedScopes: async (orgs) => {
+    const { before, memberBefore } = await seedOrgBConnection(orgs);
+    const { orgA } = orgs;
+
+    for (const id of orgBIds(before, memberBefore)) {
+      for (const ctx of [orgA.admin.ctx, orgA.member.ctx, systemCtx(orgA.id)]) {
+        await expect(server.getGrantedScopes(ctx, id)).rejects.toThrow(NotFoundError);
+      }
+    }
+  },
+
+  readableConnectionIds: async (orgs) => {
+    await seedOrgBConnection(orgs);
+    const { orgA } = orgs;
+
+    for (const ctx of [orgA.admin.ctx, orgA.member.ctx, systemCtx(orgA.id)]) {
+      expect(await server.readableConnectionIds(ctx)).toEqual([]);
+    }
+  },
+
   listConnectionsForJobs: async (orgs) => {
     await seedOrgBConnection(orgs);
     await connectGmail(orgs.orgA.member.ctx, orgs.orgA.member.email);
@@ -128,6 +148,24 @@ export const isolationCases = defineIsolationCases(server, {
     for (const id of orgBIds(before, memberBefore)) {
       await expect(
         server.proxyGet(orgs.orgA.admin.ctx, id, "/gmail/v1/users/me/profile", profile),
+      ).rejects.toThrow(NotFoundError);
+    }
+    expect(await server.listConnections(orgs.orgB.admin.ctx)).toEqual(before);
+  },
+
+  proxyPost: async (orgs) => {
+    const { before, memberBefore } = await seedOrgBConnection(orgs);
+    const label = z.object({ id: z.string() });
+
+    for (const id of orgBIds(before, memberBefore)) {
+      await expect(
+        server.proxyPost(
+          orgs.orgA.admin.ctx,
+          id,
+          "/gmail/v1/users/me/labels",
+          { name: "X" },
+          label,
+        ),
       ).rejects.toThrow(NotFoundError);
     }
     expect(await server.listConnections(orgs.orgB.admin.ctx)).toEqual(before);
@@ -151,7 +189,10 @@ export const isolationCases = defineIsolationCases(server, {
 
     for (const id of orgBIds(before, memberBefore)) {
       await expect(
-        server.recordIngestState(orgs.orgA.admin.ctx, id, { status: "failed", cursor: "1" }),
+        server.recordIngestState(orgs.orgA.admin.ctx, id, "gmail", {
+          status: "failed",
+          cursor: "1",
+        }),
       ).rejects.toThrow(NotFoundError);
     }
 
@@ -172,7 +213,7 @@ export const isolationCases = defineIsolationCases(server, {
       operation: "deletion",
       success: true,
       connectionId: nangoConnectionId,
-      providerConfigKey: "google-mail",
+      providerConfigKey: "google",
       tags: {
         mycel_attempt_id: "x",
         end_user_id: orgs.orgA.member.id,

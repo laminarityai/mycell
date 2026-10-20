@@ -1,8 +1,17 @@
 // A fake Gmail mailbox, served through the fake Nango's proxy. It answers the Gmail API calls
-// Mycel makes (users.getProfile, users.messages.list, users.messages.get, users.history.list)
-// in the shapes Google documents, from messages a test seeds.
+// Mycel makes (users.getProfile, users.messages.list and get, users.history.list,
+// users.threads.get, users.labels.list, users.drafts.list, and the writes in
+// fake-gmail-writes.ts) in the shapes Google documents, from messages a test seeds.
 import { randomUUID } from "node:crypto";
 import { HttpResponse } from "msw";
+import {
+  FakeGmailWrites,
+  gmailWrite,
+  listDrafts,
+  newDraftIds,
+  type FakeDraft,
+  type WritableMailbox,
+} from "./fake-gmail-writes";
 
 /** A message to seed, described the way a test thinks about it. */
 export type FakeMessageInput = {
@@ -20,6 +29,8 @@ export type FakeMessageInput = {
   labelIds?: string[];
   at: Date;
   threadId?: string;
+  // More headers, such as Reply-To or a reply's References.
+  headers?: Record<string, string>;
 };
 
 type GmailPart = {
@@ -53,9 +64,13 @@ type HistoryRecord = {
 /** Thrown for a startHistoryId Gmail no longer keeps; the fake proxy answers it with 404. */
 class HistoryExpiredError extends Error {}
 
-export class FakeMailbox {
+export class FakeMailbox implements WritableMailbox {
   private historyId = 1000;
   private messages: GmailMessage[] = [];
+  // Drafts' messages, in their threads but kept out of the message list and history.
+  private draftMessages: GmailMessage[] = [];
+  /** Its labels and drafts, and the writes it was asked for. */
+  readonly writes = new FakeGmailWrites();
   private history: HistoryRecord[] = [];
   // History IDs below this one have expired: Gmail keeps history for about a week.
   private oldestHistoryId = 0;
@@ -141,7 +156,57 @@ export class FakeMailbox {
   }
 
   get(id: string): GmailMessage | undefined {
-    return this.messages.find((m) => m.id === id);
+    return [...this.messages, ...this.draftMessages].find((m) => m.id === id);
+  }
+
+  /** users.threads.get: the thread's messages and drafts, oldest first, in `format`. */
+  thread(id: string, params: URLSearchParams) {
+    const messages = [...this.messages, ...this.draftMessages]
+      .filter((m) => m.threadId === id)
+      .map((m) => inFormat(m, params));
+    if (messages.length === 0) return undefined;
+    return { id, historyId: String(this.historyId), messages };
+  }
+
+  /** The names of the labels on a message. */
+  labelNamesOf(messageId: string): string[] {
+    const labels = this.writes.labels();
+    return (this.get(messageId)?.labelIds ?? []).map(
+      (id) => labels.find((label) => label.id === id)?.name ?? id,
+    );
+  }
+
+  /** The drafts in the mailbox, oldest first. */
+  drafts(): FakeDraft[] {
+    return [...this.writes.drafts];
+  }
+
+  modify(messageId: string, add: string[], remove: string[]) {
+    const message = this.messages.find((m) => m.id === messageId);
+    if (message === undefined) return undefined;
+    message.labelIds = [
+      ...message.labelIds.filter((id) => !remove.includes(id)),
+      ...add.filter((id) => !message.labelIds.includes(id)),
+    ];
+    return minimal(message);
+  }
+
+  addDraft(threadId: string, content: Omit<FakeDraft, "id" | "messageId" | "threadId">) {
+    if (!this.messages.some((m) => m.threadId === threadId)) return undefined;
+    const draft: FakeDraft = { ...newDraftIds(), threadId, ...content };
+    this.writes.drafts.push(draft);
+    const headers = Object.entries(content.headers).map(([name, value]) => ({ name, value }));
+    this.draftMessages.push({
+      id: draft.messageId,
+      threadId,
+      labelIds: ["DRAFT"],
+      snippet: content.text.slice(0, 100),
+      historyId: String(this.historyId),
+      internalDate: String(Date.now()),
+      payload: { ...textPart("", "text/plain", content.text), headers },
+      sizeEstimate: Buffer.byteLength(content.text),
+    });
+    return draft;
   }
 }
 
@@ -155,6 +220,7 @@ function gmailMessage(input: FakeMessageInput, historyId: string): GmailMessage 
     { name: "Subject", value: input.subject ?? "" },
     { name: "Date", value: input.at.toUTCString() },
     { name: "Message-ID", value: `<${id}@mail.gmail.com>` },
+    ...Object.entries(input.headers ?? {}).map(([name, value]) => ({ name, value })),
   ];
   const bodies: GmailPart[] = [
     ...(input.text === undefined ? [] : [textPart("0.0", "text/plain", input.text)]),
@@ -223,11 +289,45 @@ export function gmailResponse(mailbox: FakeMailbox, path: string, params: URLSea
       throw error;
     }
   }
+  if (path === "/gmail/v1/users/me/labels") {
+    return HttpResponse.json({ labels: mailbox.writes.labels() });
+  }
+  if (path === "/gmail/v1/users/me/drafts") {
+    return HttpResponse.json(listDrafts(mailbox.writes, params));
+  }
+  const threadId = /^\/gmail\/v1\/users\/me\/threads\/([^/]+)$/.exec(path)?.[1];
+  if (threadId !== undefined) {
+    const thread = mailbox.thread(decodeURIComponent(threadId), params);
+    return thread === undefined ? gmailError(404, "NOT_FOUND") : HttpResponse.json(thread);
+  }
   const id = /^\/gmail\/v1\/users\/me\/messages\/([^/]+)$/.exec(path)?.[1];
   if (id === undefined) throw new Error(`The fake Gmail doesn't serve ${path}`);
-  if (params.get("format") !== "full") throw new Error("The fake Gmail serves format=full only");
   const message = mailbox.get(decodeURIComponent(id));
-  return message === undefined ? gmailError(404, "NOT_FOUND") : HttpResponse.json(message);
+  if (message === undefined) return gmailError(404, "NOT_FOUND");
+  return HttpResponse.json(inFormat(message, params));
+}
+
+/** A POST to the Gmail API: a label, a label change, or a draft. */
+export { gmailWrite };
+
+// A message in the `format` asked for: full, metadata (only the `metadataHeaders` asked for,
+// or all), or minimal (IDs and labels).
+function inFormat(message: GmailMessage, params: URLSearchParams) {
+  const format = params.get("format");
+  if (format === "full") return message;
+  if (format === "minimal") return minimal(message);
+  if (format !== "metadata") throw new Error("The fake Gmail serves full, metadata and minimal");
+  const asked = params.getAll("metadataHeaders").map((name) => name.toLowerCase());
+  const headers = message.payload.headers.filter(
+    (h) => asked.length === 0 || asked.includes(h.name.toLowerCase()),
+  );
+  return { ...minimal(message), payload: { mimeType: message.payload.mimeType, headers } };
+}
+
+// A message with format=minimal: its IDs and labels, no headers or body.
+function minimal(message: GmailMessage) {
+  const { id, threadId, labelIds, snippet, historyId, internalDate, sizeEstimate } = message;
+  return { id, threadId, labelIds, snippet, historyId, internalDate, sizeEstimate };
 }
 
 // An error as Google's APIs return it.

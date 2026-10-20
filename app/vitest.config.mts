@@ -19,6 +19,12 @@ process.env.NANGO_WEBHOOK_SIGNING_KEY = "test-nango-webhook-signing-key";
 process.env.INNGEST_DEV = "0";
 process.env.INNGEST_EVENT_KEY = "test-inngest-event-key";
 process.env.INNGEST_SIGNING_KEY = "signkey-test-00000000000000000000000000000000";
+// Model calls reach the fake AI Gateway (src/testing/fake-ai-gateway.ts), which checks the key.
+process.env.AI_GATEWAY_API_KEY = "test-ai-gateway-api-key";
+process.env.MODEL_CLASSIFY = "typesafe-ai/jev-1.14.0";
+process.env.MODEL_FAST = "test/fast-default";
+process.env.MODEL_SMART = "test/smart-default";
+process.env.MODEL_JUDGE = "test/judge-default";
 
 export default defineConfig({
   resolve: { tsconfigPaths: true },

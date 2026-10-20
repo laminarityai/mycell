@@ -7,9 +7,11 @@ import { FakeDrive } from "./fake-drive";
 import { FakeMailbox } from "./fake-gmail";
 import { connectionsApiHandlers, type ListingBehaviour } from "./fake-nango-connections";
 import { FakeIntegrations } from "./fake-nango-integrations";
-import { authorised, NANGO_API, proxyRefusal, unauthorised } from "./fake-nango-http";
+import { authorised, NANGO_API, unauthorised } from "./fake-nango-http";
+import { proxyHandlers } from "./fake-nango-proxy";
 import { type FakeReconnectSession, type FakeSession, FakeSessions } from "./fake-nango-sessions";
-import { PROXIED_SOURCES, type ProxiedSource } from "./fake-proxied-sources";
+import { DEFAULT_SCOPES } from "./fake-proxied-sources";
+import { FakeSheets } from "./fake-sheets";
 
 /** What the connected account looks like from inside its source. */
 export type FakeAccount = { emailAddress: string };
@@ -22,9 +24,13 @@ export type FakeConnection = {
   integration: string;
   tags: Record<string, string>;
   account: FakeAccount;
-  // The account's Gmail mailbox and Drive; its integration decides which the proxy reaches.
+  // The OAuth scopes Google granted, as Nango reports them in the token response.
+  scopes: readonly string[];
+  // The account's Gmail mailbox, Drive and spreadsheets. The proxy reaches each through its
+  // API's host, if the connection's scopes allow that API.
   mailbox: FakeMailbox;
   drive: FakeDrive;
+  sheets: FakeSheets;
   // Google refused the refresh token (access revoked): the proxy can't call the source.
   refreshFails?: boolean;
 };
@@ -41,10 +47,11 @@ class FakeNango {
   private deletesFail = false;
   private rateLimitsLeft = 0;
   private rateLimitsServed = 0;
+  private writeFailuresLeft = 0;
   private proxyHook: ProxyHook | undefined;
   private nextId = 1;
   private listing: ListingBehaviour = { pageCap: undefined, empty: false };
-  /** The integrations: `google-mail` and `google-drive`, until a test changes them. */
+  /** The integrations: `google`, `google-mail` and `google-drive`, until a test changes them. */
   readonly integrations = new FakeIntegrations();
 
   reset(): void {
@@ -53,6 +60,7 @@ class FakeNango {
     this.deletesFail = false;
     this.rateLimitsLeft = 0;
     this.rateLimitsServed = 0;
+    this.writeFailuresLeft = 0;
     this.proxyHook = undefined;
     this.nextId = 1;
     this.listing = { pageCap: undefined, empty: false };
@@ -64,6 +72,9 @@ class FakeNango {
 
   /** The connected account's Drive, for seeding files. */
   drive = (connectionId: string): FakeDrive => this.connection(connectionId).drive;
+
+  /** The connected account's spreadsheets, for seeding sheets. */
+  sheets = (connectionId: string): FakeSheets => this.connection(connectionId).sheets;
 
   private connection(connectionId: string): FakeConnection {
     const connection = this.connections.get(connectionId);
@@ -82,6 +93,11 @@ class FakeNango {
   /** How many 429s the source has answered (retried or not) since the last reset. */
   rateLimitsAnswered(): number {
     return this.rateLimitsServed;
+  }
+
+  /** Makes the source answer the next `count` proxied writes (POSTs) with 500, unmade. */
+  failWrites(count: number): void {
+    this.writeFailuresLeft += count;
   }
 
   /** Runs `hook` before each proxied request, until the next reset. */
@@ -120,10 +136,15 @@ class FakeNango {
   }
 
   /**
-   * A user finishes OAuth in Connect UI with the given account: Nango creates the connection
-   * and returns the creation webhook it then sends.
+   * A user finishes OAuth in Connect UI with the given account, granting `scopes` (by default
+   * everything the integration asks for): Nango creates the connection and returns the
+   * creation webhook it then sends.
    */
-  completeConnect(token: string, account: FakeAccount): FakeWebhook & { connectionId: string } {
+  completeConnect(
+    token: string,
+    account: FakeAccount,
+    scopes?: readonly string[],
+  ): FakeWebhook & { connectionId: string } {
     const session = this.sessions.connects.find((s) => s.token === token);
     if (session === undefined) throw new Error(`Unknown connect session token ${token}`);
     const connectionId = randomUUID();
@@ -134,8 +155,10 @@ class FakeNango {
       integration: session.integration,
       tags: session.tags,
       account,
+      scopes: scopes ?? DEFAULT_SCOPES[session.integration] ?? [],
       mailbox: new FakeMailbox(account.emailAddress),
       drive: new FakeDrive(account.emailAddress),
+      sheets: new FakeSheets(),
     });
     return { connectionId, ...this.authWebhook(connectionId, "creation", true) };
   }
@@ -148,16 +171,20 @@ class FakeNango {
   /**
    * A user finishes OAuth in Connect UI opened with a reconnect session: Nango replaces the
    * connection's credentials and returns the `override` webhook it then sends. Choosing a
-   * different Google account than before swaps in that account's (empty) mailbox and Drive.
+   * different Google account than before swaps in that account's (empty) mailbox, Drive and
+   * spreadsheets.
+   * `scopes`, when given, are what the new token was granted; otherwise they stay as they were.
    */
-  completeReconnect(token: string, account?: FakeAccount): FakeWebhook {
+  completeReconnect(token: string, account?: FakeAccount, scopes?: readonly string[]): FakeWebhook {
     const session = this.sessions.reconnects.find((s) => s.token === token);
     if (session === undefined) throw new Error(`Unknown reconnect session token ${token}`);
     const connection = this.connection(session.connectionId);
+    if (scopes !== undefined) connection.scopes = scopes;
     if (account !== undefined && account.emailAddress !== connection.account.emailAddress) {
       connection.account = account;
       connection.mailbox = new FakeMailbox(account.emailAddress);
       connection.drive = new FakeDrive(account.emailAddress);
+      connection.sheets = new FakeSheets();
     }
     return this.authWebhook(session.connectionId, "override", true);
   }
@@ -235,35 +262,22 @@ class FakeNango {
       return HttpResponse.json({ success: true });
     }),
 
-    ...PROXIED_SOURCES.map((source) =>
-      http.get(`${NANGO_API}/proxy${source.prefix}/*`, ({ request }) =>
-        this.proxy(request, source),
-      ),
-    ),
+    ...proxyHandlers({
+      connection: (connectionId) => this.connections.get(connectionId),
+      beforeProxy: (path) => this.proxyHook?.(path),
+      takeRateLimit: () => {
+        if (this.rateLimitsLeft === 0) return false;
+        this.rateLimitsLeft -= 1;
+        this.rateLimitsServed += 1;
+        return true;
+      },
+      takeWriteFailure: () => {
+        if (this.writeFailuresLeft === 0) return false;
+        this.writeFailuresLeft -= 1;
+        return true;
+      },
+    }),
   ];
-
-  private async proxy(request: Request, source: ProxiedSource) {
-    if (!authorised(request)) return unauthorised();
-    const url = new URL(request.url);
-    const path = url.pathname.slice("/proxy".length);
-    await this.proxyHook?.(path);
-    const connection = this.proxied(request);
-    if (connection === undefined) return proxyRefusal("no-connection");
-    if (connection.refreshFails === true) return proxyRefusal("refresh-failed");
-    const retries = Number(request.headers.get("Retries") ?? 0);
-    for (let attempt = 0; attempt <= retries && this.rateLimitsLeft > 0; attempt++) {
-      this.rateLimitsLeft -= 1;
-      this.rateLimitsServed += 1;
-      if (attempt === retries) return source.rateLimited();
-    }
-    return source.respond(connection, path, url.searchParams);
-  }
-
-  private proxied(request: Request): FakeConnection | undefined {
-    const connection = this.connections.get(request.headers.get("Connection-Id") ?? "");
-    const key = request.headers.get("Provider-Config-Key");
-    return connection?.integration === key ? connection : undefined;
-  }
 }
 
 export const fakeNango = new FakeNango();

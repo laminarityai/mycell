@@ -21,8 +21,7 @@ describe("nango preflight", () => {
 
     expect(results.map((r) => [r.name, r.ok])).toEqual([
       ["Nango API key", true],
-      ["Integration google-mail", true],
-      ["Integration google-drive", true],
+      ["Integration google", true],
       ["Webhook signing key", true],
       ["Inngest", true],
     ]);
@@ -33,26 +32,28 @@ describe("nango preflight", () => {
     const results = await byName({ ...READY, nangoApiKey: "wrong-key" });
 
     expect(results["Nango API key"]).toMatchObject({ ok: false, detail: /rejected/ });
-    expect(results["Integration google-mail"]).toMatchObject({ ok: false });
+    expect(results["Integration google"]).toMatchObject({ ok: false });
   });
 
   it("fails an integration that's missing, on another provider, or without credentials", async () => {
-    fakeNango.integrations.remove("google-drive");
-    fakeNango.integrations.set({
-      uniqueKey: "google-mail",
-      provider: "google",
-      missingFields: [],
+    fakeNango.integrations.remove("google");
+    expect((await byName(READY))["Integration google"]).toMatchObject({
+      ok: false,
+      detail: /not found/,
     });
-    const results = await byName(READY);
-    expect(results["Integration google-drive"]).toMatchObject({ ok: false, detail: /not found/ });
-    expect(results["Integration google-mail"]).toMatchObject({ ok: false, detail: /provider/ });
+
+    fakeNango.integrations.set({ uniqueKey: "google", provider: "google-mail", missingFields: [] });
+    expect((await byName(READY))["Integration google"]).toMatchObject({
+      ok: false,
+      detail: /provider/,
+    });
 
     fakeNango.integrations.set({
-      uniqueKey: "google-mail",
-      provider: "google-mail",
+      uniqueKey: "google",
+      provider: "google",
       missingFields: ["oauth_client_id"],
     });
-    expect((await byName(READY))["Integration google-mail"]).toMatchObject({
+    expect((await byName(READY))["Integration google"]).toMatchObject({
       ok: false,
       detail: /missing configuration: oauth_client_id/,
     });

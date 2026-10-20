@@ -1,5 +1,5 @@
 // The checks `pnpm nango:preflight` runs before the dogfood check (docs/runbooks/m1-dogfood.md):
-// does the Nango API key work, do the two Google integrations exist under the IDs Mycel uses,
+// does the Nango API key work, does the Google integration exist under the ID Mycel uses,
 // is the webhook signing key a real one, and is Inngest set up for the local dev server. Each
 // result's detail is fixed text: no check ever echoes a key or a response body.
 //
@@ -8,8 +8,12 @@ import { z } from "zod";
 
 const NANGO_API_URL = "https://api.nango.dev";
 
-/** Mycel's integrations, by ID (provider config key), each expected on its own provider. */
-export const EXPECTED_INTEGRATIONS = ["google-mail", "google-drive"] as const;
+/**
+ * Mycel's integrations, by ID (provider config key), each expected on its own provider: the one
+ * Google integration that every new connection uses (ADR-0014, connections/lib/google.ts). The
+ * one-app `google-mail` and `google-drive` serve only connections made before it.
+ */
+export const EXPECTED_INTEGRATIONS = ["google"] as const;
 
 /** What the checks read: the env values that matter, as src/env.ts parsed them. */
 export type PreflightConfig = {

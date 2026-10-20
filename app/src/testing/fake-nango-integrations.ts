@@ -6,8 +6,10 @@ import { authorised, NANGO_API, unauthorised } from "./fake-nango-http";
 /** An integration as the environment holds it: its ID, its provider, and unset config. */
 export type FakeIntegration = { uniqueKey: string; provider: string; missingFields: string[] };
 
-// The environment Mycel expects: both Google integrations, each under its provider's name.
+// The environment Mycel expects: the one Google integration (ADR-0014), and the two one-app
+// integrations that connections from before it still use, each under its provider's name.
 const DEFAULT_INTEGRATIONS: FakeIntegration[] = [
+  { uniqueKey: "google", provider: "google", missingFields: [] },
   { uniqueKey: "google-mail", provider: "google-mail", missingFields: [] },
   { uniqueKey: "google-drive", provider: "google-drive", missingFields: [] },
 ];

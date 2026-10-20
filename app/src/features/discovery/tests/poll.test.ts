@@ -11,7 +11,7 @@ import {
   pollAllConnections,
   pollConnection,
 } from "../server";
-import { connectMailbox, daysAgo, listed } from "./ingest-helpers";
+import { connectMailbox, daysAgo, listed } from "@/testing/connect-helpers";
 
 beforeEach(resetDatabase);
 
@@ -48,7 +48,7 @@ describe("pollConnection", () => {
     const found = await findEventsByObject(ctx, "email", LATE);
     expect(found).toEqual([expect.objectContaining({ actor: LATE, connectionId: connection.id })]);
     expect(await getConnection(ctx, connection.id)).toMatchObject({
-      cursor: connection.mailbox.profile().historyId,
+      ingest: { gmail: { cursor: connection.mailbox.profile().historyId } },
     });
     expect((await listed(ctx, connection.id))?.lastPolledAt).toBeInstanceOf(Date);
 
@@ -126,8 +126,7 @@ describe("pollConnection", () => {
     expect(await findEventsByObject(ctx, "email", CUSTOMER)).toHaveLength(1);
     expect(await findEventsByObject(ctx, "email", LATE)).toHaveLength(2);
     expect(await getConnection(ctx, connection.id)).toMatchObject({
-      status: "active",
-      cursor: connection.mailbox.profile().historyId,
+      ingest: { gmail: { status: "active", cursor: connection.mailbox.profile().historyId } },
     });
     expect(await listed(ctx, connection.id)).toMatchObject({ status: "active" });
 

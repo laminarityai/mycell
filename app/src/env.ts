@@ -1,6 +1,14 @@
 import { z } from "zod";
 
 // The only place that reads process.env. Everything else imports `env`.
+
+/** A gateway model ID: `provider/model`, such as `typesafe-ai/jev-1.14.0`. */
+export const modelIdSchema = z.string().regex(/^[\w.-]+\/[\w.:-]+$/, "Expected provider/model");
+
+function positiveNumber(fallback: string) {
+  return z.string().default(fallback).transform(Number).pipe(z.number().positive());
+}
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   DATABASE_URL: z.url(),
@@ -23,6 +31,22 @@ const envSchema = z.object({
     .transform((value) => value === "1"),
   INNGEST_EVENT_KEY: z.string().min(1).optional(),
   INNGEST_SIGNING_KEY: z.string().min(1).optional(),
+  // The Vercel AI Gateway: every model call goes through it, and it reports each call's cost.
+  AI_GATEWAY_API_KEY: z.string().min(1),
+  // The global default model for each model role (invariant 6), as a gateway `provider/model` ID.
+  // An org's own row in model_roles wins over these. Pin Jev's version for classify, since
+  // experimental_decide may change in patch releases.
+  MODEL_CLASSIFY: modelIdSchema,
+  MODEL_FAST: modelIdSchema,
+  MODEL_SMART: modelIdSchema,
+  MODEL_JUDGE: modelIdSchema,
+  // Credits (ADR-0010): how many credits one US dollar of gateway cost uses up, and the per-role
+  // estimate a call must find in the balance before it is made. Placeholders until M7's pricing.
+  CREDITS_PER_USD: positiveNumber("1000"),
+  CREDIT_ESTIMATE_CLASSIFY: positiveNumber("1"),
+  CREDIT_ESTIMATE_FAST: positiveNumber("5"),
+  CREDIT_ESTIMATE_SMART: positiveNumber("50"),
+  CREDIT_ESTIMATE_JUDGE: positiveNumber("50"),
 });
 
 export const env = envSchema

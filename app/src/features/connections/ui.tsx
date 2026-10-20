@@ -8,6 +8,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ConnectButton } from "./lib/connect-button";
+import { DisconnectButton } from "./lib/disconnect-button";
 import type { ConnectionsListing, Source } from "./types";
 
 const SOURCE_NAMES: Record<Source, string> = { gmail: "Gmail" };
@@ -42,6 +43,7 @@ export function ConnectionsPanel({ listing }: { listing: ConnectionsListing }) {
               <TableHead>Source</TableHead>
               <TableHead>Account</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -51,6 +53,12 @@ export function ConnectionsPanel({ listing }: { listing: ConnectionsListing }) {
                 <TableCell>{connection.accountEmail}</TableCell>
                 <TableCell>
                   <Badge variant="secondary">{connection.status}</Badge>
+                </TableCell>
+                <TableCell className="text-right">
+                  <DisconnectButton
+                    connectionId={connection.id}
+                    accountEmail={connection.accountEmail}
+                  />
                 </TableCell>
               </TableRow>
             ))}

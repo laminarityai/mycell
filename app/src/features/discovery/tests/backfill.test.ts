@@ -66,6 +66,7 @@ describe("backfillConnection", () => {
         threadId: "thread-1182",
         attachments: [{ mimeType: "application/pdf", size: 52_000, driveFileId: null }],
         labelIds: ["INBOX", "UNREAD", "CATEGORY_PERSONAL"],
+        mimeType: null,
       },
       expect.objectContaining({
         type: "email.sent",

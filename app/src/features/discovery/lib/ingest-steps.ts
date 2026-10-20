@@ -6,10 +6,14 @@ import type { Source } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
 import type { Connector, SourceClient } from "./connector";
+import { driveConnector } from "./drive/connector";
 import { gmailConnector } from "./gmail/connector";
 import { storeEvents } from "./store";
 
-export const CONNECTORS: Record<Source, Connector> = { gmail: gmailConnector };
+export const CONNECTORS: Record<Source, Connector> = {
+  gmail: gmailConnector,
+  drive: driveConnector,
+};
 
 /** A step result: JSON, since Inngest stores it and replays it instead of re-running. */
 export type StepResult = Record<string, string | number | boolean | null>;

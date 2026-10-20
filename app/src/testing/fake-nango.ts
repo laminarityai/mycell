@@ -1,11 +1,12 @@
 // The fake Nango: an in-memory Nango Cloud behind msw's fetch interception, so tests run the
-// real Nango client (src/features/connections/lib/nango.ts) without network or secrets. It
-// implements only the endpoints Mycel calls, with the shapes Nango documents.
+// real Nango client without network or secrets. Only the endpoints Mycel calls, as documented.
 import { createHmac, randomUUID } from "node:crypto";
 import { http, HttpResponse } from "msw";
 import { env } from "@/env";
-import { FakeMailbox, gmailError, gmailResponse } from "./fake-gmail";
+import { FakeDrive } from "./fake-drive";
+import { FakeMailbox } from "./fake-gmail";
 import { connectionsApiHandlers, type ListingBehaviour } from "./fake-nango-connections";
+import { PROXIED_SOURCES, type ProxiedSource } from "./fake-proxied-sources";
 
 const API = "https://api.nango.dev";
 
@@ -25,7 +26,9 @@ export type FakeConnection = {
   integration: string;
   tags: Record<string, string>;
   account: FakeAccount;
+  // The account's Gmail mailbox and Drive; its integration decides which the proxy reaches.
   mailbox: FakeMailbox;
+  drive: FakeDrive;
 };
 
 /** Runs before the fake proxies a request to a source, given the source API path. */
@@ -58,10 +61,15 @@ class FakeNango {
   }
 
   /** The connected account's Gmail mailbox, for seeding messages. */
-  mailbox(connectionId: string): FakeMailbox {
+  mailbox = (connectionId: string): FakeMailbox => this.connection(connectionId).mailbox;
+
+  /** The connected account's Drive, for seeding files. */
+  drive = (connectionId: string): FakeDrive => this.connection(connectionId).drive;
+
+  private connection(connectionId: string): FakeConnection {
     const connection = this.connections.get(connectionId);
     if (connection === undefined) throw new Error(`Unknown connection ${connectionId}`);
-    return connection.mailbox;
+    return connection;
   }
 
   /**
@@ -123,6 +131,7 @@ class FakeNango {
       tags: session.tags,
       account,
       mailbox: new FakeMailbox(account.emailAddress),
+      drive: new FakeDrive(account.emailAddress),
     });
     return { connectionId, ...this.authWebhook(connectionId, "creation", true) };
   }
@@ -135,16 +144,16 @@ class FakeNango {
   /**
    * A user finishes OAuth in Connect UI opened with a reconnect session: Nango replaces the
    * connection's credentials and returns the `override` webhook it then sends. Choosing a
-   * different Google account than before swaps in that account's (empty) mailbox.
+   * different Google account than before swaps in that account's (empty) mailbox and Drive.
    */
   completeReconnect(token: string, account?: FakeAccount): FakeWebhook {
     const session = this.reconnectSessions.find((s) => s.token === token);
     if (session === undefined) throw new Error(`Unknown reconnect session token ${token}`);
-    const connection = this.connections.get(session.connectionId);
-    if (connection === undefined) throw new Error(`Unknown connection ${session.connectionId}`);
+    const connection = this.connection(session.connectionId);
     if (account !== undefined && account.emailAddress !== connection.account.emailAddress) {
       connection.account = account;
       connection.mailbox = new FakeMailbox(account.emailAddress);
+      connection.drive = new FakeDrive(account.emailAddress);
     }
     return this.authWebhook(session.connectionId, "override", true);
   }
@@ -172,8 +181,7 @@ class FakeNango {
     operation: "creation" | "override" | "refresh" | "deletion",
     success: boolean,
   ): FakeWebhook {
-    const connection = this.connections.get(connectionId);
-    if (connection === undefined) throw new Error(`Unknown connection ${connectionId}`);
+    const connection = this.connection(connectionId);
     return this.signed({
       from: "nango",
       type: "auth",
@@ -251,24 +259,28 @@ class FakeNango {
       return HttpResponse.json({ success: true });
     }),
 
-    http.get(`${API}/proxy/gmail/v1/users/me/*`, async ({ request }) => {
-      if (!authorised(request)) return unauthorised();
-      const url = new URL(request.url);
-      const path = url.pathname.slice("/proxy".length);
-      await this.proxyHook?.(path);
-      const connection = this.proxied(request);
-      if (connection === undefined) {
-        return HttpResponse.json({ error: { code: "unknown_connection" } }, { status: 404 });
-      }
-      const retries = Number(request.headers.get("Retries") ?? 0);
-      for (let attempt = 0; attempt <= retries && this.rateLimitsLeft > 0; attempt++) {
-        this.rateLimitsLeft -= 1;
-        this.rateLimitsServed += 1;
-        if (attempt === retries) return gmailError(429, "RESOURCE_EXHAUSTED");
-      }
-      return gmailResponse(connection.mailbox, path, url.searchParams);
-    }),
+    ...PROXIED_SOURCES.map((source) =>
+      http.get(`${API}/proxy${source.prefix}/*`, ({ request }) => this.proxy(request, source)),
+    ),
   ];
+
+  private async proxy(request: Request, source: ProxiedSource) {
+    if (!authorised(request)) return unauthorised();
+    const url = new URL(request.url);
+    const path = url.pathname.slice("/proxy".length);
+    await this.proxyHook?.(path);
+    const connection = this.proxied(request);
+    if (connection === undefined) {
+      return HttpResponse.json({ error: { code: "unknown_connection" } }, { status: 404 });
+    }
+    const retries = Number(request.headers.get("Retries") ?? 0);
+    for (let attempt = 0; attempt <= retries && this.rateLimitsLeft > 0; attempt++) {
+      this.rateLimitsLeft -= 1;
+      this.rateLimitsServed += 1;
+      if (attempt === retries) return source.rateLimited();
+    }
+    return source.respond(connection, path, url.searchParams);
+  }
 
   private proxied(request: Request): FakeConnection | undefined {
     const connection = this.connections.get(request.headers.get("Connection-Id") ?? "");

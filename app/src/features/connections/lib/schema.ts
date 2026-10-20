@@ -14,7 +14,7 @@ export const connections = pgTable(
     orgId: text("org_id").notNull(),
     kind: text("kind", { enum: ["member", "org"] }).notNull(),
     ownerUserId: text("owner_user_id").notNull(),
-    source: text("source", { enum: ["gmail"] }).notNull(),
+    source: text("source", { enum: ["gmail", "drive"] }).notNull(),
     // The connected Google account, lowercased.
     accountEmail: text("account_email").notNull(),
     nangoConnectionId: text("nango_connection_id").notNull().unique(),
@@ -25,7 +25,8 @@ export const connections = pgTable(
     }).notNull(),
     // Messages (or files) the current backfill has stored so far.
     backfilledItems: integer("backfilled_items").notNull().default(0),
-    // Where polling resumes in the source: Gmail's history ID. Null until a backfill starts.
+    // Where polling resumes in the source: Gmail's history ID, or Drive's changes page token.
+    // Null until a backfill starts.
     cursor: text("cursor"),
     // When polling last finished for it. Null until the first poll.
     lastPolledAt: timestamp("last_polled_at"),
@@ -53,7 +54,7 @@ export const connectAttempts = pgTable(
     orgId: text("org_id").notNull(),
     userId: text("user_id").notNull(),
     kind: text("kind", { enum: ["member", "org"] }).notNull(),
-    source: text("source", { enum: ["gmail"] }).notNull(),
+    source: text("source", { enum: ["gmail", "drive"] }).notNull(),
     status: text("status", { enum: ["pending", "connected", "refused"] }).notNull(),
     refusal: text("refusal"),
     createdAt: timestamp("created_at").defaultNow().notNull(),

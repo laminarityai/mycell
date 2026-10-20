@@ -28,6 +28,7 @@ export function ConnectionsPanel({
     <div className="flex flex-col gap-4">
       <div className="flex gap-2">
         <ConnectButton source="gmail" kind="member" label="Connect Gmail" />
+        <ConnectButton source="drive" kind="member" label="Connect Google Drive" />
       </div>
       {listing.attempts.map((attempt) => (
         <p

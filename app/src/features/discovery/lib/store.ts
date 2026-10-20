@@ -36,6 +36,7 @@ export async function storeEvents(
       threadId: event.threadId,
       attachments: event.attachments,
       labelIds: event.labelIds,
+      mimeType: event.mimeType,
     })),
     { onConflictDoNothing: true },
   );

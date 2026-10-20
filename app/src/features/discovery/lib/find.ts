@@ -41,6 +41,7 @@ export async function findEventsByObject(
     threadId: row.threadId,
     attachments: row.attachments,
     labelIds: row.labelIds,
+    mimeType: row.mimeType,
   }));
 }
 

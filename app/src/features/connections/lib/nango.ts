@@ -3,6 +3,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { env } from "@/env";
+import { SourceRequestError } from "../types";
 
 export const NANGO_API_URL = "https://api.nango.dev";
 
@@ -147,7 +148,8 @@ const nangoError = z.object({ error: z.object({ code: z.string() }) });
 /**
  * A GET through the Nango proxy to the source's own API, parsed with `schema`. Returns null when
  * the source answers 404 or 410 (the item is gone at the source), and throws
- * NangoConnectionGoneError when Nango no longer has the connection.
+ * NangoConnectionGoneError when Nango no longer has the connection, and SourceRequestError for
+ * any other refusal.
  */
 export async function nangoProxyGet<T>(
   connection: { connectionId: string; integration: string },
@@ -163,12 +165,13 @@ export async function nangoProxyGet<T>(
     },
   });
   if (response.ok) return schema.parse(await response.json());
-  const body = nangoError.safeParse(await response.json().catch(() => undefined));
+  const raw: unknown = await response.json().catch(() => undefined);
+  const body = nangoError.safeParse(raw);
   if (body.success && body.data.error.code === "unknown_connection") {
     throw new NangoConnectionGoneError();
   }
   if (response.status === 404 || response.status === 410) return null;
-  throw new Error(`Nango proxy ${path} failed: ${String(response.status)}`);
+  throw new SourceRequestError(response.status, raw, path);
 }
 
 /** Whether a webhook body really came from Nango: a hex HMAC-SHA256 of the raw body. */

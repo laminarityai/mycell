@@ -1,7 +1,7 @@
 // The connector interface: everything source-specific sits behind it, so nothing outside a
-// connector knows about Gmail (or, later, Drive or Outlook).
+// connector knows about Gmail or Drive (or, later, Outlook).
 import type { z } from "zod";
-import type { AttachmentMeta, EventType, ObjectRefKind } from "../types";
+import type { AttachmentMeta, Direction, EventType, ObjectRefKind } from "../types";
 
 /** GETs against one connection's source API, through the Nango proxy. Null: no such item. */
 export type SourceClient = {
@@ -18,10 +18,11 @@ export type NormalizedEvent = {
   occurredAt: Date;
   actor: string | null;
   counterparties: string[];
-  direction: "inbound" | "outbound";
+  direction: Direction | null;
   threadId: string | null;
   attachments: AttachmentMeta[];
   labelIds: string[];
+  mimeType: string | null;
   objectRefs: { kind: ObjectRefKind; key: string }[];
 };
 

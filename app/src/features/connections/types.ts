@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /** The sources a connection can reach. Outlook joins after v1, behind the same interface. */
-export const sourceSchema = z.enum(["gmail"]);
+export const sourceSchema = z.enum(["gmail", "drive"]);
 export type Source = z.infer<typeof sourceSchema>;
 
 /**
@@ -26,7 +26,7 @@ export type ConnectionSummary = {
   kind: ConnectionKind;
   accountEmail: string;
   status: ConnectionStatus;
-  // How many messages the current backfill has stored so far.
+  // How many messages (or file changes) the current backfill has stored so far.
   backfilledItems: number;
   // When polling last finished for it; null until the first poll.
   lastPolledAt: Date | null;
@@ -109,3 +109,19 @@ export type ReconciliationSummary = {
   // Nango connections with no Mycel connection, left alone this run by the bulk-delete rule.
   heldAtNango: NangoConnectionRef[];
 };
+
+/**
+ * The source refused a proxied request (anything but a 404 or 410, which read as "no such
+ * item"). It carries the source's status and parsed error body, so a connector can tell a
+ * refusal it recovers from (Drive's invalid page token) from a failure.
+ */
+export class SourceRequestError extends Error {
+  constructor(
+    readonly status: number,
+    readonly body: unknown,
+    path: string,
+  ) {
+    super(`Nango proxy ${path} failed: ${String(status)}`);
+    this.name = "SourceRequestError";
+  }
+}

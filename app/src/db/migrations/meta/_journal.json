@@ -43,6 +43,13 @@
       "when": 1792478346097,
       "tag": "0005_gmail-polling",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792479595840,
+      "tag": "0006_drive-events",
+      "breakpoints": true
     }
   ]
 }

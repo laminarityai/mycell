@@ -4,6 +4,7 @@ import { refresh } from "next/cache";
 import { z } from "zod";
 import { getCtx } from "@/features/orgs/server";
 import { actionError, type ActionResult } from "@/lib/errors";
+import { parseForm } from "@/lib/forms";
 import { startRun } from "./server";
 
 const startRunInput = z.object({
@@ -18,8 +19,8 @@ export async function startRunAction(
   form: FormData,
 ): Promise<ActionResult> {
   const ctx = await getCtx();
-  const input = startRunInput.parse(Object.fromEntries(form));
   try {
+    const input = parseForm(startRunInput, form);
     await startRun(ctx, input.workflowId, input.connectionId, input.sourceRef);
   } catch (error) {
     return actionError(error);

@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
+import { grantCredits } from "@/features/credits/server";
 import { backfillConnection, pollConnection } from "@/features/discovery/server";
 import { switchWorkflowOff, switchWorkflowOn } from "@/features/workflows/server";
 import { systemCtx, type Ctx } from "@/lib/ctx";
 import { ForbiddenError } from "@/lib/errors";
 import { gmailMessageReceived, type GmailMessageReceived } from "@/lib/events";
 import { connectMailbox } from "@/testing/connect-helpers";
+import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import { fakeInngest } from "@/testing/fake-inngest";
 import type { FakeMessageInput } from "@/testing/fake-gmail";
 import { executeRun, getRun, listRuns, startTriggeredRuns } from "../server";
@@ -180,6 +182,96 @@ describe("a polled message", () => {
 
     await expect(startTriggeredRuns(admin, event)).rejects.toThrow(ForbiddenError);
     await expect(startTriggeredRuns(orgA.member.ctx, event)).rejects.toThrow(ForbiddenError);
+  });
+});
+
+// Drafts a reply, labels the message and logs it: one of each write.
+const writeSteps = [
+  {
+    id: "draft",
+    type: "draft",
+    role: "smart",
+    instructions: "Reply with our current prices.",
+    context: ["trigger.message"],
+    output: "google-mail.create-draft",
+  },
+  { id: "approve", type: "approval", channel: "gmail_drafts" },
+  {
+    id: "label",
+    type: "tool",
+    action: "google-mail.add-label",
+    input: { messageId: { from: "trigger.messageId" }, label: "Pricing" },
+  },
+  {
+    id: "log",
+    type: "tool",
+    action: "google-sheet.append-row",
+    input: { spreadsheetId: "log", range: "Log!A:B", values: [{ from: "trigger.messageId" }] },
+  },
+];
+
+describe("a triggered run that writes", () => {
+  // The writing workflow switched on for the admin's inbox, and the run a new message started.
+  async function writingRun() {
+    const { orgA, admin, inbox, system } = await adminWithInbox();
+    await grantCredits(system, 100);
+    inbox.sheets.add("log", "Log", [["Message"]]);
+    const workflowId = await publish(admin, threadSpec({ id: "writes", steps: writeSteps }));
+    await switchWorkflowOn(admin, workflowId, inbox.id);
+    const message = inbox.mailbox.add(arriving());
+    const [runId] = await pollAndFanOut(orgA.id, inbox.id);
+    // One reply is scripted: generating a second would fail the test.
+    fakeAiGateway.text("Thanks, our prices are attached.");
+    return { orgA, admin, inbox, system, workflowId, message, runId };
+  }
+
+  function expectOneOfEach(inbox: Awaited<ReturnType<typeof writingRun>>["inbox"], row: string[]) {
+    expect(inbox.mailbox.drafts()).toHaveLength(1);
+    expect(inbox.mailbox.writes.log.toSorted()).toEqual([
+      "drafts.create",
+      "labels.create",
+      "messages.modify",
+    ]);
+    expect(inbox.sheets.rows("log", "Log")).toEqual([["Message"], row]);
+  }
+
+  it("makes no second draft, label or row when it's run again or its event comes twice", async () => {
+    const { orgA, admin, inbox, system, workflowId, message, runId } = await writingRun();
+
+    expect(await executeRun(system, runId)).toEqual({ status: "succeeded" });
+    expect(await executeRun(system, runId)).toEqual({ status: "succeeded" });
+    const again = await startTriggeredRuns(system, {
+      orgId: orgA.id,
+      connectionId: inbox.id,
+      sourceRef: message.id,
+      occurredAt: new Date().toISOString(),
+      labelIds: ["INBOX"],
+    });
+    expect(again.runIds).toEqual([runId]);
+    expect(await executeRun(system, runId)).toEqual({ status: "succeeded" });
+
+    expectOneOfEach(inbox, [message.id, `mycel:${runId}/log`]);
+    expect(await listRuns(admin, workflowId)).toHaveLength(1);
+  });
+
+  it("makes no second draft, label or row when every step runs again from scratch", async () => {
+    const { inbox, system, message, runId } = await writingRun();
+    // Keeps no step state, and dies once after the last write, before its result is kept:
+    // running again repeats every step.
+    let died = false;
+    const forgetful: RunStep = async (id, run) => {
+      const result = await run();
+      if (id === "log" && !died) {
+        died = true;
+        throw new Error("died after log");
+      }
+      return result;
+    };
+
+    await expect(executeRun(system, runId, forgetful)).rejects.toThrow("died after log");
+    expect(await executeRun(system, runId, forgetful)).toEqual({ status: "succeeded" });
+
+    expectOneOfEach(inbox, [message.id, `mycel:${runId}/log`]);
   });
 });
 

@@ -77,22 +77,38 @@ async function sheetRun(spec: Record<string, unknown> = exampleSpec()) {
 
 describe("the read-range action", () => {
   it("gives the draft the sheet's prices, and records only the range's counts", async () => {
-    const { admin, system, google, runId } = await sheetRun();
+    const { admin, system, google, message, runId } = await sheetRun();
     fakeAiGateway.decision({ choice: "yes", probabilities: { yes: 0.95, no: 0.05 } });
     fakeAiGateway.text(REPLY);
 
     expect(await executeRun(system, runId)).toEqual({ status: "succeeded" });
 
-    expect(google.mailbox.drafts()).toHaveLength(1);
+    const drafts = google.mailbox.drafts();
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0]).toMatchObject({
+      threadId: message.threadId,
+      headers: { to: "ada@customer.test" },
+    });
     const prompt = JSON.stringify(fakeAiGateway.requests("language").at(0)?.body);
     for (const cell of ["Oak chair", "80 GBP", "Walnut table", "3 weeks"]) {
       expect(prompt).toContain(cell);
     }
     const run = await getRun(admin, runId);
-    expect(run.steps.find((step) => step.stepId === "prices")).toMatchObject({
-      status: "succeeded",
-      output: { range: "Prices!A1:C50", rowCount: 3, columnCount: 3 },
-    });
+    expect(run.steps).toMatchObject([
+      { stepId: "classify", status: "succeeded", output: { label: "yes" } },
+      { stepId: "gate", status: "succeeded" },
+      {
+        stepId: "prices",
+        status: "succeeded",
+        output: { range: "Prices!A1:C50", rowCount: 3, columnCount: 3 },
+      },
+      {
+        stepId: "draft",
+        status: "succeeded",
+        output: { draftId: drafts[0]?.id, threadId: message.threadId },
+      },
+      { stepId: "approve", status: "succeeded", output: { awaiting: "human" } },
+    ]);
     expect(JSON.stringify(run)).not.toContain("Oak chair");
   });
 

@@ -122,13 +122,24 @@ Specs are JSON, validated by zod, and run by our own interpreter in `features/ru
       "question": "Is this a pricing inquiry?",
       "labels": ["yes", "no"]
     },
-    { "id": "gate", "type": "branch", "when": "classify.yes.p >= 0.85", "else": "stop" },
-    { "id": "prices", "type": "tool", "action": "google-sheet.read-range" },
+    {
+      "id": "gate",
+      "type": "branch",
+      "when": { "step": "classify", "label": "yes", "minP": 0.85 },
+      "else": "stop"
+    },
+    {
+      "id": "prices",
+      "type": "tool",
+      "action": "google-sheet.read-range",
+      "input": { "spreadsheetId": "sheet-1", "range": "Prices!A1:C50" }
+    },
     {
       "id": "draft",
       "type": "draft",
       "role": "smart",
-      "context": ["prices", "org_memory"],
+      "instructions": "Reply with our current prices.",
+      "context": ["trigger.message", "prices"],
       "output": "google-mail.create-draft"
     },
     { "id": "approve", "type": "approval", "channel": "gmail_drafts" }
@@ -136,6 +147,8 @@ Specs are JSON, validated by zod, and run by our own interpreter in `features/ru
   "autonomy": { "rung": 3 }
 }
 ```
+
+**Shape and structure** (`validateSpec` in `features/spec`, pure): the schema refuses unknown step types and misspelled fields; step IDs are unique; a `branch`'s `when` names an earlier `classify` step and one of its labels, and when the condition fails the run stops (`else: "stop"`, status `skipped`) or escalates (`else: "escalate"`); `tool` inputs are literals or references `{ "from": "<step>.<field>" }` and `{ "from": "trigger.<field>" }`, and a `draft`'s `context` names earlier steps, `trigger.message` or `trigger.thread`, all only to steps before it. `org_memory` as context is refused until memory exists (M9). A `risk` field anywhere is accepted and ignored. Every issue comes back in one list, each with the path of its field.
 
 **Validation before save:**
 
@@ -173,6 +186,19 @@ Each catalog action has a fixed level: `read` < `internal_reversible` < `externa
 - `read`, `internal_reversible`: may run autonomously.
 - `external_send`: must wait in the app's pending form for a person's review (ADR-0013). M3 approves by sending the Gmail draft; from M5 on, every review also appears on the Reviews page.
 - `financial`, `destructive`: not available in v1.
+
+The catalog is code (`features/policy/catalog.ts`), each action with its risk level, integration, the API host its proxy calls reach, the scopes that allow it, and input and output schemas. Outputs are derived data and IDs only (ADR-0012).
+
+| Action                     | Risk level            | Host (on the one `google` integration) | Scope needed                             |
+| -------------------------- | --------------------- | -------------------------------------- | ---------------------------------------- |
+| `google-mail.read-message` | `read`                | Gmail                                  | `gmail.readonly` or `gmail.modify`       |
+| `google-mail.read-thread`  | `read`                | Gmail                                  | `gmail.readonly` or `gmail.modify`       |
+| `google-mail.add-label`    | `internal_reversible` | Gmail                                  | `gmail.modify`                           |
+| `google-mail.create-draft` | `external_send`       | Gmail                                  | `gmail.modify` or `gmail.compose`        |
+| `google-sheet.read-range`  | `read`                | Sheets                                 | Drive or Sheets, read-only or read-write |
+| `google-sheet.append-row`  | `internal_reversible` | Sheets                                 | `spreadsheets`                           |
+
+`maxRisk(spec)` is the highest level among the spec's `tool` actions and `draft` outputs; model steps count as `read`, and a `risk` field in the spec is ignored. `applyPolicy(spec)` refuses unknown actions, an `external_send` action in a `tool` step (in v1 the only way to send is a draft), and a `draft` output that isn't `external_send`. It inserts an `approval` step (`channel: "gmail_drafts"`) directly after any draft with no approval before or after it, and reports each insertion.
 
 ## Models (`features/runtime`)
 

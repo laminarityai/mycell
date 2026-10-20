@@ -5,5 +5,5 @@ Workflow specs are executed by a small interpreter in `features/runtime` that ru
 ## Consequences
 
 - We give up Mastra's graph engine (parallel branches, loops, nested workflows), its trace storage, and Studio. v1's specs are short linear step lists with a stop branch, so none of that is needed yet.
-- Branch conditions should be structured data (e.g. `{ "step": "classify", "label": "yes", "minP": 0.85 }`) rather than expression strings, so the interpreter needs no expression parser. Settle this in M3.
+- Branch conditions are structured data (`{ "step": "classify", "label": "yes", "minP": 0.85 }`) rather than expression strings, so the interpreter needs no expression parser. Settled in M3 (#34); see `docs/architecture.md`, "Workflow spec".
 - The spec is the contract (invariant 5), so the executor is replaceable: switching to Mastra or another engine later, e.g. for rung-5 multi-person workflows, stays inside `features/runtime`.

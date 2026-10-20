@@ -14,6 +14,7 @@ Every `app/src/features/<name>/` has the same shape. Root files are the public e
 | `jobs.ts`    | the feature's Inngest functions                | the single Inngest route                |
 | `types.ts`   | public types and Zod schemas                   | anyone                                  |
 
+- A pure feature (no tables, no IO, no `ctx`, like `spec` and `policy`) has no `server.ts`. Its functions live in root files named for what they hold (`spec/validate.ts`, `policy/catalog.ts`, `policy/engine.ts`), which anyone may import, client code included.
 - `server.ts` functions that exist before any `ctx` does (sign-in, resolving the session to `ctx`, the auth route) are the only ones that don't take it first; they live in `orgs`.
 - `lib/`: implementation, including `lib/schema.ts` for the feature's tables.
 - `tests/`: tests that import only the feature's entry files.

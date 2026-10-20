@@ -63,10 +63,11 @@ async function recordRun(
   on: SwitchedOn,
   sourceRef: string,
 ): Promise<RecordedRun | null> {
+  const by = on.switch;
   const triggerKey =
-    on.enablementId === null
-      ? `workflow:${on.workflowId}:${sourceRef}`
-      : `enablement:${on.enablementId}:${sourceRef}`;
+    by.kind === "org"
+      ? `workflow:${by.workflowId}:${sourceRef}`
+      : `enablement:${by.enablementId}:${sourceRef}`;
   const db = forOrg(ctx);
   try {
     const created = await db.insert(
@@ -77,8 +78,8 @@ async function recordRun(
         ownerScope: connection.kind,
         workflowId: on.workflowId,
         workflowVersionId: on.versionId,
-        startedBy: on.enablementId === null ? "org_switch" : "enablement",
-        enablementId: on.enablementId,
+        startedBy: by.kind === "org" ? "org_switch" : "enablement",
+        enablementId: by.kind === "member" ? by.enablementId : null,
         sourceRef,
         triggerKey,
         status: "running",

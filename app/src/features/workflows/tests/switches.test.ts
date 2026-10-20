@@ -60,7 +60,7 @@ describe("switching a member workflow on", () => {
     expect(await listSwitchedOn(systemCtx(orgA.id), own.id)).toEqual([
       {
         workflowId,
-        enablementId: expect.any(String) as string,
+        switch: { kind: "member", enablementId: expect.any(String) as string },
         versionId: latest.id,
         since: workflow.switch?.since,
         labelIds: ["INBOX"],
@@ -134,7 +134,7 @@ describe("switching an org workflow on", () => {
     expect(await listSwitchedOn(systemCtx(orgA.id), support.id)).toEqual([
       {
         workflowId,
-        enablementId: null,
+        switch: { kind: "org", workflowId },
         versionId: workflow.versions[0].id,
         since: workflow.switch?.since,
         labelIds: ["INBOX"],

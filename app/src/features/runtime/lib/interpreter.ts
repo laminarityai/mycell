@@ -125,10 +125,10 @@ async function mayGoOn(ctx: Ctx, run: Run): Promise<boolean> {
   if (run.startedBy !== "manual") {
     // Lists nothing for a connection that's gone.
     const on = await listSwitchedOn(ctx, run.connectionId);
-    return on.some((switched) =>
+    return on.some(({ switch: by }) =>
       run.startedBy === "enablement"
-        ? switched.enablementId !== null && switched.enablementId === run.enablementId
-        : switched.enablementId === null && switched.workflowId === run.workflowId,
+        ? by.kind === "member" && by.enablementId === run.enablementId
+        : by.kind === "org" && by.workflowId === run.workflowId,
     );
   }
   try {

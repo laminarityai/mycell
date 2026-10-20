@@ -68,11 +68,13 @@ export type WorkflowDetails = {
  */
 export type WorkflowSwitch = { kind: "member" | "org"; connectionId: string; since: Date };
 
+/** What switched a workflow on: one admin's enablement, or an org workflow's org switch. */
+export type Switch = { kind: "member"; enablementId: string } | { kind: "org"; workflowId: string };
+
 /** One enablement or org switch on a connection, as the trigger's fan-out reads it. */
 export type SwitchedOn = {
   workflowId: string;
-  /** The enablement, for a member workflow; null for an org workflow's switch. */
-  enablementId: string | null;
+  switch: Switch;
   /** The latest version, which the run pins. */
   versionId: string;
   /** Messages that occurred before this start nothing. */

@@ -11,7 +11,7 @@ import type { ConnectionSummary } from "@/features/connections/types";
 import type { Spec, SpecIssue } from "@/features/spec/types";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError, SpecInvalidError, ValidationError } from "@/lib/errors";
-import type { SwitchedOn, WorkflowSwitch } from "../types";
+import type { Switch, SwitchedOn, WorkflowSwitch } from "../types";
 import { enablements, workflows, workflowVersions } from "./schema";
 import { scopeIssues } from "./scope-check";
 import { reachesGmail } from "./validation";
@@ -89,20 +89,15 @@ export async function listSwitchedOn(ctx: Ctx, connectionId: string): Promise<Sw
     ...enabled.map((row) => row.workflowId),
     ...orgSwitched.map((row) => row.id),
   ]);
-  const on = (
-    workflowId: string,
-    enablementId: string | null,
-    since: Date | null,
-  ): SwitchedOn[] => {
+  const on = (workflowId: string, by: Switch, since: Date | null): SwitchedOn[] => {
     const version = latest.get(workflowId);
-    const credentials = enablementId === null ? "org" : "member";
-    if (version === undefined || since === null || version.spec.credentials !== credentials) {
+    if (version === undefined || since === null || version.spec.credentials !== by.kind) {
       return [];
     }
     return [
       {
         workflowId,
-        enablementId,
+        switch: by,
         versionId: version.id,
         since,
         labelIds: version.spec.trigger.labelIds,
@@ -110,8 +105,12 @@ export async function listSwitchedOn(ctx: Ctx, connectionId: string): Promise<Sw
     ];
   };
   return [
-    ...enabled.flatMap((row) => on(row.workflowId, row.id, row.enabledAt)),
-    ...orgSwitched.flatMap((row) => on(row.id, null, row.orgSwitchedOnAt)),
+    ...enabled.flatMap((row) =>
+      on(row.workflowId, { kind: "member", enablementId: row.id }, row.enabledAt),
+    ),
+    ...orgSwitched.flatMap((row) =>
+      on(row.id, { kind: "org", workflowId: row.id }, row.orgSwitchedOnAt),
+    ),
   ];
 }
 

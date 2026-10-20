@@ -2,9 +2,9 @@ import { and, eq } from "drizzle-orm";
 import { isUniqueViolation } from "@/db/errors";
 import { forOrg } from "@/db/for-org";
 import { listUsers } from "@/features/orgs/server";
-import type { Ctx } from "@/lib/ctx";
+import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
-import { requireAdmin, requireTag } from "./access";
+import { requireTag } from "./access";
 import { tagAssignments } from "./schema";
 
 /** Gives the user the tag; does nothing if they already have it. */

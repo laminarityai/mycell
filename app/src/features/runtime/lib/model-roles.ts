@@ -4,8 +4,8 @@ import { eq } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { env, modelIdSchema } from "@/env";
 import type { ModelRole } from "@/features/spec/types";
-import type { Ctx } from "@/lib/ctx";
-import { ForbiddenError, ValidationError } from "@/lib/errors";
+import { requireAdmin, type Ctx } from "@/lib/ctx";
+import { ValidationError } from "@/lib/errors";
 import { modelRoles } from "./schema";
 
 const DEFAULT_MODELS: Record<ModelRole, string> = {
@@ -23,7 +23,7 @@ export async function resolveModel(ctx: Ctx, role: ModelRole): Promise<string> {
 
 /** Points one of the org's roles at a gateway model. Admins only; no UI until later. */
 export async function setModelRole(ctx: Ctx, role: ModelRole, modelId: string): Promise<void> {
-  if (ctx.role !== "admin") throw new ForbiddenError();
+  requireAdmin(ctx);
   const parsed = modelIdSchema.safeParse(modelId);
   if (!parsed.success) throw new ValidationError("A model ID looks like provider/model.");
 

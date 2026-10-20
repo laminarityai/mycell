@@ -9,13 +9,13 @@ import { forOrg } from "@/db/for-org";
 import { listConnections } from "@/features/connections/server";
 import type { ConnectionSummary } from "@/features/connections/types";
 import type { Spec, SpecIssue } from "@/features/spec/types";
-import type { Ctx } from "@/lib/ctx";
+import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError, SpecInvalidError, ValidationError } from "@/lib/errors";
 import type { SwitchedOn, WorkflowSwitch } from "../types";
 import { enablements, workflows, workflowVersions } from "./schema";
 import { scopeIssues } from "./scope-check";
 import { reachesGmail } from "./validation";
-import { findWorkflow, requireAdmin } from "./access";
+import { findWorkflow } from "./access";
 
 type Workflow = typeof workflows.$inferSelect;
 type Version = typeof workflowVersions.$inferSelect;

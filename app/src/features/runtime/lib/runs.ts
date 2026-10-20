@@ -7,7 +7,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { getConnection, readableConnectionIds } from "@/features/connections/server";
 import { getWorkflow, getWorkflowVersion } from "@/features/workflows/server";
-import type { Ctx } from "@/lib/ctx";
+import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import type { RunRecord, RunStepRecord } from "../types";
 import { sendRunRequested } from "./events";
@@ -18,10 +18,6 @@ type RunStepRow = typeof runSteps.$inferSelect;
 
 /** How many runs a workflow's page lists. */
 const RECENT_RUNS = 20;
-
-function requireAdmin(ctx: Ctx): void {
-  if (ctx.role !== "admin") throw new ForbiddenError();
-}
 
 /**
  * Runs the workflow's latest version on one message of a connection, as a debugging aid: the

@@ -1,12 +1,8 @@
 import { eq } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import type { Ctx } from "@/lib/ctx";
-import { ForbiddenError, NotFoundError } from "@/lib/errors";
+import { NotFoundError } from "@/lib/errors";
 import { tags } from "./schema";
-
-export function requireAdmin(ctx: Ctx): void {
-  if (ctx.role !== "admin") throw new ForbiddenError();
-}
 
 /** Throws NotFoundError unless the tag is in the caller's org. */
 export async function requireTag(ctx: Ctx, tagId: string): Promise<void> {

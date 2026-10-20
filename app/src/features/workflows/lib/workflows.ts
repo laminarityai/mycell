@@ -4,7 +4,7 @@ import { desc, eq } from "drizzle-orm";
 import { isUniqueViolation } from "@/db/errors";
 import { forOrg } from "@/db/for-org";
 import { applyPolicy } from "@/features/policy/engine";
-import type { Ctx } from "@/lib/ctx";
+import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { ConflictError, ValidationError } from "@/lib/errors";
 import type {
   SavedWorkflow,
@@ -13,7 +13,7 @@ import type {
   WorkflowSummary,
   WorkflowVersionSummary,
 } from "../types";
-import { findWorkflow, requireAdmin } from "./access";
+import { findWorkflow } from "./access";
 import { workflows, workflowVersions } from "./schema";
 import { switchesOf, switchOf } from "./switches";
 import { validateWorkflowSpec } from "./validation";

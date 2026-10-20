@@ -4,12 +4,12 @@ import { randomUUID } from "node:crypto";
 import { desc, eq } from "drizzle-orm";
 import { isUniqueViolation } from "@/db/errors";
 import { forOrg } from "@/db/for-org";
-import type { Ctx } from "@/lib/ctx";
+import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { ConflictError, ForbiddenError, NotFoundError } from "@/lib/errors";
 import type { WorkflowVersion } from "../types";
 import { workflowVersions } from "./schema";
 import { validateWorkflowSpec } from "./validation";
-import { findWorkflow, requireAdmin } from "./access";
+import { findWorkflow } from "./access";
 
 type Version = typeof workflowVersions.$inferSelect;
 

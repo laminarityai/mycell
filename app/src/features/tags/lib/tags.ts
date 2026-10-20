@@ -2,10 +2,10 @@ import { randomUUID } from "node:crypto";
 import { asc, eq, inArray } from "drizzle-orm";
 import { isUniqueViolation } from "@/db/errors";
 import { forOrg } from "@/db/for-org";
-import type { Ctx } from "@/lib/ctx";
+import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { ConflictError, NotFoundError } from "@/lib/errors";
 import type { Tag, TagSummary } from "../types";
-import { requireAdmin } from "./access";
+
 import { tagAssignments, tags } from "./schema";
 import { normalizeTagName } from "./tag-name";
 

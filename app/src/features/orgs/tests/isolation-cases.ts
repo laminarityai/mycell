@@ -22,6 +22,11 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await server.listUsers(orgB.admin.ctx)).toEqual(orgBUsers);
   },
 
+  findCtx: async ({ orgA, orgB }) => {
+    expect(await server.findCtx(orgA.member.id)).toEqual(orgA.member.ctx);
+    expect(await server.findCtx(orgB.admin.id)).toEqual(orgB.admin.ctx);
+  },
+
   listUsers: async ({ orgA }) => {
     const users = await server.listUsers(orgA.member.ctx);
 

@@ -25,11 +25,19 @@ async function OrgUsers() {
   return (
     <>
       <MyTags tags={myTags} />
-      {ctx.role === "admin" ? (
-        <Link href="/tags" className="text-sm font-medium underline-offset-4 hover:underline">
-          Manage tags
+      <nav className="flex gap-4">
+        <Link
+          href="/connections"
+          className="text-sm font-medium underline-offset-4 hover:underline"
+        >
+          Connections
         </Link>
-      ) : null}
+        {ctx.role === "admin" ? (
+          <Link href="/tags" className="text-sm font-medium underline-offset-4 hover:underline">
+            Manage tags
+          </Link>
+        ) : null}
+      </nav>
       <OrgUsersTable users={users} viewer={ctx} />
     </>
   );

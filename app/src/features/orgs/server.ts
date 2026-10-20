@@ -11,6 +11,9 @@ export { listUsers } from "./lib/list-users";
 export { removeUser, setRole } from "./lib/manage-users";
 // Called only by Better Auth's session hook (lib/auth.ts) and tests: it trusts its profile.
 export { signIn } from "./lib/sign-in";
+// For callers holding a user ID that something trusted vouched for, such as a signed Nango
+// webhook. It reads the membership fresh, so a removed user gets undefined.
+export { findCtx } from "./lib/find-ctx";
 
 /**
  * The signed-in user's ctx, read fresh from their membership on every request. Pages and Server

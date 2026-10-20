@@ -12,6 +12,8 @@ const e2eEnv = {
   BETTER_AUTH_URL: `http://localhost:${String(port)}`,
   GOOGLE_CLIENT_ID: "e2e-google-client-id",
   GOOGLE_CLIENT_SECRET: "e2e-google-client-secret",
+  NANGO_API_KEY: "e2e-nango-api-key",
+  NANGO_WEBHOOK_SIGNING_KEY: "e2e-nango-webhook-signing-key",
 };
 // The test workers seed that database and sign cookies through src/env, like the app does.
 Object.assign(process.env, e2eEnv);

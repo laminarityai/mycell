@@ -77,6 +77,24 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await server.listConnections(orgs.orgB.member.ctx)).toEqual(memberBefore);
   },
 
+  // Reconciliation takes no ctx: it walks every org. Org A's connection deleted at Nango goes,
+  // inside org A only, and org B's connections stay on both sides.
+  reconcileConnections: async (orgs) => {
+    const { before, memberBefore, nangoConnectionId } = await seedOrgBConnection(orgs);
+    const own = await connectGmail(orgs.orgA.member.ctx, orgs.orgA.member.email);
+    const mine = (await server.listConnections(orgs.orgA.member.ctx)).connections.at(0);
+    fakeNango.deleteWithoutWebhook(own.connectionId);
+
+    const summary = await server.reconcileConnections();
+
+    expect(summary.deletedRows).toEqual([{ orgId: orgs.orgA.id, connectionId: mine?.id }]);
+    expect(summary.deletedAtNango).toEqual([]);
+    expect((await server.listConnections(orgs.orgA.member.ctx)).connections).toEqual([]);
+    expect(await server.listConnections(orgs.orgB.admin.ctx)).toEqual(before);
+    expect(await server.listConnections(orgs.orgB.member.ctx)).toEqual(memberBefore);
+    expect(fakeNango.hasConnection(nangoConnectionId)).toBe(true);
+  },
+
   getConnection: async (orgs) => {
     const { before, memberBefore } = await seedOrgBConnection(orgs);
     const own = await connectGmail(orgs.orgA.member.ctx, orgs.orgA.member.email);

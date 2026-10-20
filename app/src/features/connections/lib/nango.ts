@@ -47,6 +47,84 @@ export async function deleteNangoConnection(
   }
 }
 
+/** A connection as Nango lists it: no credentials, just which integration and its tags. */
+export type ListedNangoConnection = {
+  connectionId: string;
+  integration: string;
+  tags: Partial<Record<string, string>>;
+};
+
+const connectionsPage = z.object({
+  connections: z.array(
+    z.object({
+      connection_id: z.string().min(1),
+      provider_config_key: z.string().min(1),
+      tags: z.record(z.string(), z.unknown()).nullish(),
+    }),
+  ),
+});
+
+// Nango caps a page at 2000. Its pages are numbered from 0, and it signals no last page, and
+// may serve fewer than asked: the listing ends at the first empty page.
+const LIST_PAGE_SIZE = 1000;
+const MAX_LIST_PAGES = 1000;
+
+/**
+ * Every connection in Mycel's Nango environment, across all pages. Throws rather than return
+ * a listing it can't vouch for: a failed page, or pages that repeat (paging being ignored).
+ */
+export async function listNangoConnections(): Promise<ListedNangoConnection[]> {
+  const listed = new Map<string, ListedNangoConnection>();
+  for (let page = 0; page < MAX_LIST_PAGES; page++) {
+    const query = new URLSearchParams({ limit: String(LIST_PAGE_SIZE), page: String(page) });
+    const response = await nangoFetch(`/connections?${query.toString()}`, { method: "GET" });
+    if (!response.ok) throw new Error(`Nango connection list failed: ${String(response.status)}`);
+    const { connections } = connectionsPage.parse(await response.json());
+    if (connections.length === 0) return [...listed.values()];
+    let added = 0;
+    for (const connection of connections) {
+      const key = `${connection.provider_config_key}/${connection.connection_id}`;
+      if (listed.has(key)) continue;
+      added += 1;
+      listed.set(key, {
+        connectionId: connection.connection_id,
+        integration: connection.provider_config_key,
+        tags: stringTags(connection.tags ?? {}),
+      });
+    }
+    if (added === 0) throw new Error(`Nango repeated page ${String(page)} of its connections`);
+  }
+  throw new Error(`Nango listed more than ${String(MAX_LIST_PAGES)} pages of connections`);
+}
+
+// Mycel's tags are strings; anything else on a listed connection isn't Mycel's and is dropped.
+function stringTags(tags: Record<string, unknown>): Partial<Record<string, string>> {
+  return Object.fromEntries(
+    Object.entries(tags).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+  );
+}
+
+/**
+ * Asks Nango about one connection by ID: false only when Nango answers that it has no such
+ * connection. Any other failure throws, so an outage never reads as "gone".
+ */
+export async function nangoConnectionExists(
+  connectionId: string,
+  integration: string,
+): Promise<boolean> {
+  // The response carries credentials; only the status is read, and nothing is kept.
+  const query = new URLSearchParams({ provider_config_key: integration });
+  const response = await nangoFetch(
+    `/connections/${encodeURIComponent(connectionId)}?${query.toString()}`,
+    { method: "GET" },
+  );
+  await response.body?.cancel();
+  // 424: Nango has the connection, but its token refresh is exhausted.
+  if (response.ok || response.status === 424) return true;
+  if (response.status === 404) return false;
+  throw new Error(`Nango connection read failed: ${String(response.status)}`);
+}
+
 // Nango's error body for a proxy call naming a connection it doesn't have.
 const nangoError = z.object({ error: z.object({ code: z.string() }) });
 

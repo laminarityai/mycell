@@ -5,6 +5,7 @@ import { createHmac, randomUUID } from "node:crypto";
 import { http, HttpResponse } from "msw";
 import { env } from "@/env";
 import { FakeMailbox } from "./fake-gmail";
+import { connectionsApiHandlers, type ListingBehaviour } from "./fake-nango-connections";
 
 const API = "https://api.nango.dev";
 
@@ -13,7 +14,10 @@ type FakeSession = { token: string; integration: string; tags: Record<string, st
 /** What the connected account looks like from inside its source. */
 export type FakeAccount = { emailAddress: string };
 
-type FakeConnection = {
+export type FakeConnection = {
+  // Nango's own numeric ID, beside the connection ID Mycel uses.
+  id: number;
+  created: string;
   connectionId: string;
   integration: string;
   tags: Record<string, string>;
@@ -34,6 +38,8 @@ class FakeNango {
   private rateLimitsLeft = 0;
   private rateLimitsServed = 0;
   private proxyHook: ProxyHook | undefined;
+  private nextId = 1;
+  private listing: ListingBehaviour = { pageCap: undefined, empty: false };
 
   reset(): void {
     this.sessions = [];
@@ -42,6 +48,8 @@ class FakeNango {
     this.rateLimitsLeft = 0;
     this.rateLimitsServed = 0;
     this.proxyHook = undefined;
+    this.nextId = 1;
+    this.listing = { pageCap: undefined, empty: false };
   }
 
   /** The connected account's Gmail mailbox, for seeding messages. */
@@ -69,9 +77,22 @@ class FakeNango {
     this.proxyHook = hook;
   }
 
-  /** Makes Nango's connection delete endpoint answer 500 until the next reset. */
-  failDeletes(): void {
-    this.deletesFail = true;
+  /** Makes Nango's connection delete endpoint answer 500, until `failDeletes(false)` or reset. */
+  failDeletes(failing = true): void {
+    this.deletesFail = failing;
+  }
+
+  /** Serves at most `size` connections per page of the list endpoint, whatever is asked. */
+  capListPage(size: number): void {
+    this.listing.pageCap = size;
+  }
+
+  /**
+   * Makes the list endpoint answer 200 with no connections (an outage, or a key for the wrong
+   * environment), until the next reset. Reading one connection by ID still finds it.
+   */
+  listNothing(): void {
+    this.listing.empty = true;
   }
 
   /** The connect session Mycel created most recently. */
@@ -90,6 +111,8 @@ class FakeNango {
     if (session === undefined) throw new Error(`Unknown connect session token ${token}`);
     const connectionId = randomUUID();
     this.connections.set(connectionId, {
+      id: this.nextId++,
+      created: new Date().toISOString(),
       connectionId,
       integration: session.integration,
       tags: session.tags,
@@ -107,6 +130,13 @@ class FakeNango {
     const webhook = this.authWebhook(connectionId, "deletion", true);
     this.connections.delete(connectionId);
     return webhook;
+  }
+
+  /** The connection is deleted at Nango and no webhook reaches Mycel (a bulk delete, say). */
+  deleteWithoutWebhook(connectionId: string): void {
+    if (!this.connections.delete(connectionId)) {
+      throw new Error(`Unknown connection ${connectionId}`);
+    }
   }
 
   /** The webhook Nango sends about one of its connections. */
@@ -144,6 +174,10 @@ class FakeNango {
   }
 
   readonly handlers = [
+    ...connectionsApiHandlers(
+      () => [...this.connections.values()],
+      () => this.listing,
+    ),
     http.post(`${API}/connect/sessions`, async ({ request }) => {
       if (!authorised(request)) return unauthorised();
       const body = (await request.json()) as {

@@ -41,7 +41,7 @@ export default defineConfig([
     extends: [tseslint.configs.disableTypeChecked],
   },
   {
-    files: ["src/**/*.{ts,tsx}"],
+    files: ["src/**/*.{ts,tsx}", "e2e/**/*.ts"],
     rules: {
       "max-lines": ["error", { max: 300, skipBlankLines: true, skipComments: true }],
       "import/no-default-export": "error",
@@ -78,6 +78,8 @@ export default defineConfig([
   },
   { files: ["src/env.ts"], rules: { "no-restricted-properties": "off" } },
   { files: [NEXT_DEFAULT_EXPORT_FILES], rules: { "import/no-default-export": "off" } },
+  // Playwright loads its global setup as a default export.
+  { files: ["e2e/global-setup.ts"], rules: { "import/no-default-export": "off" } },
   prettier,
   globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts"]),
 ]);

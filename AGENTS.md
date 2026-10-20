@@ -4,7 +4,7 @@ Mycel lets a small company's admins describe supervised AI workflows to a builde
 
 ## Verify
 
-`pnpm verify` is the whole CI: format check, lint, typecheck, import boundaries, tests, build. Work is done when it passes locally; the pre-push hook runs it too. GitHub Actions is out of minutes, so its red runs carry no signal and a local pass is the source of truth. (Delete these two sentences once Actions has minutes again.)
+`pnpm verify` is the whole CI: format check, lint, typecheck, import boundaries, tests, build, e2e tests. Work is done when it passes locally; the pre-push hook runs it too. GitHub Actions is out of minutes, so its red runs carry no signal and a local pass is the source of truth. (Delete these two sentences once Actions has minutes again.)
 
 Other commands: the `package.json` scripts.
 

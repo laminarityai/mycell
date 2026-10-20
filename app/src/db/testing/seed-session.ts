@@ -1,20 +1,24 @@
 // Signed-in sessions as Better Auth stores them. Tests that end a user's access check them
-// here, because Better Auth's own session reads need a signed cookie.
+// here, and e2e tests sign a browser in with the returned token (e2e/sign-in-as.ts), because
+// Better Auth's own session reads need a signed cookie.
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { session } from "../auth-schema";
 import { getDb } from "../client";
 
-export async function seedSession(userId: string): Promise<void> {
+/** Stores a session for the user that is valid for an hour, and returns its token. */
+export async function seedSession(userId: string): Promise<string> {
+  const token = randomUUID();
   await getDb()
     .insert(session)
     .values({
       id: randomUUID(),
-      token: randomUUID(),
+      token,
       userId,
       expiresAt: new Date(Date.now() + 60 * 60 * 1000),
       updatedAt: new Date(),
     });
+  return token;
 }
 
 export async function hasSession(userId: string): Promise<boolean> {

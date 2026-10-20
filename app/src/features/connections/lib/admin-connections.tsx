@@ -40,7 +40,7 @@ export function AdminConnections({ listing }: { listing: ConnectionsListing }) {
               {listing.orgConnections.map((connection) => (
                 <TableRow key={connection.id}>
                   <TableCell>{connection.accountEmail}</TableCell>
-                  <TableCell>
+                  <TableCell className="min-w-32 whitespace-normal">
                     <ConnectionApps connection={connection} />
                   </TableCell>
                   <TableCell>
@@ -55,7 +55,7 @@ export function AdminConnections({ listing }: { listing: ConnectionsListing }) {
                   <TableCell>
                     <LastPolled at={connection.lastPolledAt} />
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right whitespace-normal">
                     <ConnectionControls connection={connection} />
                   </TableCell>
                 </TableRow>
@@ -83,7 +83,7 @@ export function AdminConnections({ listing }: { listing: ConnectionsListing }) {
                   <TableCell>
                     <OwnerName owner={connection.owner} />
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="min-w-32 whitespace-normal">
                     <ConnectionApps connection={connection} />
                   </TableCell>
                   <TableCell>

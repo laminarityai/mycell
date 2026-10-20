@@ -5,12 +5,13 @@ import { disconnect } from "@/features/connections/server";
 import { GOOGLE_APP_SCOPES } from "@/features/connections/types";
 import { systemCtx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError, SpecInvalidError, ValidationError } from "@/lib/errors";
-import { connectGoogle, connectMailbox } from "@/testing/connect-helpers";
+import { connectGoogle, connectMailbox, connectOldConnection } from "@/testing/connect-helpers";
 import {
   getWorkflow,
   listSwitchedOn,
   listWorkflows,
   publishWorkflow,
+  runnableConnections,
   saveWorkflow,
   switchWorkflowOff,
   switchWorkflowOn,
@@ -174,6 +175,41 @@ describe("switching an org workflow on", () => {
 
     expect((await getWorkflow(admin, workflowId)).switch).toBeNull();
     expect(await listSwitchedOn(systemCtx(orgA.id), support.id)).toEqual([]);
+  });
+});
+
+describe("the connections a workflow can run on", () => {
+  it("are the org connections allowed Gmail with the scopes it needs, its switch's first", async () => {
+    const orgs = await seedTwoOrgs();
+    const admin = orgs.orgA.admin.ctx;
+    // Read-only Gmail, from before write access was asked for: it can't add a label.
+    await connectOldConnection(admin, "gmail", "sales@org-a.test", { kind: "org" });
+    const allButGmail = Object.values(GOOGLE_APP_SCOPES).filter(
+      (scope) => scope !== GOOGLE_APP_SCOPES.gmail,
+    );
+    await connectGoogle(admin, "ops@org-a.test", { kind: "org", scopes: allButGmail });
+    const support = await connectMailbox(admin, "support@org-a.test", [], "org");
+    await connectMailbox(admin, "help@org-a.test", [], "org");
+    await connectMailbox(admin, orgs.orgA.admin.email);
+    const { id } = await saveWorkflow(admin, {
+      name: "Support",
+      spec: labelSpec({ credentials: "org" }),
+    });
+    await publishWorkflow(admin, id);
+
+    const ids = async () => (await runnableConnections(admin, id)).map((c) => c.accountEmail);
+    expect(await ids()).toEqual(["help@org-a.test", "support@org-a.test"]);
+
+    await switchWorkflowOn(admin, id, support.id);
+    expect(await ids()).toEqual(["support@org-a.test", "help@org-a.test"]);
+  });
+
+  it("are the admin's own connections for a member workflow, and admins' to ask for", async () => {
+    const { orgA, admin, own, workflowId } = await memberWorkflow();
+    await connectMailbox(admin, "support@org-a.test", [], "org");
+
+    expect((await runnableConnections(admin, workflowId)).map((c) => c.id)).toEqual([own.id]);
+    await expect(runnableConnections(orgA.member.ctx, workflowId)).rejects.toThrow(ForbiddenError);
   });
 });
 

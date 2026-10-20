@@ -1,11 +1,10 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
-import { listConnections } from "@/features/connections/server";
 import { getCtx } from "@/features/orgs/server";
 import { listRuns } from "@/features/runtime/server";
 import { RecentRuns, RunOnMessageForm } from "@/features/runtime/ui";
-import { getWorkflow } from "@/features/workflows/server";
+import { getWorkflow, runnableConnections } from "@/features/workflows/server";
 import { WorkflowEditor, WorkflowSwitchSection } from "@/features/workflows/ui";
 import { NotFoundError } from "@/lib/errors";
 
@@ -33,11 +32,12 @@ async function Workflow({ params }: Pick<PageProps<"/workflows/[workflowId]">, "
     if (error instanceof NotFoundError) notFound();
     throw error;
   });
-  const [runs, listing] = await Promise.all([listRuns(ctx, workflowId), listConnections(ctx)]);
-  // The connections the spec's credentials allow: the admin's own, or the org's.
-  const usable =
-    workflow.workingSpec.credentials === "member" ? listing.connections : listing.orgConnections;
-  const connections = usable.map((connection) => ({
+  const [runs, runnable] = await Promise.all([
+    listRuns(ctx, workflowId),
+    runnableConnections(ctx, workflowId),
+  ]);
+  // Only the connections a run could use, the one it's switched on for first.
+  const connections = runnable.map((connection) => ({
     id: connection.id,
     label: connection.accountEmail,
   }));

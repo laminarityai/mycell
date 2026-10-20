@@ -30,7 +30,7 @@ export const modelRoles = pgTable(
     role: text("role", { enum: modelRoleEnum }).notNull(),
     // A gateway `provider/model` ID.
     modelId: text("model_id").notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [primaryKey({ columns: [table.orgId, table.role] })],
 );
@@ -61,8 +61,8 @@ export const runs = pgTable(
     triggerKey: text("trigger_key"),
     status: text("status", { enum: runStatuses }).notNull(),
     costUsd: doublePrecision("cost_usd").notNull().default(0),
-    startedAt: timestamp("started_at").defaultNow().notNull(),
-    finishedAt: timestamp("finished_at"),
+    startedAt: timestamp("started_at", { withTimezone: true }).defaultNow().notNull(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
   },
   (table) => [
     unique("runs_org_id_id_unique").on(table.orgId, table.id),
@@ -103,7 +103,7 @@ export const runSteps = pgTable(
     status: text("status", { enum: runStepStatuses }).notNull(),
     attempts: integer("attempts").notNull(),
     // When the step's last attempt began.
-    lastAttemptAt: timestamp("last_attempt_at").defaultNow().notNull(),
+    lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true }).defaultNow().notNull(),
     // Labels, probabilities, IDs, counts and field names; never content (ADR-0012). Null when
     // the step failed or has nothing to show.
     output: jsonb("output").$type<Json>(),
@@ -113,8 +113,8 @@ export const runSteps = pgTable(
     modelRole: text("model_role", { enum: modelRoleEnum }),
     modelId: text("model_id"),
     costUsd: doublePrecision("cost_usd").notNull().default(0),
-    startedAt: timestamp("started_at").notNull(),
-    finishedAt: timestamp("finished_at").notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }).notNull(),
   },
   (table) => [
     // A step replayed after a crash records nothing twice.

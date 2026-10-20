@@ -67,8 +67,8 @@ export const ingestStates = pgTable(
     // Null until a backfill starts.
     cursor: text("cursor"),
     // When polling last finished for the app. Null until the first poll.
-    lastPolledAt: timestamp("last_polled_at"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
+    lastPolledAt: timestamp("last_polled_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     unique("ingest_states_connection_id_app_unique").on(table.connectionId, table.app),

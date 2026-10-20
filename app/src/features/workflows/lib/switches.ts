@@ -213,7 +213,10 @@ function connectionIssues(spec: Spec, connection: ConnectionSummary): SpecIssue[
   return scopeIssues(spec, [connection]);
 }
 
-async function latestVersions(ctx: Ctx, workflowIds: string[]): Promise<Map<string, Version>> {
+export async function latestVersions(
+  ctx: Ctx,
+  workflowIds: string[],
+): Promise<Map<string, Version>> {
   const latest = new Map<string, Version>();
   if (workflowIds.length === 0) return latest;
   const versions = await forOrg(ctx).select(workflowVersions, {

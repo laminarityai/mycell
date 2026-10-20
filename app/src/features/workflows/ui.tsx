@@ -9,6 +9,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { RiskLevel } from "@/features/policy/types";
+import { formatSpec } from "@/features/spec/format";
 import { SwitchForm, type SwitchConnectionOption } from "./lib/switch-form";
 import { PublishButton, WorkflowForm } from "./lib/workflow-editor";
 import type { WorkflowDetails, WorkflowSummary, WorkflowSwitch } from "./types";
@@ -135,7 +136,7 @@ export function WorkflowEditor({ workflow }: { workflow: WorkflowDetails }) {
         key={workflow.updatedAt.toISOString()}
         workflowId={workflow.id}
         name={workflow.name}
-        spec={JSON.stringify(workflow.workingSpec, null, 2)}
+        spec={formatSpec(workflow.workingSpec)}
       />
       <section className="flex flex-col gap-2" aria-label="Versions">
         <h2 className="text-lg font-semibold">Versions</h2>

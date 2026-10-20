@@ -5,10 +5,18 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { startConnectAction } from "../actions";
-import type { Source } from "../types";
+import type { ConnectionKind, Source } from "../types";
 
 /** Opens Nango's Connect UI for one source, then refreshes once the popup closes. */
-export function ConnectButton({ source, label }: { source: Source; label: string }) {
+export function ConnectButton({
+  source,
+  kind,
+  label,
+}: {
+  source: Source;
+  kind: ConnectionKind;
+  label: string;
+}) {
   const router = useRouter();
   const [error, setError] = useState<string>();
   const [pending, startTransition] = useTransition();
@@ -21,7 +29,7 @@ export function ConnectButton({ source, label }: { source: Source; label: string
       },
     });
     startTransition(async () => {
-      const result = await startConnectAction(source);
+      const result = await startConnectAction(source, kind);
       if ("error" in result) {
         connectUI.close();
         setError(result.error);

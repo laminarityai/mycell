@@ -22,5 +22,5 @@ export default function ConnectionsPage() {
 
 async function Connections() {
   const ctx = await getCtx();
-  return <ConnectionsPanel listing={await listConnections(ctx)} />;
+  return <ConnectionsPanel listing={await listConnections(ctx)} isAdmin={ctx.role === "admin"} />;
 }

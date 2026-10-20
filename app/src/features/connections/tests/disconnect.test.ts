@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
-import { removeUser } from "@/features/orgs/server";
+import { removeUser, setRole } from "@/features/orgs/server";
 import type { Ctx } from "@/lib/ctx";
 import { ConflictError, ForbiddenError, NotFoundError } from "@/lib/errors";
 import { fakeNango } from "@/testing/fake-nango";
@@ -11,7 +11,7 @@ import {
   handleNangoWebhook,
   listConnections,
 } from "../server";
-import { connectGmail } from "./connect-helpers";
+import { connectGmail, connectOrgInbox } from "./connect-helpers";
 
 beforeEach(resetDatabase);
 
@@ -20,6 +20,15 @@ async function connectOwnGmail(ctx: Ctx, emailAddress: string) {
   const { connectionId: nangoConnectionId } = await connectGmail(ctx, emailAddress);
   const { connections } = await listConnections(ctx);
   const connection = connections.find((c) => c.accountEmail === emailAddress);
+  if (connection === undefined) throw new Error(`${emailAddress} didn't connect`);
+  return { id: connection.id, nangoConnectionId };
+}
+
+// Connects a shared inbox as an org connection, returning Mycel's connection ID and Nango's.
+async function connectSharedInbox(ctx: Ctx, emailAddress: string) {
+  const { connectionId: nangoConnectionId } = await connectOrgInbox(ctx, emailAddress);
+  const { orgConnections } = await listConnections(ctx);
+  const connection = orgConnections.find((c) => c.accountEmail === emailAddress);
   if (connection === undefined) throw new Error(`${emailAddress} didn't connect`);
   return { id: connection.id, nangoConnectionId };
 }
@@ -211,5 +220,46 @@ describe("removing a user", () => {
     );
 
     expect((await listConnections(orgA.admin.ctx)).connections).toHaveLength(1);
+  });
+});
+
+describe("org connections", () => {
+  it("lets any admin disconnect an org connection, here and at Nango", async () => {
+    const { orgA } = await seedTwoOrgs();
+    await setRole(orgA.admin.ctx, orgA.member.id, "admin");
+    const otherAdmin = { ...orgA.member.ctx, role: "admin" as const };
+    const inbox = await connectSharedInbox(otherAdmin, `support@${orgA.workspaceDomain}`);
+
+    await disconnect(orgA.admin.ctx, inbox.id);
+
+    expect((await listConnections(orgA.admin.ctx)).orgConnections).toEqual([]);
+    expect(fakeNango.hasConnection(inbox.nangoConnectionId)).toBe(false);
+  });
+
+  it("refuses a member disconnecting an org connection", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const inbox = await connectSharedInbox(orgA.admin.ctx, `support@${orgA.workspaceDomain}`);
+
+    await expect(disconnect(orgA.member.ctx, inbox.id)).rejects.toThrow(ForbiddenError);
+
+    expect((await listConnections(orgA.admin.ctx)).orgConnections).toHaveLength(1);
+    expect(fakeNango.hasConnection(inbox.nangoConnectionId)).toBe(true);
+  });
+
+  it("keeps a removed user's org connections, flagged, while their own ones go", async () => {
+    const { orgA } = await seedTwoOrgs();
+    await setRole(orgA.admin.ctx, orgA.member.id, "admin");
+    const leaving = { ...orgA.member.ctx, role: "admin" as const };
+    const inbox = await connectSharedInbox(leaving, `support@${orgA.workspaceDomain}`);
+    const own = await connectOwnGmail(leaving, orgA.member.email);
+
+    await removeUser(orgA.admin.ctx, orgA.member.id);
+    await deleteMemberConnectionsOf(orgA.admin.ctx, orgA.member.id);
+
+    const listing = await listConnections(orgA.admin.ctx);
+    expect(listing.orgConnections.map((c) => [c.id, c.owner.removed])).toEqual([[inbox.id, true]]);
+    expect(listing.memberConnections).toEqual([]);
+    expect(fakeNango.hasConnection(inbox.nangoConnectionId)).toBe(true);
+    expect(fakeNango.hasConnection(own.nangoConnectionId)).toBe(false);
   });
 });

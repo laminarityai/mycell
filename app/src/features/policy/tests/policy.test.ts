@@ -18,6 +18,15 @@ describe("the catalog", () => {
       "google-sheet.append-row": "internal_reversible",
     });
   });
+
+  it("names the pending form of every external send, and of nothing else (ADR-0013)", () => {
+    const forms = Object.values(catalog).map((action) => [action.risk, action.pendingForm]);
+
+    for (const [risk, form] of forms) {
+      expect(form === undefined).toBe(risk !== "external_send");
+    }
+    expect(catalog["google-mail.create-draft"].pendingForm).toBe("a Gmail draft");
+  });
 });
 
 describe("maxRisk", () => {

@@ -100,6 +100,20 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await server.resolveModel(orgs.orgA.admin.ctx, "fast")).toBe("test/fast-default");
   },
 
+  openMeteredStream: async (orgs) => {
+    const { ledgerBefore } = await seedOrgB(orgs);
+    const admin = orgs.orgA.admin.ctx;
+
+    // Org B's balance doesn't cover org A.
+    await expect(server.openMeteredStream(admin, "smart")).rejects.toThrow(OutOfCreditsError);
+    await grantCredits(systemCtx(orgs.orgA.id), 100);
+    const stream = await server.openMeteredStream(admin, "smart");
+    await stream.finish("succeeded");
+
+    expect(stream.modelId).toBe("test/smart-default");
+    expect(await listLedger(orgs.orgB.admin.ctx)).toEqual(ledgerBefore);
+  },
+
   setModelRole: async (orgs) => {
     await seedOrgB(orgs);
 

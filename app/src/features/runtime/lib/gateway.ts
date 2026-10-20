@@ -29,6 +29,21 @@ const meteringSchema = z.object({
     .nullish(),
 });
 
+/**
+ * The cost and generation ID in a gateway answer, or in a streamed step's
+ * `{ providerMetadata }`; cost 0 when it reports none.
+ */
+export function meteringOf(answer: unknown): Metering {
+  const parsed = meteringSchema.safeParse(answer);
+  if (!parsed.success) return { costUsd: 0, generationId: undefined };
+  const gateway = parsed.data.providerMetadata?.gateway;
+  const costUsd = gateway?.cost;
+  return {
+    costUsd: costUsd !== undefined && Number.isFinite(costUsd) ? costUsd : 0,
+    generationId: gateway?.generationId ?? parsed.data.generationId ?? undefined,
+  };
+}
+
 export function meteredGateway(): MeteredGateway {
   let last: Metering = { costUsd: 0, generationId: undefined };
 
@@ -38,15 +53,7 @@ export function meteredGateway(): MeteredGateway {
       .clone()
       .json()
       .catch(() => undefined);
-    const parsed = meteringSchema.safeParse(body);
-    if (parsed.success) {
-      const gateway = parsed.data.providerMetadata?.gateway;
-      const costUsd = gateway?.cost;
-      last = {
-        costUsd: costUsd !== undefined && Number.isFinite(costUsd) ? costUsd : 0,
-        generationId: gateway?.generationId ?? parsed.data.generationId ?? undefined,
-      };
-    }
+    if (meteringSchema.safeParse(body).success) last = meteringOf(body);
     return response;
   };
 

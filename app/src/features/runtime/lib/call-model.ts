@@ -23,7 +23,7 @@ import { meteredGateway, type MeteredGateway } from "./gateway";
 import { resolveModel } from "./model-roles";
 
 /** The credits a call on each role must find in the balance before it's made. */
-const CREDIT_ESTIMATES: Record<ModelRole, number> = {
+export const CREDIT_ESTIMATES: Record<ModelRole, number> = {
   classify: env.CREDIT_ESTIMATE_CLASSIFY,
   fast: env.CREDIT_ESTIMATE_FAST,
   smart: env.CREDIT_ESTIMATE_SMART,

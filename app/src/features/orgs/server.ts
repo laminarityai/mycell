@@ -10,7 +10,7 @@ import { findCtx } from "./lib/find-ctx";
 export { listUsers } from "./lib/list-users";
 // Called only by scheduled jobs, which take no ctx until they pick an org.
 export { listOrgIds } from "./lib/list-org-ids";
-export { getWorkspaceDomain } from "./lib/workspace-domain";
+export { getOrgSettings, getWorkspaceDomain } from "./lib/workspace-domain";
 export { removeUser, setRole } from "./lib/manage-users";
 // Called only by Better Auth's session hook (lib/auth.ts) and tests: it trusts its profile.
 export { signIn } from "./lib/sign-in";

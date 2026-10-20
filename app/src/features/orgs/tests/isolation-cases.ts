@@ -42,6 +42,17 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await server.getWorkspaceDomain(orgB.admin.ctx)).toBe(orgB.workspaceDomain);
   },
 
+  getOrgSettings: async ({ orgA, orgB }) => {
+    expect(await server.getOrgSettings(orgA.member.ctx)).toEqual({
+      name: "Org A",
+      workspaceDomain: orgA.workspaceDomain,
+    });
+    expect(await server.getOrgSettings(orgB.admin.ctx)).toEqual({
+      name: "Org B",
+      workspaceDomain: orgB.workspaceDomain,
+    });
+  },
+
   setRole: async ({ orgA, orgB }) => {
     const orgBUsers = await server.listUsers(orgB.admin.ctx);
 

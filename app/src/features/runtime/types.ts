@@ -1,10 +1,24 @@
 // Runtime's public types: what a model call takes and returns, and the error it throws.
+import type { LanguageModel } from "ai";
 import type { z } from "zod";
 import type { ActionName } from "@/features/policy/catalog";
 import type { ModelRole, StepType } from "@/features/spec/types";
 
 /** What a model call is for; recorded on its ledger entry. */
 export type CallAttribution = { workflowId?: string; runId?: string };
+
+/** A streamed call's model and its metering (`openMeteredStream`). */
+export type MeteredStream = {
+  modelId: string;
+  model: LanguageModel;
+  /** Adds one finished model step's cost, read from its `providerMetadata.gateway`. */
+  meterStep(providerMetadata: unknown): void;
+  /**
+   * Records the call's usage: the cost of every step metered so far. Only the first call
+   * records; later ones do nothing, so every way a stream can end may call it.
+   */
+  finish(outcome: "succeeded" | "failed"): Promise<void>;
+};
 
 /** A text call. */
 export type TextRequest = CallAttribution & {

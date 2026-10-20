@@ -14,7 +14,16 @@ export type RiskLevel = z.infer<typeof riskLevelSchema>;
 /** One operation a workflow may call, with the risk level our team fixed for it. */
 export type CatalogAction = {
   readonly name: string;
+  /** The app it acts in, as admins name it. */
+  readonly app: "Gmail" | "Sheets";
+  /** What it does, in a sentence the builder chat reads. */
+  readonly description: string;
   readonly risk: RiskLevel;
+  /**
+   * Where an `external_send` action waits for a person's review, inside its app (ADR-0013),
+   * such as "a Gmail draft". Every external send has one; other actions have none.
+   */
+  readonly pendingForm?: string;
   readonly integration: "google";
   /** The API host the Nango proxy reaches, set with its base-URL override (ADR-0014). */
   readonly host: string;

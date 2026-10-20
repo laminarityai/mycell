@@ -9,6 +9,12 @@ export type VerifiedGoogleProfile = {
   hd: string | undefined;
 };
 
+/** What an org is called, and the Workspace domain it was created for (ADR-0002). */
+export type OrgSettings = {
+  name: string;
+  workspaceDomain: string;
+};
+
 /** A user of the org, as the org page lists them. */
 export type OrgUser = {
   id: string;

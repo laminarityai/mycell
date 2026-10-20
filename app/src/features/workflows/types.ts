@@ -40,6 +40,8 @@ export type WorkflowSummary = {
   name: string;
   specId: string;
   latestVersion: WorkflowVersionSummary | null;
+  /** The caller's enablement, or the org switch; null while off. */
+  switch: WorkflowSwitch | null;
   updatedAt: Date;
 };
 
@@ -60,8 +62,11 @@ export type WorkflowDetails = {
   updatedAt: Date;
 };
 
-/** Where a workflow is switched on: the connection it runs on, and since when. */
-export type WorkflowSwitch = { connectionId: string; since: Date };
+/**
+ * Where a workflow is switched on: by the caller's own enablement (`member`) or the org switch
+ * (`org`), the connection it runs on, and since when.
+ */
+export type WorkflowSwitch = { kind: "member" | "org"; connectionId: string; since: Date };
 
 /** One enablement or org switch on a connection, as the trigger's fan-out reads it. */
 export type SwitchedOn = {

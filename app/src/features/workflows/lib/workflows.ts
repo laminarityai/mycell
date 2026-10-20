@@ -15,7 +15,7 @@ import type {
 } from "../types";
 import { findWorkflow, requireAdmin } from "./access";
 import { workflows, workflowVersions } from "./schema";
-import { switchOf } from "./switches";
+import { switchesOf, switchOf } from "./switches";
 import { validateWorkflowSpec } from "./validation";
 
 type Version = typeof workflowVersions.$inferSelect;
@@ -54,7 +54,7 @@ export async function saveWorkflow(ctx: Ctx, input: WorkflowInput): Promise<Save
   }
 }
 
-/** The org's workflows by name, each with its latest version. */
+/** The org's workflows by name, each with its latest version and its switch. */
 export async function listWorkflows(ctx: Ctx): Promise<WorkflowSummary[]> {
   requireAdmin(ctx);
   const db = forOrg(ctx);
@@ -64,6 +64,7 @@ export async function listWorkflows(ctx: Ctx): Promise<WorkflowSummary[]> {
   for (const version of versions) {
     if (!latest.has(version.workflowId)) latest.set(version.workflowId, version);
   }
+  const switches = await switchesOf(ctx, rows);
   return rows.map((row) => {
     const version = latest.get(row.id);
     return {
@@ -71,6 +72,7 @@ export async function listWorkflows(ctx: Ctx): Promise<WorkflowSummary[]> {
       name: row.name,
       specId: row.specId,
       latestVersion: version === undefined ? null : versionSummary(version),
+      switch: switches.get(row.id) ?? null,
       updatedAt: row.updatedAt,
     };
   });

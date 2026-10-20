@@ -117,15 +117,39 @@ export async function listSwitchedOn(ctx: Ctx, connectionId: string): Promise<Sw
 
 /** The workflow's switch as the caller sees it: their own enablement, or the org switch. */
 export async function switchOf(ctx: Ctx, workflow: Workflow): Promise<WorkflowSwitch | null> {
-  const own = (
-    await forOrg(ctx).select(enablements, {
-      where: and(eq(enablements.workflowId, workflow.id), eq(enablements.userId, ctx.userId)),
-      limit: 1,
-    })
-  ).at(0);
-  if (own !== undefined) return { connectionId: own.connectionId, since: own.enabledAt };
+  return (await switchesOf(ctx, [workflow])).get(workflow.id) ?? null;
+}
+
+/** Each workflow's switch as the caller sees it, by workflow ID, in one read. */
+export async function switchesOf(
+  ctx: Ctx,
+  rows: Workflow[],
+): Promise<Map<string, WorkflowSwitch | null>> {
+  const own =
+    rows.length === 0
+      ? []
+      : await forOrg(ctx).select(enablements, {
+          where: and(
+            eq(enablements.userId, ctx.userId),
+            inArray(
+              enablements.workflowId,
+              rows.map((row) => row.id),
+            ),
+          ),
+        });
+  const ownOf = new Map(own.map((enablement) => [enablement.workflowId, enablement]));
+  return new Map(rows.map((row) => [row.id, switchFrom(row, ownOf.get(row.id))]));
+}
+
+function switchFrom(
+  workflow: Workflow,
+  own: typeof enablements.$inferSelect | undefined,
+): WorkflowSwitch | null {
+  if (own !== undefined) {
+    return { kind: "member", connectionId: own.connectionId, since: own.enabledAt };
+  }
   if (workflow.orgConnectionId === null || workflow.orgSwitchedOnAt === null) return null;
-  return { connectionId: workflow.orgConnectionId, since: workflow.orgSwitchedOnAt };
+  return { kind: "org", connectionId: workflow.orgConnectionId, since: workflow.orgSwitchedOnAt };
 }
 
 async function enable(ctx: Ctx, workflowId: string, connectionId: string): Promise<void> {

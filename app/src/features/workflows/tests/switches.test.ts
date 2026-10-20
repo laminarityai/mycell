@@ -9,6 +9,7 @@ import { connectGoogle, connectMailbox } from "@/testing/connect-helpers";
 import {
   getWorkflow,
   listSwitchedOn,
+  listWorkflows,
   publishWorkflow,
   saveWorkflow,
   switchWorkflowOff,
@@ -49,7 +50,11 @@ describe("switching a member workflow on", () => {
     await switchWorkflowOn(admin, workflowId, own.id);
 
     const workflow = await getWorkflow(admin, workflowId);
-    expect(workflow.switch).toEqual({ connectionId: own.id, since: expect.any(Date) as Date });
+    expect(workflow.switch).toEqual({
+      kind: "member",
+      connectionId: own.id,
+      since: expect.any(Date) as Date,
+    });
     expect(workflow.switch?.since.getTime()).toBeGreaterThanOrEqual(before.getTime() - 1000);
     const latest = workflow.versions[0];
     expect(await listSwitchedOn(systemCtx(orgA.id), own.id)).toEqual([
@@ -121,7 +126,11 @@ describe("switching an org workflow on", () => {
     await switchWorkflowOn(admin, workflowId, support.id);
 
     const workflow = await getWorkflow(admin, workflowId);
-    expect(workflow.switch).toEqual({ connectionId: support.id, since: expect.any(Date) as Date });
+    expect(workflow.switch).toEqual({
+      kind: "org",
+      connectionId: support.id,
+      since: expect.any(Date) as Date,
+    });
     expect(await listSwitchedOn(systemCtx(orgA.id), support.id)).toEqual([
       {
         workflowId,
@@ -165,6 +174,41 @@ describe("switching an org workflow on", () => {
 
     expect((await getWorkflow(admin, workflowId)).switch).toBeNull();
     expect(await listSwitchedOn(systemCtx(orgA.id), support.id)).toEqual([]);
+  });
+});
+
+describe("the workflows list", () => {
+  it("shows which workflows are on: the admin's own enablement, or the org switch", async () => {
+    const { orgA, admin, support, workflowId: orgId } = await orgWorkflow();
+    const own = await connectMailbox(admin, orgA.admin.email);
+    const { id: memberId } = await saveWorkflow(admin, {
+      name: "Label",
+      spec: labelSpec({ id: "label-mine" }),
+    });
+    await publishWorkflow(admin, memberId);
+    const { id: offId } = await saveWorkflow(admin, {
+      name: "Off",
+      spec: labelSpec({ id: "off" }),
+    });
+    await publishWorkflow(admin, offId);
+
+    await switchWorkflowOn(admin, orgId, support.id);
+    await switchWorkflowOn(admin, memberId, own.id);
+
+    const since = expect.any(Date) as Date;
+    expect(await listWorkflows(admin)).toMatchObject([
+      { id: memberId, switch: { kind: "member", connectionId: own.id, since } },
+      { id: offId, switch: null },
+      { id: orgId, switch: { kind: "org", connectionId: support.id, since } },
+    ]);
+  });
+
+  it("doesn't show another admin's enablement as on", async () => {
+    const { orgA, admin, own, workflowId } = await memberWorkflow();
+    await switchWorkflowOn(admin, workflowId, own.id);
+    const promoted = { ...orgA.member.ctx, role: "admin" as const };
+
+    expect(await listWorkflows(promoted)).toMatchObject([{ id: workflowId, switch: null }]);
   });
 });
 

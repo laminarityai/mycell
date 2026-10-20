@@ -11,7 +11,7 @@ import {
 import type { RiskLevel } from "@/features/policy/types";
 import { SwitchForm, type SwitchConnectionOption } from "./lib/switch-form";
 import { PublishButton, WorkflowForm } from "./lib/workflow-editor";
-import type { WorkflowDetails, WorkflowSummary } from "./types";
+import type { WorkflowDetails, WorkflowSummary, WorkflowSwitch } from "./types";
 
 export { WorkflowForm };
 
@@ -51,7 +51,7 @@ export function RiskBadge({ risk }: { risk: RiskLevel }) {
   return <Badge variant={risk === "read" ? "secondary" : "outline"}>{RISK_LABELS[risk]}</Badge>;
 }
 
-/** The admin's workflows: name, latest version and its max risk level. */
+/** The admin's workflows: name, latest version, its max risk level, and whether it's on. */
 export function WorkflowsList({ workflows }: { workflows: WorkflowSummary[] }) {
   if (workflows.length === 0) {
     return <p className="text-sm text-muted-foreground">No workflows yet.</p>;
@@ -63,6 +63,7 @@ export function WorkflowsList({ workflows }: { workflows: WorkflowSummary[] }) {
           <TableHead>Workflow</TableHead>
           <TableHead>Latest version</TableHead>
           <TableHead>Max risk</TableHead>
+          <TableHead>Switch</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -88,10 +89,23 @@ export function WorkflowsList({ workflows }: { workflows: WorkflowSummary[] }) {
                 <RiskBadge risk={workflow.latestVersion.maxRisk} />
               )}
             </TableCell>
+            <TableCell>
+              <SwitchBadge current={workflow.switch} />
+            </TableCell>
           </TableRow>
         ))}
       </TableBody>
     </Table>
+  );
+}
+
+/** Whether the workflow is on: for the admin's own connection, for the org's, or off. */
+function SwitchBadge({ current }: { current: WorkflowSwitch | null }) {
+  if (current === null) return <Badge variant="secondary">Off</Badge>;
+  return (
+    <Badge variant="outline">
+      {current.kind === "member" ? "On for your connection" : "On for the org"}
+    </Badge>
   );
 }
 

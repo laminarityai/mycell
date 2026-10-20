@@ -158,6 +158,56 @@ describe("the append-row action", () => {
   });
 });
 
+const draftStep = {
+  id: "draft",
+  type: "draft",
+  role: "smart",
+  instructions: "Reply with our current prices.",
+  context: ["trigger.message"],
+  output: "google-mail.create-draft",
+};
+const approveStep = { id: "approve", type: "approval", channel: "gmail_drafts" };
+
+describe("an approval step", () => {
+  it("records that the draft awaits a person, and lets the steps after it run", async () => {
+    const { admin, system, google, runId } = await sheetRun(
+      threadSpec({ steps: [draftStep, approveStep, logStep] }),
+    );
+    google.sheets.add("sheet-1", "Log", [["Message", "Kind", "Note"]]);
+    fakeAiGateway.text(REPLY);
+
+    expect(await executeRun(system, runId)).toEqual({ status: "succeeded" });
+
+    const draftIds = google.mailbox.drafts().map((draft) => draft.id);
+    expect(draftIds).toHaveLength(1);
+    expect(google.sheets.rows("sheet-1", "Log")).toHaveLength(2);
+    expect((await getRun(admin, runId)).steps).toMatchObject([
+      { stepId: "draft", status: "succeeded" },
+      {
+        stepId: "approve",
+        status: "succeeded",
+        output: { awaiting: "human", channel: "gmail_drafts", draftIds },
+      },
+      { stepId: "log", status: "succeeded" },
+    ]);
+  });
+
+  it("before a draft, still lets the draft be made: the draft is what awaits the person", async () => {
+    const { admin, system, google, runId } = await sheetRun(
+      threadSpec({ steps: [approveStep, draftStep] }),
+    );
+    fakeAiGateway.text(REPLY);
+
+    expect(await executeRun(system, runId)).toEqual({ status: "succeeded" });
+
+    expect(google.mailbox.drafts()).toHaveLength(1);
+    expect((await getRun(admin, runId)).steps).toMatchObject([
+      { stepId: "approve", status: "succeeded" },
+      { stepId: "draft", status: "succeeded" },
+    ]);
+  });
+});
+
 describe("a sheet step on a disconnected Google connection", () => {
   const pricesStep = (exampleSpec().steps as Record<string, unknown>[])[2];
 

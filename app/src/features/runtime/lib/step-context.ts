@@ -16,8 +16,8 @@ export type StepContext = {
 
 /** What a step did. */
 export type StepExecution = {
-  /** Go on to the next step, or end the run (`succeeded` ends it early, as an approval does). */
-  next: "continue" | "succeeded" | "skipped" | "escalated";
+  /** Go on to the next step, or end the run `skipped` or `escalated`. */
+  next: "continue" | "skipped" | "escalated";
   /** Handed on to later steps through the step state: derived data only (ADR-0012). */
   output: Json;
   /** What run_steps keeps: no content, and an extract's field names but not their values. */

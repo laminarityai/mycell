@@ -1,8 +1,8 @@
 // The draft and approval steps. A draft step fetches its context, generates the reply on its
 // role and hands it to its output action, all inside the one step, so the generated text never
 // reaches the step state or the run's records (invariant 8). In v1 the approval is the person
-// sending the Gmail draft, so the approval step records that the draft awaits them and ends the
-// run.
+// sending the Gmail draft: we never send it, so the draft is itself what awaits them. The
+// approval step records that, and the run goes on to its later steps.
 import { z } from "zod";
 import { findAction, type ActionName } from "@/features/policy/catalog";
 import type { Step } from "@/features/spec/types";
@@ -103,7 +103,10 @@ async function sheetText(name: string, context: StepContext): Promise<string | u
 
 const draftOutput = z.object({ draftId: z.string() });
 
-/** Records that the drafts before it await a person, who approves by sending one. */
+/**
+ * Records that the drafts before it await a person, who approves by sending one. It holds
+ * nothing back: a Gmail draft is never sent by a run, so the steps after it still run.
+ */
 export function approvalStep(
   step: StepOf<"approval">,
   context: StepContext,
@@ -113,5 +116,5 @@ export function approvalStep(
     return parsed.success ? [parsed.data.draftId] : [];
   });
   const record = { awaiting: "human", channel: step.channel, draftIds };
-  return Promise.resolve({ next: "succeeded", output: record, record });
+  return Promise.resolve({ next: "continue", output: record, record });
 }

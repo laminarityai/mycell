@@ -22,9 +22,9 @@ export const workflows = pgTable(
     // An org-credential workflow's one switch: the org connection it runs on while it's on, and
     // since when. Null while off. Deleting the connection switches it off.
     orgConnectionId: text("org_connection_id"),
-    orgSwitchedOnAt: timestamp("org_switched_on_at"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    orgSwitchedOnAt: timestamp("org_switched_on_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     unique("workflows_org_id_spec_id_unique").on(table.orgId, table.specId),
@@ -57,7 +57,7 @@ export const enablements = pgTable(
       .default("on"),
     // Written from JS, like the message times it's compared with (no default: the column has
     // no time zone, and the database's now() would be read back hours off).
-    enabledAt: timestamp("enabled_at").notNull(),
+    enabledAt: timestamp("enabled_at", { withTimezone: true }).notNull(),
   },
   (table) => [
     unique("enablements_workflow_id_user_id_unique").on(table.workflowId, table.userId),
@@ -96,7 +96,7 @@ export const workflowVersions = pgTable(
       .notNull(),
     requiredActions: jsonb("required_actions").$type<string[]>().notNull(),
     publishedBy: text("published_by").notNull(),
-    publishedAt: timestamp("published_at").defaultNow().notNull(),
+    publishedAt: timestamp("published_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     unique("workflow_versions_workflow_id_number_unique").on(table.workflowId, table.number),

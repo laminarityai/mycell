@@ -22,7 +22,7 @@ export const creditLedger = pgTable(
     // What the call was for, when a workflow run made it. No foreign keys: usage outlives both.
     workflowId: text("workflow_id"),
     runId: text("run_id"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [index("credit_ledger_org_id_idx").on(table.orgId)],
 );

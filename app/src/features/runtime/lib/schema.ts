@@ -85,6 +85,8 @@ export const runSteps = pgTable(
     type: text("type", { enum: stepTypes as [StepType, ...StepType[]] }).notNull(),
     status: text("status", { enum: runStepStatuses }).notNull(),
     attempts: integer("attempts").notNull(),
+    // When the step's last attempt began.
+    lastAttemptAt: timestamp("last_attempt_at").defaultNow().notNull(),
     // Labels, probabilities, IDs, counts and field names; never content (ADR-0012). Null when
     // the step failed or has nothing to show.
     output: jsonb("output").$type<Json>(),

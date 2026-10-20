@@ -122,6 +122,7 @@ function stepRecord(row: RunStepRow): RunStepRecord {
     type: row.type,
     status: row.status,
     attempts: row.attempts,
+    lastAttemptAt: row.lastAttemptAt,
     output: row.output ?? null,
     errorCode: row.errorCode,
     errorMessage: row.errorMessage,

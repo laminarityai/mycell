@@ -11,6 +11,7 @@ import { getWorkflowVersion } from "@/features/workflows/server";
 import type { Ctx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import type { Json, RetryPolicy, RunOutcome, RunStep } from "../types";
+import { checked } from "./checks";
 import { stepExecutors } from "./executors";
 import { isConnectionGone, RunStepError, type Failure } from "./failures";
 import { defaultRetryPolicy, runInline, withRetries } from "./run-step";
@@ -76,14 +77,14 @@ async function executeStep(ctx: Ctx, run: Run, step: Step, place: StepPlace): Pr
   try {
     if (!attempted.ok) {
       if (attempted.failure.runStatus === "cancelled") return await cancel(ctx, run);
-      await recordStep(ctx, run, step, place.position, startedAt, attempted.attempts, {
+      await recordStep(ctx, run, step, place.position, startedAt, attempted, {
         failure: attempted.failure,
       });
       await finishRun(ctx, run.id, "failed");
       return { ended: "failed", output: null };
     }
     const execution = attempted.value;
-    await recordStep(ctx, run, step, place.position, startedAt, attempted.attempts, {
+    await recordStep(ctx, run, step, place.position, startedAt, attempted, {
       execution,
     });
     const ended =
@@ -110,7 +111,7 @@ function attempt(step: Step, context: StepContext): Promise<StepExecution> {
   if (executor.status === "pending") {
     throw new RunStepError("not_available", `The ${step.type} step isn't available yet.`);
   }
-  return (executor.run as StepRun<Step>)(step, context);
+  return checked(step, () => (executor.run as StepRun<Step>)(step, context));
 }
 
 /** Whether the run may start its next step: its connection is still there. */
@@ -132,7 +133,7 @@ async function recordStep(
   step: Step,
   position: number,
   startedAt: Date,
-  attempts: number,
+  tries: { attempts: number; lastAttemptAt: Date },
   end: StepEnd,
 ): Promise<void> {
   const common = {
@@ -142,7 +143,8 @@ async function recordStep(
     position,
     stepId: step.id,
     type: step.type,
-    attempts,
+    attempts: tries.attempts,
+    lastAttemptAt: tries.lastAttemptAt,
     startedAt,
     finishedAt: new Date(),
   };
@@ -158,7 +160,7 @@ async function recordStep(
         }
       : {
           ...common,
-          status: "failed" as const,
+          status: end.failure.stepStatus,
           output: null,
           errorCode: end.failure.code,
           errorMessage: end.failure.message,

@@ -104,6 +104,65 @@ describe("validateSpec", () => {
       issues: [{ message: expect.stringContaining("chekcs") as string }],
     });
   });
+
+  it("accepts a schema check in the supported JSON Schema subset", () => {
+    const spec = exampleSpec();
+    const schema = {
+      type: "object",
+      required: ["label"],
+      additionalProperties: false,
+      properties: {
+        label: { type: "string", enum: ["yes", "no"], minLength: 2 },
+        p: { type: ["number", "null"], minimum: 0, maximum: 1 },
+        tags: { type: "array", items: { type: "string" }, maxItems: 3 },
+      },
+    };
+    spec.steps[0] = { ...spec.steps[0], checks: { schema, minP: 0.5 } };
+
+    expect(validateSpec(spec)).toMatchObject({ ok: true });
+  });
+
+  it("refuses minP on a step that isn't a classify, and requiredFields an extract lacks", () => {
+    const spec = {
+      ...exampleSpec(),
+      steps: [
+        {
+          id: "details",
+          type: "extract",
+          role: "fast",
+          fields: { city: { type: "string", description: "Where to deliver" } },
+          checks: { minP: 0.5, requiredFields: ["city", "quantity"] },
+        },
+        { id: "stop", type: "escalate", reason: "Unclear", checks: { requiredFields: ["city"] } },
+      ],
+    };
+
+    expect(validateSpec(spec)).toMatchObject({
+      ok: false,
+      issues: [
+        { path: ["steps", 0, "checks", "minP"], message: "Only a classify step has a p to check." },
+        {
+          path: ["steps", 0, "checks", "requiredFields", 1],
+          message: '"details" has no field "quantity".',
+        },
+        {
+          path: ["steps", 1, "checks", "requiredFields"],
+          message: "Only an extract step has fields to require.",
+        },
+      ],
+    });
+  });
+
+  it("refuses a schema check keyword outside the subset, at its path", () => {
+    const spec = exampleSpec();
+    const schema = { type: "object", properties: { label: { pattern: "^y" } } };
+    spec.steps[0] = { ...spec.steps[0], checks: { schema } };
+
+    expect(issuePaths(spec)).toEqual([["steps", 0, "checks", "schema", "properties", "label"]]);
+    expect(validateSpec(spec)).toMatchObject({
+      issues: [{ message: expect.stringContaining("pattern") as string }],
+    });
+  });
 });
 
 function issuePaths(spec: unknown) {

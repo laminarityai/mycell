@@ -1,9 +1,12 @@
 // What the interpreter's tests share: an admin's inbox, a published workflow, and step runners
 // that stand in for Inngest's.
+import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
+import { grantCredits } from "@/features/credits/server";
 import { getWorkflow, publishWorkflow, saveWorkflow } from "@/features/workflows/server";
-import type { Ctx } from "@/lib/ctx";
+import { systemCtx, type Ctx } from "@/lib/ctx";
 import { connectMailbox } from "@/testing/connect-helpers";
 import type { FakeMessageInput } from "@/testing/fake-gmail";
+import { startRun } from "../server";
 import type { RetryPolicy, RunStep } from "../types";
 
 /** Connects the user's Gmail as a member connection and seeds its mailbox. */
@@ -51,6 +54,51 @@ export function recordingStepRunner() {
   };
 }
 
+/**
+ * Starts a run of `steps` on a pricing question in org A's admin's inbox, with `credits`
+ * granted first.
+ */
+export async function runOn(steps: Record<string, unknown>[], credits = 100) {
+  const { orgA } = await seedTwoOrgs();
+  const admin = orgA.admin.ctx;
+  const system = systemCtx(orgA.id);
+  if (credits > 0) await grantCredits(system, credits);
+  const inbox = await connectInbox(admin, orgA.admin.email, [pricingQuestion()]);
+  const workflowId = await publish(admin, threadSpec({ steps }));
+  const { runId } = await startRun(admin, workflowId, inbox.connectionId, inbox.messages[0].id);
+  return { admin, system, runId, workflowId };
+}
+
+/**
+ * A step runner that keeps what Inngest's step state would: each step's result, or the error
+ * it threw with everything Inngest serializes (name, message, stack, own fields, `cause`).
+ */
+export function stepStateRecorder() {
+  const state: string[] = [];
+  const runStep: RunStep = async (id, run) => {
+    try {
+      const result = await run();
+      state.push(JSON.stringify({ id, result }));
+      return result;
+    } catch (error) {
+      state.push(JSON.stringify({ id, thrown: serializedError(error) }));
+      throw error;
+    }
+  };
+  return { runStep, state };
+}
+
+function serializedError(error: unknown): unknown {
+  if (!(error instanceof Error)) return error;
+  return {
+    ...Object.fromEntries(Object.entries(error)),
+    name: error.name,
+    message: error.message,
+    stack: error.stack,
+    cause: serializedError(error.cause),
+  };
+}
+
 /** The default attempts, with the waits recorded instead of slept. */
 export function recordedBackoff(): RetryPolicy & { waits: number[] } {
   const waits: number[] = [];
@@ -77,6 +125,32 @@ export function pricingQuestion(overrides: Partial<FakeMessageInput> = {}): Fake
     ...overrides,
   };
 }
+
+/** A classify step, asking whether the message is a pricing inquiry, with `checks`. */
+export const classifyWith = (checks?: Record<string, unknown>) => ({
+  id: "classify",
+  type: "classify",
+  role: "classify",
+  question: "Is this a pricing inquiry?",
+  labels: ["yes", "no"],
+  checks,
+});
+
+/** An extract step `details` filling quantity, city and deadline on `fast`, with `checks`. */
+export const extractWith = (checks?: Record<string, unknown>) => ({
+  id: "details",
+  type: "extract",
+  role: "fast",
+  fields: {
+    quantity: { type: "number", description: "How many chairs" },
+    city: { type: "string", description: "Where to deliver" },
+    deadline: { type: "string", description: "When they're needed by" },
+  },
+  checks,
+});
+
+/** A model answer that quotes the message where the extract wants a number. */
+export const OFF_SCHEMA = "30 oak chairs, delivered to Leeds";
 
 /** classify → branch → read the thread. */
 export function threadSpec(overrides: Record<string, unknown> = {}): Record<string, unknown> {

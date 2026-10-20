@@ -5,6 +5,7 @@ import { isForeignKeyViolation } from "@/db/errors";
 import { SourceRequestError } from "@/features/connections/types";
 import { NotFoundError, OutOfCreditsError } from "@/lib/errors";
 import { ModelCallError } from "../types";
+import { StepCheckError, type StepCheck } from "./checks";
 
 export const runStepErrorCodes = [
   // The executor for this action or step type isn't built yet.
@@ -39,13 +40,37 @@ export type Failure = {
   retryable: boolean;
   /** How the run ends when this failure ends the step. */
   runStatus: "failed" | "cancelled";
+  /** How the step is recorded: a failed check is told apart from a step that broke. */
+  stepStatus: "failed" | "check_failed";
+};
+
+const CHECK_CODES: Record<StepCheck, string> = {
+  schema: "check_schema",
+  minP: "check_min_p",
+  requiredFields: "check_required_fields",
 };
 
 // A write that hits one of these means the run's connection, and with it the run, is gone.
 const GONE_FOREIGN_KEYS = ["runs_connection_fk", "run_steps_connection_fk", "run_steps_run_fk"];
 
-/** Describes a thrown error without quoting it. #41 adds check failures here. */
+/**
+ * Describes a thrown error without quoting it. A failed check is never retried: the same
+ * question would get the same answer. Everything else is a step that broke.
+ */
 export function describeFailure(error: unknown): Failure {
+  if (error instanceof StepCheckError) {
+    return {
+      code: CHECK_CODES[error.check],
+      message: error.message,
+      retryable: false,
+      runStatus: "failed",
+      stepStatus: "check_failed",
+    };
+  }
+  return { ...describeBreak(error), stepStatus: "failed" };
+}
+
+function describeBreak(error: unknown): Omit<Failure, "stepStatus"> {
   if (isConnectionGone(error)) {
     return {
       code: "connection_gone",

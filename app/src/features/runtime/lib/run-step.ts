@@ -16,8 +16,11 @@ export const defaultRetryPolicy: RetryPolicy = {
     }),
 };
 
+/** How many attempts it took, and when the last one began. */
+type Tries = { attempts: number; lastAttemptAt: Date };
+
 export type Attempted<T> =
-  { ok: true; value: T; attempts: number } | { ok: false; failure: Failure; attempts: number };
+  (Tries & { ok: true; value: T }) | (Tries & { ok: false; failure: Failure });
 
 /**
  * Tries `work` until it succeeds, its failure isn't retryable, or the policy's attempts run
@@ -28,12 +31,13 @@ export async function withRetries<T>(
   work: () => Promise<T>,
 ): Promise<Attempted<T>> {
   for (let attempt = 1; ; attempt++) {
+    const tries = { attempts: attempt, lastAttemptAt: new Date() };
     try {
-      return { ok: true, value: await work(), attempts: attempt };
+      return { ok: true, value: await work(), ...tries };
     } catch (error) {
       const failure = describeFailure(error);
       if (!failure.retryable || attempt >= policy.attempts) {
-        return { ok: false, failure, attempts: attempt };
+        return { ok: false, failure, ...tries };
       }
       await policy.sleep(policy.delayMs(attempt));
     }

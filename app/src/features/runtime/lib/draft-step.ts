@@ -4,15 +4,14 @@
 // sending the Gmail draft: we never send it, so the draft is itself what awaits them. The
 // approval step records that, and the run goes on to its later steps.
 import { z } from "zod";
-import { findAction, type ActionName } from "@/features/policy/catalog";
+import { findAction } from "@/features/policy/catalog";
 import type { Step } from "@/features/spec/types";
 import type { Json } from "../types";
-import { actionExecutors } from "./actions";
 import { callModel } from "./call-model";
 import { RunStepError } from "./failures";
 import { messageRef, messageText, threadText } from "./gmail";
-import type { DraftInput } from "./gmail-drafts";
 import { resolveInput } from "./references";
+import { runAction } from "./run-action";
 import { rangeText } from "./sheets";
 import type { StepContext, StepExecution } from "./step-context";
 
@@ -29,32 +28,21 @@ export async function draftStep(
   context: StepContext,
 ): Promise<StepExecution> {
   const { ctx, run } = context;
-  const action = findAction(step.output);
-  const executor = action === undefined ? undefined : actionExecutors[action.name as ActionName];
-  if (action === undefined || executor === undefined || executor.status === "pending") {
-    throw new RunStepError("not_available", `The action ${step.output} isn't available yet.`);
-  }
   let model: StepExecution["model"];
-  const input: DraftInput = {
-    messageId: run.sourceRef,
-    compose: async () => {
-      const result = await callModel(ctx, step.role, {
-        system: `${SYSTEM}\n\n${step.instructions}`,
-        prompt: await contextText(step, context),
-        workflowId: run.workflowId,
-        runId: run.id,
-      });
-      model = { role: step.role, modelId: result.modelId, costUsd: result.costUsd };
-      return result.output;
-    },
+  // Called by the action only when the step hasn't made its draft yet.
+  const compose = async () => {
+    const result = await callModel(ctx, step.role, {
+      system: `${SYSTEM}\n\n${step.instructions}`,
+      prompt: await contextText(step, context),
+      workflowId: run.workflowId,
+      runId: run.id,
+    });
+    model = { role: step.role, modelId: result.modelId, costUsd: result.costUsd };
+    return result.output;
   };
-  const marker = `${run.id}/${step.id}`;
-  const result = await executor.run(ctx, run.connectionId, input as never, marker);
-  const output = action.output.safeParse(result);
-  if (!output.success) {
-    throw new RunStepError("invalid_output", `${step.output} returned an unexpected result.`);
-  }
-  const value = output.data as Json;
+  // The draft replies to the triggering message.
+  const input = { messageId: run.sourceRef };
+  const value = await runAction(step.output, input, step.id, context, compose);
   return { next: "continue", output: value, record: value, ...(model ? { model } : {}) };
 }
 

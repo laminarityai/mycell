@@ -26,14 +26,22 @@ export type StepExecution = {
 };
 
 /**
+ * A draft step's generator of the reply's text, held in memory only (invariant 8). The action
+ * that writes the draft calls it only when the step hasn't made its draft yet.
+ */
+export type Compose = () => Promise<string>;
+
+/**
  * One catalog action: a Nango proxy call with the action's validated input. `marker` names the
  * run and step (`<runId>/<stepId>`), for a write to find what an earlier try already did.
+ * `compose` is given by a draft step, for the action that writes its draft.
  */
 export type ActionRun = (
   ctx: Ctx,
   connectionId: string,
   input: never,
   marker: string,
+  compose?: Compose,
 ) => Promise<Json>;
 
 export type StepRun<S extends Step> = (step: S, context: StepContext) => Promise<StepExecution>;

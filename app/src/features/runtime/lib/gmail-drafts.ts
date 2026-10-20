@@ -7,15 +7,10 @@ import { proxyGet, proxyPost } from "@/features/connections/server";
 import type { Ctx } from "@/lib/ctx";
 import { RunStepError } from "./failures";
 import { GMAIL } from "./gmail";
+import type { Compose } from "./step-context";
 
 /** The header that marks a draft as one run step's. */
 export const DRAFT_MARKER_HEADER = "X-Mycel-Draft";
-
-/**
- * What the action takes. `compose` generates the reply's text; it's called only when the step
- * hasn't made its draft yet, and its text is held in memory only (invariant 8).
- */
-export type DraftInput = { messageId: string; compose: () => Promise<string> };
 
 const REPLY_HEADERS = ["From", "Reply-To", "Subject", "Message-ID", "References"];
 
@@ -33,13 +28,21 @@ const draftsPage = z.object({
 });
 const createdDraft = z.object({ id: z.string(), message: z.object({ threadId: z.string() }) });
 
-/** Makes the reply draft, or finds the one this step (`marker`) made on an earlier try. */
+/**
+ * Makes the reply draft to `input.messageId`, or finds the one this step (`marker`) made on an
+ * earlier try. `compose` generates the reply's text; it's called only when there's no draft
+ * yet. Only a draft step gives one: a tool step can't make a draft (the policy refuses it).
+ */
 export async function createReplyDraft(
   ctx: Ctx,
   connectionId: string,
-  input: DraftInput,
+  input: { messageId: string },
   marker: string,
+  compose?: Compose,
 ): Promise<{ draftId: string; threadId: string }> {
+  if (compose === undefined) {
+    throw new RunStepError("not_available", "Only a draft step can make a draft.");
+  }
   const query = new URLSearchParams({ format: "metadata" });
   for (const name of REPLY_HEADERS) query.append("metadataHeaders", name);
   const original = await found(
@@ -53,7 +56,7 @@ export async function createReplyDraft(
   const earlier = await findMarkedDraft(ctx, connectionId, original.threadId, marker);
   if (earlier !== undefined) return { draftId: earlier, threadId: original.threadId };
 
-  const raw = replyMessage(original.payload.headers, await input.compose(), marker);
+  const raw = replyMessage(original.payload.headers, await compose(), marker);
   const draft = await found(
     proxyPost(
       ctx,

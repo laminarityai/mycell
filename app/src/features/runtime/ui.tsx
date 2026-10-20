@@ -47,23 +47,29 @@ export function RecentRuns({ runs }: { runs: RunRecord[] }) {
       <TableBody>
         {runs.map((run) => (
           <TableRow key={run.id}>
-            <TableCell>{run.startedAt.toLocaleString("en-US")}</TableCell>
-            <TableCell className="font-mono text-xs">{run.sourceRef}</TableCell>
+            <TableCell className="whitespace-normal">
+              {run.startedAt.toLocaleString("en-US")}
+            </TableCell>
+            <TableCell className="font-mono text-xs break-all whitespace-normal">
+              {run.sourceRef}
+            </TableCell>
             <TableCell>
               <StatusBadge status={run.status} />
             </TableCell>
-            <TableCell>
-              <ul className="flex flex-col gap-1 text-xs">
+            <TableCell className="whitespace-normal">
+              <ul className="flex min-w-0 flex-col gap-1 text-xs">
                 {run.steps.map((step) => (
-                  <li key={step.stepId} className="flex flex-wrap items-center gap-2">
+                  <li key={step.stepId} className="flex min-w-0 flex-wrap items-center gap-2">
                     <code className="font-mono">{step.stepId}</code>
                     <StatusBadge status={step.status} />
                     {step.attempts > 1 ? `${String(step.attempts)} attempts` : null}
                     {step.errorCode === null ? null : (
-                      <span className="text-destructive">{step.errorMessage}</span>
+                      <span className="min-w-0 wrap-anywhere text-destructive">
+                        {step.errorMessage}
+                      </span>
                     )}
                     {step.output === null ? null : (
-                      <code className="font-mono text-muted-foreground">
+                      <code className="block w-full min-w-0 font-mono wrap-anywhere text-muted-foreground">
                         {JSON.stringify(step.output)}
                       </code>
                     )}

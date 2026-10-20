@@ -9,9 +9,9 @@ import {
 } from "@/components/ui/table";
 import type { ConnectionOwner, ConnectionsListing } from "../types";
 import { ConnectButton } from "./connect-button";
-import { DisconnectButton } from "./disconnect-button";
+import { ConnectionControls, ReauthNotices } from "./connection-controls";
 import { SOURCE_NAMES } from "./source-names";
-import { StatusBadge } from "./status-badge";
+import { LastPolled, StatusBadge } from "./status-badge";
 
 /** The admin-only part of the connections page: org connections, and members' connections. */
 export function AdminConnections({ listing }: { listing: ConnectionsListing }) {
@@ -22,6 +22,7 @@ export function AdminConnections({ listing }: { listing: ConnectionsListing }) {
         <div className="flex gap-2">
           <ConnectButton source="gmail" kind="org" label="Connect an org inbox" />
         </div>
+        <ReauthNotices connections={listing.orgConnections} />
         {listing.orgConnections.length === 0 ? (
           <p className="text-sm text-muted-foreground">No org connections yet.</p>
         ) : (
@@ -32,6 +33,7 @@ export function AdminConnections({ listing }: { listing: ConnectionsListing }) {
                 <TableHead>Account</TableHead>
                 <TableHead>Connected by</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Last polled</TableHead>
                 <TableHead />
               </TableRow>
             </TableHeader>
@@ -49,11 +51,11 @@ export function AdminConnections({ listing }: { listing: ConnectionsListing }) {
                       backfilledItems={connection.backfilledItems}
                     />
                   </TableCell>
+                  <TableCell>
+                    <LastPolled at={connection.lastPolledAt} />
+                  </TableCell>
                   <TableCell className="text-right">
-                    <DisconnectButton
-                      connectionId={connection.id}
-                      accountEmail={connection.accountEmail}
-                    />
+                    <ConnectionControls connection={connection} />
                   </TableCell>
                 </TableRow>
               ))}

@@ -1,5 +1,6 @@
 // The Gmail API responses the connector reads, parsed with Zod. Shapes follow Google's
-// reference for users.getProfile, users.messages.list and users.messages.get (format=full).
+// reference for users.getProfile, users.messages.list, users.messages.get (format=full) and
+// users.history.list.
 import { z } from "zod";
 
 export const profileSchema = z.object({ emailAddress: z.string(), historyId: z.string() });
@@ -7,6 +8,21 @@ export const profileSchema = z.object({ emailAddress: z.string(), historyId: z.s
 export const messageListSchema = z.object({
   messages: z.array(z.object({ id: z.string(), threadId: z.string() })).optional(),
   nextPageToken: z.string().optional(),
+});
+
+// Only the parts polling reads: which messages each record added.
+export const historyListSchema = z.object({
+  history: z
+    .array(
+      z.object({
+        id: z.string(),
+        messagesAdded: z.array(z.object({ message: z.object({ id: z.string() }) })).optional(),
+      }),
+    )
+    .optional(),
+  nextPageToken: z.string().optional(),
+  // The mailbox's current history ID: where the next poll starts.
+  historyId: z.string(),
 });
 
 /** A MIME part of a message: the payload is one, and multipart parts nest more. */

@@ -74,6 +74,7 @@ function summary(row: Connection): ConnectionSummary {
     accountEmail: row.accountEmail,
     status: row.status,
     backfilledItems: row.backfilledItems,
+    lastPolledAt: row.lastPolledAt,
     createdAt: row.createdAt,
   };
 }

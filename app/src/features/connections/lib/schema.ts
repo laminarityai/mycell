@@ -19,12 +19,16 @@ export const connections = pgTable(
     accountEmail: text("account_email").notNull(),
     nangoConnectionId: text("nango_connection_id").notNull().unique(),
     // Set by discovery's ingest: backfilling until the first backfill ends, then active (or
-    // failed). See ConnectionStatus.
-    status: text("status", { enum: ["backfilling", "active", "failed"] }).notNull(),
+    // failed); needs_reauth from a failed token refresh until a reconnect. See ConnectionStatus.
+    status: text("status", {
+      enum: ["backfilling", "active", "needs_reauth", "failed"],
+    }).notNull(),
     // Messages (or files) the current backfill has stored so far.
     backfilledItems: integer("backfilled_items").notNull().default(0),
     // Where polling resumes in the source: Gmail's history ID. Null until a backfill starts.
     cursor: text("cursor"),
+    // When polling last finished for it. Null until the first poll.
+    lastPolledAt: timestamp("last_polled_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [

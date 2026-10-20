@@ -1,14 +1,17 @@
 import { expect } from "vitest";
 import { defineIsolationCases } from "@/db/testing/isolation";
 import type { TwoOrgs } from "@/db/testing/two-org-fixture";
-import { listConnections } from "@/features/connections/server";
+import { getConnection, listConnections } from "@/features/connections/server";
+import { systemCtx } from "@/lib/ctx";
+import { NotFoundError } from "@/lib/errors";
 import * as server from "../server";
 import { connectMailbox, daysAgo } from "./ingest-helpers";
 
 const CUSTOMER = "alice@customer.example";
 
 // Org B's member and org B's shared inbox both hear from the same customer as org A, and are
-// backfilled, so every case can check org B is left as it was.
+// backfilled, then hear from them again, so every case can check org B is left as it was (a
+// poll reaching org B would store the second message).
 async function seedOrgB({ orgB }: TwoOrgs) {
   const inbox = `support@${orgB.workspaceDomain}`;
   const member = await connectMailbox(orgB.member.ctx, orgB.member.email, [
@@ -22,6 +25,8 @@ async function seedOrgB({ orgB }: TwoOrgs) {
   );
   await server.backfillConnection(orgB.member.ctx, member.id);
   await server.backfillConnection(orgB.admin.ctx, org.id);
+  member.mailbox.add({ from: CUSTOMER, to: [orgB.member.email], text: "Again", at: new Date() });
+  org.mailbox.add({ from: CUSTOMER, to: [inbox], text: "Again", at: new Date() });
   return { ids: [member.id, org.id], snapshot: () => orgBState(orgB) };
 }
 
@@ -55,6 +60,46 @@ export const isolationCases = defineIsolationCases(server, {
     for (const id of ids) await server.markBackfillFailed(orgs.orgA.admin.ctx, id);
 
     expect(await snapshot()).toEqual(before);
+  },
+
+  pollConnection: async (orgs) => {
+    const { ids, snapshot } = await seedOrgB(orgs);
+    const before = await snapshot();
+    const { orgA } = orgs;
+
+    for (const id of ids) {
+      for (const ctx of [orgA.admin.ctx, orgA.member.ctx, systemCtx(orgA.id)]) {
+        expect(await server.pollConnection(ctx, id)).toEqual({ outcome: "gone" });
+      }
+    }
+
+    expect(await snapshot()).toEqual(before);
+  },
+
+  // Cross-org by design: it lists every org's connections for the polling cron. What it must
+  // keep straight is which org each poll acts in: always the connection's own.
+  pollAllConnections: async (orgs) => {
+    const { ids } = await seedOrgB(orgs);
+    const { orgA, orgB } = orgs;
+    const own = await connectMailbox(orgA.member.ctx, orgA.member.email);
+    await server.backfillConnection(orgA.member.ctx, own.id);
+
+    const due = await server.pollAllConnections();
+
+    expect(due).toEqual(
+      expect.arrayContaining([
+        { orgId: orgA.id, connectionId: own.id },
+        ...ids.map((connectionId) => ({ orgId: orgB.id, connectionId })),
+      ]),
+    );
+    expect(due).toHaveLength(3);
+    for (const { orgId, connectionId } of due) {
+      const other = orgId === orgA.id ? orgB.id : orgA.id;
+      expect(await getConnection(systemCtx(orgId), connectionId)).toMatchObject({
+        id: connectionId,
+      });
+      await expect(getConnection(systemCtx(other), connectionId)).rejects.toThrow(NotFoundError);
+    }
   },
 
   findEventsByObject: async (orgs) => {

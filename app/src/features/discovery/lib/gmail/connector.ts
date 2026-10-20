@@ -1,6 +1,8 @@
-// The Gmail connector. Polling from the history ID (`history.list`) arrives with #15.
-import type { BackfillConnector, NormalizedEvent, SourceClient } from "../connector";
-import { messageListSchema, messageSchema, profileSchema } from "./api";
+// The Gmail connector: the history ID as the cursor, messages.list for the backfill, and
+// history.list (messageAdded only) for polling. Both fetch and normalize each message the same
+// way.
+import type { Connector, NormalizedEvent, SourceClient } from "../connector";
+import { historyListSchema, messageListSchema, messageSchema, profileSchema } from "./api";
 import { normalizeMessage } from "./normalize";
 
 // Messages per backfill page, so one page (one Inngest step) stays well inside a serverless
@@ -9,8 +11,12 @@ const PAGE_SIZE = 100;
 // messages.get calls in flight at once. Each costs 5 of Gmail's 250 quota units per user per
 // second; Nango retries the 429s that bursts beyond that cause.
 const FETCH_CONCURRENCY = 10;
+// History records per history.list page, Gmail's maximum.
+const HISTORY_PAGE_SIZE = 500;
+// messages.list leaves these out unless asked (includeSpamTrash), so polling does too.
+const EXCLUDED_LABELS = ["SPAM", "TRASH"];
 
-export const gmailConnector: BackfillConnector = {
+export const gmailConnector: Connector = {
   async readStartCursor(client) {
     const profile = await client.get("/gmail/v1/users/me/profile", profileSchema);
     if (profile === null) throw new Error("Gmail has no profile for this mailbox");
@@ -35,6 +41,43 @@ export const gmailConnector: BackfillConnector = {
         (event): event is NormalizedEvent => event !== null && event.occurredAt >= since,
       ),
       nextPageToken: list?.nextPageToken ?? null,
+    };
+  },
+
+  async poll(client, cursor) {
+    const added = new Set<string>();
+    let nextCursor: string | undefined;
+    let pageToken: string | null = null;
+    do {
+      const query = new URLSearchParams({
+        startHistoryId: cursor,
+        historyTypes: "messageAdded",
+        maxResults: String(HISTORY_PAGE_SIZE),
+      });
+      if (pageToken !== null) query.set("pageToken", pageToken);
+      const page = await client.get(
+        `/gmail/v1/users/me/history?${query.toString()}`,
+        historyListSchema,
+      );
+      // Gmail answers 404 for a history ID it no longer keeps (roughly a week).
+      if (page === null) return { cursorExpired: true };
+      // The first page's history ID: whatever arrives while later pages are read is after it,
+      // so the next poll gets it (and a message seen twice is stored once).
+      nextCursor ??= page.historyId;
+      for (const record of page.history ?? []) {
+        for (const { message } of record.messagesAdded ?? []) added.add(message.id);
+      }
+      pageToken = page.nextPageToken ?? null;
+    } while (pageToken !== null);
+    const events = await mapConcurrently([...added], FETCH_CONCURRENCY, (id) =>
+      fetchEvent(client, id),
+    );
+    return {
+      events: events.filter(
+        (event): event is NormalizedEvent =>
+          event !== null && !event.labelIds.some((label) => EXCLUDED_LABELS.includes(label)),
+      ),
+      nextCursor,
     };
   },
 };

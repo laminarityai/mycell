@@ -8,9 +8,9 @@ import {
 } from "@/components/ui/table";
 import { AdminConnections } from "./lib/admin-connections";
 import { ConnectButton } from "./lib/connect-button";
-import { DisconnectButton } from "./lib/disconnect-button";
+import { ConnectionControls, ReauthNotices } from "./lib/connection-controls";
 import { attemptTarget, SOURCE_NAMES } from "./lib/source-names";
-import { StatusBadge } from "./lib/status-badge";
+import { LastPolled, StatusBadge } from "./lib/status-badge";
 import type { ConnectionsListing } from "./types";
 
 /**
@@ -43,6 +43,7 @@ export function ConnectionsPanel({
             : `Couldn't connect ${attemptTarget(attempt)}: ${attempt.refusal ?? "it was refused."}`}
         </p>
       ))}
+      <ReauthNotices connections={listing.connections} />
       {listing.connections.length === 0 ? (
         <p className="text-sm text-muted-foreground">You haven&apos;t connected anything yet.</p>
       ) : (
@@ -52,6 +53,7 @@ export function ConnectionsPanel({
               <TableHead>Source</TableHead>
               <TableHead>Account</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Last polled</TableHead>
               <TableHead />
             </TableRow>
           </TableHeader>
@@ -66,11 +68,11 @@ export function ConnectionsPanel({
                     backfilledItems={connection.backfilledItems}
                   />
                 </TableCell>
+                <TableCell>
+                  <LastPolled at={connection.lastPolledAt} />
+                </TableCell>
                 <TableCell className="text-right">
-                  <DisconnectButton
-                    connectionId={connection.id}
-                    accountEmail={connection.accountEmail}
-                  />
+                  <ConnectionControls connection={connection} />
                 </TableCell>
               </TableRow>
             ))}

@@ -36,6 +36,13 @@
       "when": 1792476005434,
       "tag": "0004_gmail-backfill",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792478346097,
+      "tag": "0005_gmail-polling",
+      "breakpoints": true
     }
   ]
 }

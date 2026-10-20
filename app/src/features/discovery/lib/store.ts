@@ -2,7 +2,7 @@
 // so a retried page or a re-run backfill stores nothing twice, and a page that failed between
 // the two inserts gets its refs on the retry.
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import type { ConnectionDetails } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
@@ -65,4 +65,14 @@ export async function storeEvents(
       onConflictDoNothing: true,
     });
   }
+}
+
+/** When the connection's latest stored event occurred, or null if it has none. */
+export async function latestEventTime(ctx: Ctx, connectionId: string): Promise<Date | null> {
+  const rows = await forOrg(ctx).select(events, {
+    where: eq(events.connectionId, connectionId),
+    orderBy: [desc(events.occurredAt)],
+    limit: 1,
+  });
+  return rows.at(0)?.occurredAt ?? null;
 }

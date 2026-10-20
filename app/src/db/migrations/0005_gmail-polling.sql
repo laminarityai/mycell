@@ -1,0 +1,1 @@
+ALTER TABLE "connections" ADD COLUMN "last_polled_at" timestamp;

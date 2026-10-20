@@ -25,7 +25,7 @@ describe("connecting an org inbox", () => {
         source: "gmail",
         kind: "org",
         accountEmail: support,
-        status: "active",
+        status: "backfilling",
         owner: { userId: orgA.admin.id, removed: false, name: orgA.admin.email },
       }),
     ]);
@@ -129,7 +129,7 @@ describe("listing connections by role", () => {
       {
         id: expect.any(String) as string,
         source: "gmail",
-        status: "active",
+        status: "backfilling",
         owner: { userId: orgA.member.id, removed: false, name: orgA.member.email },
         createdAt: expect.any(Date) as Date,
       },
@@ -161,7 +161,7 @@ describe("listing connections by role", () => {
     expect(orgConnections).toEqual([
       expect.objectContaining({
         accountEmail: support,
-        status: "active",
+        status: "backfilling",
         owner: { userId: orgA.member.id, removed: true },
       }),
     ]);

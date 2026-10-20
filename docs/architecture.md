@@ -38,7 +38,8 @@ app/                         The one Next.js app (deploys to Vercel)
     spec/                    Workflow spec schema (zod), validator
     policy/                  Action risk catalog + policy engine (deterministic)
     runtime/                 Spec interpreter (steps as Inngest steps); model-role routing; Nango tool adapters
-    discovery/               Normalize, object refs, mining, ranking, shadow eval
+    connections/             Connections, the Nango client and proxy, Nango's webhook, disconnecting
+    discovery/               Ingest (connectors, backfill, polling), events, object refs, mining, ranking, shadow eval
     credits/                 Credit ledger, estimates, budget enforcement
     memory/                  Fact extraction + retrieval (after the core loop)
 nango-integrations/          Custom Nango functions (deployed via the Nango CLI)
@@ -78,6 +79,10 @@ The eight invariants live in `AGENTS.md`, which is always loaded, so they have a
 ## Discovery pipeline (`features/discovery`)
 
 1. **Ingest**: backfill 90 days on connect, then incremental updates by polling Gmail's `history.list` through the Nango proxy every minute (an Inngest cron job), starting from the last stored history ID. Push via Pub/Sub can replace polling later without changing anything downstream.
+   - Each source is one connector (start cursor, backfill page over a window, poll from a cursor); nothing outside it knows the source's API. `discovery` reaches a source only through `connections`' `proxyGet(ctx, connectionId, …)`, and `connections` never imports `discovery`.
+   - Recording a connection sends `connections/connection.recorded`, which starts the backfill job: the history ID is read first (the polling cursor), then one page of messages per Inngest step, each fetched in full and normalized in memory. Backfill and poll share a concurrency of one per connection and a per-org limit.
+   - The connection row holds the ingest state the connections page shows: `backfilling` with a count of stored messages, then `active` or `failed`, and the cursor.
+   - **Ingest persists no text.** Events and object refs hold no subject, body, snippet or file name; the decoded body exists only while its object refs are extracted.
 2. **Normalize** into one event schema: `event_id, source, type, timestamp, actor, counterparty, direction, thread_id, text (cleaned, in memory only), object_refs, attachments_meta`. Strip quoted replies, signatures, and disclaimers.
 3. **Object refs** (ADR-0008): deterministic links only. Structured fields (addresses, attendees, file IDs) and regex for IDs, merged on exact keys. No LLM entity pass and no fuzzy matching. An entity backbone (free-text extraction, resolution, lifecycle mining) comes after v1, and only if the discovery-lens experiment passes.
 4. **Mine**: embed and cluster into intent clusters. For v1, clustering links events whose pgvector similarity is above a threshold and takes each connected group as a cluster. It sits behind one `clusterEvents` function so the method can change (ADR-0004). Have an LLM label only a few representatives per cluster. Detect templates (near-duplicate outbound messages with their slots), request→response pairs, periodic tasks, and chasing/follow-up patterns.

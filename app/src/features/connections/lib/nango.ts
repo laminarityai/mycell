@@ -47,23 +47,34 @@ export async function deleteNangoConnection(
   }
 }
 
-/** A GET through the Nango proxy to the source's own API, parsed with `schema`. */
-export async function proxyGet<T>(
+// Nango's error body for a proxy call naming a connection it doesn't have.
+const nangoError = z.object({ error: z.object({ code: z.string() }) });
+
+/**
+ * A GET through the Nango proxy to the source's own API, parsed with `schema`. Returns null when
+ * the source answers 404 or 410 (the item is gone at the source), and throws
+ * NangoConnectionGoneError when Nango no longer has the connection.
+ */
+export async function nangoProxyGet<T>(
   connection: { connectionId: string; integration: string },
   path: string,
   schema: z.ZodType<T>,
-): Promise<T> {
+): Promise<T | null> {
   const response = await nangoFetch(`/proxy${path}`, {
     headers: {
       "Connection-Id": connection.connectionId,
       "Provider-Config-Key": connection.integration,
-      // Nango retries 429s and 5xx with exponential backoff.
+      // Nango retries the source's 429s and 5xx with exponential backoff.
       Retries: "3",
     },
   });
-  if (response.status === 404 || response.status === 410) throw new NangoConnectionGoneError();
-  if (!response.ok) throw new Error(`Nango proxy ${path} failed: ${String(response.status)}`);
-  return schema.parse(await response.json());
+  if (response.ok) return schema.parse(await response.json());
+  const body = nangoError.safeParse(await response.json().catch(() => undefined));
+  if (body.success && body.data.error.code === "unknown_connection") {
+    throw new NangoConnectionGoneError();
+  }
+  if (response.status === 404 || response.status === 410) return null;
+  throw new Error(`Nango proxy ${path} failed: ${String(response.status)}`);
 }
 
 /** Whether a webhook body really came from Nango: a hex HMAC-SHA256 of the raw body. */

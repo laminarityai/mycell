@@ -41,6 +41,14 @@ Whether a piece of data belongs to one member or to the whole org.
 **Promotion**:
 The step by which a member-scoped fact becomes org-scoped.
 
+**Event**:
+One normalized thing that happened in a source, such as an email received or sent, kept as its provenance and shape (time, people, thread, attachment metadata) without its content. The code's type is `IngestedEvent`, to stay clear of the DOM's `Event`.
+_Avoid_: Activity, message, record
+
+**Backfill**:
+Ingesting a connection's last 90 days when it's recorded, before polling picks up what's new.
+_Avoid_: Import, initial sync
+
 **Object**:
 A business thing, such as a customer, order, or file, that several events refer to.
 _Avoid_: Entity, record

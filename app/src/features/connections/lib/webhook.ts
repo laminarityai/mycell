@@ -1,6 +1,6 @@
 // Nango's webhooks. A signed `auth` / `creation` webhook is the only thing that records a
-// connection: the browser's word that a popup finished is never trusted. A signed `auth` /
-// `deletion` webhook forgets one.
+// connection: the browser's word that a popup finished is never trusted. Recording one sends
+// the event that starts its backfill. A signed `auth` / `deletion` webhook forgets one.
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
@@ -11,6 +11,7 @@ import type { Ctx } from "@/lib/ctx";
 import { checkAccount } from "./account-check";
 import { ATTEMPT_TAGS } from "./connect";
 import { forgetNangoConnection } from "./disconnect";
+import { sendConnectionRecorded } from "./events";
 import { deleteNangoConnection, isSignedByNango, NANGO_SIGNATURE_HEADER } from "./nango";
 import { connectAttempts, connections } from "./schema";
 import { INTEGRATIONS, readAccountEmail } from "./sources";
@@ -107,29 +108,45 @@ async function record(
   webhook: AuthWebhook,
   accountEmail: string,
 ): Promise<void> {
+  let id: string | undefined = randomUUID();
   try {
     await forOrg(ctx).insert(connections, {
-      id: randomUUID(),
+      id,
       kind: attempt.kind,
       ownerUserId: attempt.userId,
       source: attempt.source,
       accountEmail,
       nangoConnectionId: webhook.connectionId,
-      status: "active",
+      status: "backfilling",
     });
   } catch (error) {
-    // Nango redelivered a webhook that's already recorded.
-    if (isUniqueViolation(error, "connections_nango_connection_id_unique")) return;
-    if (!isUniqueViolation(error, "connections_org_id_source_account_unique")) throw error;
-    await deleteNangoConnection(webhook.connectionId, webhook.providerConfigKey);
-    await refuse(ctx, attempt, `${accountEmail} is already connected.`);
-    return;
+    // Nango redelivered the webhook after the row was recorded but before the attempt was
+    // settled (sending the event failed, say): settle it now, sending the event again.
+    if (isUniqueViolation(error, "connections_nango_connection_id_unique")) {
+      id = await recordedConnectionId(ctx, webhook.connectionId);
+    } else if (isUniqueViolation(error, "connections_org_id_source_account_unique")) {
+      await deleteNangoConnection(webhook.connectionId, webhook.providerConfigKey);
+      await refuse(ctx, attempt, `${accountEmail} is already connected.`);
+      return;
+    } else {
+      throw error;
+    }
   }
+  // Sent before the attempt is settled, so a failed send leaves the attempt pending for the
+  // redelivery. The event's ID makes Inngest drop a duplicate.
+  if (id !== undefined) await sendConnectionRecorded(ctx, id);
   await forOrg(ctx).update(
     connectAttempts,
     { status: "connected" },
     eq(connectAttempts.id, attempt.id),
   );
+}
+
+async function recordedConnectionId(ctx: Ctx, nangoConnectionId: string) {
+  const rows = await forOrg(ctx).select(connections, {
+    where: eq(connections.nangoConnectionId, nangoConnectionId),
+  });
+  return rows.at(0)?.id;
 }
 
 async function refuse(ctx: Ctx, attempt: Attempt, refusal: string): Promise<void> {

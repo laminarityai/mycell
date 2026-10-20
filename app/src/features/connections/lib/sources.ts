@@ -2,7 +2,7 @@
 // a connection reached.
 import { z } from "zod";
 import type { Source } from "../types";
-import { proxyGet } from "./nango";
+import { NangoConnectionGoneError, nangoProxyGet } from "./nango";
 
 /** The Nango integration (provider config key) behind each source. */
 export const INTEGRATIONS: Record<Source, string> = { gmail: "google-mail" };
@@ -12,8 +12,11 @@ const gmailProfile = z.object({ emailAddress: z.string().min(1) });
 type NangoConnection = { connectionId: string; integration: string };
 
 const accountEmailReaders: Record<Source, (connection: NangoConnection) => Promise<string>> = {
-  gmail: async (connection) =>
-    (await proxyGet(connection, "/gmail/v1/users/me/profile", gmailProfile)).emailAddress,
+  gmail: async (connection) => {
+    const profile = await nangoProxyGet(connection, "/gmail/v1/users/me/profile", gmailProfile);
+    if (profile === null) throw new NangoConnectionGoneError();
+    return profile.emailAddress;
+  },
 };
 
 /** The connected account's address, lowercased. */

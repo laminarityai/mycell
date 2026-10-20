@@ -1,5 +1,5 @@
 // Connections and the connect attempts that lead to them. Both tables are tenant-owned.
-import { foreignKey, index, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { foreignKey, index, integer, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
 import { member } from "@/db/auth-schema";
 
 /**
@@ -18,7 +18,13 @@ export const connections = pgTable(
     // The connected Google account, lowercased.
     accountEmail: text("account_email").notNull(),
     nangoConnectionId: text("nango_connection_id").notNull().unique(),
-    status: text("status", { enum: ["active"] }).notNull(),
+    // Set by discovery's ingest: backfilling until the first backfill ends, then active (or
+    // failed). See ConnectionStatus.
+    status: text("status", { enum: ["backfilling", "active", "failed"] }).notNull(),
+    // Messages (or files) the current backfill has stored so far.
+    backfilledItems: integer("backfilled_items").notNull().default(0),
+    // Where polling resumes in the source: Gmail's history ID. Null until a backfill starts.
+    cursor: text("cursor"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [

@@ -74,6 +74,22 @@ describe("forOrg(ctx).insert", () => {
     expect(rows).toMatchObject([{ body: "sneaky", orgId: orgs.orgA.id }]);
     expect(bodies(await forOrg(orgs.orgB.admin.ctx).select(notes))).toEqual(["b1"]);
   });
+
+  it("skips conflicting rows when asked, returning only the rows it inserted", async () => {
+    const existing = (
+      await forOrg(orgs.orgA.admin.ctx).select(notes, { where: eq(notes.body, "a1") })
+    ).at(0);
+    if (existing === undefined) throw new Error("a1 wasn't seeded");
+
+    const rows = await forOrg(orgs.orgA.admin.ctx).insert(
+      notes,
+      [{ id: existing.id, body: "duplicate" }, { body: "a3" }],
+      { onConflictDoNothing: true },
+    );
+
+    expect(rows.map((row) => row.body)).toEqual(["a3"]);
+    expect(bodies(await forOrg(orgs.orgA.admin.ctx).select(notes))).toEqual(["a1", "a2", "a3"]);
+  });
 });
 
 describe("forOrg(ctx).update", () => {

@@ -1,4 +1,3 @@
-import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -11,6 +10,7 @@ import { AdminConnections } from "./lib/admin-connections";
 import { ConnectButton } from "./lib/connect-button";
 import { DisconnectButton } from "./lib/disconnect-button";
 import { attemptTarget, SOURCE_NAMES } from "./lib/source-names";
+import { StatusBadge } from "./lib/status-badge";
 import type { ConnectionsListing } from "./types";
 
 /**
@@ -61,7 +61,10 @@ export function ConnectionsPanel({
                 <TableCell>{SOURCE_NAMES[connection.source]}</TableCell>
                 <TableCell>{connection.accountEmail}</TableCell>
                 <TableCell>
-                  <Badge variant="secondary">{connection.status}</Badge>
+                  <StatusBadge
+                    status={connection.status}
+                    backfilledItems={connection.backfilledItems}
+                  />
                 </TableCell>
                 <TableCell className="text-right">
                   <DisconnectButton

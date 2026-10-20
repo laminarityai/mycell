@@ -9,3 +9,12 @@ export function isUniqueViolation(error: unknown, constraint: string): boolean {
   }
   return false;
 }
+
+/** True if `error` (or the error it wraps) is a foreign key violation of the named constraint. */
+export function isForeignKeyViolation(error: unknown, constraint: string): boolean {
+  for (let current: unknown = error; current instanceof Error; current = current.cause) {
+    const pg = current as Error & { code?: unknown; constraint?: unknown };
+    if (pg.code === "23503" && pg.constraint === constraint) return true;
+  }
+  return false;
+}

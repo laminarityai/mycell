@@ -18,11 +18,17 @@ export type SelectOptions = {
   limit?: number;
 };
 
+export type InsertOptions = {
+  /** Skip rows that would break a unique constraint instead of failing (idempotent writes). */
+  onConflictDoNothing?: boolean;
+};
+
 export type OrgScopedDb = {
   select<T extends TenantTable>(table: T, options?: SelectOptions): Promise<InferSelectModel<T>[]>;
   insert<T extends TenantTable>(
     table: T,
     values: TenantValues<T> | TenantValues<T>[],
+    options?: InsertOptions,
   ): Promise<InferSelectModel<T>[]>;
   update<T extends TenantTable>(
     table: T,
@@ -49,16 +55,19 @@ export function forOrg(ctx: Ctx): OrgScopedDb {
       return rows as InferSelectModel<typeof table>[];
     },
 
-    async insert(table, values) {
+    async insert(table, values, options = {}) {
       const rows = (Array.isArray(values) ? values : [values]).map((row) => ({
         ...withoutOrgId(row),
         orgId: ctx.orgId,
       }));
       if (rows.length === 0) return [];
-      const inserted = await db
+      const query = db
         .insert(table)
         .values(rows as never)
-        .returning();
+        .$dynamic();
+      const inserted = await (
+        options.onConflictDoNothing === true ? query.onConflictDoNothing() : query
+      ).returning();
       return inserted as InferSelectModel<typeof table>[];
     },
 

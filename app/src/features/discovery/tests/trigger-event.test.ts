@@ -4,6 +4,7 @@ import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { systemCtx } from "@/lib/ctx";
 import { connectMailbox, daysAgo } from "@/testing/connect-helpers";
 import { fakeInngest } from "@/testing/fake-inngest";
+import type { RunStep } from "../lib/ingest-steps";
 import { backfillConnection, pollConnection } from "../server";
 
 beforeEach(resetDatabase);
@@ -20,6 +21,21 @@ async function backfilledMailbox() {
   ]);
   await backfillConnection(orgA.member.ctx, connection.id);
   return { orgA, connection, me, poll: () => pollConnection(systemCtx(orgA.id), connection.id) };
+}
+
+/**
+ * A step runner that memoizes like Inngest: a step that finished returns its stored result on
+ * a retry, and one that threw runs again.
+ */
+function memoizingStepRunner() {
+  const results = new Map<string, unknown>();
+  const runStep: RunStep = async (id, run) => {
+    if (results.has(id)) return results.get(id) as Awaited<ReturnType<typeof run>>;
+    const result = await run();
+    results.set(id, JSON.parse(JSON.stringify(result)) as unknown);
+    return result;
+  };
+  return runStep;
 }
 
 describe("discovery/gmail.message_received", () => {
@@ -76,6 +92,45 @@ describe("discovery/gmail.message_received", () => {
     connection.mailbox.expireHistory();
 
     expect(await poll()).toMatchObject({ outcome: "recovered" });
+
+    expect(fakeInngest.sent(RECEIVED).map((event) => event.data.sourceRef)).toEqual([message.id]);
+  });
+
+  it("is still sent once when the first send fails and the poll is retried", async () => {
+    const { orgA, connection, me } = await backfilledMailbox();
+    const message = connection.mailbox.add({
+      from: CUSTOMER,
+      to: [me],
+      text: "Hi",
+      at: new Date(),
+    });
+    const runStep = memoizingStepRunner();
+    fakeInngest.failSends();
+
+    await expect(pollConnection(systemCtx(orgA.id), connection.id, runStep)).rejects.toThrow();
+    fakeInngest.failSends(false);
+    await pollConnection(systemCtx(orgA.id), connection.id, runStep);
+
+    expect(fakeInngest.sent(RECEIVED).map((event) => event.data.sourceRef)).toEqual([message.id]);
+  });
+
+  it("is still sent once when a recovery's first send fails and it's retried", async () => {
+    const { orgA, connection, me } = await backfilledMailbox();
+    const message = connection.mailbox.add({
+      from: CUSTOMER,
+      to: [me],
+      text: "Hi",
+      at: new Date(),
+    });
+    connection.mailbox.expireHistory();
+    const runStep = memoizingStepRunner();
+    fakeInngest.failSends();
+
+    await expect(pollConnection(systemCtx(orgA.id), connection.id, runStep)).rejects.toThrow();
+    fakeInngest.failSends(false);
+    expect(await pollConnection(systemCtx(orgA.id), connection.id, runStep)).toMatchObject({
+      outcome: "recovered",
+    });
 
     expect(fakeInngest.sent(RECEIVED).map((event) => event.data.sourceRef)).toEqual([message.id]);
   });

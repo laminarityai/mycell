@@ -88,6 +88,22 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await server.getWorkflow(orgs.orgB.admin.ctx, b.workflowId)).toEqual(b.before);
   },
 
+  runnableConnections: async (orgs) => {
+    const b = await switchedOnInOrgB(orgs);
+    const ownA = await connectMailbox(orgs.orgA.admin.ctx, orgs.orgA.admin.email);
+    const { id: workflowA } = await server.saveWorkflow(orgs.orgA.admin.ctx, {
+      name: "A",
+      spec: labelSpec(),
+    });
+
+    await expect(server.runnableConnections(orgs.orgA.admin.ctx, b.workflowId)).rejects.toThrow(
+      NotFoundError,
+    );
+    expect(
+      (await server.runnableConnections(orgs.orgA.admin.ctx, workflowA)).map((c) => c.id),
+    ).toEqual([ownA.id]);
+  },
+
   listSwitchedOn: async (orgs) => {
     const b = await switchedOnInOrgB(orgs);
 

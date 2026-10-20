@@ -93,7 +93,7 @@ export function reachesGmail(connection: ConnectionSummary): boolean {
   return connection.apps.includes("gmail");
 }
 
-async function readSetup(ctx: Ctx): Promise<OrgSetup> {
+export async function readSetup(ctx: Ctx): Promise<OrgSetup> {
   const listing = await listConnections(ctx);
   return { ownConnections: listing.connections, orgConnections: listing.orgConnections };
 }

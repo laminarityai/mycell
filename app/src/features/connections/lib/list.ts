@@ -73,6 +73,7 @@ function summary(row: Connection): ConnectionSummary {
     kind: row.kind,
     accountEmail: row.accountEmail,
     status: row.status,
+    backfilledItems: row.backfilledItems,
     createdAt: row.createdAt,
   };
 }

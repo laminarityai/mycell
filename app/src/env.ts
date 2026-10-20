@@ -14,6 +14,24 @@ const envSchema = z.object({
   // signed with the environment's separate webhook signing key.
   NANGO_API_KEY: z.string().min(1),
   NANGO_WEBHOOK_SIGNING_KEY: z.string().min(1),
+  // Inngest (background jobs). INNGEST_DEV=1 points the client at the local Inngest dev server
+  // (`npx inngest-cli@latest dev`), which needs no keys. Otherwise Inngest Cloud sends with the
+  // event key and signs its requests to /api/inngest with the signing key.
+  INNGEST_DEV: z
+    .enum(["0", "1"])
+    .optional()
+    .transform((value) => value === "1"),
+  INNGEST_EVENT_KEY: z.string().min(1).optional(),
+  INNGEST_SIGNING_KEY: z.string().min(1).optional(),
 });
 
-export const env = envSchema.parse(process.env);
+export const env = envSchema
+  .superRefine((parsed, context) => {
+    if (parsed.INNGEST_DEV) return;
+    for (const key of ["INNGEST_EVENT_KEY", "INNGEST_SIGNING_KEY"] as const) {
+      if (parsed[key] === undefined) {
+        context.addIssue({ code: "custom", path: [key], message: "Required unless INNGEST_DEV=1" });
+      }
+    }
+  })
+  .parse(process.env);

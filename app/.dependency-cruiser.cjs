@@ -37,8 +37,19 @@ module.exports = {
       from: { path: `^${R}/([^/]+)/`, pathNot: `^${R}/[^/]+/tests/` },
       to: {
         path: FEATURE_INTERNALS,
-        pathNot: `^${R}/$1/`, // same feature → intra-feature freedom
+        pathNot: [
+          `^${R}/$1/`, // same feature → intra-feature freedom
+          `^${R}/[^/]+/lib/schema\\.ts$`, // the next rule covers other features' schemas
+        ],
       },
+    },
+    {
+      name: "schemas-only-from-schemas",
+      comment:
+        "A feature's lib/schema.ts may import another feature's lib/schema.ts, only so its foreign keys can reference that table (derived data cascades from its connection). Nothing else may.",
+      severity: "error",
+      from: { path: `^${R}/([^/]+)/`, pathNot: `^${R}/[^/]+/lib/schema\\.ts$` },
+      to: { path: `^${R}/[^/]+/lib/schema\\.ts$`, pathNot: `^${R}/$1/` },
     },
     {
       name: "tests-through-entrypoints",

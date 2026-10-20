@@ -4,6 +4,7 @@
 import { createHmac, randomUUID } from "node:crypto";
 import { http, HttpResponse } from "msw";
 import { env } from "@/env";
+import { FakeMailbox } from "./fake-gmail";
 
 const API = "https://api.nango.dev";
 
@@ -17,7 +18,11 @@ type FakeConnection = {
   integration: string;
   tags: Record<string, string>;
   account: FakeAccount;
+  mailbox: FakeMailbox;
 };
+
+/** Runs before the fake proxies a request to a source, given the source API path. */
+export type ProxyHook = (path: string) => void | Promise<void>;
 
 /** A webhook as Nango delivers it: the raw body and the headers that sign it. */
 export type FakeWebhook = { rawBody: string; headers: Headers };
@@ -26,11 +31,42 @@ class FakeNango {
   private sessions: FakeSession[] = [];
   private connections = new Map<string, FakeConnection>();
   private deletesFail = false;
+  private rateLimitsLeft = 0;
+  private rateLimitsServed = 0;
+  private proxyHook: ProxyHook | undefined;
 
   reset(): void {
     this.sessions = [];
     this.connections.clear();
     this.deletesFail = false;
+    this.rateLimitsLeft = 0;
+    this.rateLimitsServed = 0;
+    this.proxyHook = undefined;
+  }
+
+  /** The connected account's Gmail mailbox, for seeding messages. */
+  mailbox(connectionId: string): FakeMailbox {
+    const connection = this.connections.get(connectionId);
+    if (connection === undefined) throw new Error(`Unknown connection ${connectionId}`);
+    return connection.mailbox;
+  }
+
+  /**
+   * Makes the source answer the next `count` proxied requests with 429. Like Nango, the proxy
+   * retries them when the request's `Retries` header allows, and passes the 429 on otherwise.
+   */
+  rateLimitSource(count: number): void {
+    this.rateLimitsLeft += count;
+  }
+
+  /** How many 429s the source has answered (retried or not) since the last reset. */
+  rateLimitsAnswered(): number {
+    return this.rateLimitsServed;
+  }
+
+  /** Runs `hook` before each proxied request, until the next reset. */
+  beforeProxy(hook: ProxyHook): void {
+    this.proxyHook = hook;
   }
 
   /** Makes Nango's connection delete endpoint answer 500 until the next reset. */
@@ -58,6 +94,7 @@ class FakeNango {
       integration: session.integration,
       tags: session.tags,
       account,
+      mailbox: new FakeMailbox(account.emailAddress),
     });
     return { connectionId, ...this.authWebhook(connectionId, "creation", true) };
   }
@@ -136,18 +173,22 @@ class FakeNango {
       return HttpResponse.json({ success: true });
     }),
 
-    http.get(`${API}/proxy/gmail/v1/users/me/profile`, ({ request }) => {
+    http.get(`${API}/proxy/gmail/v1/users/me/*`, async ({ request }) => {
       if (!authorised(request)) return unauthorised();
+      const url = new URL(request.url);
+      const path = url.pathname.slice("/proxy".length);
+      await this.proxyHook?.(path);
       const connection = this.proxied(request);
       if (connection === undefined) {
         return HttpResponse.json({ error: { code: "unknown_connection" } }, { status: 404 });
       }
-      return HttpResponse.json({
-        emailAddress: connection.account.emailAddress,
-        messagesTotal: 0,
-        threadsTotal: 0,
-        historyId: "1",
-      });
+      const retries = Number(request.headers.get("Retries") ?? 0);
+      for (let attempt = 0; attempt <= retries && this.rateLimitsLeft > 0; attempt++) {
+        this.rateLimitsLeft -= 1;
+        this.rateLimitsServed += 1;
+        if (attempt === retries) return gmailError(429, "RESOURCE_EXHAUSTED");
+      }
+      return gmailResponse(connection.mailbox, path, url.searchParams);
     }),
   ];
 
@@ -164,6 +205,23 @@ function authorised(request: Request): boolean {
 
 function unauthorised() {
   return HttpResponse.json({ error: { code: "unauthorized" } }, { status: 401 });
+}
+
+// The Gmail API behind the proxy, answering from the connection's mailbox.
+function gmailResponse(mailbox: FakeMailbox, path: string, params: URLSearchParams) {
+  if (path === "/gmail/v1/users/me/profile") return HttpResponse.json(mailbox.profile());
+  if (path === "/gmail/v1/users/me/messages") return HttpResponse.json(mailbox.list(params));
+  const id = /^\/gmail\/v1\/users\/me\/messages\/([^/]+)$/.exec(path)?.[1];
+  if (id === undefined) throw new Error(`The fake Gmail doesn't serve ${path}`);
+  if (params.get("format") !== "full") throw new Error("The fake Gmail serves format=full only");
+  const message = mailbox.get(decodeURIComponent(id));
+  return message === undefined ? gmailError(404, "NOT_FOUND") : HttpResponse.json(message);
+}
+
+// An error as Google's APIs return it.
+function gmailError(code: 404 | 429, status: string) {
+  const message = code === 404 ? "Requested entity was not found." : "User-rate limit exceeded.";
+  return HttpResponse.json({ error: { code, message, status } }, { status: code });
 }
 
 export const fakeNango = new FakeNango();

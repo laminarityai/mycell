@@ -22,7 +22,7 @@ describe("connecting your own Gmail", () => {
         source: "gmail",
         kind: "member",
         accountEmail: orgA.member.email,
-        status: "active",
+        status: "backfilling",
       }),
     ]);
   });

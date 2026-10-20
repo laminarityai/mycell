@@ -1,0 +1,143 @@
+import { beforeEach, describe, expect, it } from "vitest";
+import { z } from "zod";
+import { resetDatabase } from "@/db/testing/reset";
+import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
+import { ForbiddenError, NotFoundError } from "@/lib/errors";
+import { fakeInngest } from "@/testing/fake-inngest";
+import { fakeNango } from "@/testing/fake-nango";
+import {
+  disconnect,
+  getConnection,
+  handleNangoWebhook,
+  listConnections,
+  proxyGet,
+  recordIngestState,
+  startConnect,
+} from "../server";
+import { connectGmail, connectOrgInbox } from "./connect-helpers";
+
+beforeEach(resetDatabase);
+
+const profile = z.object({ emailAddress: z.string(), historyId: z.string() });
+const message = z.object({ id: z.string() });
+
+async function ownConnectionId(ctx: Parameters<typeof listConnections>[0]) {
+  const listing = await listConnections(ctx);
+  const id = [...listing.connections, ...listing.orgConnections].at(0)?.id;
+  if (id === undefined) throw new Error("Nothing connected");
+  return id;
+}
+
+describe("recording a connection", () => {
+  it("starts it backfilling and sends the event that runs the backfill", async () => {
+    const { orgA } = await seedTwoOrgs();
+    await connectGmail(orgA.member.ctx, orgA.member.email);
+    const id = await ownConnectionId(orgA.member.ctx);
+
+    expect(await getConnection(orgA.member.ctx, id)).toEqual({
+      id,
+      source: "gmail",
+      kind: "member",
+      ownerUserId: orgA.member.id,
+      status: "backfilling",
+      cursor: null,
+    });
+    expect(fakeInngest.sent("connections/connection.recorded")).toHaveLength(1);
+  });
+
+  it("sends the event on Nango's redelivery when sending it failed the first time", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const { token } = await startConnect(orgA.member.ctx, "gmail");
+    const webhook = fakeNango.completeConnect(token, { emailAddress: orgA.member.email });
+    fakeInngest.failSends();
+
+    // The route answers 500, so Nango delivers the webhook again later.
+    await expect(handleNangoWebhook(webhook.rawBody, webhook.headers)).rejects.toThrow();
+    expect((await listConnections(orgA.member.ctx)).attempts).toEqual([
+      expect.objectContaining({ status: "pending" }),
+    ]);
+
+    fakeInngest.failSends(false);
+    await handleNangoWebhook(webhook.rawBody, webhook.headers);
+    // Once settled, a further redelivery changes nothing.
+    await handleNangoWebhook(webhook.rawBody, webhook.headers);
+
+    const listing = await listConnections(orgA.member.ctx);
+    expect(listing.attempts).toEqual([]);
+    expect(listing.connections).toHaveLength(1);
+    expect(fakeInngest.sent("connections/connection.recorded")).toEqual([
+      expect.objectContaining({ id: `connection-recorded-${listing.connections[0]?.id ?? ""}` }),
+    ]);
+  });
+});
+
+describe("getConnection", () => {
+  it("refuses a connection that isn't the caller's to read", async () => {
+    const { orgA } = await seedTwoOrgs();
+    await connectGmail(orgA.member.ctx, orgA.member.email);
+    await connectOrgInbox(orgA.admin.ctx, `support@${orgA.workspaceDomain}`);
+    const members = await ownConnectionId(orgA.member.ctx);
+    const orgs = await ownConnectionId(orgA.admin.ctx);
+
+    await expect(getConnection(orgA.admin.ctx, members)).rejects.toThrow(ForbiddenError);
+    await expect(getConnection(orgA.member.ctx, orgs)).rejects.toThrow(ForbiddenError);
+    expect(await getConnection(orgA.admin.ctx, orgs)).toMatchObject({ kind: "org" });
+  });
+});
+
+describe("proxyGet", () => {
+  it("reads the connection's source through Nango, null for an item it doesn't have", async () => {
+    const { orgA } = await seedTwoOrgs();
+    await connectGmail(orgA.member.ctx, orgA.member.email);
+    const id = await ownConnectionId(orgA.member.ctx);
+
+    expect(
+      await proxyGet(orgA.member.ctx, id, "/gmail/v1/users/me/profile", profile),
+    ).toMatchObject({ emailAddress: orgA.member.email });
+    expect(
+      await proxyGet(orgA.member.ctx, id, "/gmail/v1/users/me/messages/nope?format=full", message),
+    ).toBeNull();
+  });
+
+  it("turns a connection Nango no longer has, or Mycel no longer has, into not found", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const { connectionId: nangoId } = await connectGmail(orgA.member.ctx, orgA.member.email);
+    const id = await ownConnectionId(orgA.member.ctx);
+    // Deleted at Nango without the webhook having arrived yet.
+    fakeNango.deleteOutsideMycel(nangoId);
+
+    const path = "/gmail/v1/users/me/profile";
+    await expect(proxyGet(orgA.member.ctx, id, path, profile)).rejects.toThrow(NotFoundError);
+    await disconnect(orgA.member.ctx, id);
+    await expect(proxyGet(orgA.member.ctx, id, path, profile)).rejects.toThrow(NotFoundError);
+  });
+});
+
+describe("recordIngestState", () => {
+  it("shows the status and progress on the connections page", async () => {
+    const { orgA } = await seedTwoOrgs();
+    await connectGmail(orgA.member.ctx, orgA.member.email);
+    const id = await ownConnectionId(orgA.member.ctx);
+
+    await recordIngestState(orgA.member.ctx, id, { backfilledItems: 40, cursor: "1234" });
+    expect((await listConnections(orgA.member.ctx)).connections).toEqual([
+      expect.objectContaining({ status: "backfilling", backfilledItems: 40 }),
+    ]);
+
+    await recordIngestState(orgA.member.ctx, id, { status: "active" });
+    expect(await getConnection(orgA.member.ctx, id)).toMatchObject({
+      status: "active",
+      cursor: "1234",
+    });
+  });
+
+  it("refuses another member's connection", async () => {
+    const { orgA } = await seedTwoOrgs();
+    await connectGmail(orgA.member.ctx, orgA.member.email);
+    const id = await ownConnectionId(orgA.member.ctx);
+
+    await expect(recordIngestState(orgA.admin.ctx, id, { status: "failed" })).rejects.toThrow(
+      ForbiddenError,
+    );
+  });
+});

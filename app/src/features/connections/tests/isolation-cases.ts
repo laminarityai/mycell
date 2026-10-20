@@ -1,9 +1,11 @@
 import { expect } from "vitest";
+import { z } from "zod";
 import { defineIsolationCases } from "@/db/testing/isolation";
 import type { TwoOrgs } from "@/db/testing/two-org-fixture";
 import { NotFoundError } from "@/lib/errors";
 import { fakeNango } from "@/testing/fake-nango";
 import * as server from "../server";
+import type { ConnectionsListing } from "../types";
 import { connectGmail, connectOrgInbox } from "./connect-helpers";
 
 // Org B's member connects their Gmail and org B's admin a shared inbox, so every case can
@@ -16,6 +18,13 @@ async function seedOrgBConnection({ orgB }: TwoOrgs) {
     memberBefore: await server.listConnections(orgB.member.ctx),
     nangoConnectionId: connectionId,
   };
+}
+
+// The IDs of org B's member connection and org connection.
+function orgBIds(admins: ConnectionsListing, members: ConnectionsListing): string[] {
+  const ids = [...members.connections, ...admins.orgConnections].map((c) => c.id);
+  expect(ids).toHaveLength(2);
+  return ids;
 }
 
 export const isolationCases = defineIsolationCases(server, {
@@ -62,6 +71,48 @@ export const isolationCases = defineIsolationCases(server, {
 
     // Org B's member isn't a member of org A, and their connections are out of org A's reach.
     await server.deleteMemberConnectionsOf(orgs.orgA.admin.ctx, orgs.orgB.member.id);
+
+    expect(await server.listConnections(orgs.orgB.admin.ctx)).toEqual(before);
+    expect(await server.listConnections(orgs.orgB.member.ctx)).toEqual(memberBefore);
+  },
+
+  getConnection: async (orgs) => {
+    const { before, memberBefore } = await seedOrgBConnection(orgs);
+    const own = await connectGmail(orgs.orgA.member.ctx, orgs.orgA.member.email);
+    const mine = (await server.listConnections(orgs.orgA.member.ctx)).connections.at(0);
+    expect(own.response).toEqual({ status: 200 });
+
+    for (const id of orgBIds(before, memberBefore)) {
+      for (const ctx of [orgs.orgA.admin.ctx, orgs.orgA.member.ctx]) {
+        await expect(server.getConnection(ctx, id)).rejects.toThrow(NotFoundError);
+      }
+    }
+    expect(await server.getConnection(orgs.orgA.member.ctx, mine?.id ?? "")).toMatchObject({
+      id: mine?.id,
+      ownerUserId: orgs.orgA.member.id,
+    });
+  },
+
+  proxyGet: async (orgs) => {
+    const { before, memberBefore } = await seedOrgBConnection(orgs);
+    const profile = z.object({ emailAddress: z.string() });
+
+    for (const id of orgBIds(before, memberBefore)) {
+      await expect(
+        server.proxyGet(orgs.orgA.admin.ctx, id, "/gmail/v1/users/me/profile", profile),
+      ).rejects.toThrow(NotFoundError);
+    }
+    expect(await server.listConnections(orgs.orgB.admin.ctx)).toEqual(before);
+  },
+
+  recordIngestState: async (orgs) => {
+    const { before, memberBefore } = await seedOrgBConnection(orgs);
+
+    for (const id of orgBIds(before, memberBefore)) {
+      await expect(
+        server.recordIngestState(orgs.orgA.admin.ctx, id, { status: "failed", cursor: "1" }),
+      ).rejects.toThrow(NotFoundError);
+    }
 
     expect(await server.listConnections(orgs.orgB.admin.ctx)).toEqual(before);
     expect(await server.listConnections(orgs.orgB.member.ctx)).toEqual(memberBefore);

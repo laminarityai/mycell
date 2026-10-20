@@ -11,14 +11,43 @@ export type Source = z.infer<typeof sourceSchema>;
 export const connectionKindSchema = z.enum(["member", "org"]);
 export type ConnectionKind = z.infer<typeof connectionKindSchema>;
 
+/**
+ * Where a connection's ingest stands: `backfilling` from when it's recorded until its first
+ * backfill ends, then `active`, or `failed` if the backfill gave up.
+ */
+export const connectionStatusSchema = z.enum(["backfilling", "active", "failed"]);
+export type ConnectionStatus = z.infer<typeof connectionStatusSchema>;
+
 /** A connection as its owner sees it. */
 export type ConnectionSummary = {
   id: string;
   source: Source;
   kind: ConnectionKind;
   accountEmail: string;
-  status: "active";
+  status: ConnectionStatus;
+  // How many messages the current backfill has stored so far.
+  backfilledItems: number;
   createdAt: Date;
+};
+
+/**
+ * What another feature needs to ingest from a connection: whose it is (its kind becomes the
+ * owner scope of everything derived from it) and where its ingest stands.
+ */
+export type ConnectionDetails = {
+  id: string;
+  source: Source;
+  kind: ConnectionKind;
+  ownerUserId: string;
+  status: ConnectionStatus;
+  cursor: string | null;
+};
+
+/** A change to a connection's ingest state; fields left out stay as they are. */
+export type IngestStateUpdate = {
+  status?: ConnectionStatus;
+  backfilledItems?: number;
+  cursor?: string;
 };
 
 /** The user who made a connection, or `removed` once they're no longer a user of the org. */

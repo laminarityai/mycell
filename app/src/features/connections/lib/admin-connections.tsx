@@ -11,6 +11,7 @@ import type { ConnectionOwner, ConnectionsListing } from "../types";
 import { ConnectButton } from "./connect-button";
 import { DisconnectButton } from "./disconnect-button";
 import { SOURCE_NAMES } from "./source-names";
+import { StatusBadge } from "./status-badge";
 
 /** The admin-only part of the connections page: org connections, and members' connections. */
 export function AdminConnections({ listing }: { listing: ConnectionsListing }) {
@@ -43,7 +44,10 @@ export function AdminConnections({ listing }: { listing: ConnectionsListing }) {
                     <OwnerName owner={connection.owner} />
                   </TableCell>
                   <TableCell>
-                    <Badge variant="secondary">{connection.status}</Badge>
+                    <StatusBadge
+                      status={connection.status}
+                      backfilledItems={connection.backfilledItems}
+                    />
                   </TableCell>
                   <TableCell className="text-right">
                     <DisconnectButton
@@ -78,7 +82,7 @@ export function AdminConnections({ listing }: { listing: ConnectionsListing }) {
                   </TableCell>
                   <TableCell>{SOURCE_NAMES[connection.source]}</TableCell>
                   <TableCell>
-                    <Badge variant="secondary">{connection.status}</Badge>
+                    <StatusBadge status={connection.status} />
                   </TableCell>
                 </TableRow>
               ))}

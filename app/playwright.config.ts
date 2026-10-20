@@ -17,6 +17,9 @@ const e2eEnv = {
   GOOGLE_CLIENT_SECRET: "e2e-google-client-secret",
   NANGO_API_KEY: "e2e-nango-api-key",
   NANGO_WEBHOOK_SIGNING_KEY: "e2e-nango-webhook-signing-key",
+  INNGEST_DEV: "0",
+  INNGEST_EVENT_KEY: "e2e-inngest-event-key",
+  INNGEST_SIGNING_KEY: "signkey-e2e-00000000000000000000000000000000",
 };
 // The test workers seed that database and sign cookies through src/env, like the app does.
 Object.assign(process.env, e2eEnv);

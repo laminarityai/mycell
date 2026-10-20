@@ -29,6 +29,13 @@
       "when": 1792472539416,
       "tag": "0003_connections",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792476005434,
+      "tag": "0004_gmail-backfill",
+      "breakpoints": true
     }
   ]
 }

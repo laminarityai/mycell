@@ -1,10 +1,8 @@
 // The fake Nango's connections API: listing connections, and reading one by ID, in the shapes
 // Nango documents. Pages are numbered from 0 and the listing ends at an empty page.
 import { http, HttpResponse } from "msw";
-import { env } from "@/env";
 import type { FakeConnection } from "./fake-nango";
-
-const API = "https://api.nango.dev";
+import { authorised, NANGO_API as API, unauthorised } from "./fake-nango-http";
 
 // Nango's own cap on a page, and its default when no limit is asked.
 const MAX_LIMIT = 2000;
@@ -51,11 +49,19 @@ export function connectionsApiHandlers(
       const key = new URL(request.url).searchParams.get("provider_config_key");
       const connection = all().find((c) => c.connectionId === String(params.connectionId));
       if (connection === undefined || connection.integration !== key) {
-        return HttpResponse.json({ error: { code: "unknown_connection" } }, { status: 404 });
+        const error = { code: "not_found", message: "Failed to find connection" };
+        return HttpResponse.json({ error }, { status: 404 });
       }
-      // `raw` is Google's whole token response, whose `scope` lists what was granted.
+      // The full connection, which names its times as created_at and updated_at (the listing
+      // says `created`). `raw` is Google's whole token response, whose `scope` lists what was
+      // granted.
+      const { created, ...rest } = listed(connection);
       return HttpResponse.json({
-        ...listed(connection),
+        ...rest,
+        connection_config: {},
+        created_at: created,
+        updated_at: created,
+        last_fetched_at: null,
         credentials: {
           type: "OAUTH2",
           access_token: "fake-access-token",
@@ -84,12 +90,4 @@ function listed(connection: FakeConnection) {
     tags: connection.tags,
     errors: [],
   };
-}
-
-function authorised(request: Request): boolean {
-  return request.headers.get("Authorization") === `Bearer ${env.NANGO_API_KEY}`;
-}
-
-function unauthorised() {
-  return HttpResponse.json({ error: { code: "unauthorized" } }, { status: 401 });
 }

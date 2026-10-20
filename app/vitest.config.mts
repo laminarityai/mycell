@@ -29,7 +29,7 @@ process.env.MODEL_JUDGE = "test/judge-default";
 export default defineConfig({
   resolve: { tsconfigPaths: true },
   test: {
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "scripts/**/*.test.ts"],
     globalSetup: ["src/db/testing/global-setup.ts"],
     setupFiles: ["src/db/testing/reset-before-each-file.ts", "src/testing/fake-services-setup.ts"],
     // Test files share one database and each starts by emptying it, so they run one at a time.

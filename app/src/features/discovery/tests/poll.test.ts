@@ -99,10 +99,13 @@ describe("pollConnection", () => {
     expect(new Set(found.map((event) => event.sourceRef)).size).toBe(501);
   });
 
-  it("leaves out spam and trash, as the backfill's listing does", async () => {
+  it("leaves out spam, trash and drafts, as the backfill does", async () => {
     const { orgA, connection, me, ctx } = await backfilledMailbox();
     connection.mailbox.add({ ...fromCustomer(me, new Date(), LATE), labelIds: ["SPAM"] });
     connection.mailbox.add({ ...fromCustomer(me, new Date(), LATE), labelIds: ["TRASH"] });
+    // Each save of a draft adds a new message to history.
+    connection.mailbox.add({ from: me, to: [LATE], at: new Date(), labelIds: ["DRAFT"] });
+    connection.mailbox.add({ from: me, to: [LATE], at: new Date(), labelIds: ["DRAFT"] });
 
     await pollConnection(systemCtx(orgA.id), connection.id);
 

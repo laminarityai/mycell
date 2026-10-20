@@ -3,11 +3,9 @@
 // retries the source's 429s as the request's Retries header asks, and forwards a POST's JSON
 // body to the source as it is.
 import { http, HttpResponse } from "msw";
-import { env } from "@/env";
 import type { FakeConnection } from "./fake-nango";
+import { authorised, NANGO_API as API, proxyRefusal, unauthorised } from "./fake-nango-http";
 import { INTEGRATION_HOSTS, proxiedSource, refusal } from "./fake-proxied-sources";
-
-const API = "https://api.nango.dev";
 
 /** What the proxy needs from the fake Nango: its connections, hook and rate limiting. */
 export type ProxyState = {
@@ -27,16 +25,15 @@ export function proxyHandlers(state: ProxyState) {
 }
 
 async function proxy(state: ProxyState, request: Request, method: "GET" | "POST") {
-  if (request.headers.get("Authorization") !== `Bearer ${env.NANGO_API_KEY}`) {
-    return HttpResponse.json({ error: { code: "unauthorized" } }, { status: 401 });
-  }
+  if (!authorised(request)) return unauthorised();
   const url = new URL(request.url);
   const path = url.pathname.slice("/proxy".length);
   await state.beforeProxy(path);
   const connection = state.connection(request.headers.get("Connection-Id") ?? "");
   if (connection?.integration !== request.headers.get("Provider-Config-Key")) {
-    return HttpResponse.json({ error: { code: "unknown_connection" } }, { status: 404 });
+    return proxyRefusal("no-connection");
   }
+  if (connection.refreshFails === true) return proxyRefusal("refresh-failed");
   const host = baseUrl(request, connection);
   const source = proxiedSource(host, path);
   const refused = refusal(source, connection, method);

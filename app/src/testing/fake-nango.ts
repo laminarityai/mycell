@@ -6,16 +6,12 @@ import { env } from "@/env";
 import { FakeDrive } from "./fake-drive";
 import { FakeMailbox } from "./fake-gmail";
 import { connectionsApiHandlers, type ListingBehaviour } from "./fake-nango-connections";
+import { FakeIntegrations } from "./fake-nango-integrations";
+import { authorised, NANGO_API, unauthorised } from "./fake-nango-http";
 import { proxyHandlers } from "./fake-nango-proxy";
+import { type FakeReconnectSession, type FakeSession, FakeSessions } from "./fake-nango-sessions";
 import { DEFAULT_SCOPES } from "./fake-proxied-sources";
 import { FakeSheets } from "./fake-sheets";
-
-const API = "https://api.nango.dev";
-
-type FakeSession = { token: string; integration: string; tags: Record<string, string> };
-
-// A reconnect session: Connect UI re-authorizes this existing connection.
-type FakeReconnectSession = { token: string; connectionId: string; integration: string };
 
 /** What the connected account looks like from inside its source. */
 export type FakeAccount = { emailAddress: string };
@@ -35,6 +31,8 @@ export type FakeConnection = {
   mailbox: FakeMailbox;
   drive: FakeDrive;
   sheets: FakeSheets;
+  // Google refused the refresh token (access revoked): the proxy can't call the source.
+  refreshFails?: boolean;
 };
 
 /** Runs before the fake proxies a request to a source, given the source API path. */
@@ -44,8 +42,7 @@ export type ProxyHook = (path: string) => void | Promise<void>;
 export type FakeWebhook = { rawBody: string; headers: Headers };
 
 class FakeNango {
-  private sessions: FakeSession[] = [];
-  private reconnectSessions: FakeReconnectSession[] = [];
+  private sessions = new FakeSessions();
   private connections = new Map<string, FakeConnection>();
   private deletesFail = false;
   private rateLimitsLeft = 0;
@@ -54,10 +51,11 @@ class FakeNango {
   private proxyHook: ProxyHook | undefined;
   private nextId = 1;
   private listing: ListingBehaviour = { pageCap: undefined, empty: false };
+  /** The integrations: `google`, `google-mail` and `google-drive`, until a test changes them. */
+  readonly integrations = new FakeIntegrations();
 
   reset(): void {
-    this.sessions = [];
-    this.reconnectSessions = [];
+    this.sessions.reset();
     this.connections.clear();
     this.deletesFail = false;
     this.rateLimitsLeft = 0;
@@ -66,6 +64,7 @@ class FakeNango {
     this.proxyHook = undefined;
     this.nextId = 1;
     this.listing = { pageCap: undefined, empty: false };
+    this.integrations.reset();
   }
 
   /** The connected account's Gmail mailbox, for seeding messages. */
@@ -106,6 +105,11 @@ class FakeNango {
     this.proxyHook = hook;
   }
 
+  /** Google stops refreshing the connection's token: Nango keeps it, and its proxy refuses. */
+  revokeAccess(connectionId: string): void {
+    this.connection(connectionId).refreshFails = true;
+  }
+
   /** Makes Nango's connection delete endpoint answer 500, until `failDeletes(false)` or reset. */
   failDeletes(failing = true): void {
     this.deletesFail = failing;
@@ -126,7 +130,7 @@ class FakeNango {
 
   /** The connect session Mycel created most recently. */
   lastSession(): FakeSession {
-    const session = this.sessions.at(-1);
+    const session = this.sessions.connects.at(-1);
     if (session === undefined) throw new Error("No connect session was created");
     return session;
   }
@@ -141,7 +145,7 @@ class FakeNango {
     account: FakeAccount,
     scopes?: readonly string[],
   ): FakeWebhook & { connectionId: string } {
-    const session = this.sessions.find((s) => s.token === token);
+    const session = this.sessions.connects.find((s) => s.token === token);
     if (session === undefined) throw new Error(`Unknown connect session token ${token}`);
     const connectionId = randomUUID();
     this.connections.set(connectionId, {
@@ -161,7 +165,7 @@ class FakeNango {
 
   /** The reconnect sessions Mycel has created since the last reset, oldest first. */
   reconnectSessionsCreated(): readonly FakeReconnectSession[] {
-    return this.reconnectSessions;
+    return this.sessions.reconnects;
   }
 
   /**
@@ -172,7 +176,7 @@ class FakeNango {
    * `scopes`, when given, are what the new token was granted; otherwise they stay as they were.
    */
   completeReconnect(token: string, account?: FakeAccount, scopes?: readonly string[]): FakeWebhook {
-    const session = this.reconnectSessions.find((s) => s.token === token);
+    const session = this.sessions.reconnects.find((s) => s.token === token);
     if (session === undefined) throw new Error(`Unknown reconnect session token ${token}`);
     const connection = this.connection(session.connectionId);
     if (scopes !== undefined) connection.scopes = scopes;
@@ -240,38 +244,10 @@ class FakeNango {
       () => [...this.connections.values()],
       () => this.listing,
     ),
-    http.post(`${API}/connect/sessions`, async ({ request }) => {
-      if (!authorised(request)) return unauthorised();
-      const body = (await request.json()) as {
-        allowed_integrations: string[];
-        tags: Record<string, string>;
-      };
-      const integration = body.allowed_integrations.at(0);
-      if (integration === undefined) return HttpResponse.json({ error: {} }, { status: 400 });
-      const token = `nango_connect_session_${randomUUID()}`;
-      this.sessions.push({ token, integration, tags: body.tags });
-      const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
-      return HttpResponse.json({ data: { token, expires_at: expiresAt } }, { status: 201 });
-    }),
+    ...this.integrations.handlers,
+    ...this.sessions.handlers((connectionId) => this.connections.get(connectionId)),
 
-    http.post(`${API}/connect/sessions/reconnect`, async ({ request }) => {
-      if (!authorised(request)) return unauthorised();
-      const body = (await request.json()) as { connection_id?: string; integration_id?: string };
-      const connection = this.connections.get(body.connection_id ?? "");
-      if (connection === undefined || connection.integration !== body.integration_id) {
-        return HttpResponse.json({ error: { code: "unknown_connection" } }, { status: 400 });
-      }
-      const token = `nango_connect_session_${randomUUID()}`;
-      this.reconnectSessions.push({
-        token,
-        connectionId: connection.connectionId,
-        integration: connection.integration,
-      });
-      const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
-      return HttpResponse.json({ data: { token, expires_at: expiresAt } }, { status: 201 });
-    }),
-
-    http.delete(`${API}/connections/:connectionId`, ({ request, params }) => {
+    http.delete(`${NANGO_API}/connections/:connectionId`, ({ request, params }) => {
       if (!authorised(request)) return unauthorised();
       if (this.deletesFail) {
         return HttpResponse.json({ error: { code: "server_error" } }, { status: 500 });
@@ -302,14 +278,6 @@ class FakeNango {
       },
     }),
   ];
-}
-
-function authorised(request: Request): boolean {
-  return request.headers.get("Authorization") === `Bearer ${env.NANGO_API_KEY}`;
-}
-
-function unauthorised() {
-  return HttpResponse.json({ error: { code: "unauthorized" } }, { status: 401 });
 }
 
 export const fakeNango = new FakeNango();

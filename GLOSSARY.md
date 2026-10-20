@@ -99,9 +99,21 @@ _Avoid_: Config, definition, recipe
 An immutable snapshot of a workflow's spec, created each time the workflow is published.
 _Avoid_: Revision, release
 
+**Working spec**:
+A workflow's current, unpublished spec, which admins edit and which becomes a workflow version when published.
+_Avoid_: Draft spec, draft (a draft is outgoing mail)
+
 **Enablement**:
 One member's switch-on of one member-credential workflow, following its latest version.
 _Avoid_: Instance, subscription, install, activation
+
+**Run**:
+One execution of one workflow version on one trigger, such as one incoming email.
+_Avoid_: Execution, job, invocation
+
+**Model role**:
+The kind of model a step asks for (`classify`, `fast`, `smart` or `judge`), which each org maps to a concrete model.
+_Avoid_: Model, model tier
 
 **Paused**:
 The state of a workflow or enablement that will not run, always shown together with its reason.

@@ -4,6 +4,17 @@ Build order for the v1 full loop, dogfooded on our own Google Workspace. Every m
 
 The builder chat is primary (ADR-0007), so it comes before mining. Milestones keep their numbers as stable names and are listed in build order: **M0 → M1 → M3 → M6 → M5 → M2 → M4 → M7 → M8 → M9 → M10.**
 
+## Status (2026-10-20)
+
+| Milestone | State       | Spec | Notes                                                                                                                                         |
+| --------- | ----------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| M0        | Done        | #1   |                                                                                                                                               |
+| M1        | In progress | #11  | Merged: connect, org connections, disconnect cascade, Gmail backfill. Open: polling #15, reconciliation #16 (PR #31), Drive #17, dogfood #19. |
+| M3        | Ready       | #33  | Grilled; tickets ready for agents. Decisions in ADR-0010 (credits slice), ADR-0011 (write access up front) and ADR-0012 (what runs keep).     |
+| M6        | Specced     | #43  | Needs triage.                                                                                                                                 |
+| M5        | Specced     | #51  | Needs triage. Adds draft-outcome tracking, the measurement for the builder ship bar in `docs/intent.md`.                                      |
+| M2 onward | Not started |      |                                                                                                                                               |
+
 ## M0: Scaffold and tenancy
 
 - **First commit:** the docs, plus an empty app skeleton with every tool wired and proven to bite. `pnpm verify` passes, a deliberate bad import fails the boundary check, the GitHub Actions workflow calls `pnpm verify`, the Husky hooks are in place, and `CLAUDE.md` is a symlink to `AGENTS.md`. No product features.
@@ -53,11 +64,12 @@ The builder chat is primary (ADR-0007), so it comes before mining. Milestones ke
 ## M4: Shadow eval
 
 - Replay specs on held-out past cases; judge plus edit distance; show the results on suggestions.
+- Compare `classify` models on our own mail, e.g. Jev against Laya (`convaiinnovations/laya`), before changing an org's role table.
 - **Done when:** every suggestion shows "would have handled X of Y correctly".
 
 ## M7: Credits and budgets
 
-- Ledger, pre-flight checks, hard stop, per-workflow budgets, discovery cost estimate.
+- Hard stop, per-workflow budgets, discovery cost estimate, real pricing. The ledger and pre-flight check already arrive in M3 (ADR-0010).
 
 ## M8: Observability and failure handling
 
@@ -68,6 +80,7 @@ The builder chat is primary (ADR-0007), so it comes before mining. Milestones ke
 - Nightly incremental mining; the dismissed-suggestion resurfacing rule.
 - Mine our own run logs (runs, approvals, edits, overrides) as a discovery source.
 - Memory extraction, dedupe/supersede, promotion; org memories added to builder chat context.
+- **To scope when grilling M9:** a company agent that draws on org memory. Settle what it can see and do (especially around member-scoped data) before building; `docs/intent.md` non-goal 5 rules out a personal agent for v1.
 
 ## M10: External readiness (first outside customer)
 

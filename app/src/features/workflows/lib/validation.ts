@@ -89,7 +89,7 @@ const scopeCheck: SetupCheck = (spec, setup) =>
 const SETUP_CHECKS: SetupCheck[] = [connectionCheck, scopeCheck];
 
 // A Google connection reaches Gmail when it was granted Gmail (ADR-0014).
-function reachesGmail(connection: ConnectionSummary): boolean {
+export function reachesGmail(connection: ConnectionSummary): boolean {
   return connection.apps.includes("gmail");
 }
 

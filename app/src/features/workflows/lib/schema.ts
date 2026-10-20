@@ -1,6 +1,9 @@
-// Workflows and their published versions. Both are tenant-owned. A version is immutable: the
-// feature has no update path for it, only inserts.
+// Workflows, their published versions, and what switches them on. All are tenant-owned. A
+// version is immutable: the feature has no update path for it, only inserts.
 import { foreignKey, integer, jsonb, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { member } from "@/db/auth-schema";
+// A switch names the connection it runs on, and goes when the connection does (invariant 3).
+import { connections } from "@/features/connections/lib/schema";
 import type { RiskLevel } from "@/features/policy/types";
 import type { Spec } from "@/features/spec/types";
 
@@ -16,12 +19,64 @@ export const workflows = pgTable(
     workingSpec: jsonb("working_spec").$type<Spec>().notNull(),
     // Plain user IDs: a workflow outlives the admin who made it.
     createdBy: text("created_by").notNull(),
+    // An org-credential workflow's one switch: the org connection it runs on while it's on, and
+    // since when. Null while off. Deleting the connection switches it off.
+    orgConnectionId: text("org_connection_id"),
+    orgSwitchedOnAt: timestamp("org_switched_on_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (table) => [
     unique("workflows_org_id_spec_id_unique").on(table.orgId, table.specId),
     unique("workflows_org_id_id_unique").on(table.orgId, table.id),
+    // On the connection's ID alone, so deleting it can null this column and keep org_id. The
+    // switch-on checks the connection is in the workflow's org.
+    foreignKey({
+      name: "workflows_org_connection_fk",
+      columns: [table.orgConnectionId],
+      foreignColumns: [connections.id],
+    }).onDelete("set null"),
+  ],
+);
+
+/**
+ * An enablement: one admin's switch-on of one member-credential workflow on their own member
+ * connection. It follows the workflow's latest version. Switching off deletes it, and so does
+ * deleting the connection or removing the user. `status` is only `on` until M5 adds `paused`.
+ */
+export const enablements = pgTable(
+  "enablements",
+  {
+    id: text("id").primaryKey(),
+    orgId: text("org_id").notNull(),
+    workflowId: text("workflow_id").notNull(),
+    userId: text("user_id").notNull(),
+    connectionId: text("connection_id").notNull(),
+    status: text("status", { enum: ["on"] })
+      .notNull()
+      .default("on"),
+    // Written from JS, like the message times it's compared with (no default: the column has
+    // no time zone, and the database's now() would be read back hours off).
+    enabledAt: timestamp("enabled_at").notNull(),
+  },
+  (table) => [
+    unique("enablements_workflow_id_user_id_unique").on(table.workflowId, table.userId),
+    unique("enablements_org_id_id_unique").on(table.orgId, table.id),
+    foreignKey({
+      name: "enablements_workflow_fk",
+      columns: [table.orgId, table.workflowId],
+      foreignColumns: [workflows.orgId, workflows.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "enablements_connection_fk",
+      columns: [table.orgId, table.connectionId],
+      foreignColumns: [connections.orgId, connections.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "enablements_member_fk",
+      columns: [table.orgId, table.userId],
+      foreignColumns: [member.organizationId, member.userId],
+    }).onDelete("cascade"),
   ],
 );
 

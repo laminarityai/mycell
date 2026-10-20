@@ -1,10 +1,10 @@
 import { serve } from "inngest/next";
 import { reconcileJob } from "@/features/connections/jobs";
 import { backfillJob, pollCron, pollJob } from "@/features/discovery/jobs";
-import { runWorkflowJob } from "@/features/runtime/jobs";
+import { fanOutMessageJob, runWorkflowJob } from "@/features/runtime/jobs";
 import { inngest } from "@/lib/inngest";
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
-  functions: [backfillJob, pollCron, pollJob, reconcileJob, runWorkflowJob],
+  functions: [backfillJob, pollCron, pollJob, reconcileJob, fanOutMessageJob, runWorkflowJob],
 });

@@ -8,3 +8,6 @@ export { executorCoverage } from "./lib/executors";
 export { executeRun } from "./lib/interpreter";
 export { resolveModel, setModelRole } from "./lib/model-roles";
 export { getRun, listRuns, startRun } from "./lib/runs";
+// Called by the trigger's fan-out job and tests, as the org's system ctx: the runs one new
+// inbound message starts.
+export { startTriggeredRuns } from "./lib/trigger";

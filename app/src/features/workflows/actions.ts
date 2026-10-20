@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getCtx } from "@/features/orgs/server";
 import { actionError, type ActionResult } from "@/lib/errors";
-import { publishWorkflow, saveWorkflow } from "./server";
+import { publishWorkflow, saveWorkflow, switchWorkflowOff, switchWorkflowOn } from "./server";
 
 const saveInput = z.object({
   workflowId: z.string().min(1).optional(),
@@ -13,6 +13,7 @@ const saveInput = z.object({
   spec: z.string(),
 });
 const publishInput = z.object({ workflowId: z.string().min(1) });
+const switchOnInput = z.object({ workflowId: z.string().min(1), connectionId: z.string().min(1) });
 
 /** Saves the pasted spec. A new workflow goes to its own page; an edit refreshes this one. */
 export async function saveWorkflowAction(
@@ -37,6 +38,36 @@ export async function saveWorkflowAction(
     return actionError(error);
   }
   if (input.workflowId === undefined) redirect(`/workflows/${id}`);
+  refresh();
+  return {};
+}
+
+export async function switchWorkflowOnAction(
+  _previous: ActionResult,
+  form: FormData,
+): Promise<ActionResult> {
+  const ctx = await getCtx();
+  const { workflowId, connectionId } = switchOnInput.parse(Object.fromEntries(form));
+  try {
+    await switchWorkflowOn(ctx, workflowId, connectionId);
+  } catch (error) {
+    return actionError(error);
+  }
+  refresh();
+  return {};
+}
+
+export async function switchWorkflowOffAction(
+  _previous: ActionResult,
+  form: FormData,
+): Promise<ActionResult> {
+  const ctx = await getCtx();
+  const { workflowId } = publishInput.parse(Object.fromEntries(form));
+  try {
+    await switchWorkflowOff(ctx, workflowId);
+  } catch (error) {
+    return actionError(error);
+  }
   refresh();
   return {};
 }

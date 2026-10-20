@@ -5,6 +5,7 @@ import { getConnection, proxyGet, recordIngestState } from "@/features/connectio
 import type { IngestedApp } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
+import { announceReceived } from "./announce";
 import type { Connector, SourceClient } from "./connector";
 import { driveConnector } from "./drive/connector";
 import { gmailConnector } from "./gmail/connector";
@@ -59,7 +60,8 @@ export function sourceClient(ctx: Ctx, connectionId: string): SourceClient {
 /**
  * Stores everything that occurred in one app since `since`, one page per step named
  * `<stepPrefix>page-<n>`. With `recordProgress`, the app's ingest state shows the running
- * count (the backfill's progress). Returns how many items it stored.
+ * count (the backfill's progress). With `announce` (a recovery's), each new inbound Gmail
+ * message is sent on as discovery/gmail.message_received. Returns how many items it stored.
  */
 export async function storeWindow(
   ctx: Ctx,
@@ -67,15 +69,14 @@ export async function storeWindow(
   app: IngestedApp,
   since: Date,
   runStep: RunStep,
-  options: { stepPrefix: string; recordProgress: boolean },
+  options: WindowOptions,
 ): Promise<Gone<{ items: number }>> {
   let progress: PageProgress = { pageToken: null, items: 0 };
   for (let page = 1; page === 1 || progress.pageToken !== null; page++) {
     const from = progress;
     const result: Gone<PageProgress> = await runStep(
       `${options.stepPrefix}page-${String(page)}`,
-      () =>
-        untilGone(() => storePage(ctx, { connectionId, app, since, from }, options.recordProgress)),
+      () => untilGone(() => storePage(ctx, { connectionId, app, since, from }, options)),
     );
     if (result.gone) return { gone: true };
     progress = { pageToken: result.pageToken, items: result.items };
@@ -87,12 +88,14 @@ export async function storeWindow(
 // stored so far.
 type PageProgress = { pageToken: string | null; items: number };
 
+type WindowOptions = { stepPrefix: string; recordProgress: boolean; announce: boolean };
+
 type PageRequest = { connectionId: string; app: IngestedApp; since: Date; from: PageProgress };
 
 async function storePage(
   ctx: Ctx,
   { connectionId, app, since, from }: PageRequest,
-  recordProgress: boolean,
+  { recordProgress, announce }: WindowOptions,
 ): Promise<PageProgress> {
   const connection = await getConnection(ctx, connectionId);
   const page = await CONNECTORS[app].backfillPage(
@@ -100,7 +103,8 @@ async function storePage(
     since,
     from.pageToken,
   );
-  await storeEvents(ctx, connection, app, page.events);
+  const created = await storeEvents(ctx, connection, app, page.events);
+  if (announce && app === "gmail") await announceReceived(ctx, connectionId, created);
   const items = from.items + page.events.length;
   if (recordProgress) {
     await recordIngestState(ctx, connectionId, app, { backfilledItems: items });

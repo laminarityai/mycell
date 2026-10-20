@@ -27,6 +27,8 @@ export async function backfillConnection(
     const stored = await storeWindow(ctx, connectionId, app, new Date(start.since), runStep, {
       stepPrefix: `${app}-`,
       recordProgress: true,
+      // A backfill reads history: nothing it stores is new mail to run workflows on.
+      announce: false,
     });
     if (stored.gone) return { outcome: "gone" };
     const end = await runStep(`${app}-finish`, () =>

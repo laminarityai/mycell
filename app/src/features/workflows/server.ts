@@ -2,3 +2,6 @@
 // Admin-only in M3; members get ForbiddenError.
 export { getWorkflowVersion, publishWorkflow } from "./lib/versions";
 export { getWorkflow, listWorkflows, saveWorkflow } from "./lib/workflows";
+export { switchWorkflowOff, switchWorkflowOn } from "./lib/switches";
+// Called by the trigger's fan-out, as the system ctx: what's switched on for one connection.
+export { listSwitchedOn } from "./lib/switches";

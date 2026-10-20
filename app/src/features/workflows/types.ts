@@ -54,6 +54,24 @@ export type WorkflowDetails = {
   inserted: InsertedApproval[];
   /** Newest first. */
   versions: WorkflowVersionSummary[];
+  /** The caller's enablement, or the org switch; null while off. */
+  switch: WorkflowSwitch | null;
   createdBy: string;
   updatedAt: Date;
+};
+
+/** Where a workflow is switched on: the connection it runs on, and since when. */
+export type WorkflowSwitch = { connectionId: string; since: Date };
+
+/** One enablement or org switch on a connection, as the trigger's fan-out reads it. */
+export type SwitchedOn = {
+  workflowId: string;
+  /** The enablement, for a member workflow; null for an org workflow's switch. */
+  enablementId: string | null;
+  /** The latest version, which the run pins. */
+  versionId: string;
+  /** Messages that occurred before this start nothing. */
+  since: Date;
+  /** The trigger's label filter: a message starts a run when it has one of them. */
+  labelIds: string[];
 };

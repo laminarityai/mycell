@@ -9,7 +9,7 @@ import { ConflictError, ForbiddenError, NotFoundError } from "@/lib/errors";
 import type { WorkflowVersion } from "../types";
 import { workflowVersions } from "./schema";
 import { validateWorkflowSpec } from "./validation";
-import { findWorkflow, requireAdmin } from "./workflows";
+import { findWorkflow, requireAdmin } from "./access";
 
 type Version = typeof workflowVersions.$inferSelect;
 

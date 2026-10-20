@@ -161,6 +161,14 @@ Specs are JSON, validated by zod, and run by our own interpreter in `features/ru
 - the policy engine computes the max risk level and inserts any approvals the spec is missing
 - every step type and catalog action has a registered executor in `features/runtime`
 
+**Switching on and triggering:**
+
+- A member-credential workflow is switched on by an **enablement** (`enablements`, unique on workflow and user) on the enabling user's own member connection; an org-credential workflow by its one switch, recorded on `workflows` as the org connection it runs on and since when. Either follows the latest version, and switching on checks that version against the chosen connection alone (Gmail allowed, every action's scope granted). Switching off deletes the enablement or clears the switch; deleting the connection does too. In M3 only admins switch anything.
+- Only polled mail triggers: when a poll (or an expired-cursor recovery) newly inserts an inbound Gmail message that isn't a draft, `discovery` sends `discovery/gmail.message_received` (`src/lib/events.ts`, shared so `runtime` needn't import `discovery`). The backfill sends nothing, and neither does a re-read.
+- `runtime`'s fan-out, as the system ctx, starts one run per enablement or org switch on that connection whose switch-on came at or before the message's `occurredAt` and whose trigger labels (default `INBOX`) the message carries. Each run is unique on (enablement or org workflow, `source_ref`) through `runs.trigger_key`, and its run event's ID is the run's, so a resent trigger starts nothing twice.
+- Before each step, a triggered run checks its enablement or org switch is still on for its connection; if not, it ends `cancelled` after the step it was on.
+- Known gap: the trigger event is sent inside the poll step after the insert. If the send fails, the step's retry finds the rows already stored and sends nothing, so that message starts no run.
+
 **Capability requests:** when no catalog action fits, the builder emits a structured `capability_request` (API, operation, inputs, outputs) to an internal queue. Our team builds the Nango function. The interface stays the same so an auto-builder can take over later.
 
 ## Adding an app (ADR-0013)

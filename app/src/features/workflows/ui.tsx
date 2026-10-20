@@ -9,10 +9,35 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { RiskLevel } from "@/features/policy/types";
+import { SwitchForm, type SwitchConnectionOption } from "./lib/switch-form";
 import { PublishButton, WorkflowForm } from "./lib/workflow-editor";
 import type { WorkflowDetails, WorkflowSummary } from "./types";
 
 export { WorkflowForm };
+
+/**
+ * The workflow's switch. A member workflow is switched on for the admin's own connection, an
+ * org workflow for one org connection: `connections` are the ones its credentials allow.
+ */
+export function WorkflowSwitchSection({
+  workflow,
+  connections,
+}: {
+  workflow: WorkflowDetails;
+  connections: SwitchConnectionOption[];
+}) {
+  return (
+    <section className="flex flex-col gap-2" aria-label="Switch">
+      <h2 className="text-lg font-semibold">Switch</h2>
+      <SwitchForm
+        workflowId={workflow.id}
+        current={workflow.switch}
+        connections={connections}
+        published={workflow.versions.length > 0}
+      />
+    </section>
+  );
+}
 
 const RISK_LABELS: Record<RiskLevel, string> = {
   read: "Read",

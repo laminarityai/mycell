@@ -15,6 +15,7 @@ import { getConnection, recordIngestState } from "@/features/connections/server"
 import { ingestedAppSchema, type IngestedApp } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
 import type { PollOutcome } from "../types";
+import { announceReceived } from "./announce";
 import { BACKFILL_DAYS, DAY_MS } from "./backfill";
 import { CONNECTORS, runInline, sourceClient, storeWindow, untilGone } from "./ingest-steps";
 import type { RunStep } from "./ingest-steps";
@@ -75,7 +76,8 @@ async function pollOnce(ctx: Ctx, connectionId: string, app: IngestedApp) {
   if (state.cursor === null) return { result: "expired", items: 0 } as const;
   const found = await CONNECTORS[app].poll(sourceClient(ctx, connectionId), state.cursor);
   if ("cursorExpired" in found) return { result: "expired", items: 0 } as const;
-  await storeEvents(ctx, connection, app, found.events);
+  const created = await storeEvents(ctx, connection, app, found.events);
+  if (app === "gmail") await announceReceived(ctx, connectionId, created);
   await recordIngestState(ctx, connectionId, app, {
     cursor: found.nextCursor,
     lastPolledAt: new Date(),
@@ -103,6 +105,7 @@ async function recover(
   const stored = await storeWindow(ctx, connectionId, app, new Date(start.since), runStep, {
     stepPrefix: `${app}-recover-`,
     recordProgress: false,
+    announce: true,
   });
   if (stored.gone) return { outcome: "gone" };
   const { cursor } = start;

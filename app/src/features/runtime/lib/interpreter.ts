@@ -7,7 +7,7 @@ import { eq } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { getConnection } from "@/features/connections/server";
 import type { Step } from "@/features/spec/types";
-import { getWorkflowVersion } from "@/features/workflows/server";
+import { getWorkflowVersion, listSwitchedOn } from "@/features/workflows/server";
 import type { Ctx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import type { Json, RetryPolicy, RunOutcome, RunStep } from "../types";
@@ -114,8 +114,21 @@ function attempt(step: Step, context: StepContext): Promise<StepExecution> {
   return checked(step, () => (executor.run as StepRun<Step>)(step, context));
 }
 
-/** Whether the run may start its next step: its connection is still there. */
+/**
+ * Whether the run may start its next step: its connection is still there, and a triggered
+ * run's enablement or org switch is still on for it. Switching off takes effect here, so a step
+ * already under way finishes first.
+ */
 async function mayGoOn(ctx: Ctx, run: Run): Promise<boolean> {
+  if (run.startedBy !== "manual") {
+    // Lists nothing for a connection that's gone.
+    const on = await listSwitchedOn(ctx, run.connectionId);
+    return on.some((switched) =>
+      run.startedBy === "enablement"
+        ? switched.enablementId !== null && switched.enablementId === run.enablementId
+        : switched.enablementId === null && switched.workflowId === run.workflowId,
+    );
+  }
   try {
     await getConnection(ctx, run.connectionId);
     return true;

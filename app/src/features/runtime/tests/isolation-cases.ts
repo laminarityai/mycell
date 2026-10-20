@@ -2,6 +2,7 @@ import { expect } from "vitest";
 import { defineIsolationCases } from "@/db/testing/isolation";
 import type { TwoOrgs } from "@/db/testing/two-org-fixture";
 import { grantCredits, listLedger } from "@/features/credits/server";
+import { switchWorkflowOn } from "@/features/workflows/server";
 import { systemCtx } from "@/lib/ctx";
 import { NotFoundError, OutOfCreditsError } from "@/lib/errors";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
@@ -59,6 +60,25 @@ export const isolationCases = defineIsolationCases(server, {
     const { workflowId } = await seedOrgBRun(orgs);
 
     expect(await server.listRuns(orgs.orgA.admin.ctx, workflowId)).toEqual([]);
+  },
+
+  startTriggeredRuns: async (orgs) => {
+    // Org B's workflow is switched on for its admin's inbox; org A's fan-out is handed org B's
+    // connection, as a forged or misrouted event would.
+    const orgB = await seedOrgBRun(orgs);
+    await switchWorkflowOn(orgs.orgB.admin.ctx, orgB.workflowId, orgB.connectionId);
+    const event = {
+      orgId: orgs.orgA.id,
+      connectionId: orgB.connectionId,
+      sourceRef: "message-1",
+      occurredAt: new Date(Date.now() + 1000).toISOString(),
+      labelIds: ["INBOX"],
+    };
+
+    expect(await server.startTriggeredRuns(systemCtx(orgs.orgA.id), event)).toEqual({
+      runIds: [],
+    });
+    expect(await server.listRuns(orgs.orgB.admin.ctx, orgB.workflowId)).toHaveLength(1);
   },
 
   executeRun: async (orgs) => {

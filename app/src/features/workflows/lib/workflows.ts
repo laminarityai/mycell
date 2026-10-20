@@ -5,7 +5,7 @@ import { isUniqueViolation } from "@/db/errors";
 import { forOrg } from "@/db/for-org";
 import { applyPolicy } from "@/features/policy/engine";
 import type { Ctx } from "@/lib/ctx";
-import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
+import { ConflictError, ValidationError } from "@/lib/errors";
 import type {
   SavedWorkflow,
   WorkflowDetails,
@@ -13,15 +13,12 @@ import type {
   WorkflowSummary,
   WorkflowVersionSummary,
 } from "../types";
+import { findWorkflow, requireAdmin } from "./access";
 import { workflows, workflowVersions } from "./schema";
+import { switchOf } from "./switches";
 import { validateWorkflowSpec } from "./validation";
 
-type Workflow = typeof workflows.$inferSelect;
 type Version = typeof workflowVersions.$inferSelect;
-
-export function requireAdmin(ctx: Ctx): void {
-  if (ctx.role !== "admin") throw new ForbiddenError();
-}
 
 /**
  * Validates the spec in full and saves it as a workflow's working spec: a new workflow when
@@ -96,19 +93,10 @@ export async function getWorkflow(ctx: Ctx, workflowId: string): Promise<Workflo
     maxRisk: policy.ok ? policy.maxRisk : null,
     inserted: policy.ok ? policy.inserted : [],
     versions: versions.map(versionSummary),
+    switch: await switchOf(ctx, row),
     createdBy: row.createdBy,
     updatedAt: row.updatedAt,
   };
-}
-
-export async function findWorkflow(ctx: Ctx, workflowId: string): Promise<Workflow> {
-  const rows = await forOrg(ctx).select(workflows, {
-    where: eq(workflows.id, workflowId),
-    limit: 1,
-  });
-  const row = rows.at(0);
-  if (row === undefined) throw new NotFoundError("workflow");
-  return row;
 }
 
 export function versionSummary(version: Version): WorkflowVersionSummary {

@@ -79,7 +79,7 @@ export function PublishButton({ workflowId }: { workflowId: string }) {
 }
 
 /** The action's error, with every spec issue at the path it's about. */
-function Problems({ result }: { result: ActionResult }) {
+export function Problems({ result }: { result: ActionResult }) {
   if (result.error === undefined) return null;
   return (
     <div role="alert" className="flex flex-col gap-1 text-sm text-destructive">

@@ -6,7 +6,7 @@ import { getCtx } from "@/features/orgs/server";
 import { listRuns } from "@/features/runtime/server";
 import { RecentRuns, RunOnMessageForm } from "@/features/runtime/ui";
 import { getWorkflow } from "@/features/workflows/server";
-import { WorkflowEditor } from "@/features/workflows/ui";
+import { WorkflowEditor, WorkflowSwitchSection } from "@/features/workflows/ui";
 import { NotFoundError } from "@/lib/errors";
 
 export default function WorkflowPage({ params }: PageProps<"/workflows/[workflowId]">) {
@@ -44,6 +44,7 @@ async function Workflow({ params }: Pick<PageProps<"/workflows/[workflowId]">, "
   return (
     <div className="flex flex-col gap-8">
       <WorkflowEditor workflow={workflow} />
+      <WorkflowSwitchSection workflow={workflow} connections={connections} />
       <section className="flex flex-col gap-3" aria-label="Runs">
         <h2 className="text-lg font-semibold">Runs</h2>
         <RunOnMessageForm workflowId={workflow.id} connections={connections} />

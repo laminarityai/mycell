@@ -18,7 +18,7 @@ import {
 // from its connection (docs/conventions.md).
 import { connections } from "@/features/connections/lib/schema";
 import { modelRoleSchema, stepTypes, type ModelRole, type StepType } from "@/features/spec/types";
-import { workflowVersions } from "@/features/workflows/lib/schema";
+import { enablements, workflowVersions } from "@/features/workflows/lib/schema";
 import { runStatuses, runStepStatuses, type Json } from "../types";
 
 const modelRoleEnum = modelRoleSchema.options as [ModelRole, ...ModelRole[]];
@@ -46,10 +46,19 @@ export const runs = pgTable(
     ownerScope: text("owner_scope", { enum: ["member", "org"] }).notNull(),
     workflowId: text("workflow_id").notNull(),
     workflowVersionId: text("workflow_version_id").notNull(),
-    // The enablement that started it; null for an org workflow or a manual run.
+    // What started it: an admin by hand, a member workflow's enablement, or an org workflow's
+    // switch. A triggered run goes on only while what started it is still on.
+    startedBy: text("started_by", { enum: ["manual", "enablement", "org_switch"] })
+      .notNull()
+      .default("manual"),
+    // The enablement that started it. Null for an org workflow or a manual run, and once the
+    // enablement is switched off.
     enablementId: text("enablement_id"),
     // The triggering Gmail message's ID.
     sourceRef: text("source_ref").notNull(),
+    // A triggered run's (enablement or org workflow, source_ref), so one message starts at most
+    // one run of each. Null for a manual run, which may be repeated.
+    triggerKey: text("trigger_key"),
     status: text("status", { enum: runStatuses }).notNull(),
     costUsd: doublePrecision("cost_usd").notNull().default(0),
     startedAt: timestamp("started_at").defaultNow().notNull(),
@@ -57,7 +66,15 @@ export const runs = pgTable(
   },
   (table) => [
     unique("runs_org_id_id_unique").on(table.orgId, table.id),
+    unique("runs_org_id_trigger_key_unique").on(table.orgId, table.triggerKey),
     index("runs_org_id_workflow_id_idx").on(table.orgId, table.workflowId),
+    // On the enablement's ID alone, so switching off nulls it and the run's row stays: the run
+    // then ends `cancelled` before its next step.
+    foreignKey({
+      name: "runs_enablement_fk",
+      columns: [table.enablementId],
+      foreignColumns: [enablements.id],
+    }).onDelete("set null"),
     foreignKey({
       name: "runs_connection_fk",
       columns: [table.orgId, table.connectionId],

@@ -12,16 +12,25 @@ import { events, objectRefs } from "./schema";
 // Rows per object-ref insert, well under Postgres's 65,535 bind parameters.
 const REF_CHUNK = 1000;
 
-/** Stores what one app's connector found on the connection, as events from that app. */
+/** An event a store call created, rather than one stored already. */
+export type NewEvent = Pick<
+  typeof events.$inferSelect,
+  "sourceRef" | "direction" | "occurredAt" | "labelIds"
+>;
+
+/**
+ * Stores what one app's connector found on the connection, as events from that app, and
+ * returns the ones the insert created: what was stored already comes back as nothing.
+ */
 export async function storeEvents(
   ctx: Ctx,
   connection: ConnectionDetails,
   app: IngestedApp,
   normalized: NormalizedEvent[],
-): Promise<void> {
-  if (normalized.length === 0) return;
+): Promise<NewEvent[]> {
+  if (normalized.length === 0) return [];
   const db = forOrg(ctx);
-  await db.insert(
+  const created = await db.insert(
     events,
     normalized.map((event) => ({
       id: randomUUID(),
@@ -68,6 +77,12 @@ export async function storeEvents(
       onConflictDoNothing: true,
     });
   }
+  return created.map(({ sourceRef, direction, occurredAt, labelIds }) => ({
+    sourceRef,
+    direction,
+    occurredAt,
+    labelIds,
+  }));
 }
 
 /** When the latest event the connection stored from `app` occurred, or null if it has none. */

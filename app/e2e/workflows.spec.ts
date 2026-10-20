@@ -41,7 +41,7 @@ test("an admin sees every issue with a refused spec, and members can't reach wor
     }),
   );
   await page.getByRole("button", { name: "Save" }).click();
-  await expect(problems).toContainText("needs your own Gmail connection");
+  await expect(problems).toContainText("needs your own Google connection, allowed Gmail");
   await expect(spec).toHaveValue(/"id":"labels"/);
 
   await page.context().clearCookies();

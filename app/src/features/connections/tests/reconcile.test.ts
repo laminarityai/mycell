@@ -24,7 +24,7 @@ async function addresses(ctx: Ctx) {
 // A user opens Connect UI and finishes OAuth, but Nango's creation webhook never arrives:
 // Nango has the connection, and Mycel only a pending attempt.
 async function connectWithoutWebhook(ctx: Ctx, emailAddress: string) {
-  const { token } = await startConnect(ctx, "gmail");
+  const { token } = await startConnect(ctx, "google");
   return fakeNango.completeConnect(token, { emailAddress }).connectionId;
 }
 
@@ -58,7 +58,7 @@ describe("reconcileConnections", () => {
 
     expect(summary).toEqual({
       ...NOTHING_DONE,
-      deletedAtNango: [{ nangoConnectionId: nangoId, integration: "google-mail" }],
+      deletedAtNango: [{ nangoConnectionId: nangoId, integration: "google" }],
     });
     expect(fakeNango.hasConnection(nangoId)).toBe(false);
   });
@@ -72,9 +72,7 @@ describe("reconcileConnections", () => {
 
     const summary = await reconcileConnections(hoursFromNow(25));
 
-    expect(summary.deletedAtNango).toEqual([
-      { nangoConnectionId: nangoId, integration: "google-mail" },
-    ]);
+    expect(summary.deletedAtNango).toEqual([{ nangoConnectionId: nangoId, integration: "google" }]);
     expect(fakeNango.hasConnection(nangoId)).toBe(false);
   });
 
@@ -112,7 +110,7 @@ describe("reconcileConnections", () => {
 
     expect(summary).toEqual({
       ...NOTHING_DONE,
-      deletedAtNango: [{ nangoConnectionId: orphan, integration: "google-mail" }],
+      deletedAtNango: [{ nangoConnectionId: orphan, integration: "google" }],
     });
     expect((await addresses(orgA.admin.ctx)).length).toBe(2);
     expect((await addresses(orgB.admin.ctx)).length).toBe(2);

@@ -7,7 +7,7 @@ import { seedUserWithoutOrg } from "@/db/testing/seed-user";
 import { signIn } from "@/features/orgs/server";
 import { ForbiddenError } from "@/lib/errors";
 import { backfillConnection, findEventsByObject } from "../server";
-import { connectMailbox, daysAgo } from "./ingest-helpers";
+import { connectMailbox, daysAgo } from "@/testing/connect-helpers";
 
 beforeEach(resetDatabase);
 

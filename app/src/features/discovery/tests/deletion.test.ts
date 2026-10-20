@@ -9,7 +9,7 @@ import {
 } from "@/features/connections/server";
 import { fakeNango } from "@/testing/fake-nango";
 import { backfillConnection, findEventsByObject, markBackfillFailed } from "../server";
-import { connectMailbox, daysAgo } from "./ingest-helpers";
+import { connectMailbox, daysAgo } from "@/testing/connect-helpers";
 
 beforeEach(resetDatabase);
 

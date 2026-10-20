@@ -5,7 +5,7 @@ import { getConnection } from "@/features/connections/server";
 import { fakeInngest } from "@/testing/fake-inngest";
 import { fakeNango } from "@/testing/fake-nango";
 import { backfillConnection, findEventsByObject, markBackfillFailed } from "../server";
-import { connectMailbox, daysAgo, listed } from "./ingest-helpers";
+import { connectMailbox, daysAgo, listed } from "@/testing/connect-helpers";
 
 beforeEach(resetDatabase);
 
@@ -153,7 +153,7 @@ describe("backfillConnection", () => {
       backfilledItems: 230,
     });
     expect(await getConnection(orgA.member.ctx, connection.id)).toMatchObject({
-      cursor: historyIdBefore,
+      ingest: { gmail: { cursor: historyIdBefore } },
     });
     const found = await findEventsByObject(orgA.member.ctx, "email", "alice@customer.example");
     expect(new Set(found.map((event) => event.sourceRef)).size).toBe(230);

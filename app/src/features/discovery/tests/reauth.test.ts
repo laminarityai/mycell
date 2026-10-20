@@ -12,7 +12,7 @@ import {
   pollAllConnections,
   pollConnection,
 } from "../server";
-import { connectMailbox, daysAgo, listed } from "./ingest-helpers";
+import { connectMailbox, daysAgo, listed } from "@/testing/connect-helpers";
 
 beforeEach(resetDatabase);
 

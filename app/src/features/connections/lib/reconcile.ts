@@ -14,7 +14,7 @@ import {
   nangoConnectionExists,
 } from "./nango";
 import { connectAttempts, connections } from "./schema";
-import { INTEGRATIONS } from "./sources";
+import { INTEGRATIONS } from "./google";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

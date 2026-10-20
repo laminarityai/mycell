@@ -131,7 +131,7 @@ describe("Nango's deletion webhook", () => {
       operation: "deletion",
       success: true,
       connectionId: "unknown-nango-connection",
-      providerConfigKey: "google-mail",
+      providerConfigKey: "google",
       tags: { mycel_attempt_id: "x", end_user_id: orgA.member.id, organization_id: orgA.id },
     });
 

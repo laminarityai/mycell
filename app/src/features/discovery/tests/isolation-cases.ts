@@ -5,7 +5,7 @@ import { getConnection, listConnections } from "@/features/connections/server";
 import { systemCtx } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
 import * as server from "../server";
-import { connectMailbox, daysAgo } from "./ingest-helpers";
+import { connectMailbox, daysAgo } from "@/testing/connect-helpers";
 
 const CUSTOMER = "alice@customer.example";
 

@@ -1,8 +1,11 @@
-// Backfilling a connection: record where polling will start, then store the last 90 days page
-// by page. Each page is one step, so Inngest retries a failed page without redoing the others.
-// A connection deleted while this runs ends it quietly: a missing connection is NotFoundError,
-// and a write for it breaks its foreign key.
+// Backfilling a connection: for each app still backfilling on it (on a new connection, every
+// ingested app it was granted; after a reconnect, the ones it newly allows), record where
+// polling will start, then store the last 90 days page by page. Each page is one step, so
+// Inngest retries a failed page without redoing the others. A connection deleted while this
+// runs ends it quietly: a missing connection is NotFoundError, and a write for it breaks its
+// foreign key.
 import { getConnection, recordIngestState } from "@/features/connections/server";
+import { ingestedAppSchema, type IngestedApp } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
 import type { BackfillOutcome } from "../types";
 import { CONNECTORS, runInline, sourceClient, storeWindow, untilGone } from "./ingest-steps";
@@ -19,34 +22,49 @@ export async function backfillConnection(
 ): Promise<BackfillOutcome> {
   const start = await runStep("start", () => untilGone(() => startBackfill(ctx, connectionId)));
   if (start.gone) return { outcome: "gone" };
-  const stored = await storeWindow(ctx, connectionId, new Date(start.since), runStep, {
-    stepPrefix: "",
-    recordProgress: true,
-  });
-  if (stored.gone) return { outcome: "gone" };
-  const { items } = stored;
-  const end = await runStep("finish", () =>
-    untilGone(async () => {
-      await recordIngestState(ctx, connectionId, { status: "active", backfilledItems: items });
-      return {};
-    }),
-  );
-  return end.gone ? { outcome: "gone" } : { outcome: "done", items };
+  let items = 0;
+  for (const app of start.apps) {
+    const stored = await storeWindow(ctx, connectionId, app, new Date(start.since), runStep, {
+      stepPrefix: `${app}-`,
+      recordProgress: true,
+    });
+    if (stored.gone) return { outcome: "gone" };
+    const end = await runStep(`${app}-finish`, () =>
+      untilGone(async () => {
+        await recordIngestState(ctx, connectionId, app, {
+          status: "active",
+          backfilledItems: stored.items,
+        });
+        return {};
+      }),
+    );
+    if (end.gone) return { outcome: "gone" };
+    items += stored.items;
+  }
+  return { outcome: "done", items };
 }
 
-/** The backfill gave up (Inngest ran out of retries): the connection shows it failed. */
+/** The backfill gave up (Inngest ran out of retries): each app it hadn't finished failed. */
 export async function markBackfillFailed(ctx: Ctx, connectionId: string): Promise<void> {
   await untilGone(async () => {
-    await recordIngestState(ctx, connectionId, { status: "failed" });
+    for (const app of await backfillingApps(ctx, connectionId)) {
+      await recordIngestState(ctx, connectionId, app, { status: "failed" });
+    }
     return {};
   });
 }
 
 async function startBackfill(ctx: Ctx, connectionId: string) {
-  const connection = await getConnection(ctx, connectionId);
-  const connector = CONNECTORS[connection.source];
-  // Read before listing, so whatever arrives during the backfill is polled after it.
-  const cursor = await connector.readStartCursor(sourceClient(ctx, connectionId));
-  await recordIngestState(ctx, connectionId, { status: "backfilling", backfilledItems: 0, cursor });
-  return { since: new Date(Date.now() - BACKFILL_DAYS * DAY_MS).toISOString() };
+  const apps = await backfillingApps(ctx, connectionId);
+  for (const app of apps) {
+    // Read before listing, so whatever arrives during the backfill is polled after it.
+    const cursor = await CONNECTORS[app].readStartCursor(sourceClient(ctx, connectionId));
+    await recordIngestState(ctx, connectionId, app, { backfilledItems: 0, cursor });
+  }
+  return { apps, since: new Date(Date.now() - BACKFILL_DAYS * DAY_MS).toISOString() };
+}
+
+async function backfillingApps(ctx: Ctx, connectionId: string): Promise<IngestedApp[]> {
+  const { ingest } = await getConnection(ctx, connectionId);
+  return ingestedAppSchema.options.filter((app) => ingest[app]?.status === "backfilling");
 }

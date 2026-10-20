@@ -6,7 +6,8 @@ import { env } from "@/env";
 import { FakeDrive } from "./fake-drive";
 import { FakeMailbox } from "./fake-gmail";
 import { connectionsApiHandlers, type ListingBehaviour } from "./fake-nango-connections";
-import { PROXIED_SOURCES, type ProxiedSource } from "./fake-proxied-sources";
+import { proxyHandlers } from "./fake-nango-proxy";
+import { DEFAULT_SCOPES } from "./fake-proxied-sources";
 
 const API = "https://api.nango.dev";
 
@@ -26,7 +27,10 @@ export type FakeConnection = {
   integration: string;
   tags: Record<string, string>;
   account: FakeAccount;
-  // The account's Gmail mailbox and Drive; its integration decides which the proxy reaches.
+  // The OAuth scopes Google granted, as Nango reports them in the token response.
+  scopes: readonly string[];
+  // The account's Gmail mailbox and Drive. The proxy reaches each through its API's host, if
+  // the connection's scopes allow that API.
   mailbox: FakeMailbox;
   drive: FakeDrive;
 };
@@ -116,10 +120,15 @@ class FakeNango {
   }
 
   /**
-   * A user finishes OAuth in Connect UI with the given account: Nango creates the connection
-   * and returns the creation webhook it then sends.
+   * A user finishes OAuth in Connect UI with the given account, granting `scopes` (by default
+   * everything the integration asks for): Nango creates the connection and returns the
+   * creation webhook it then sends.
    */
-  completeConnect(token: string, account: FakeAccount): FakeWebhook & { connectionId: string } {
+  completeConnect(
+    token: string,
+    account: FakeAccount,
+    scopes?: readonly string[],
+  ): FakeWebhook & { connectionId: string } {
     const session = this.sessions.find((s) => s.token === token);
     if (session === undefined) throw new Error(`Unknown connect session token ${token}`);
     const connectionId = randomUUID();
@@ -130,6 +139,7 @@ class FakeNango {
       integration: session.integration,
       tags: session.tags,
       account,
+      scopes: scopes ?? DEFAULT_SCOPES[session.integration] ?? [],
       mailbox: new FakeMailbox(account.emailAddress),
       drive: new FakeDrive(account.emailAddress),
     });
@@ -145,11 +155,13 @@ class FakeNango {
    * A user finishes OAuth in Connect UI opened with a reconnect session: Nango replaces the
    * connection's credentials and returns the `override` webhook it then sends. Choosing a
    * different Google account than before swaps in that account's (empty) mailbox and Drive.
+   * `scopes`, when given, are what the new token was granted; otherwise they stay as they were.
    */
-  completeReconnect(token: string, account?: FakeAccount): FakeWebhook {
+  completeReconnect(token: string, account?: FakeAccount, scopes?: readonly string[]): FakeWebhook {
     const session = this.reconnectSessions.find((s) => s.token === token);
     if (session === undefined) throw new Error(`Unknown reconnect session token ${token}`);
     const connection = this.connection(session.connectionId);
+    if (scopes !== undefined) connection.scopes = scopes;
     if (account !== undefined && account.emailAddress !== connection.account.emailAddress) {
       connection.account = account;
       connection.mailbox = new FakeMailbox(account.emailAddress);
@@ -259,34 +271,17 @@ class FakeNango {
       return HttpResponse.json({ success: true });
     }),
 
-    ...PROXIED_SOURCES.map((source) =>
-      http.get(`${API}/proxy${source.prefix}/*`, ({ request }) => this.proxy(request, source)),
-    ),
+    ...proxyHandlers({
+      connection: (connectionId) => this.connections.get(connectionId),
+      beforeProxy: (path) => this.proxyHook?.(path),
+      takeRateLimit: () => {
+        if (this.rateLimitsLeft === 0) return false;
+        this.rateLimitsLeft -= 1;
+        this.rateLimitsServed += 1;
+        return true;
+      },
+    }),
   ];
-
-  private async proxy(request: Request, source: ProxiedSource) {
-    if (!authorised(request)) return unauthorised();
-    const url = new URL(request.url);
-    const path = url.pathname.slice("/proxy".length);
-    await this.proxyHook?.(path);
-    const connection = this.proxied(request);
-    if (connection === undefined) {
-      return HttpResponse.json({ error: { code: "unknown_connection" } }, { status: 404 });
-    }
-    const retries = Number(request.headers.get("Retries") ?? 0);
-    for (let attempt = 0; attempt <= retries && this.rateLimitsLeft > 0; attempt++) {
-      this.rateLimitsLeft -= 1;
-      this.rateLimitsServed += 1;
-      if (attempt === retries) return source.rateLimited();
-    }
-    return source.respond(connection, path, url.searchParams);
-  }
-
-  private proxied(request: Request): FakeConnection | undefined {
-    const connection = this.connections.get(request.headers.get("Connection-Id") ?? "");
-    const key = request.headers.get("Provider-Config-Key");
-    return connection?.integration === key ? connection : undefined;
-  }
 }
 
 function authorised(request: Request): boolean {

@@ -8,7 +8,7 @@ import type { Ctx } from "@/lib/ctx";
 import { ConflictError, ForbiddenError, NotFoundError } from "@/lib/errors";
 import { deleteNangoConnection } from "./nango";
 import { connections } from "./schema";
-import { INTEGRATIONS } from "./sources";
+import { INTEGRATIONS } from "./google";
 
 type Connection = typeof connections.$inferSelect;
 
@@ -70,10 +70,12 @@ export function mayManage(ctx: Ctx, connection: Pick<Connection, "kind" | "owner
     : ctx.role === "admin";
 }
 
-// Revokes Mycel's access at Nango, then deletes the row. A failed Nango delete doesn't keep
-// the row: Mycel forgets the connection either way, and reconciliation deletes the Nango
-// connection it no longer has a row for.
-async function deleteConnection(ctx: Ctx, connection: Connection): Promise<void> {
+/**
+ * Revokes Mycel's access at Nango, then deletes the row, and the cascade everything derived
+ * from it. A failed Nango delete doesn't keep the row: Mycel forgets the connection either
+ * way, and reconciliation deletes the Nango connection it no longer has a row for.
+ */
+export async function deleteConnection(ctx: Ctx, connection: Connection): Promise<void> {
   try {
     await deleteNangoConnection(connection.nangoConnectionId, INTEGRATIONS[connection.source]);
   } catch (error) {

@@ -1,22 +1,25 @@
 // Nango's webhooks. A signed `auth` / `creation` webhook is the only thing that records a
 // connection: the browser's word that a popup finished is never trusted. Recording one sends
-// the event that starts its backfill. A signed `auth` / `deletion` webhook forgets one, and
-// `refresh` and `override` report on its credentials (lib/reauth.ts).
-import { randomUUID } from "node:crypto";
+// the event that starts its backfill (lib/record.ts). A signed `auth` / `deletion` webhook
+// forgets one, and `refresh` and `override` report on its credentials (lib/reauth.ts).
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-import { isUniqueViolation } from "@/db/errors";
 import { forOrg } from "@/db/for-org";
 import { findCtx } from "@/features/orgs/server";
 import type { Ctx } from "@/lib/ctx";
 import { checkAccount } from "./account-check";
 import { ATTEMPT_TAGS } from "./connect";
 import { forgetNangoConnection } from "./disconnect";
-import { sendConnectionRecorded } from "./events";
-import { deleteNangoConnection, isSignedByNango, NANGO_SIGNATURE_HEADER } from "./nango";
+import { grantedApps, INTEGRATIONS, readAccountEmail } from "./google";
+import {
+  deleteNangoConnection,
+  isSignedByNango,
+  NANGO_SIGNATURE_HEADER,
+  readGrantedScopes,
+} from "./nango";
 import { recordCredentials } from "./reauth";
-import { connectAttempts, connections } from "./schema";
-import { INTEGRATIONS, readAccountEmail } from "./sources";
+import { recordConnection, refuse } from "./record";
+import { connectAttempts } from "./schema";
 
 // The tags startConnect put on the connect session.
 const attemptTags = z.object({
@@ -34,8 +37,6 @@ const authWebhook = z.object({
   tags: z.record(z.string(), z.string()).optional(),
 });
 type AuthWebhook = z.infer<typeof authWebhook>;
-
-type Attempt = typeof connectAttempts.$inferSelect;
 
 /**
  * Handles one webhook from Nango, given its raw body and headers. A bad signature is 401 and
@@ -85,14 +86,28 @@ async function settleAttempt(webhook: AuthWebhook): Promise<void> {
     await refuse(ctx, attempt, "Google didn't finish connecting. Try again.");
     return;
   }
-  const accountEmail = await readAccountEmail(attempt.source, webhook.connectionId);
-  const refusal = await checkAccount(ctx, attempt.kind, accountEmail);
-  if (refusal !== undefined) {
+  const grantedScopes = await readGrantedScopes(webhook.connectionId, webhook.providerConfigKey);
+  const apps = grantedApps(attempt.source, grantedScopes);
+  // A refused account's access is revoked at Nango before the attempt says why.
+  const reject = async (refusal: string) => {
     await deleteNangoConnection(webhook.connectionId, webhook.providerConfigKey);
     await refuse(ctx, attempt, refusal);
+  };
+  const accountEmail = await readAccountEmail(attempt.source, webhook.connectionId, apps);
+  if (accountEmail === undefined) {
+    await reject("Allow Gmail or Drive, so Mycel can tell which account this is.");
     return;
   }
-  await record(ctx, attempt, webhook, accountEmail);
+  const refusal = await checkAccount(ctx, attempt.kind, accountEmail);
+  if (refusal !== undefined) {
+    await reject(refusal);
+    return;
+  }
+  await recordConnection(ctx, attempt, {
+    nangoConnectionId: webhook.connectionId,
+    accountEmail,
+    grantedScopes,
+  });
 }
 
 // The attempt the webhook's tags name, read as its user, who must still be in the org the
@@ -109,61 +124,6 @@ async function findAttempt(webhook: AuthWebhook) {
   });
   const attempt = rows.at(0);
   return attempt === undefined ? undefined : { ctx, attempt };
-}
-
-async function record(
-  ctx: Ctx,
-  attempt: Attempt,
-  webhook: AuthWebhook,
-  accountEmail: string,
-): Promise<void> {
-  let id: string | undefined = randomUUID();
-  try {
-    await forOrg(ctx).insert(connections, {
-      id,
-      kind: attempt.kind,
-      ownerUserId: attempt.userId,
-      source: attempt.source,
-      accountEmail,
-      nangoConnectionId: webhook.connectionId,
-      status: "backfilling",
-    });
-  } catch (error) {
-    // Nango redelivered the webhook after the row was recorded but before the attempt was
-    // settled (sending the event failed, say): settle it now, sending the event again.
-    if (isUniqueViolation(error, "connections_nango_connection_id_unique")) {
-      id = await recordedConnectionId(ctx, webhook.connectionId);
-    } else if (isUniqueViolation(error, "connections_org_id_source_account_unique")) {
-      await deleteNangoConnection(webhook.connectionId, webhook.providerConfigKey);
-      await refuse(ctx, attempt, `${accountEmail} is already connected.`);
-      return;
-    } else {
-      throw error;
-    }
-  }
-  // Sent before the attempt is settled, so a failed send leaves the attempt pending for the
-  // redelivery. The event's ID makes Inngest drop a duplicate.
-  if (id !== undefined) await sendConnectionRecorded(ctx, id);
-  await forOrg(ctx).update(
-    connectAttempts,
-    { status: "connected" },
-    eq(connectAttempts.id, attempt.id),
-  );
-}
-
-async function recordedConnectionId(ctx: Ctx, nangoConnectionId: string) {
-  const rows = await forOrg(ctx).select(connections, {
-    where: eq(connections.nangoConnectionId, nangoConnectionId),
-  });
-  return rows.at(0)?.id;
-}
-
-async function refuse(ctx: Ctx, attempt: Attempt, refusal: string): Promise<void> {
-  await forOrg(ctx).update(
-    connectAttempts,
-    { status: "refused", refusal },
-    eq(connectAttempts.id, attempt.id),
-  );
 }
 
 function parseJson(text: string): unknown {

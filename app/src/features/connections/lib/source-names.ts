@@ -1,10 +1,35 @@
-import type { ConnectionKind, Source } from "../types";
+import type { ConnectionKind, GoogleApp, Source } from "../types";
+
+/** How the UI names each Google app. */
+export const APP_NAMES: Record<GoogleApp, string> = {
+  gmail: "Gmail",
+  drive: "Drive",
+  sheets: "Sheets",
+  calendar: "Calendar",
+  docs: "Docs",
+  tasks: "Tasks",
+};
 
 /** How the UI names each source. */
-export const SOURCE_NAMES: Record<Source, string> = { gmail: "Gmail", drive: "Google Drive" };
+export const SOURCE_NAMES: Record<Source, string> = {
+  google: "Google",
+  gmail: "Gmail",
+  drive: "Google Drive",
+};
 
-/** How the UI names what a connect attempt is connecting, such as "Gmail" or "an org inbox". */
+/** Names apps as a list: "Gmail", "Gmail and Drive", "Gmail, Drive and Sheets". */
+export function appList(apps: readonly GoogleApp[]): string {
+  const names = apps.map((app) => APP_NAMES[app]);
+  if (names.length <= 1) return names.join("");
+  return `${names.slice(0, -1).join(", ")} and ${names.at(-1) ?? ""}`;
+}
+
+/** How the UI names what a connect attempt is connecting, such as "Google" or "an org inbox". */
 export function attemptTarget(attempt: { source: Source; kind: ConnectionKind }): string {
-  const orgTargets: Record<Source, string> = { gmail: "an org inbox", drive: "an org Drive" };
+  const orgTargets: Record<Source, string> = {
+    google: "an org Google account",
+    gmail: "an org inbox",
+    drive: "an org Drive",
+  };
   return attempt.kind === "org" ? orgTargets[attempt.source] : SOURCE_NAMES[attempt.source];
 }

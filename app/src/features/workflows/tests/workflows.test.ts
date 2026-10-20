@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { disconnect, listConnections } from "@/features/connections/server";
+import { GOOGLE_APP_SCOPES } from "@/features/connections/types";
 import { systemCtx } from "@/lib/ctx";
 import { ConflictError, ForbiddenError, SpecInvalidError, ValidationError } from "@/lib/errors";
 import { connectGmail, connectOrgInbox } from "@/testing/connect-helpers";
@@ -120,7 +121,26 @@ describe("saveWorkflow's validation", () => {
     expect(issues).toEqual([
       {
         path: ["credentials"],
-        message: expect.stringContaining("your own Gmail connection") as string,
+        message: expect.stringContaining("your own Google connection, allowed Gmail") as string,
+      },
+    ]);
+  });
+
+  it("refuses a member spec when the admin's Google connection wasn't allowed Gmail", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const allButGmail = Object.values(GOOGLE_APP_SCOPES).filter(
+      (scope) => scope !== GOOGLE_APP_SCOPES.gmail,
+    );
+    await connectGmail(orgA.admin.ctx, orgA.admin.email, allButGmail);
+
+    const issues = await issuesOf(
+      saveWorkflow(orgA.admin.ctx, { name: "Pricing", spec: draftSpec() }),
+    );
+
+    expect(issues).toEqual([
+      {
+        path: ["credentials"],
+        message: expect.stringContaining("your own Google connection, allowed Gmail") as string,
       },
     ]);
   });
@@ -134,7 +154,7 @@ describe("saveWorkflow's validation", () => {
     expect(issues).toEqual([
       {
         path: ["credentials"],
-        message: expect.stringContaining("an org Gmail connection") as string,
+        message: expect.stringContaining("an org Google connection, allowed Gmail") as string,
       },
     ]);
   });

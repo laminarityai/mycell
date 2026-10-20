@@ -1,17 +1,18 @@
-// Polling a connection: everything new since its cursor, normalized and stored exactly as the
-// backfill stores it, then the next cursor. Re-running a poll stores nothing twice (events are
-// unique per connection on source_ref). Only `active` connections are polled: one still
-// backfilling has its cursor taken care of by the backfill, and one needing a reconnect can't
-// reach its source.
+// Polling a connection: for each of its apps, everything new since that app's cursor,
+// normalized and stored exactly as the backfill stores it, then the app's next cursor.
+// Re-running a poll stores nothing twice (events are unique per connection on source_ref).
+// Only `active` apps are polled: one still backfilling has its cursor taken care of by the
+// backfill. A connection needing a reconnect can't reach its source, so it's skipped whole.
 //
 // An expired cursor recovers inline, in the same run: it records a fresh start cursor, then
-// backfills from just before the latest stored event, one page per step, and only then stores
-// the new cursor. Running it here rather than re-triggering the backfill job keeps it inside the
-// poll's per-connection concurrency slot (so no backfill or other poll races it), needs no
-// second event or trigger for the backfill job, leaves the connection `active` instead of
+// backfills the app from just before the latest stored event, one page per step, and only then
+// stores the new cursor. Running it here rather than re-triggering the backfill job keeps it
+// inside the poll's per-connection concurrency slot (so no backfill or other poll races it),
+// needs no second event or trigger for the backfill job, leaves the app `active` instead of
 // showing a fresh 90-day backfill, and a recovery that fails part-way leaves the expired cursor
 // in place, so the next poll simply recovers again.
 import { getConnection, recordIngestState } from "@/features/connections/server";
+import { ingestedAppSchema, type IngestedApp } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
 import type { PollOutcome } from "../types";
 import { BACKFILL_DAYS, DAY_MS } from "./backfill";
@@ -23,56 +24,91 @@ import { latestEventTime, storeEvents } from "./store";
 // earlier than one already stored. What it re-reads is stored once.
 const RECOVERY_OVERLAP_MS = DAY_MS;
 
+// How one app's poll ended.
+type AppPoll = { outcome: "polled" | "recovered"; items: number } | { outcome: "skipped" | "gone" };
+
+/**
+ * Polls each of the connection's apps in turn. It was `polled` if any app was (`recovered` if
+ * any recovered from an expired cursor), with the items read across apps; `skipped` if no app
+ * was due; `gone` if the connection was deleted while it ran.
+ */
 export async function pollConnection(
   ctx: Ctx,
   connectionId: string,
   runStep: RunStep = runInline,
 ): Promise<PollOutcome> {
-  const polled = await runStep("poll", () => untilGone(() => pollOnce(ctx, connectionId)));
+  const polls: AppPoll[] = [];
+  for (const app of ingestedAppSchema.options) {
+    const poll = await pollApp(ctx, connectionId, app, runStep);
+    if (poll.outcome === "gone") return { outcome: "gone" };
+    polls.push(poll);
+  }
+  const ran = polls.flatMap((poll) => (poll.outcome === "skipped" ? [] : [poll]));
+  if (ran.length === 0) return { outcome: "skipped" };
+  return {
+    outcome: ran.some((poll) => poll.outcome === "recovered") ? "recovered" : "polled",
+    items: ran.reduce((sum, poll) => sum + ("items" in poll ? poll.items : 0), 0),
+  };
+}
+
+async function pollApp(
+  ctx: Ctx,
+  connectionId: string,
+  app: IngestedApp,
+  runStep: RunStep,
+): Promise<AppPoll> {
+  const polled = await runStep(`${app}-poll`, () =>
+    untilGone(() => pollOnce(ctx, connectionId, app)),
+  );
   if (polled.gone) return { outcome: "gone" };
   if (polled.result === "skipped") return { outcome: "skipped" };
   if (polled.result === "polled") return { outcome: "polled", items: polled.items };
-  return recover(ctx, connectionId, runStep);
+  return recover(ctx, connectionId, app, runStep);
 }
 
-async function pollOnce(ctx: Ctx, connectionId: string) {
+async function pollOnce(ctx: Ctx, connectionId: string, app: IngestedApp) {
   const connection = await getConnection(ctx, connectionId);
-  if (connection.status !== "active") return { result: "skipped", items: 0 } as const;
-  if (connection.cursor === null) return { result: "expired", items: 0 } as const;
-  const connector = CONNECTORS[connection.source];
-  const found = await connector.poll(sourceClient(ctx, connectionId), connection.cursor);
+  const state = connection.ingest[app];
+  if (connection.needsReauth || state?.status !== "active") {
+    return { result: "skipped", items: 0 } as const;
+  }
+  if (state.cursor === null) return { result: "expired", items: 0 } as const;
+  const found = await CONNECTORS[app].poll(sourceClient(ctx, connectionId), state.cursor);
   if ("cursorExpired" in found) return { result: "expired", items: 0 } as const;
-  await storeEvents(ctx, connection, found.events);
-  await recordIngestState(ctx, connectionId, {
+  await storeEvents(ctx, connection, app, found.events);
+  await recordIngestState(ctx, connectionId, app, {
     cursor: found.nextCursor,
     lastPolledAt: new Date(),
   });
   return { result: "polled", items: found.events.length } as const;
 }
 
-// The source no longer knows the cursor: backfill from the latest stored event, then poll on
-// from a cursor read before that backfill.
-async function recover(ctx: Ctx, connectionId: string, runStep: RunStep): Promise<PollOutcome> {
-  const start = await runStep("recover-start", () =>
+// The source no longer knows the app's cursor: backfill the app from the latest stored event,
+// then poll on from a cursor read before that backfill.
+async function recover(
+  ctx: Ctx,
+  connectionId: string,
+  app: IngestedApp,
+  runStep: RunStep,
+): Promise<AppPoll> {
+  const start = await runStep(`${app}-recover-start`, () =>
     untilGone(async () => {
-      const connection = await getConnection(ctx, connectionId);
-      const connector = CONNECTORS[connection.source];
       // Read before listing, like the backfill, so nothing arriving meanwhile is missed.
-      const cursor = await connector.readStartCursor(sourceClient(ctx, connectionId));
-      const since = recoverySince(await latestEventTime(ctx, connectionId));
+      const cursor = await CONNECTORS[app].readStartCursor(sourceClient(ctx, connectionId));
+      const since = recoverySince(await latestEventTime(ctx, connectionId, app));
       return { cursor, since: since.toISOString() };
     }),
   );
   if (start.gone) return { outcome: "gone" };
-  const stored = await storeWindow(ctx, connectionId, new Date(start.since), runStep, {
-    stepPrefix: "recover-",
+  const stored = await storeWindow(ctx, connectionId, app, new Date(start.since), runStep, {
+    stepPrefix: `${app}-recover-`,
     recordProgress: false,
   });
   if (stored.gone) return { outcome: "gone" };
   const { cursor } = start;
-  const end = await runStep("recover-finish", () =>
+  const end = await runStep(`${app}-recover-finish`, () =>
     untilGone(async () => {
-      await recordIngestState(ctx, connectionId, { cursor, lastPolledAt: new Date() });
+      await recordIngestState(ctx, connectionId, app, { cursor, lastPolledAt: new Date() });
       return {};
     }),
   );

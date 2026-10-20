@@ -1,8 +1,33 @@
 import { z } from "zod";
 
-/** The sources a connection can reach. Outlook joins after v1, behind the same interface. */
-export const sourceSchema = z.enum(["gmail", "drive"]);
+/**
+ * What a connection reaches. `google` is one Google account, with every Google app it allows
+ * (ADR-0014). `gmail` and `drive` are the one-app connections made before that: nothing makes
+ * them any more, and connecting Google for their account replaces them. Outlook joins after v1.
+ */
+export const sourceSchema = z.enum(["google", "gmail", "drive"]);
 export type Source = z.infer<typeof sourceSchema>;
+
+/** The Google apps a Google connection asks for, in the order the UI lists them. */
+export const googleAppSchema = z.enum(["gmail", "drive", "sheets", "calendar", "docs", "tasks"]);
+export type GoogleApp = z.infer<typeof googleAppSchema>;
+
+/**
+ * The scope a Google connection asks for each app. Google lets people untick apps on the
+ * consent screen, so a connection may be granted only some of them.
+ */
+export const GOOGLE_APP_SCOPES: Record<GoogleApp, string> = {
+  gmail: "https://www.googleapis.com/auth/gmail.modify",
+  drive: "https://www.googleapis.com/auth/drive.readonly",
+  sheets: "https://www.googleapis.com/auth/spreadsheets",
+  calendar: "https://www.googleapis.com/auth/calendar.events",
+  docs: "https://www.googleapis.com/auth/documents",
+  tasks: "https://www.googleapis.com/auth/tasks",
+};
+
+/** The apps discovery ingests from. Each has its own backfill, cursor and poll. */
+export const ingestedAppSchema = z.enum(["gmail", "drive"]);
+export type IngestedApp = z.infer<typeof ingestedAppSchema>;
 
 /**
  * Whose a connection is: a member connection's data is member-scoped, an org connection's is
@@ -12,9 +37,16 @@ export const connectionKindSchema = z.enum(["member", "org"]);
 export type ConnectionKind = z.infer<typeof connectionKindSchema>;
 
 /**
- * Where a connection's ingest stands: `backfilling` from when it's recorded until its first
- * backfill ends, then `active`, or `failed` if the backfill gave up. `needs_reauth` once Nango
- * reports Google refused to refresh its token: polling skips it until its owner reconnects.
+ * Where one app's ingest stands: `backfilling` from when the app is granted until its first
+ * backfill ends, then `active`, or `failed` if the backfill gave up.
+ */
+export const ingestStatusSchema = z.enum(["backfilling", "active", "failed"]);
+export type IngestStatus = z.infer<typeof ingestStatusSchema>;
+
+/**
+ * Where a connection stands as a whole: `needs_reauth` once Nango reports Google refused to
+ * refresh its token (polling skips it until its owner reconnects), and otherwise the furthest
+ * behind of its apps' ingest statuses: `failed`, then `backfilling`, then `active`.
  */
 export const connectionStatusSchema = z.enum(["backfilling", "active", "needs_reauth", "failed"]);
 export type ConnectionStatus = z.infer<typeof connectionStatusSchema>;
@@ -26,29 +58,49 @@ export type ConnectionSummary = {
   kind: ConnectionKind;
   accountEmail: string;
   status: ConnectionStatus;
-  // How many messages (or file changes) the current backfill has stored so far.
+  // The OAuth scopes Google granted it, as full scope URLs, as of its last connect or
+  // reconnect. Empty for a one-app connection not reconnected since ADR-0014.
+  grantedScopes: string[];
+  // The apps it may use, and the ones a Google connection asks for but wasn't granted (none
+  // for a one-app connection from before ADR-0014).
+  apps: GoogleApp[];
+  missingApps: GoogleApp[];
+  // How many messages and file changes its current backfills have stored so far.
   backfilledItems: number;
-  // When polling last finished for it; null until the first poll.
+  // When polling last finished for any of its apps; null until the first poll.
   lastPolledAt: Date | null;
   createdAt: Date;
 };
 
+/** Where one ingested app stands on a connection. */
+export type AppIngestState = {
+  status: IngestStatus;
+  // Where polling resumes: Gmail's history ID, or Drive's changes page token. Null until the
+  // app's backfill starts.
+  cursor: string | null;
+  backfilledItems: number;
+  lastPolledAt: Date | null;
+};
+
 /**
  * What another feature needs to ingest from a connection: whose it is (its kind becomes the
- * owner scope of everything derived from it) and where its ingest stands.
+ * owner scope of everything derived from it), what it was granted, and where each ingested
+ * app stands. `ingest` holds exactly the ingested apps the connection may use.
  */
 export type ConnectionDetails = {
   id: string;
   source: Source;
   kind: ConnectionKind;
   ownerUserId: string;
-  status: ConnectionStatus;
-  cursor: string | null;
+  needsReauth: boolean;
+  grantedScopes: string[];
+  apps: GoogleApp[];
+  ingest: Partial<Record<IngestedApp, AppIngestState>>;
 };
 
-/** A change to a connection's ingest state; fields left out stay as they are. */
+/** A change to one app's ingest state; fields left out stay as they are. */
 export type IngestStateUpdate = {
-  status?: ConnectionStatus;
+  status?: IngestStatus;
   backfilledItems?: number;
   cursor?: string;
   lastPolledAt?: Date;
@@ -62,13 +114,14 @@ export type ConnectionOwner =
 export type OrgConnectionSummary = ConnectionSummary & { owner: ConnectionOwner };
 
 /**
- * Another member's connection as an admin sees it: who, which source, and its status. Its
+ * Another member's connection as an admin sees it: who, which apps, and its status. Its
  * account address is left out (it is always the owner's sign-in address), and so is anything
  * derived from it: a member connection's data stays the member's (ADR-0001).
  */
 export type MemberConnectionMetadata = {
   id: string;
   source: Source;
+  apps: GoogleApp[];
   status: ConnectionSummary["status"];
   owner: ConnectionOwner;
   createdAt: Date;

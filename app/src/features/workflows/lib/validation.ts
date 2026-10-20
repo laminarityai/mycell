@@ -74,17 +74,17 @@ const connectionCheck: SetupCheck = (spec, setup) => {
       path: ["credentials"],
       message:
         spec.credentials === "member"
-          ? "A member-credential workflow needs your own Gmail connection. Connect Gmail first."
-          : "An org-credential workflow needs an org Gmail connection. Connect a shared inbox first.",
+          ? "A member-credential workflow needs your own Google connection, allowed Gmail. Connect Google first, or reconnect it to allow Gmail."
+          : "An org-credential workflow needs an org Google connection, allowed Gmail. Connect a shared account first, or reconnect it to allow Gmail.",
     },
   ];
 };
 
 const SETUP_CHECKS: SetupCheck[] = [connectionCheck];
 
-// One Google connection reaches every app from #62 on; until then, Gmail is its own source.
+// A Google connection reaches Gmail when it was granted Gmail (ADR-0014).
 function reachesGmail(connection: ConnectionSummary): boolean {
-  return connection.source === "gmail";
+  return connection.apps.includes("gmail");
 }
 
 async function readSetup(ctx: Ctx): Promise<OrgSetup> {

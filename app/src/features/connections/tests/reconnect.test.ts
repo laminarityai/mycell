@@ -90,7 +90,7 @@ describe("startReconnect", () => {
     const { token } = await startReconnect(orgA.member.ctx, await idOf(orgA.member.ctx));
 
     expect(fakeNango.reconnectSessionsCreated()).toEqual([
-      { token, connectionId, integration: "google-mail" },
+      { token, connectionId, integration: "google" },
     ]);
   });
 

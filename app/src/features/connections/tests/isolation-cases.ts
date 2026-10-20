@@ -32,8 +32,8 @@ export const isolationCases = defineIsolationCases(server, {
   startConnect: async (orgs) => {
     const { before } = await seedOrgBConnection(orgs);
 
-    await server.startConnect(orgs.orgA.member.ctx, "gmail");
-    await server.startConnect(orgs.orgA.admin.ctx, "gmail", "org");
+    await server.startConnect(orgs.orgA.member.ctx, "google");
+    await server.startConnect(orgs.orgA.admin.ctx, "google", "org");
 
     expect(await server.listConnections(orgs.orgB.admin.ctx)).toEqual(before);
   },
@@ -112,6 +112,17 @@ export const isolationCases = defineIsolationCases(server, {
     });
   },
 
+  getGrantedScopes: async (orgs) => {
+    const { before, memberBefore } = await seedOrgBConnection(orgs);
+    const { orgA } = orgs;
+
+    for (const id of orgBIds(before, memberBefore)) {
+      for (const ctx of [orgA.admin.ctx, orgA.member.ctx, systemCtx(orgA.id)]) {
+        await expect(server.getGrantedScopes(ctx, id)).rejects.toThrow(NotFoundError);
+      }
+    }
+  },
+
   listConnectionsForJobs: async (orgs) => {
     await seedOrgBConnection(orgs);
     await connectGmail(orgs.orgA.member.ctx, orgs.orgA.member.email);
@@ -151,7 +162,10 @@ export const isolationCases = defineIsolationCases(server, {
 
     for (const id of orgBIds(before, memberBefore)) {
       await expect(
-        server.recordIngestState(orgs.orgA.admin.ctx, id, { status: "failed", cursor: "1" }),
+        server.recordIngestState(orgs.orgA.admin.ctx, id, "gmail", {
+          status: "failed",
+          cursor: "1",
+        }),
       ).rejects.toThrow(NotFoundError);
     }
 
@@ -172,7 +186,7 @@ export const isolationCases = defineIsolationCases(server, {
       operation: "deletion",
       success: true,
       connectionId: nangoConnectionId,
-      providerConfigKey: "google-mail",
+      providerConfigKey: "google",
       tags: {
         mycel_attempt_id: "x",
         end_user_id: orgs.orgA.member.id,

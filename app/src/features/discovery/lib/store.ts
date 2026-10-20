@@ -4,7 +4,7 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
-import type { ConnectionDetails } from "@/features/connections/types";
+import type { ConnectionDetails, IngestedApp } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
 import type { NormalizedEvent } from "./connector";
 import { events, objectRefs } from "./schema";
@@ -12,9 +12,11 @@ import { events, objectRefs } from "./schema";
 // Rows per object-ref insert, well under Postgres's 65,535 bind parameters.
 const REF_CHUNK = 1000;
 
+/** Stores what one app's connector found on the connection, as events from that app. */
 export async function storeEvents(
   ctx: Ctx,
   connection: ConnectionDetails,
+  app: IngestedApp,
   normalized: NormalizedEvent[],
 ): Promise<void> {
   if (normalized.length === 0) return;
@@ -26,7 +28,7 @@ export async function storeEvents(
       connectionId: connection.id,
       ownerScope: connection.kind,
       ownerUserId: connection.ownerUserId,
-      source: connection.source,
+      source: app,
       sourceRef: event.sourceRef,
       type: event.type,
       occurredAt: event.occurredAt,
@@ -68,10 +70,14 @@ export async function storeEvents(
   }
 }
 
-/** When the connection's latest stored event occurred, or null if it has none. */
-export async function latestEventTime(ctx: Ctx, connectionId: string): Promise<Date | null> {
+/** When the latest event the connection stored from `app` occurred, or null if it has none. */
+export async function latestEventTime(
+  ctx: Ctx,
+  connectionId: string,
+  app: IngestedApp,
+): Promise<Date | null> {
   const rows = await forOrg(ctx).select(events, {
-    where: eq(events.connectionId, connectionId),
+    where: and(eq(events.connectionId, connectionId), eq(events.source, app)),
     orderBy: [desc(events.occurredAt)],
     limit: 1,
   });

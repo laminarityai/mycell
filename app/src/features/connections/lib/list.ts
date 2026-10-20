@@ -3,13 +3,16 @@ import { forOrg } from "@/db/for-org";
 import { listUsers } from "@/features/orgs/server";
 import type { Ctx } from "@/lib/ctx";
 import type { ConnectionOwner, ConnectionSummary, ConnectionsListing } from "../types";
-import { connectAttempts, connections } from "./schema";
+import { grantedApps, missingApps } from "./google";
+import { backfilledItems, ingestStatesOf, lastPolledAt, overallStatus } from "./ingest-states";
+import { connectAttempts, connections, type ingestStates } from "./schema";
 
 // A pending attempt older than this was abandoned (the popup closed without connecting).
 // Compared in the database: created_at has no time zone, so a JS Date would be off by one.
 const attemptShownSince = sql`now() - interval '1 hour'`;
 
 type Connection = typeof connections.$inferSelect;
+type IngestState = typeof ingestStates.$inferSelect;
 
 /**
  * The connections the caller may see, and their own recent connect attempts that didn't
@@ -23,8 +26,12 @@ export async function listConnections(ctx: Ctx): Promise<ConnectionsListing> {
     where: isAdmin
       ? undefined
       : and(eq(connections.ownerUserId, ctx.userId), eq(connections.kind, "member")),
-    orderBy: [connections.source, connections.accountEmail],
+    orderBy: [connections.accountEmail, connections.source],
   });
+  const states = await ingestStatesOf(
+    ctx,
+    rows.map((row) => row.id),
+  );
   const attempts = await db.select(connectAttempts, {
     where: and(
       eq(connectAttempts.userId, ctx.userId),
@@ -34,18 +41,20 @@ export async function listConnections(ctx: Ctx): Promise<ConnectionsListing> {
     orderBy: [desc(connectAttempts.createdAt)],
   });
   const ownerOf = await ownerLookup(ctx);
+  const summaryOf = (row: Connection) => summary(row, states.get(row.id) ?? []);
   const memberRows = rows.filter((row) => row.kind === "member");
   return {
-    connections: memberRows.filter((row) => row.ownerUserId === ctx.userId).map(summary),
+    connections: memberRows.filter((row) => row.ownerUserId === ctx.userId).map(summaryOf),
     orgConnections: rows
       .filter((row) => row.kind === "org")
-      .map((row) => ({ ...summary(row), owner: ownerOf(row.ownerUserId) })),
+      .map((row) => ({ ...summaryOf(row), owner: ownerOf(row.ownerUserId) })),
     memberConnections: memberRows
       .filter((row) => row.ownerUserId !== ctx.userId)
       .map((row) => ({
         id: row.id,
         source: row.source,
-        status: row.status,
+        apps: grantedApps(row.source, row.grantedScopes),
+        status: summaryOf(row).status,
         owner: ownerOf(row.ownerUserId),
         createdAt: row.createdAt,
       })),
@@ -66,15 +75,18 @@ export async function listConnections(ctx: Ctx): Promise<ConnectionsListing> {
   };
 }
 
-function summary(row: Connection): ConnectionSummary {
+function summary(row: Connection, states: IngestState[]): ConnectionSummary {
   return {
     id: row.id,
     source: row.source,
     kind: row.kind,
     accountEmail: row.accountEmail,
-    status: row.status,
-    backfilledItems: row.backfilledItems,
-    lastPolledAt: row.lastPolledAt,
+    status: overallStatus(row.needsReauth, states),
+    grantedScopes: row.grantedScopes,
+    apps: grantedApps(row.source, row.grantedScopes),
+    missingApps: missingApps(row.source, row.grantedScopes),
+    backfilledItems: backfilledItems(states),
+    lastPolledAt: lastPolledAt(states),
     createdAt: row.createdAt,
   };
 }

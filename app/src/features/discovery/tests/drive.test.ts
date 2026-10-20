@@ -7,7 +7,7 @@ import { getConnection } from "@/features/connections/server";
 import { systemCtx } from "@/lib/ctx";
 import { fakeNango } from "@/testing/fake-nango";
 import { backfillConnection, findEventsByObject, pollConnection } from "../server";
-import { connectDrive, connectMailbox, daysAgo, listed } from "./ingest-helpers";
+import { connectDrive, daysAgo, listed } from "@/testing/connect-helpers";
 
 beforeEach(resetDatabase);
 
@@ -98,7 +98,9 @@ describe("backfilling a Drive", () => {
       status: "active",
       backfilledItems: 1001,
     });
-    expect(await getConnection(orgA.member.ctx, drive.id)).toMatchObject({ cursor: tokenBefore });
+    expect(await getConnection(orgA.member.ctx, drive.id)).toMatchObject({
+      ingest: { drive: { cursor: tokenBefore } },
+    });
     const found = await findEventsByObject(orgA.member.ctx, "email", orgA.member.email);
     expect(found).toHaveLength(1001);
   });
@@ -137,7 +139,7 @@ describe("polling a Drive", () => {
       expect.objectContaining({ type: "file.created" }),
     ]);
     expect(await getConnection(ctx, drive.id)).toMatchObject({
-      cursor: drive.drive.startPageToken().startPageToken,
+      ingest: { drive: { cursor: drive.drive.startPageToken().startPageToken } },
     });
 
     expect(await pollConnection(systemCtx(orgA.id), drive.id)).toEqual({
@@ -183,8 +185,7 @@ describe("polling a Drive", () => {
       "file.modified",
     ]);
     expect(await getConnection(ctx, drive.id)).toMatchObject({
-      status: "active",
-      cursor: drive.drive.startPageToken().startPageToken,
+      ingest: { drive: { status: "active", cursor: drive.drive.startPageToken().startPageToken } },
     });
 
     // Polling carries on from the fresh token.
@@ -199,21 +200,19 @@ describe("polling a Drive", () => {
 
 describe("Drive changes and email", () => {
   it("links an email that links a file and that file's Drive changes by its file ID", async () => {
-    const { orgA, drive, file, me, ctx } = await backfilledDrive();
-    const mailbox = await connectMailbox(ctx, me, [
-      {
-        from: COLLEAGUE,
-        to: [me],
-        subject: "Pricing",
-        text: `Updated https://docs.google.com/spreadsheets/d/${file.id}/edit#gid=0`,
-        at: daysAgo(1),
-      },
-    ]);
-    await backfillConnection(ctx, mailbox.id);
+    const { orgA, drive, file, me } = await backfilledDrive();
+    // The same Google connection's mail, polled with its Drive.
+    drive.mailbox.add({
+      from: COLLEAGUE,
+      to: [me],
+      subject: "Pricing",
+      text: `Updated https://docs.google.com/spreadsheets/d/${file.id}/edit#gid=0`,
+      at: daysAgo(1),
+    });
     drive.drive.modify(file.id, new Date(), COLLEAGUE);
     await pollConnection(systemCtx(orgA.id), drive.id);
 
-    const found = await findEventsByObject(ctx, "drive_file", file.id);
+    const found = await findEventsByObject(orgA.member.ctx, "drive_file", file.id);
 
     expect(found.map((event) => [event.source, event.type])).toEqual([
       ["drive", "file.created"],

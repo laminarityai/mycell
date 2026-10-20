@@ -142,8 +142,39 @@ export async function nangoConnectionExists(
   throw new Error(`Nango connection read failed: ${String(response.status)}`);
 }
 
+// The parts of a connection Mycel reads: Google's token response, kept whole by Nango as
+// `credentials.raw`, whose `scope` lists the granted scopes, space-separated.
+const connectionCredentials = z.object({
+  credentials: z.object({
+    raw: z.object({ scope: z.string().optional() }).optional(),
+  }),
+});
+
+/**
+ * The OAuth scopes Google granted the connection, from Nango's copy of its token response.
+ * Throws NangoConnectionGoneError when Nango has no such connection.
+ */
+export async function readGrantedScopes(
+  connectionId: string,
+  integration: string,
+): Promise<string[]> {
+  // The response carries credentials; only the scopes are read, and nothing else is kept.
+  const query = new URLSearchParams({ provider_config_key: integration });
+  const response = await nangoFetch(
+    `/connections/${encodeURIComponent(connectionId)}?${query.toString()}`,
+    { method: "GET" },
+  );
+  if (response.status === 404) throw new NangoConnectionGoneError();
+  if (!response.ok) throw new Error(`Nango connection read failed: ${String(response.status)}`);
+  const { credentials } = connectionCredentials.parse(await response.json());
+  return (credentials.raw?.scope ?? "").split(/\s+/).filter((scope) => scope !== "");
+}
+
 // Nango's error body for a proxy call naming a connection it doesn't have.
 const nangoError = z.object({ error: z.object({ code: z.string() }) });
+
+/** A call through the Nango proxy: which API host it reaches, and the path on that host. */
+export type ProxyTarget = { baseUrl: string; path: string };
 
 /**
  * A GET through the Nango proxy to the source's own API, parsed with `schema`. Returns null when
@@ -153,13 +184,15 @@ const nangoError = z.object({ error: z.object({ code: z.string() }) });
  */
 export async function nangoProxyGet<T>(
   connection: { connectionId: string; integration: string },
-  path: string,
+  { baseUrl, path }: ProxyTarget,
   schema: z.ZodType<T>,
 ): Promise<T | null> {
   const response = await nangoFetch(`/proxy${path}`, {
     headers: {
       "Connection-Id": connection.connectionId,
       "Provider-Config-Key": connection.integration,
+      // One Nango integration reaches every Google API, each on its own host.
+      "Base-Url-Override": baseUrl,
       // Nango retries the source's 429s and 5xx with exponential backoff.
       Retries: "3",
     },

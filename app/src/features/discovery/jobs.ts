@@ -1,6 +1,6 @@
 // Discovery's Inngest functions. Thin: each calls server.ts. The backfill runs as the user who
 // connected the source; polling, started by a cron, as the org's system ctx (ADR-0009).
-import { connectionRecorded } from "@/features/connections/server";
+import { connectionAppsGranted, connectionRecorded } from "@/features/connections/server";
 import { systemCtx, type Ctx } from "@/lib/ctx";
 import { inngest } from "@/lib/inngest";
 import { connectionPollDue } from "./lib/events";
@@ -37,11 +37,14 @@ const stepRunner =
   <T>(id: string, run: () => Promise<T>) =>
     step.run(id, run) as Promise<T>;
 
-/** Backfills a connection once it's recorded, one page per step. */
+/**
+ * Backfills a connection's apps once it's recorded, and the apps a reconnect grants it, one
+ * page per step.
+ */
 export const backfillJob = inngest.createFunction(
   {
     id: "backfill-connection",
-    triggers: [connectionRecorded],
+    triggers: [connectionRecorded, connectionAppsGranted],
     concurrency: [...INGEST_CONCURRENCY],
     onFailure: async ({ event }) => {
       const data = connectionRecorded.schema.parse(event.data.event.data);

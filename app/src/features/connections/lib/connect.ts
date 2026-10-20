@@ -6,7 +6,7 @@ import { ForbiddenError } from "@/lib/errors";
 import type { ConnectionKind, Source } from "../types";
 import { createConnectSession } from "./nango";
 import { connectAttempts } from "./schema";
-import { INTEGRATIONS } from "./sources";
+import { INTEGRATIONS } from "./google";
 
 /**
  * Tags Mycel puts on a connect session; Nango copies them onto the connection's webhooks. The
@@ -23,6 +23,8 @@ export const ATTEMPT_TAGS = {
  * Starts connecting a source: records a pending connect attempt and returns the token Nango's
  * Connect UI opens with. Nango's creation webhook settles it. A member connection reaches the
  * caller's own account; an org connection reaches a shared one, and only admins make those.
+ * The app connects `google` only: `gmail` and `drive` are the one-app connections from before
+ * ADR-0014, which tests still make to stand in for the ones that remain.
  */
 export async function startConnect(
   ctx: Ctx,

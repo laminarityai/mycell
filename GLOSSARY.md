@@ -28,6 +28,10 @@ _Avoid_: Group, team, role
 One authorised link between a user or the org and an external account, such as one person's Google account.
 _Avoid_: Integration, account, link
 
+**Google app**:
+One of the Google products a connection can reach: Gmail, Drive, Sheets, Calendar, Docs or Tasks. A person connects Google once, and the connection records which apps they allowed.
+_Avoid_: Service, product, integration
+
 **Member connection**:
 A connection to a member's own source, whose data is member-scoped.
 

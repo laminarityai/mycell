@@ -53,9 +53,20 @@ export function connectionsApiHandlers(
       if (connection === undefined || connection.integration !== key) {
         return HttpResponse.json({ error: { code: "unknown_connection" } }, { status: 404 });
       }
+      // `raw` is Google's whole token response, whose `scope` lists what was granted.
       return HttpResponse.json({
         ...listed(connection),
-        credentials: { type: "OAUTH2", access_token: "fake-access-token" },
+        credentials: {
+          type: "OAUTH2",
+          access_token: "fake-access-token",
+          expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+          raw: {
+            access_token: "fake-access-token",
+            expires_in: 3599,
+            scope: connection.scopes.join(" "),
+            token_type: "Bearer",
+          },
+        },
       });
     }),
   ];

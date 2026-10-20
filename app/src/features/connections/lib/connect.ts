@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { listUsers } from "@/features/orgs/server";
 import { forOrg } from "@/db/for-org";
 import type { Ctx } from "@/lib/ctx";
-import type { Source } from "../types";
+import { ForbiddenError } from "@/lib/errors";
+import type { ConnectionKind, Source } from "../types";
 import { createConnectSession } from "./nango";
 import { connectAttempts } from "./schema";
 import { INTEGRATIONS } from "./sources";
@@ -19,10 +20,16 @@ export const ATTEMPT_TAGS = {
 } as const;
 
 /**
- * Starts connecting one of the caller's own sources: records a pending connect attempt and
- * returns the token Nango's Connect UI opens with. Nango's creation webhook settles it.
+ * Starts connecting a source: records a pending connect attempt and returns the token Nango's
+ * Connect UI opens with. Nango's creation webhook settles it. A member connection reaches the
+ * caller's own account; an org connection reaches a shared one, and only admins make those.
  */
-export async function startConnect(ctx: Ctx, source: Source): Promise<{ token: string }> {
+export async function startConnect(
+  ctx: Ctx,
+  source: Source,
+  kind: ConnectionKind = "member",
+): Promise<{ token: string }> {
+  if (kind === "org" && ctx.role !== "admin") throw new ForbiddenError();
   const users = await listUsers(ctx);
   const me = users.find((user) => user.id === ctx.userId);
   if (me === undefined) throw new Error("The caller isn't a user of their own org");
@@ -30,7 +37,7 @@ export async function startConnect(ctx: Ctx, source: Source): Promise<{ token: s
   await forOrg(ctx).insert(connectAttempts, {
     id: attemptId,
     userId: ctx.userId,
-    kind: "member",
+    kind,
     source,
     status: "pending",
   });

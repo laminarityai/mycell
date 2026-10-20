@@ -6,8 +6,9 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { isUniqueViolation } from "@/db/errors";
 import { forOrg } from "@/db/for-org";
-import { findCtx, listUsers } from "@/features/orgs/server";
+import { findCtx } from "@/features/orgs/server";
 import type { Ctx } from "@/lib/ctx";
+import { checkAccount } from "./account-check";
 import { ATTEMPT_TAGS } from "./connect";
 import { forgetNangoConnection } from "./disconnect";
 import { deleteNangoConnection, isSignedByNango, NANGO_SIGNATURE_HEADER } from "./nango";
@@ -75,7 +76,7 @@ async function settleAttempt(webhook: AuthWebhook): Promise<void> {
     return;
   }
   const accountEmail = await readAccountEmail(attempt.source, webhook.connectionId);
-  const refusal = await checkAccount(ctx, accountEmail);
+  const refusal = await checkAccount(ctx, attempt.kind, accountEmail);
   if (refusal !== undefined) {
     await deleteNangoConnection(webhook.connectionId, webhook.providerConfigKey);
     await refuse(ctx, attempt, refusal);
@@ -98,16 +99,6 @@ async function findAttempt(webhook: AuthWebhook) {
   });
   const attempt = rows.at(0);
   return attempt === undefined ? undefined : { ctx, attempt };
-}
-
-// Why this account can't be connected as the caller's own, or undefined if it can.
-async function checkAccount(ctx: Ctx, accountEmail: string): Promise<string | undefined> {
-  const users = await listUsers(ctx);
-  const me = users.find((user) => user.id === ctx.userId);
-  if (me?.email.toLowerCase() !== accountEmail) {
-    return `You can only connect your own account (${me?.email ?? "your sign-in address"}), not ${accountEmail}.`;
-  }
-  return undefined;
 }
 
 async function record(

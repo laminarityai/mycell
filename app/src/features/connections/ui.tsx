@@ -7,18 +7,27 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { AdminConnections } from "./lib/admin-connections";
 import { ConnectButton } from "./lib/connect-button";
 import { DisconnectButton } from "./lib/disconnect-button";
-import type { ConnectionsListing, Source } from "./types";
+import { attemptTarget, SOURCE_NAMES } from "./lib/source-names";
+import type { ConnectionsListing } from "./types";
 
-const SOURCE_NAMES: Record<Source, string> = { gmail: "Gmail" };
-
-/** The caller's connections, their unfinished connect attempts, and the buttons to connect. */
-export function ConnectionsPanel({ listing }: { listing: ConnectionsListing }) {
+/**
+ * The caller's connections, their unfinished connect attempts, and the buttons to connect.
+ * Admins also get the org's connections and the controls to make one.
+ */
+export function ConnectionsPanel({
+  listing,
+  isAdmin,
+}: {
+  listing: ConnectionsListing;
+  isAdmin: boolean;
+}) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex gap-2">
-        <ConnectButton source="gmail" label="Connect Gmail" />
+        <ConnectButton source="gmail" kind="member" label="Connect Gmail" />
       </div>
       {listing.attempts.map((attempt) => (
         <p
@@ -30,8 +39,8 @@ export function ConnectionsPanel({ listing }: { listing: ConnectionsListing }) {
           }
         >
           {attempt.status === "pending"
-            ? `Connecting ${SOURCE_NAMES[attempt.source]}…`
-            : `Couldn't connect ${SOURCE_NAMES[attempt.source]}: ${attempt.refusal ?? "it was refused."}`}
+            ? `Connecting ${attemptTarget(attempt)}…`
+            : `Couldn't connect ${attemptTarget(attempt)}: ${attempt.refusal ?? "it was refused."}`}
         </p>
       ))}
       {listing.connections.length === 0 ? (
@@ -65,6 +74,7 @@ export function ConnectionsPanel({ listing }: { listing: ConnectionsListing }) {
           </TableBody>
         </Table>
       )}
+      {isAdmin ? <AdminConnections listing={listing} /> : null}
     </div>
   );
 }

@@ -2,7 +2,7 @@
 import { eventType } from "inngest";
 import { z } from "zod";
 import type { Ctx } from "@/lib/ctx";
-import { roleSchema } from "@/lib/ctx";
+import { actorSchema } from "@/lib/ctx";
 import { inngest } from "@/lib/inngest";
 
 /**
@@ -13,7 +13,7 @@ export const connectionRecorded = eventType("connections/connection.recorded", {
   schema: z.object({
     orgId: z.string().min(1),
     userId: z.string().min(1),
-    role: roleSchema,
+    role: actorSchema,
     connectionId: z.string().min(1),
   }),
 });

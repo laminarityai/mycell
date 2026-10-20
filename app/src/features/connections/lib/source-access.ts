@@ -15,9 +15,11 @@ type Connection = typeof connections.$inferSelect;
 
 /**
  * Whether the caller may read what a connection reaches: a member connection is its owner's
- * alone (ADR-0001), and an org connection is any admin's.
+ * alone (ADR-0001), and an org connection is any admin's. The system ctx, which scheduled jobs
+ * act as, may read every connection in its org (ADR-0009): it ingests for their owners.
  */
 export function isReadableBy(ctx: Ctx, connection: Pick<Connection, "kind" | "ownerUserId">) {
+  if (ctx.role === "system") return true;
   return connection.kind === "member"
     ? connection.ownerUserId === ctx.userId
     : ctx.role === "admin";
@@ -25,7 +27,20 @@ export function isReadableBy(ctx: Ctx, connection: Pick<Connection, "kind" | "ow
 
 /** One connection the caller may read. */
 export async function getConnection(ctx: Ctx, connectionId: string): Promise<ConnectionDetails> {
-  const connection = await readable(ctx, connectionId);
+  return details(await readable(ctx, connectionId));
+}
+
+/**
+ * Every connection in the org, for scheduled jobs (polling, reconciliation) acting as the
+ * system ctx. Anyone else is ForbiddenError: users list connections with listConnections.
+ */
+export async function listConnectionsForJobs(ctx: Ctx): Promise<ConnectionDetails[]> {
+  if (ctx.role !== "system") throw new ForbiddenError();
+  const rows = await forOrg(ctx).select(connections, { orderBy: [connections.createdAt] });
+  return rows.map(details);
+}
+
+function details(connection: Connection): ConnectionDetails {
   return {
     id: connection.id,
     source: connection.source,

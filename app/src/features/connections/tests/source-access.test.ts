@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
+import { systemCtx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import { fakeInngest } from "@/testing/fake-inngest";
 import { fakeNango } from "@/testing/fake-nango";
@@ -10,6 +11,7 @@ import {
   getConnection,
   handleNangoWebhook,
   listConnections,
+  listConnectionsForJobs,
   proxyGet,
   recordIngestState,
   startConnect,
@@ -139,5 +141,46 @@ describe("recordIngestState", () => {
     await expect(recordIngestState(orgA.admin.ctx, id, { status: "failed" })).rejects.toThrow(
       ForbiddenError,
     );
+  });
+});
+
+describe("scheduled jobs' system ctx", () => {
+  it("reads every connection in its org, member and org connections alike", async () => {
+    const { orgA } = await seedTwoOrgs();
+    await connectGmail(orgA.member.ctx, orgA.member.email);
+    await connectOrgInbox(orgA.admin.ctx, `support@${orgA.workspaceDomain}`);
+    const system = systemCtx(orgA.id);
+
+    const listed = await listConnectionsForJobs(system);
+
+    expect(listed.map((c) => c.kind).sort()).toEqual(["member", "org"]);
+    for (const connection of listed) {
+      expect(
+        await proxyGet(system, connection.id, "/gmail/v1/users/me/profile", profile),
+      ).not.toBeNull();
+    }
+  });
+
+  it("can't reach another org's connections", async () => {
+    const { orgA, orgB } = await seedTwoOrgs();
+    await connectGmail(orgB.member.ctx, orgB.member.email);
+    const orgBConnection = await ownConnectionId(orgB.member.ctx);
+
+    expect(await listConnectionsForJobs(systemCtx(orgA.id))).toEqual([]);
+    await expect(getConnection(systemCtx(orgA.id), orgBConnection)).rejects.toThrow(NotFoundError);
+  });
+
+  it("is the only ctx that may list connections for jobs", async () => {
+    const { orgA } = await seedTwoOrgs();
+
+    for (const ctx of [orgA.admin.ctx, orgA.member.ctx]) {
+      await expect(listConnectionsForJobs(ctx)).rejects.toThrow(ForbiddenError);
+    }
+  });
+
+  it("passes no admin check", async () => {
+    const { orgA } = await seedTwoOrgs();
+
+    await expect(startConnect(systemCtx(orgA.id), "gmail", "org")).rejects.toThrow(ForbiddenError);
   });
 });

@@ -14,7 +14,7 @@ The guiding principle is **frictionless uptake**: OAuth only, nothing installed,
 
 Two bars, one for each way of making workflows:
 
-1. **Builder (the ship bar).** At least one workflow that an admin described in the builder chat (not written by us) runs live on at least two of our own inboxes for **two days and at least 20 drafts, whichever comes later**. At least 80% of its drafts are sent with little or no editing, and the teammates who enabled it never needed our help.
+1. **Builder (the ship bar).** At least one workflow that an admin described in the builder chat (not written by us) runs live on at least two of our own inboxes for **two days and at least 20 reviews, whichever comes later**. At least 80% of its reviews are approved without edits, and the teammates who enabled it never needed our help.
 2. **Discovery.** At least 3 of the top 5 suggestions are rated "real and worth automating" by the people whose work they describe.
 
 This bar is ours to revise as we learn. Change it here when it changes.
@@ -24,7 +24,7 @@ This bar is ours to revise as we learn. Change it here when it changes.
 These are "no for v1", not "never". Where a later "yes" is likely, the architecture keeps the door open.
 
 1. **No unsupervised external effects.** Nothing leaves the company without a human sending or approving it. No financial or destructive actions.
-2. **Gmail and Sheets/Drive only.** No Outlook, Discord, or CRMs yet. Calendar and Forms come in only if the discovery-lens experiment shows tasks that need them (ADR-0008). _More sources are likely, so sources sit behind one connector interface and nothing outside the connectors assumes Google._
+2. **Google apps only.** Mycel reads Gmail and Sheets/Drive, and acts in Gmail, Sheets, Calendar, Docs and Tasks. No Slack, Outlook or the rest of Microsoft, Discord, or CRMs yet. Mining Calendar or Forms comes in only if the discovery-lens experiment shows tasks that need it (ADR-0008). _More apps are likely, so each app plugs in through the same four parts (ADR-0013), and nothing outside its connector assumes Google._
 3. **Nothing installed.** No browser extension, desktop app, or Gmail add-on.
 4. **The builder chat never writes code.** New capabilities are built by our team via capability requests. _We are likely to try code-generating agents, so the capability-request interface stays stable enough for an agent to take over._
 5. **No earned autonomy, personal agent, or full cross-app entity resolution.** _An entity backbone comes after v1, and only if the discovery-lens experiment passes (ADR-0008)._

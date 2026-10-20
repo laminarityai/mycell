@@ -25,7 +25,7 @@ _Avoid_: Group, team, role
 ### Sources and data
 
 **Connection**:
-One authorised link between a user or the org and an external source such as a Gmail inbox.
+One authorised link between a user or the org and an external account, such as one person's Google account.
 _Avoid_: Integration, account, link
 
 **Member connection**:
@@ -127,7 +127,15 @@ _Avoid_: Tool, integration, capability
 The fixed danger class of a catalog action: read, internal-reversible, external-send, financial, or destructive.
 
 **Draft**:
-Output intended for the outside world that waits for a human to send or approve it.
+An unsent Gmail message a workflow prepared, waiting for a person to send it; Gmail's pending form.
+
+**Pending form**:
+An app's own way of holding an action until a person approves it, such as a Gmail draft, a Calendar event with no guests yet, or suggested edits in a Doc.
+_Avoid_: Staged action, preview
+
+**Review**:
+One action waiting for a person's decision, shown on their Reviews page, which points at the waiting item in its app.
+_Avoid_: Approval (the step that creates a review), task (a Google Tasks item), notification
 
 **Capability request**:
 A structured ask, raised when no catalog action fits, for our team to build a new one.
@@ -136,6 +144,14 @@ _Avoid_: Feature request
 **Builder chat**:
 The admin-only agent that turns descriptions and suggestions into proposed spec changes.
 _Avoid_: Copilot, assistant
+
+**Builder conversation**:
+One chat between admins and the builder chat, optionally about one workflow.
+_Avoid_: Thread (an email thread), session
+
+**Proposal**:
+A change to a workflow that the builder chat suggests and an admin accepts or rejects.
+_Avoid_: Spec diff, suggestion (a suggestion comes from discovery)
 
 ### Money
 

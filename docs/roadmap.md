@@ -2,18 +2,19 @@
 
 Build order for the v1 full loop, dogfooded on our own Google Workspace. Every milestone ends with something we can actually use ourselves. `docs/architecture.md` holds the architecture and invariants. This file only covers sequencing.
 
-The builder chat is primary (ADR-0007), so it comes before mining. Milestones keep their numbers as stable names and are listed in build order: **M0 → M1 → M3 → M6 → M5 → M2 → M4 → M7 → M8 → M9 → M10.**
+The builder chat is primary (ADR-0007), so it comes before mining. Milestones keep their numbers as stable names and are listed in build order: **M0 → M1 → M3 → M6 → M5 → M11 → M2 → M4 → M7 → M8 → M9 → M10.**
 
 ## Status (2026-10-20)
 
-| Milestone | State       | Spec | Notes                                                                                                                                         |
-| --------- | ----------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| M0        | Done        | #1   |                                                                                                                                               |
-| M1        | In progress | #11  | Merged: connect, org connections, disconnect cascade, Gmail backfill. Open: polling #15, reconciliation #16 (PR #31), Drive #17, dogfood #19. |
-| M3        | Ready       | #33  | Grilled; tickets ready for agents. Decisions in ADR-0010 (credits slice), ADR-0011 (write access up front) and ADR-0012 (what runs keep).     |
-| M6        | Specced     | #43  | Needs triage.                                                                                                                                 |
-| M5        | Specced     | #51  | Needs triage. Adds draft-outcome tracking, the measurement for the builder ship bar in `docs/intent.md`.                                      |
-| M2 onward | Not started |      |                                                                                                                                               |
+| Milestone | State       | Spec | Notes                                                                                                                                                                       |
+| --------- | ----------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M0        | Done        | #1   |                                                                                                                                                                             |
+| M1        | In progress | #11  | Merged: connect, org connections, disconnect cascade, Gmail backfill. Open: polling #15, reconciliation #16 (PR #31), Drive #17, dogfood #19.                               |
+| M3        | Ready       | #33  | Grilled; tickets ready for agents. Decisions in ADR-0010 (credits slice), ADR-0011 (write access up front), ADR-0012 (what runs keep) and ADR-0014 (one Google connection). |
+| M6        | Ready       | #43  | Grilled; tickets ready for agents. Capability requests moved to M10.                                                                                                        |
+| M5        | Ready       | #51  | Grilled; tickets ready for agents. Adds the Reviews page (ADR-0013), whose outcomes measure the builder ship bar in `docs/intent.md`.                                       |
+| M11       | Ready       | #67  | Calendar, Docs and Tasks, each through its pending form (ADR-0013); tickets ready for agents.                                                                               |
+| M2 onward | Not started |      |                                                                                                                                                                             |
 
 ## M0: Scaffold and tenancy
 
@@ -40,19 +41,29 @@ The builder chat is primary (ADR-0007), so it comes before mining. Milestones ke
 - Zod spec schema, validator, policy engine with the action risk catalog, interpreter that runs each spec step as an Inngest step (ADR-0006).
 - Optional per-step `checks` (output schema, confidence floor, required fields), with failures recorded for observability.
 - Catalog v1: Gmail create-draft, add-label, read message/thread; Sheets read-range, append-row.
+- One Google connection per account, asking for every Google app at once, with write access (ADR-0011, ADR-0014).
 - AI Gateway with model roles; Jev for `classify`.
 - **Done when:** a hand-written spec runs end to end on a real inbox and produces drafts and labels.
 
 ## M6: Builder chat
 
-- Admin agent producing spec diffs; visual/JSON editor; capability-request queue.
+- Admin agent producing proposals in builder conversations, grounded in the admin's own and org inboxes; a "try it" dry run; visual/JSON editor.
 - **Done when:** an admin can describe a new workflow and publish it without touching JSON.
 
 ## M5: Publish, tags, member toggles
 
 - Admin publishes to tags; members enable/disable; member vs. org credentials.
 - Versioning with auto-upgrade and the re-enable exception.
+- The Reviews page: a member's main screen, holding every step that needs a person (ADR-0013). Accept, decline, edit, and hand-off where the workflow allows it; a review count and a daily digest email.
+- Record how each review ends; this measures the builder ship bar.
 - **Done when:** a teammate enables a workflow on their own inbox without our help.
+
+## M11: Calendar, Docs and Tasks
+
+- Catalog actions for Calendar (create an event, with guests added on approval), Docs (suggested edits) and Tasks (add or change a task on the person's own list), each through its pending form (ADR-0013).
+- A Calendar trigger: a new invite on the person's calendar.
+- No new connection: the one Google connection already asks for them (ADR-0014). Mining them stays gated by ADR-0008.
+- **Done when:** a workflow that reads an email and books a meeting runs on one of our inboxes, and its guests are invited only after approval.
 
 ## M2: Mining and suggestions
 
@@ -85,6 +96,7 @@ The builder chat is primary (ADR-0007), so it comes before mining. Milestones ke
 ## M10: External readiness (first outside customer)
 
 - Google OAuth verification and the restricted-scope security assessment.
-- Outlook connector behind the same interface.
+- Outlook and the rest of Microsoft, and Slack once it has a pending form, through the same four parts (ADR-0013).
+- Capability requests: a structured ask for a new catalog action, raised by the builder chat (moved from M6).
 - Onboarding flow tuned for non-technical admins.
 - Revisit admin-level data access if a customer needs it (ADR-0008).

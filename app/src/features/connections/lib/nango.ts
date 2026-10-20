@@ -142,14 +142,18 @@ export async function nangoConnectionExists(
   throw new Error(`Nango connection read failed: ${String(response.status)}`);
 }
 
-// Nango's error body for a proxy call naming a connection it doesn't have.
+// An error body from Nango itself rather than from the source: Nango's codes are strings, and
+// Google's are numbers. For a connection it doesn't have, the proxy answers 400
+// `{ error: { code: "server_error", message: "Failed to get connection" } }`, the same code it
+// uses when a token refresh fails (allProxy.ts, handleProxyServiceErrorResponse), so the code
+// alone can't say the connection is gone.
 const nangoError = z.object({ error: z.object({ code: z.string() }) });
 
 /**
  * A GET through the Nango proxy to the source's own API, parsed with `schema`. Returns null when
  * the source answers 404 or 410 (the item is gone at the source), and throws
- * NangoConnectionGoneError when Nango no longer has the connection, and SourceRequestError for
- * any other refusal.
+ * NangoConnectionGoneError when Nango no longer has the connection (asked by ID whenever Nango
+ * itself refuses the call), and SourceRequestError for any other refusal.
  */
 export async function nangoProxyGet<T>(
   connection: { connectionId: string; integration: string },
@@ -166,8 +170,10 @@ export async function nangoProxyGet<T>(
   });
   if (response.ok) return schema.parse(await response.json());
   const raw: unknown = await response.json().catch(() => undefined);
-  const body = nangoError.safeParse(raw);
-  if (body.success && body.data.error.code === "unknown_connection") {
+  if (
+    nangoError.safeParse(raw).success &&
+    !(await nangoConnectionExists(connection.connectionId, connection.integration))
+  ) {
     throw new NangoConnectionGoneError();
   }
   if (response.status === 404 || response.status === 410) return null;

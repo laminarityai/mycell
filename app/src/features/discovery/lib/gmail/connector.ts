@@ -13,8 +13,10 @@ const PAGE_SIZE = 100;
 const FETCH_CONCURRENCY = 10;
 // History records per history.list page, Gmail's maximum.
 const HISTORY_PAGE_SIZE = 500;
-// messages.list leaves these out unless asked (includeSpamTrash), so polling does too.
-const EXCLUDED_LABELS = ["SPAM", "TRASH"];
+// messages.list leaves spam and trash out unless asked (includeSpamTrash), so polling does too.
+// Drafts are left out of both: each save replaces a draft's message with a new message ID (Gmail
+// drafts guide), so every autosave would otherwise become another event.
+const EXCLUDED_LABELS = ["SPAM", "TRASH", "DRAFT"];
 
 export const gmailConnector: Connector = {
   async readStartCursor(client) {
@@ -38,7 +40,7 @@ export const gmailConnector: Connector = {
     return {
       // Search matches on Gmail's index; the window holds on each message's own internalDate.
       events: events.filter(
-        (event): event is NormalizedEvent => event !== null && event.occurredAt >= since,
+        (event): event is NormalizedEvent => isIngested(event) && event.occurredAt >= since,
       ),
       nextPageToken: list?.nextPageToken ?? null,
     };
@@ -72,15 +74,14 @@ export const gmailConnector: Connector = {
     const events = await mapConcurrently([...added], FETCH_CONCURRENCY, (id) =>
       fetchEvent(client, id),
     );
-    return {
-      events: events.filter(
-        (event): event is NormalizedEvent =>
-          event !== null && !event.labelIds.some((label) => EXCLUDED_LABELS.includes(label)),
-      ),
-      nextCursor,
-    };
+    return { events: events.filter(isIngested), nextCursor };
   },
 };
+
+// A message that still exists, and isn't spam, trash or a draft.
+function isIngested(event: NormalizedEvent | null): event is NormalizedEvent {
+  return event !== null && !event.labelIds.some((label) => EXCLUDED_LABELS.includes(label));
+}
 
 // One message, fetched in full and normalized in memory. Null if it was deleted since listing.
 async function fetchEvent(client: SourceClient, id: string): Promise<NormalizedEvent | null> {

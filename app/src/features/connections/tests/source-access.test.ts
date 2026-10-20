@@ -16,6 +16,7 @@ import {
   recordIngestState,
   startConnect,
 } from "../server";
+import { SourceRequestError } from "../types";
 import { connectGmail, connectOrgInbox } from "./connect-helpers";
 
 beforeEach(resetDatabase);
@@ -112,6 +113,18 @@ describe("proxyGet", () => {
     await expect(proxyGet(orgA.member.ctx, id, path, profile)).rejects.toThrow(NotFoundError);
     await disconnect(orgA.member.ctx, id);
     await expect(proxyGet(orgA.member.ctx, id, path, profile)).rejects.toThrow(NotFoundError);
+  });
+
+  it("keeps a connection whose token Google stopped refreshing: Nango's refusal isn't 'gone'", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const { connectionId: nangoId } = await connectGmail(orgA.member.ctx, orgA.member.email);
+    const id = await ownConnectionId(orgA.member.ctx);
+    // Nango's proxy answers this with the same error code as for a connection it doesn't have.
+    fakeNango.revokeAccess(nangoId);
+
+    const path = "/gmail/v1/users/me/profile";
+    await expect(proxyGet(orgA.member.ctx, id, path, profile)).rejects.toThrow(SourceRequestError);
+    expect(await getConnection(orgA.member.ctx, id)).toMatchObject({ id });
   });
 });
 

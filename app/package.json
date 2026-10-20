@@ -7,11 +7,12 @@
     "start": "next start",
     "lint": "next typegen && eslint --max-warnings=0",
     "typecheck": "next typegen && tsc --noEmit",
-    "boundaries": "depcruise src e2e",
+    "boundaries": "depcruise src e2e scripts",
     "test": "vitest run",
     "e2e": "playwright test",
     "db:generate": "node --env-file-if-exists=.env node_modules/drizzle-kit/bin.cjs generate",
-    "db:migrate": "node --env-file-if-exists=.env node_modules/drizzle-kit/bin.cjs migrate"
+    "db:migrate": "node --env-file-if-exists=.env node_modules/drizzle-kit/bin.cjs migrate",
+    "nango:preflight": "node --env-file-if-exists=.env --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/nango-preflight.ts"
   },
   "dependencies": {
     "@better-auth/drizzle-adapter": "1.7.11",

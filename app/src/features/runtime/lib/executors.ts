@@ -2,8 +2,6 @@
 // one fails the typecheck. Step types not built yet are pending, with the ticket that builds
 // them; a run reaching one fails `not_available`.
 import type { Step, StepType } from "@/features/spec/types";
-import type { ExecutorCoverage } from "../types";
-import { actionExecutors } from "./actions";
 import type { Executor, StepRun } from "./step-context";
 import { approvalStep, draftStep } from "./draft-step";
 import { branchStep, classifyStep, escalateStep, extractStep } from "./steps";
@@ -18,17 +16,3 @@ export const stepExecutors: { [T in StepType]: Executor<StepRun<Extract<Step, { 
   draft: { status: "ready", run: draftStep },
   approval: { status: "ready", run: approvalStep },
 };
-
-/** Which actions and step types runtime can execute yet. */
-export const executorCoverage: ExecutorCoverage = {
-  actions: statuses(actionExecutors),
-  steps: statuses(stepExecutors),
-};
-
-function statuses<K extends string>(registry: Record<K, { status: "ready" | "pending" }>) {
-  const entries = Object.entries<{ status: "ready" | "pending" }>(registry);
-  return Object.fromEntries(entries.map(([name, entry]) => [name, entry.status])) as Record<
-    K,
-    "ready" | "pending"
-  >;
-}

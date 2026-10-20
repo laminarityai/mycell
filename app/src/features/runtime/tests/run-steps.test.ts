@@ -6,7 +6,8 @@ import { actionNames } from "@/features/policy/catalog";
 import { stepTypes } from "@/features/spec/types";
 import { systemCtx } from "@/lib/ctx";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
-import { executeRun, executorCoverage, getRun, listRuns, startRun } from "../server";
+import { executorCoverage } from "../coverage";
+import { executeRun, getRun, listRuns, startRun } from "../server";
 import { connectInbox, pricingQuestion, publish, threadSpec } from "./run-helpers";
 
 beforeEach(resetDatabase);

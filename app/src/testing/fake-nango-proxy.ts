@@ -15,6 +15,8 @@ export type ProxyState = {
   beforeProxy(path: string): void | Promise<void>;
   // Takes one of the 429s a test asked for, if any are left.
   takeRateLimit(): boolean;
+  // Takes one of the failed writes a test asked for, if any are left.
+  takeWriteFailure(): boolean;
 };
 
 export function proxyHandlers(state: ProxyState) {
@@ -45,6 +47,10 @@ async function proxy(state: ProxyState, request: Request, method: "GET" | "POST"
   }
   if (method === "GET") return source.respond(connection, path, url.searchParams);
   if (source.write === undefined) throw new Error(`The fake ${host} takes no POSTs`);
+  if (state.takeWriteFailure()) {
+    const error = { code: 500, message: "Internal error encountered.", status: "INTERNAL" };
+    return HttpResponse.json({ error }, { status: 500 });
+  }
   const body: unknown = await request.json();
   return source.write.respond(connection, path, url.searchParams, body);
 }

@@ -36,6 +36,15 @@ const readThread = {
   input: { threadId: { from: "trigger.threadId" } },
 };
 
+const replyDraft = {
+  id: "reply",
+  type: "draft",
+  role: "smart",
+  instructions: "Reply with our current prices.",
+  context: ["trigger.message"],
+  output: "google-mail.create-draft",
+};
+
 const thrice = (script: () => void) => () => {
   for (let attempt = 0; attempt < 3; attempt++) script();
 };
@@ -119,13 +128,47 @@ const cases: Case[] = [
     name: "an action that isn't built yet",
     steps: [
       {
+        id: "prices",
+        type: "tool",
+        action: "google-sheet.read-range",
+        input: { spreadsheetId: "sheet-1", range: "oak chairs" },
+      },
+    ],
+    code: "not_available",
+  },
+  {
+    name: "a label write Gmail keeps failing",
+    steps: [
+      {
         id: "label",
         type: "tool",
         action: "google-mail.add-label",
         input: { messageId: { from: "trigger.messageId" }, label: "oak chairs" },
       },
     ],
-    code: "not_available",
+    script: () => {
+      fakeNango.failWrites(3);
+    },
+    code: "source_error",
+  },
+  {
+    name: "a draft write Gmail keeps failing, after generating its text",
+    steps: [replyDraft],
+    script: () => {
+      fakeNango.failWrites(3);
+      thrice(() => {
+        fakeAiGateway.text("Delivery of the oak chairs to Hull is free.");
+      })();
+    },
+    code: "source_error",
+  },
+  {
+    name: "a draft whose generation keeps failing",
+    steps: [replyDraft],
+    script: thrice(() => {
+      fakeAiGateway.fail("language", { status: 503 });
+    }),
+    code: "model_gateway_error",
   },
 ];
 

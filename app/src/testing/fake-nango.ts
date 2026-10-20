@@ -48,6 +48,7 @@ class FakeNango {
   private deletesFail = false;
   private rateLimitsLeft = 0;
   private rateLimitsServed = 0;
+  private writeFailuresLeft = 0;
   private proxyHook: ProxyHook | undefined;
   private nextId = 1;
   private listing: ListingBehaviour = { pageCap: undefined, empty: false };
@@ -59,6 +60,7 @@ class FakeNango {
     this.deletesFail = false;
     this.rateLimitsLeft = 0;
     this.rateLimitsServed = 0;
+    this.writeFailuresLeft = 0;
     this.proxyHook = undefined;
     this.nextId = 1;
     this.listing = { pageCap: undefined, empty: false };
@@ -87,6 +89,11 @@ class FakeNango {
   /** How many 429s the source has answered (retried or not) since the last reset. */
   rateLimitsAnswered(): number {
     return this.rateLimitsServed;
+  }
+
+  /** Makes the source answer the next `count` proxied writes (POSTs) with 500, unmade. */
+  failWrites(count: number): void {
+    this.writeFailuresLeft += count;
   }
 
   /** Runs `hook` before each proxied request, until the next reset. */
@@ -278,6 +285,11 @@ class FakeNango {
         if (this.rateLimitsLeft === 0) return false;
         this.rateLimitsLeft -= 1;
         this.rateLimitsServed += 1;
+        return true;
+      },
+      takeWriteFailure: () => {
+        if (this.writeFailuresLeft === 0) return false;
+        this.writeFailuresLeft -= 1;
         return true;
       },
     }),

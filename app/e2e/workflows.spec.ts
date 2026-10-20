@@ -26,7 +26,7 @@ test("an admin sees every issue with a refused spec, and members can't reach wor
     }),
   );
   await page.getByRole("button", { name: "Save" }).click();
-  const problems = page.getByRole("alert");
+  const problems = page.getByRole("alert").filter({ hasText: "The spec has" });
   await expect(problems).toContainText("The spec has 2 issues.");
   await expect(problems).toContainText("autonomy.rung");
 

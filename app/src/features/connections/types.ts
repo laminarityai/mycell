@@ -90,3 +90,18 @@ export type ConnectionsListing = {
   memberConnections: MemberConnectionMetadata[];
   attempts: ConnectAttemptSummary[];
 };
+
+/** A connection as Nango names it: its connection ID within one integration. */
+export type NangoConnectionRef = { nangoConnectionId: string; integration: string };
+
+/** What one reconciliation run did on each side. */
+export type ReconciliationSummary = {
+  // Mycel's connections Nango no longer has, deleted inside their org with all derived data.
+  deletedRows: { orgId: string; connectionId: string }[];
+  // Missing from Nango's listing, but kept: asked by ID, Nango still had them or didn't answer.
+  keptUnconfirmed: { orgId: string; connectionId: string }[];
+  // Nango connections with no Mycel connection, deleted at Nango.
+  deletedAtNango: NangoConnectionRef[];
+  // Nango connections with no Mycel connection, left alone this run by the bulk-delete rule.
+  heldAtNango: NangoConnectionRef[];
+};

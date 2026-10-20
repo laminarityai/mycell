@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
-import { disconnect, handleNangoWebhook, listConnections } from "@/features/connections/server";
+import {
+  disconnect,
+  handleNangoWebhook,
+  listConnections,
+  reconcileConnections,
+} from "@/features/connections/server";
 import { fakeNango } from "@/testing/fake-nango";
 import { backfillConnection, findEventsByObject, markBackfillFailed } from "../server";
 import { connectMailbox, daysAgo } from "./ingest-helpers";
@@ -126,5 +131,23 @@ describe("disconnecting after a backfill", () => {
     await handleNangoWebhook(webhook.rawBody, webhook.headers);
 
     expect(await findEventsByObject(ctx, "email", CUSTOMER)).toEqual([]);
+  });
+
+  it("leaves no events or object refs once reconciliation finds a missed deletion", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const ctx = orgA.member.ctx;
+    const messages = [{ from: CUSTOMER, to: [orgA.member.email], text: "Hi", at: daysAgo(2) }];
+    const connection = await connectMailbox(ctx, orgA.member.email, messages);
+    await backfillConnection(ctx, connection.id);
+    expect(await findEventsByObject(ctx, "email", CUSTOMER)).toHaveLength(1);
+
+    // Deleted at Nango, and the webhook never reaches Mycel.
+    fakeNango.deleteWithoutWebhook(connection.nangoConnectionId);
+    expect(await findEventsByObject(ctx, "email", CUSTOMER)).toHaveLength(1);
+    await reconcileConnections();
+
+    expect((await listConnections(ctx)).connections).toEqual([]);
+    expect(await findEventsByObject(ctx, "email", CUSTOMER)).toEqual([]);
+    expect(await findEventsByObject(ctx, "email", orgA.member.email)).toEqual([]);
   });
 });

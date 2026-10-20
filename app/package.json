@@ -5,7 +5,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint --max-warnings=0",
+    "lint": "next typegen && eslint --max-warnings=0",
     "typecheck": "next typegen && tsc --noEmit",
     "boundaries": "depcruise src e2e",
     "test": "vitest run",

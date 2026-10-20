@@ -1,6 +1,9 @@
+import Link from "next/link";
 import { Suspense } from "react";
 import { getCtx, listUsers } from "@/features/orgs/server";
 import { OrgUsersTable, SignOutButton } from "@/features/orgs/ui";
+import { listMyTags } from "@/features/tags/server";
+import { MyTags } from "@/features/tags/ui";
 
 export default function OrgPage() {
   return (
@@ -18,5 +21,16 @@ export default function OrgPage() {
 
 async function OrgUsers() {
   const ctx = await getCtx();
-  return <OrgUsersTable users={await listUsers(ctx)} viewer={ctx} />;
+  const [users, myTags] = await Promise.all([listUsers(ctx), listMyTags(ctx)]);
+  return (
+    <>
+      <MyTags tags={myTags} />
+      {ctx.role === "admin" ? (
+        <Link href="/tags" className="text-sm font-medium underline-offset-4 hover:underline">
+          Manage tags
+        </Link>
+      ) : null}
+      <OrgUsersTable users={users} viewer={ctx} />
+    </>
+  );
 }

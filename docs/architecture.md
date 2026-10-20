@@ -6,12 +6,13 @@ Mycel connects to a small company's existing tools, finds repetitive work in the
 
 ## Product in one paragraph
 
-An **admin** connects Google Workspace. Mycel backfills recent history and mines it for patterns (repeated questions, templated replies, cross-app handoffs). It ranks those patterns into **suggestions**, each with evidence and a measured shadow-eval result. Admins turn a suggestion into a **workflow**, or describe a new one to the **builder chat**, an agent that knows the org's context. Admins publish workflows to **tags**. **Members** see workflows published to their tags and can enable or disable them. They cannot create or edit them. Discovery runs again continuously.
+An **admin** connects Google Workspace and describes workflows to the **builder chat**, an agent that knows the org's context. This is the primary way workflows get made (ADR-0007). Alongside it, Mycel backfills recent history and mines it for patterns (repeated questions, templated replies, cross-app handoffs). It ranks those patterns into **suggestions**, each with evidence and a measured shadow-eval result, and feeds what it learns into the builder chat's context. Admins turn a suggestion or a description into a **workflow**. Admins publish workflows to **tags**. **Members** see workflows published to their tags and can enable or disable them. They cannot create or edit them. Discovery runs again continuously.
 
 ## v1 scope
 
 - First customer: our own company (dogfood). Sources: **Gmail plus Google Sheets/Drive only**. Outlook comes after v1, behind the same connector interface. Discord is not a source.
-- The full loop, kept thin at every stage: discovery → suggestions → builder chat → publish to tags → member toggles → run → observability.
+- The full loop, kept thin at every stage: builder chat (fed by discovery and suggestions) → publish to tags → member toggles → run → observability.
+- No admin-level data access: no Admin SDK Reports API and no domain-wide delegation (ADR-0008).
 - Workflows may act **autonomously only on read and internal-reversible actions** (e.g. labels). Anything sent externally is a **draft** that a human sends or approves. Financial and destructive actions don't exist in v1.
 
 ## Stack
@@ -37,7 +38,7 @@ app/                         The one Next.js app (deploys to Vercel)
     spec/                    Workflow spec schema (zod), validator
     policy/                  Action risk catalog + policy engine (deterministic)
     runtime/                 Spec interpreter (steps as Inngest steps); model-role routing; Nango tool adapters
-    discovery/               Normalize, entities, mining, ranking, shadow eval
+    discovery/               Normalize, object refs, mining, ranking, shadow eval
     credits/                 Credit ledger, estimates, budget enforcement
     memory/                  Fact extraction + retrieval (after the core loop)
 nango-integrations/          Custom Nango functions (deployed via the Nango CLI)
@@ -78,7 +79,7 @@ The eight invariants live in `AGENTS.md`, which is always loaded, so they have a
 
 1. **Ingest**: backfill 90 days on connect, then incremental updates by polling Gmail's `history.list` through the Nango proxy every minute (an Inngest cron job), starting from the last stored history ID. Push via Pub/Sub can replace polling later without changing anything downstream.
 2. **Normalize** into one event schema: `event_id, source, type, timestamp, actor, counterparty, direction, thread_id, text (cleaned, in memory only), object_refs, attachments_meta`. Strip quoted replies, signatures, and disclaimers.
-3. **Entities**: regex for structured IDs, plus a cheap LLM pass for people, orgs, amounts, dates. Deterministic merge first, then fuzzy. (Full cross-app entity resolution comes after v1.)
+3. **Object refs** (ADR-0008): deterministic links only. Structured fields (addresses, attendees, file IDs) and regex for IDs, merged on exact keys. No LLM entity pass and no fuzzy matching. An entity backbone (free-text extraction, resolution, lifecycle mining) comes after v1, and only if the discovery-lens experiment passes.
 4. **Mine**: embed and cluster into intent clusters. For v1, clustering links events whose pgvector similarity is above a threshold and takes each connected group as a cluster. It sits behind one `clusterEvents` function so the method can change (ADR-0004). Have an LLM label only a few representatives per cluster. Detect templates (near-duplicate outbound messages with their slots), request→response pairs, periodic tasks, and chasing/follow-up patterns.
 5. **Rank**: value = frequency × est. minutes × people. Feasibility = trigger type, variance, blast radius, context availability, write-API availability. Map to a starting rung.
 6. **Shadow eval**: replay the candidate on held-out past cases (re-fetched) and compare with what the human actually did, using a `judge` model plus edit distance. Show the result on the suggestion.
@@ -201,3 +202,4 @@ The always-on coding rules are in `AGENTS.md`. The detail (feature-directory sha
 
 - Concrete model IDs per role (Jev is available on the AI Gateway; see the research file for pricing).
 - Credit pricing and the free/included allowance.
+- Admin-level data access (Reports API, domain-wide delegation) versus owner scopes: out of v1, revisit at M10 (ADR-0008).

@@ -42,7 +42,7 @@ Whether a piece of data belongs to one member or to the whole org.
 The step by which a member-scoped fact becomes org-scoped.
 
 **Event**:
-One normalized thing that happened in a source, such as an email received or sent, kept as its provenance and shape (time, people, thread, attachment metadata) without its content. The code's type is `IngestedEvent`, to stay clear of the DOM's `Event`.
+One normalized thing that happened in a source, such as an email received or sent or a Drive file created or modified, kept as its provenance and shape (time, people, thread, attachment metadata, MIME type) without its content. The code's type is `IngestedEvent`, to stay clear of the DOM's `Event`.
 _Avoid_: Activity, message, record
 
 **Backfill**:

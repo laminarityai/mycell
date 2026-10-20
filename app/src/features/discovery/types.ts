@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Source } from "@/features/connections/types";
 
 /** The kinds of object an object ref points at, matched on exact keys (ADR-0008). */
 export const objectRefKindSchema = z.enum(["email", "drive_file"]);
@@ -12,7 +13,16 @@ export type AttachmentMeta = {
   driveFileId: string | null;
 };
 
-export type EventType = "email.received" | "email.sent";
+export const EVENT_TYPES = [
+  "email.received",
+  "email.sent",
+  "file.created",
+  "file.modified",
+] as const;
+export type EventType = (typeof EVENT_TYPES)[number];
+
+/** Which way an email went. A file change has none. */
+export type Direction = "inbound" | "outbound";
 
 /**
  * One event as later stages read it: provenance and shape, never content. `sourceRef` is how
@@ -22,23 +32,25 @@ export type IngestedEvent = {
   id: string;
   connectionId: string;
   ownerScope: "member" | "org";
-  source: "gmail";
+  source: Source;
   sourceRef: string;
   type: EventType;
   occurredAt: Date;
   actor: string | null;
   counterparties: string[];
-  direction: "inbound" | "outbound";
+  direction: Direction | null;
   threadId: string | null;
   attachments: AttachmentMeta[];
   labelIds: string[];
+  // A Drive file's MIME type; null for an email (its attachments carry their own).
+  mimeType: string | null;
 };
 
 /** How a backfill ended: it finished, or its connection was deleted while it ran. */
 export type BackfillOutcome = { outcome: "done"; items: number } | { outcome: "gone" };
 
 /**
- * How a poll ended: it stored what was new (`items` messages read), or the cursor had expired
+ * How a poll ended: it stored what was new (`items` messages or file changes read), or the cursor had expired
  * and it backfilled from the last stored event instead, or the connection isn't `active` and
  * was skipped, or it was deleted while the poll ran.
  */

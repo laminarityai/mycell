@@ -6,9 +6,9 @@ import { foreignKey, index, jsonb, pgTable, text, timestamp, unique } from "driz
 // The one table outside discovery its tables reference: derived data cascades from its
 // connection (docs/conventions.md, "Derived data cascades from its connection").
 import { connections } from "@/features/connections/lib/schema";
-import type { AttachmentMeta } from "../types";
+import { EVENT_TYPES, type AttachmentMeta } from "../types";
 
-/** One normalized thing that happened in a source: here, one Gmail message. */
+/** One normalized thing that happened in a source: a Gmail message, or a Drive file change. */
 export const events = pgTable(
   "events",
   {
@@ -19,18 +19,21 @@ export const events = pgTable(
     ownerScope: text("owner_scope", { enum: ["member", "org"] }).notNull(),
     // The user who made the connection, so a member scope can be checked without it.
     ownerUserId: text("owner_user_id").notNull(),
-    source: text("source", { enum: ["gmail"] }).notNull(),
-    // The Gmail message ID.
+    source: text("source", { enum: ["gmail", "drive"] }).notNull(),
+    // The Gmail message ID, or the Drive file ID and modified time (`<id>@<RFC 3339 time>`).
     sourceRef: text("source_ref").notNull(),
-    type: text("type", { enum: ["email.received", "email.sent"] }).notNull(),
+    type: text("type", { enum: EVENT_TYPES }).notNull(),
     occurredAt: timestamp("occurred_at").notNull(),
     // Lowercased addresses: who acted, and everyone else involved.
     actor: text("actor"),
     counterparties: text("counterparties").array().notNull(),
-    direction: text("direction", { enum: ["inbound", "outbound"] }).notNull(),
+    // Null for a file change, which goes no way.
+    direction: text("direction", { enum: ["inbound", "outbound"] }),
     threadId: text("thread_id"),
     attachments: jsonb("attachments").$type<AttachmentMeta[]>().notNull(),
     labelIds: text("label_ids").array().notNull(),
+    // A Drive file's MIME type; null for an email.
+    mimeType: text("mime_type"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [

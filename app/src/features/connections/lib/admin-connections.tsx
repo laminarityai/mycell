@@ -21,6 +21,7 @@ export function AdminConnections({ listing }: { listing: ConnectionsListing }) {
         <h2 className="text-sm font-medium">Org connections</h2>
         <div className="flex gap-2">
           <ConnectButton source="gmail" kind="org" label="Connect an org inbox" />
+          <ConnectButton source="drive" kind="org" label="Connect an org Drive" />
         </div>
         <ReauthNotices connections={listing.orgConnections} />
         {listing.orgConnections.length === 0 ? (

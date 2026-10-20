@@ -32,6 +32,7 @@ export function normalizeMessage(message: Message): NormalizedEvent {
     threadId: message.threadId ?? null,
     attachments,
     labelIds,
+    mimeType: null,
     objectRefs: [
       ...[...emails].map((key) => ({ kind: "email" as const, key })),
       ...driveFileIdsIn(text).map((key) => ({ kind: "drive_file" as const, key })),

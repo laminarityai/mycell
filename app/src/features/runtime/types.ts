@@ -125,6 +125,8 @@ export type RunStepRecord = {
   type: StepType;
   status: RunStepStatus;
   attempts: number;
+  /** When the last attempt began. */
+  lastAttemptAt: Date;
   output: Json;
   errorCode: string | null;
   errorMessage: string | null;

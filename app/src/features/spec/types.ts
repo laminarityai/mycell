@@ -43,9 +43,66 @@ const inputValue = z.union([
   z.array(z.union([literal, referenceSchema])),
 ]);
 
+export const jsonSchemaTypes = [
+  "object",
+  "array",
+  "string",
+  "number",
+  "integer",
+  "boolean",
+  "null",
+] as const;
+export type JsonSchemaType = (typeof jsonSchemaTypes)[number];
+
+/**
+ * The JSON Schema keywords a `schema` check may use. Any other keyword is refused, so a check
+ * never silently ignores part of what it was written to enforce.
+ */
+export type JsonSchemaSubset = {
+  type?: JsonSchemaType | JsonSchemaType[];
+  description?: string;
+  enum?: (string | number | boolean | null)[];
+  properties?: Record<string, JsonSchemaSubset>;
+  required?: string[];
+  additionalProperties?: boolean;
+  items?: JsonSchemaSubset;
+  minimum?: number;
+  maximum?: number;
+  minLength?: number;
+  maxLength?: number;
+  minItems?: number;
+  maxItems?: number;
+};
+
+const jsonType = z.enum(jsonSchemaTypes);
+const count = z.number().int().min(0);
+
+export const jsonSchemaSubset: z.ZodType<JsonSchemaSubset> = z.strictObject({
+  type: z.union([jsonType, z.array(jsonType).min(1)]).optional(),
+  description: z.string().optional(),
+  enum: z
+    .array(z.union([z.string(), z.number(), z.boolean(), z.null()]))
+    .min(1)
+    .optional(),
+  get properties() {
+    return z.record(z.string(), jsonSchemaSubset).optional();
+  },
+  required: z.array(z.string()).optional(),
+  additionalProperties: z.boolean().optional(),
+  get items() {
+    return jsonSchemaSubset.optional();
+  },
+  minimum: z.number().optional(),
+  maximum: z.number().optional(),
+  minLength: count.optional(),
+  maxLength: count.optional(),
+  minItems: count.optional(),
+  maxItems: count.optional(),
+});
+
 /** Optional checks on a step's output; a failed check fails the step without a retry. */
 const checksSchema = specObject({
-  schema: z.record(z.string(), z.unknown()).optional(),
+  schema: jsonSchemaSubset.optional(),
   minP: z.number().min(0).max(1).optional(),
   requiredFields: z.array(z.string().min(1)).optional(),
 });

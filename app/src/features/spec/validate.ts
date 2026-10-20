@@ -77,7 +77,34 @@ function structuralIssues(spec: Spec): SpecIssue[] {
       }
     }
 
+    issues.push(...checkIssues(step, at));
     earlier.set(step.id, step);
+  });
+  return issues;
+}
+
+/** A check that could never pass: minP off a classify, requiredFields the extract lacks. */
+function checkIssues(step: Step, at: (...path: (string | number)[]) => SpecIssue["path"]) {
+  const issues: SpecIssue[] = [];
+  if (step.checks?.minP !== undefined && step.type !== "classify") {
+    issues.push({ path: at("checks", "minP"), message: "Only a classify step has a p to check." });
+  }
+  const required = step.checks?.requiredFields;
+  if (required === undefined) return issues;
+  if (step.type !== "extract") {
+    issues.push({
+      path: at("checks", "requiredFields"),
+      message: "Only an extract step has fields to require.",
+    });
+    return issues;
+  }
+  required.forEach((name, i) => {
+    if (!(name in step.fields)) {
+      issues.push({
+        path: at("checks", "requiredFields", i),
+        message: `"${step.id}" has no field "${name}".`,
+      });
+    }
   });
   return issues;
 }

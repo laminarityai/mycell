@@ -1,5 +1,6 @@
 // Nango's webhooks. A signed `auth` / `creation` webhook is the only thing that records a
-// connection: the browser's word that a popup finished is never trusted.
+// connection: the browser's word that a popup finished is never trusted. A signed `auth` /
+// `deletion` webhook forgets one.
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
@@ -8,6 +9,7 @@ import { forOrg } from "@/db/for-org";
 import { findCtx, listUsers } from "@/features/orgs/server";
 import type { Ctx } from "@/lib/ctx";
 import { ATTEMPT_TAGS } from "./connect";
+import { forgetNangoConnection } from "./disconnect";
 import { deleteNangoConnection, isSignedByNango, NANGO_SIGNATURE_HEADER } from "./nango";
 import { connectAttempts, connections } from "./schema";
 import { INTEGRATIONS, readAccountEmail } from "./sources";
@@ -43,7 +45,22 @@ export async function handleNangoWebhook(
   if (!isSignedByNango(rawBody, headers.get(NANGO_SIGNATURE_HEADER))) return { status: 401 };
   const parsed = authWebhook.safeParse(parseJson(rawBody));
   if (parsed.success && parsed.data.operation === "creation") await settleAttempt(parsed.data);
+  if (parsed.success && parsed.data.operation === "deletion") await forget(parsed.data);
   return { status: 200 };
+}
+
+// The connection was deleted at Nango. Its signed tags name the org it was made in, which is
+// the only org the row can be in. Nobody in Mycel is acting, so the ctx carries that org, the
+// user who connected it, and the lesser role: forgetting checks no role.
+async function forget(webhook: AuthWebhook): Promise<void> {
+  const tags = attemptTags.safeParse(webhook.tags);
+  if (!webhook.success || !tags.success) return;
+  const orgCtx: Ctx = {
+    orgId: tags.data[ATTEMPT_TAGS.org],
+    userId: tags.data[ATTEMPT_TAGS.user],
+    role: "member",
+  };
+  await forgetNangoConnection(orgCtx, webhook.connectionId, webhook.providerConfigKey);
 }
 
 async function settleAttempt(webhook: AuthWebhook): Promise<void> {

@@ -2,6 +2,7 @@
 
 import { refresh } from "next/cache";
 import { z } from "zod";
+import { deleteMemberConnectionsOf } from "@/features/connections/server";
 import { roleSchema } from "@/lib/ctx";
 import { actionError, type ActionResult } from "@/lib/errors";
 import { getCtx, removeUser, setRole } from "./server";
@@ -24,6 +25,10 @@ export async function setRoleAction(
   return {};
 }
 
+/**
+ * Removes a user, then deletes their member connections. Composed here, not in `removeUser`:
+ * `connections` imports `orgs/server`, so `orgs/server` can't import `connections` back.
+ */
 export async function removeUserAction(
   _previous: ActionResult,
   form: FormData,
@@ -32,6 +37,7 @@ export async function removeUserAction(
   const input = removeUserInput.parse(Object.fromEntries(form));
   try {
     await removeUser(ctx, input.userId);
+    await deleteMemberConnectionsOf(ctx, input.userId);
   } catch (error) {
     return actionError(error);
   }

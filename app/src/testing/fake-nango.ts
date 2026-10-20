@@ -25,10 +25,17 @@ export type FakeWebhook = { rawBody: string; headers: Headers };
 class FakeNango {
   private sessions: FakeSession[] = [];
   private connections = new Map<string, FakeConnection>();
+  private deletesFail = false;
 
   reset(): void {
     this.sessions = [];
     this.connections.clear();
+    this.deletesFail = false;
+  }
+
+  /** Makes Nango's connection delete endpoint answer 500 until the next reset. */
+  failDeletes(): void {
+    this.deletesFail = true;
   }
 
   /** The connect session Mycel created most recently. */
@@ -53,6 +60,16 @@ class FakeNango {
       account,
     });
     return { connectionId, ...this.authWebhook(connectionId, "creation", true) };
+  }
+
+  /**
+   * The connection is deleted at Nango, not by Mycel (from Nango's dashboard, say): it's gone,
+   * and Nango sends the deletion webhook.
+   */
+  deleteOutsideMycel(connectionId: string): FakeWebhook {
+    const webhook = this.authWebhook(connectionId, "deletion", true);
+    this.connections.delete(connectionId);
+    return webhook;
   }
 
   /** The webhook Nango sends about one of its connections. */
@@ -106,6 +123,9 @@ class FakeNango {
 
     http.delete(`${API}/connections/:connectionId`, ({ request, params }) => {
       if (!authorised(request)) return unauthorised();
+      if (this.deletesFail) {
+        return HttpResponse.json({ error: { code: "server_error" } }, { status: 500 });
+      }
       const connectionId = String(params.connectionId);
       const key = new URL(request.url).searchParams.get("provider_config_key");
       const connection = this.connections.get(connectionId);

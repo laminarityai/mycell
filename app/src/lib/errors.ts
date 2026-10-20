@@ -44,6 +44,21 @@ export class ValidationError extends Error {
   }
 }
 
+/** One reason a spec was refused, at the path of the field it's about (`SpecIssue` in `spec`). */
+export type SpecInvalidIssue = { path: (string | number)[]; message: string };
+
+/** A spec failed save-time validation. It carries every issue at once, not just the first. */
+export class SpecInvalidError extends Error {
+  constructor(readonly issues: SpecInvalidIssue[]) {
+    super(
+      issues.length === 1
+        ? "The spec has 1 issue."
+        : `The spec has ${String(issues.length)} issues.`,
+    );
+    this.name = "SpecInvalidError";
+  }
+}
+
 /**
  * The org's credit balance can't cover the call it was about to make (invariant 7). Nothing was
  * called and nothing was spent.
@@ -55,8 +70,11 @@ export class OutOfCreditsError extends Error {
   }
 }
 
-/** What a Server Action returns: `error` holds a message for the user when the write failed. */
-export type ActionResult = { error?: string };
+/**
+ * What a Server Action returns: `error` holds a message for the user when the write failed,
+ * and `issues` every reason a spec was refused.
+ */
+export type ActionResult = { error?: string; issues?: SpecInvalidIssue[] };
 
 /**
  * The action-boundary half of the error rule: a typed error becomes its user-facing message,
@@ -72,5 +90,6 @@ export function actionError(error: unknown): ActionResult {
   ) {
     return { error: error.message };
   }
+  if (error instanceof SpecInvalidError) return { error: error.message, issues: error.issues };
   throw error;
 }

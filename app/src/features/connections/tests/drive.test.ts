@@ -14,7 +14,7 @@ import {
   startReconnect,
 } from "../server";
 import type { ConnectionKind } from "../types";
-import { connectGmail } from "./connect-helpers";
+import { connectGmail } from "@/testing/connect-helpers";
 
 beforeEach(resetDatabase);
 

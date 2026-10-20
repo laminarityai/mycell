@@ -16,7 +16,7 @@ import {
   recordIngestState,
   startConnect,
 } from "../server";
-import { connectGmail, connectOrgInbox } from "./connect-helpers";
+import { connectGmail, connectOrgInbox } from "@/testing/connect-helpers";
 
 beforeEach(resetDatabase);
 

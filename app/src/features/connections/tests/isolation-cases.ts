@@ -144,6 +144,24 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await server.listConnections(orgs.orgB.admin.ctx)).toEqual(before);
   },
 
+  proxyPost: async (orgs) => {
+    const { before, memberBefore } = await seedOrgBConnection(orgs);
+    const label = z.object({ id: z.string() });
+
+    for (const id of orgBIds(before, memberBefore)) {
+      await expect(
+        server.proxyPost(
+          orgs.orgA.admin.ctx,
+          id,
+          "/gmail/v1/users/me/labels",
+          { name: "X" },
+          label,
+        ),
+      ).rejects.toThrow(NotFoundError);
+    }
+    expect(await server.listConnections(orgs.orgB.admin.ctx)).toEqual(before);
+  },
+
   startReconnect: async (orgs) => {
     const { before, memberBefore } = await seedOrgBConnection(orgs);
 

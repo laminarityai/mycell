@@ -176,6 +176,8 @@ const nangoError = z.object({ error: z.object({ code: z.string() }) });
 /** A call through the Nango proxy: which API host it reaches, and the path on that host. */
 export type ProxyTarget = { baseUrl: string; path: string };
 
+type ProxiedConnection = { connectionId: string; integration: string };
+
 /**
  * A GET through the Nango proxy to the source's own API, parsed with `schema`. Returns null when
  * the source answers 404 or 410 (the item is gone at the source), and throws
@@ -183,18 +185,42 @@ export type ProxyTarget = { baseUrl: string; path: string };
  * any other refusal.
  */
 export async function nangoProxyGet<T>(
-  connection: { connectionId: string; integration: string },
-  { baseUrl, path }: ProxyTarget,
+  connection: ProxiedConnection,
+  target: ProxyTarget,
   schema: z.ZodType<T>,
 ): Promise<T | null> {
+  // Nango retries the source's 429s and 5xx with exponential backoff: a GET changes nothing.
+  return nangoProxy(connection, target, schema, { headers: { Retries: "3" } });
+}
+
+/**
+ * A POST through the Nango proxy with a JSON body, answered like nangoProxyGet. Nango doesn't
+ * retry it: a write whose answer was lost may have happened, so the caller checks for its own
+ * earlier result before writing again.
+ */
+export async function nangoProxyPost<T>(
+  connection: ProxiedConnection,
+  target: ProxyTarget,
+  body: unknown,
+  schema: z.ZodType<T>,
+): Promise<T | null> {
+  return nangoProxy(connection, target, schema, { method: "POST", body: JSON.stringify(body) });
+}
+
+async function nangoProxy<T>(
+  connection: ProxiedConnection,
+  { baseUrl, path }: ProxyTarget,
+  schema: z.ZodType<T>,
+  init: { method?: string; body?: string; headers?: Record<string, string> },
+): Promise<T | null> {
   const response = await nangoFetch(`/proxy${path}`, {
+    ...init,
     headers: {
+      ...init.headers,
       "Connection-Id": connection.connectionId,
       "Provider-Config-Key": connection.integration,
       // One Nango integration reaches every Google API, each on its own host.
       "Base-Url-Override": baseUrl,
-      // Nango retries the source's 429s and 5xx with exponential backoff.
-      Retries: "3",
     },
   });
   if (response.ok) return schema.parse(await response.json());

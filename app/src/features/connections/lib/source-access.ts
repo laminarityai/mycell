@@ -1,6 +1,6 @@
 // How other features reach a connection's source: read the connection and what it was granted,
-// call its source through the Nango proxy, and record where each app's ingest stands. Each
-// checks the connection is in the caller's org and theirs to read, and turns a connection
+// read and write its source through the Nango proxy, and record where each app's ingest stands.
+// Each checks the connection is in the caller's org and theirs to read, and turns a connection
 // that's gone into NotFoundError.
 import { and, eq } from "drizzle-orm";
 import type { z } from "zod";
@@ -10,7 +10,7 @@ import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import type { ConnectionDetails, IngestedApp, IngestStateUpdate } from "../types";
 import { grantedApps, INTEGRATIONS, proxyTarget } from "./google";
 import { ingestByApp, ingestStatesOf } from "./ingest-states";
-import { NangoConnectionGoneError, nangoProxyGet } from "./nango";
+import { NangoConnectionGoneError, nangoProxyGet, nangoProxyPost } from "./nango";
 import { connections, ingestStates } from "./schema";
 
 type Connection = typeof connections.$inferSelect;
@@ -84,16 +84,40 @@ export async function proxyGet<T>(
   path: string,
   schema: z.ZodType<T>,
 ): Promise<T | null> {
+  return proxied(ctx, connectionId, (connection) =>
+    nangoProxyGet(connection, proxyTarget(path), schema),
+  );
+}
+
+/**
+ * A POST with a JSON body to a Google API through the Nango proxy, checked and answered like
+ * proxyGet. Nango doesn't retry it, since a write whose answer was lost may still have happened:
+ * a caller that tries again checks first for what its earlier try did. A connection not granted
+ * the scope the write needs gets the source's 403 as SourceRequestError.
+ */
+export async function proxyPost<T>(
+  ctx: Ctx,
+  connectionId: string,
+  path: string,
+  body: unknown,
+  schema: z.ZodType<T>,
+): Promise<T | null> {
+  return proxied(ctx, connectionId, (connection) =>
+    nangoProxyPost(connection, proxyTarget(path), body, schema),
+  );
+}
+
+async function proxied<T>(
+  ctx: Ctx,
+  connectionId: string,
+  call: (connection: { connectionId: string; integration: string }) => Promise<T>,
+): Promise<T> {
   const connection = await readable(ctx, connectionId);
   try {
-    return await nangoProxyGet(
-      {
-        connectionId: connection.nangoConnectionId,
-        integration: INTEGRATIONS[connection.source],
-      },
-      proxyTarget(path),
-      schema,
-    );
+    return await call({
+      connectionId: connection.nangoConnectionId,
+      integration: INTEGRATIONS[connection.source],
+    });
   } catch (error) {
     if (error instanceof NangoConnectionGoneError) throw new NotFoundError("connection");
     throw error;

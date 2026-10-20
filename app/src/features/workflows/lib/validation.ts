@@ -8,6 +8,7 @@ import type { Spec, SpecIssue } from "@/features/spec/types";
 import { validateSpec } from "@/features/spec/validate";
 import type { Ctx } from "@/lib/ctx";
 import { SpecInvalidError } from "@/lib/errors";
+import { scopeIssues } from "./scope-check";
 
 /** A spec that passed every stage, with what the policy engine made of it. */
 export type ValidatedSpec = {
@@ -28,8 +29,9 @@ export type OrgSetup = {
 };
 
 /**
- * One check of a policy-applied spec against the org's setup. Scope checks (#38) and later
- * ones join `SETUP_CHECKS`; each returns its issues and never throws for a bad spec.
+ * One check of a spec that passed the policy engine against the org's setup; each returns its
+ * issues and never throws for a bad spec. It gets the working spec, so its issues' paths are
+ * where the admin wrote them: the approvals the engine inserts use no actions.
  */
 export type SetupCheck = (spec: Spec, setup: OrgSetup) => SpecIssue[];
 
@@ -44,7 +46,7 @@ export async function validateWorkflowSpec(ctx: Ctx, input: unknown): Promise<Va
   if (!policy.ok) throw new SpecInvalidError(policy.issues);
 
   const setup = await readSetup(ctx);
-  const issues = SETUP_CHECKS.flatMap((check) => check(policy.spec, setup));
+  const issues = SETUP_CHECKS.flatMap((check) => check(parsed.spec, setup));
   if (issues.length > 0) throw new SpecInvalidError(issues);
 
   return {
@@ -80,7 +82,11 @@ const connectionCheck: SetupCheck = (spec, setup) => {
   ];
 };
 
-const SETUP_CHECKS: SetupCheck[] = [connectionCheck];
+/** Every action the spec uses needs its scope granted to a connection it could run on. */
+const scopeCheck: SetupCheck = (spec, setup) =>
+  scopeIssues(spec, candidateConnections(spec, setup));
+
+const SETUP_CHECKS: SetupCheck[] = [connectionCheck, scopeCheck];
 
 // A Google connection reaches Gmail when it was granted Gmail (ADR-0014).
 function reachesGmail(connection: ConnectionSummary): boolean {

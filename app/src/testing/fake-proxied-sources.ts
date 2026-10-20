@@ -1,14 +1,20 @@
 // The Google APIs the fake Nango's proxy serves, each by its host and path prefix, answering
 // from the connection's own fake (its Gmail mailbox or its Drive). Like Google, an API answers
-// 403 to a connection whose token holds none of the scopes it accepts, and a host answers 404
-// for a path it doesn't serve.
+// 403 to a connection whose token holds none of the scopes it accepts (for a write, none of
+// the scopes its writes accept), and a host answers 404 for a path it doesn't serve.
 import { HttpResponse } from "msw";
 import { GOOGLE_APP_SCOPES } from "@/features/connections/types";
 import { driveError, driveResponse } from "./fake-drive";
-import { gmailError, gmailResponse } from "./fake-gmail";
+import { gmailError, gmailResponse, gmailWrite } from "./fake-gmail";
 import type { FakeConnection } from "./fake-nango";
 
 type Respond = (connection: FakeConnection, path: string, params: URLSearchParams) => Response;
+type RespondToWrite = (
+  connection: FakeConnection,
+  path: string,
+  params: URLSearchParams,
+  body: unknown,
+) => Response;
 
 export type ProxiedSource = {
   host: string;
@@ -16,10 +22,13 @@ export type ProxiedSource = {
   // Any one of these lets a token call the API.
   scopes: readonly string[];
   respond: Respond;
+  // How the API answers a POST, and the scopes that let a token write; none for a read-only API.
+  write?: { scopes: readonly string[]; respond: RespondToWrite };
   rateLimited: () => Response;
 };
 
 const GMAIL_READONLY = "https://www.googleapis.com/auth/gmail.readonly";
+const GMAIL_COMPOSE = "https://www.googleapis.com/auth/gmail.compose";
 const DRIVE_READONLY = GOOGLE_APP_SCOPES.drive;
 
 export const PROXIED_SOURCES: ProxiedSource[] = [
@@ -28,6 +37,11 @@ export const PROXIED_SOURCES: ProxiedSource[] = [
     prefix: "/gmail/v1/users/me",
     scopes: [GOOGLE_APP_SCOPES.gmail, GMAIL_READONLY, "https://mail.google.com/"],
     respond: (connection, path, params) => gmailResponse(connection.mailbox, path, params),
+    write: {
+      // Labels, messages.modify and drafts all take gmail.modify; drafts take compose too.
+      scopes: [GOOGLE_APP_SCOPES.gmail, GMAIL_COMPOSE, "https://mail.google.com/"],
+      respond: (connection, path, _params, body) => gmailWrite(connection.mailbox, path, body),
+    },
     rateLimited: () => gmailError(429, "RESOURCE_EXHAUSTED"),
   },
   {
@@ -68,11 +82,16 @@ export function proxiedSource(host: string, path: string): ProxiedSource | undef
 }
 
 /** What the source answers before reaching its API: 404 off its paths, 403 without a scope. */
-export function refusal(source: ProxiedSource | undefined, connection: FakeConnection) {
+export function refusal(
+  source: ProxiedSource | undefined,
+  connection: FakeConnection,
+  method: "GET" | "POST" = "GET",
+) {
   if (source === undefined) {
     return HttpResponse.json({ error: { code: 404, message: "Not Found" } }, { status: 404 });
   }
-  if (!source.scopes.some((scope) => connection.scopes.includes(scope))) {
+  const accepted = method === "GET" ? source.scopes : (source.write?.scopes ?? []);
+  if (!accepted.some((scope) => connection.scopes.includes(scope))) {
     const message = "Request had insufficient authentication scopes.";
     return HttpResponse.json(
       { error: { code: 403, message, status: "PERMISSION_DENIED" } },

@@ -3,6 +3,8 @@
 // Actions not built yet are pending, with the ticket that builds them.
 import type { ActionName } from "@/features/policy/catalog";
 import { messageRef, threadRef } from "./gmail";
+import { createReplyDraft } from "./gmail-drafts";
+import { addLabel } from "./gmail-labels";
 import type { ActionRun, Executor } from "./step-context";
 
 export const actionExecutors: Record<ActionName, Executor<ActionRun>> = {
@@ -20,8 +22,9 @@ export const actionExecutors: Record<ActionName, Executor<ActionRun>> = {
       return { threadId: thread.id, messageCount: thread.messages.length };
     },
   },
-  "google-mail.add-label": { status: "pending", ticket: "#38" },
-  "google-mail.create-draft": { status: "pending", ticket: "#38" },
+  "google-mail.add-label": { status: "ready", run: addLabel },
+  // Run by a draft step, which hands it the generated text; a tool step may not send (policy).
+  "google-mail.create-draft": { status: "ready", run: createReplyDraft },
   "google-sheet.read-range": { status: "pending", ticket: "#40" },
   "google-sheet.append-row": { status: "pending", ticket: "#40" },
 };

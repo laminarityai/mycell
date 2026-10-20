@@ -5,7 +5,7 @@ import { proxyGet } from "@/features/connections/server";
 import type { Ctx } from "@/lib/ctx";
 import { RunStepError } from "./failures";
 
-const GMAIL = "/gmail/v1/users/me";
+export const GMAIL = "/gmail/v1/users/me";
 
 type Part = {
   mimeType?: string;
@@ -29,6 +29,7 @@ const messageRefSchema = z.object({
 });
 const fullMessageSchema = messageRefSchema.extend({ payload: partSchema.optional() });
 const threadSchema = z.object({ id: z.string(), messages: z.array(messageRefSchema).default([]) });
+const fullThreadSchema = z.object({ messages: z.array(fullMessageSchema).default([]) });
 
 async function get<T>(ctx: Ctx, connectionId: string, path: string, schema: z.ZodType<T>) {
   const found = await proxyGet(ctx, connectionId, path, schema);
@@ -67,6 +68,24 @@ export async function messageText(ctx: Ctx, connectionId: string, messageId: str
     `${GMAIL}/messages/${encodeURIComponent(messageId)}?format=full`,
     fullMessageSchema,
   );
+  return asText(message);
+}
+
+/** The thread's messages as text, oldest first, leaving out drafts. In memory only, too. */
+export async function threadText(ctx: Ctx, connectionId: string, threadId: string) {
+  const thread = await get(
+    ctx,
+    connectionId,
+    `${GMAIL}/threads/${encodeURIComponent(threadId)}?format=full`,
+    fullThreadSchema,
+  );
+  return thread.messages
+    .filter((message) => !message.labelIds.includes("DRAFT"))
+    .map(asText)
+    .join("\n\n---\n\n");
+}
+
+function asText(message: z.infer<typeof fullMessageSchema>): string {
   const headers = message.payload?.headers ?? [];
   const header = (name: string) =>
     headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ?? "";

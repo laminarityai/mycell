@@ -45,6 +45,8 @@ export function recordingStepRunner() {
   return {
     runStep,
     ids,
+    /** What the step state holds: each finished step's result, by step ID. */
+    results: () => Object.fromEntries(results),
     crashAt: (id: string) => {
       crashAt = id;
     },

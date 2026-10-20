@@ -13,10 +13,11 @@ import {
   listConnections,
   listConnectionsForJobs,
   proxyGet,
+  proxyPost,
   recordIngestState,
   startConnect,
 } from "../server";
-import { GOOGLE_APP_SCOPES } from "../types";
+import { GOOGLE_APP_SCOPES, SourceRequestError } from "../types";
 import { connectGmail, connectOrgInbox } from "@/testing/connect-helpers";
 
 beforeEach(resetDatabase);
@@ -121,6 +122,60 @@ describe("proxyGet", () => {
     await expect(proxyGet(orgA.member.ctx, id, path, profile)).rejects.toThrow(NotFoundError);
     await disconnect(orgA.member.ctx, id);
     await expect(proxyGet(orgA.member.ctx, id, path, profile)).rejects.toThrow(NotFoundError);
+  });
+});
+
+describe("proxyPost", () => {
+  const label = z.object({ id: z.string(), name: z.string() });
+  const labels = "/gmail/v1/users/me/labels";
+
+  it("writes to the connection's source through Nango and parses the answer", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const { connectionId: nangoId } = await connectGmail(orgA.member.ctx, orgA.member.email);
+    const id = await ownConnectionId(orgA.member.ctx);
+
+    const created = await proxyPost(orgA.member.ctx, id, labels, { name: "Pricing" }, label);
+
+    expect(created).toMatchObject({ name: "Pricing" });
+    expect(fakeNango.mailbox(nangoId).writes.madeLabels()).toEqual([created]);
+  });
+
+  it("is null for an item the source doesn't have", async () => {
+    const { orgA } = await seedTwoOrgs();
+    await connectGmail(orgA.member.ctx, orgA.member.email);
+    const id = await ownConnectionId(orgA.member.ctx);
+
+    const path = "/gmail/v1/users/me/messages/nope/modify";
+    expect(
+      await proxyPost(orgA.member.ctx, id, path, { addLabelIds: ["STARRED"] }, message),
+    ).toBeNull();
+  });
+
+  it("refuses another member's connection, and one that's gone", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const { connectionId: nangoId } = await connectGmail(orgA.member.ctx, orgA.member.email);
+    const id = await ownConnectionId(orgA.member.ctx);
+    const body = { name: "Pricing" };
+
+    await expect(proxyPost(orgA.admin.ctx, id, labels, body, label)).rejects.toThrow(
+      ForbiddenError,
+    );
+    fakeNango.deleteOutsideMycel(nangoId);
+    await expect(proxyPost(orgA.member.ctx, id, labels, body, label)).rejects.toThrow(
+      NotFoundError,
+    );
+  });
+
+  it("is a source error when the connection wasn't granted write access", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const readOnly = "https://www.googleapis.com/auth/gmail.readonly";
+    // Drive tells Mycel which account it is, since Gmail without gmail.modify isn't an app.
+    await connectGmail(orgA.member.ctx, orgA.member.email, [readOnly, GOOGLE_APP_SCOPES.drive]);
+    const id = await ownConnectionId(orgA.member.ctx);
+
+    const written = proxyPost(orgA.member.ctx, id, labels, { name: "Pricing" }, label);
+    await expect(written).rejects.toThrow(SourceRequestError);
+    await expect(written).rejects.toMatchObject({ status: 403 });
   });
 });
 

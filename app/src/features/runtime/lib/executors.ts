@@ -5,6 +5,7 @@ import type { Step, StepType } from "@/features/spec/types";
 import type { ExecutorCoverage } from "../types";
 import { actionExecutors } from "./actions";
 import type { Executor, StepRun } from "./step-context";
+import { approvalStep, draftStep } from "./draft-step";
 import { branchStep, classifyStep, escalateStep, extractStep } from "./steps";
 import { toolStep } from "./tool-step";
 
@@ -14,8 +15,8 @@ export const stepExecutors: { [T in StepType]: Executor<StepRun<Extract<Step, { 
   extract: { status: "ready", run: extractStep },
   tool: { status: "ready", run: toolStep },
   escalate: { status: "ready", run: escalateStep },
-  draft: { status: "pending", ticket: "#38" },
-  approval: { status: "pending", ticket: "#38" },
+  draft: { status: "ready", run: draftStep },
+  approval: { status: "ready", run: approvalStep },
 };
 
 /** Which actions and step types runtime can execute yet. */

@@ -153,15 +153,15 @@ describe("the steps", () => {
 });
 
 describe("executorCoverage", () => {
-  it("lists every catalog action and step type, the read-only ones ready", () => {
+  it("lists every catalog action and step type, all but the Sheets actions ready", () => {
     expect(Object.keys(executorCoverage.actions).sort()).toEqual([...actionNames].sort());
     expect(Object.keys(executorCoverage.steps).sort()).toEqual([...stepTypes].sort());
     expect(executorCoverage).toEqual({
       actions: {
         "google-mail.read-message": "ready",
         "google-mail.read-thread": "ready",
-        "google-mail.add-label": "pending",
-        "google-mail.create-draft": "pending",
+        "google-mail.add-label": "ready",
+        "google-mail.create-draft": "ready",
         "google-sheet.read-range": "pending",
         "google-sheet.append-row": "pending",
       },
@@ -171,8 +171,8 @@ describe("executorCoverage", () => {
         extract: "ready",
         tool: "ready",
         escalate: "ready",
-        draft: "pending",
-        approval: "pending",
+        draft: "ready",
+        approval: "ready",
       },
     });
   });

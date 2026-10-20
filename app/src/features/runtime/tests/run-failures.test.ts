@@ -105,10 +105,10 @@ describe("a failing step", () => {
     const spec = threadSpec({
       steps: [
         {
-          id: "label",
+          id: "prices",
           type: "tool",
-          action: "google-mail.add-label",
-          input: { messageId: { from: "trigger.messageId" }, label: "Pricing" },
+          action: "google-sheet.read-range",
+          input: { spreadsheetId: "sheet-1", range: "Prices!A1:C50" },
         },
       ],
     });
@@ -118,7 +118,7 @@ describe("a failing step", () => {
       status: "failed",
     });
     expect((await getRun(admin, runId)).steps).toMatchObject([
-      { stepId: "label", status: "failed", attempts: 1, errorCode: "not_available" },
+      { stepId: "prices", status: "failed", attempts: 1, errorCode: "not_available" },
     ]);
   });
 });

@@ -6,6 +6,11 @@ export { deleteMemberConnectionsOf, disconnect } from "./lib/disconnect";
 export { connectionRecorded } from "./lib/events";
 export { listConnections } from "./lib/list";
 // How other features ingest from a connection, without touching Nango or the table.
-export { getConnection, proxyGet, recordIngestState } from "./lib/source-access";
+export {
+  getConnection,
+  listConnectionsForJobs,
+  proxyGet,
+  recordIngestState,
+} from "./lib/source-access";
 // Called only by the Nango webhook route and tests: it checks Nango's signature itself.
 export { handleNangoWebhook } from "./lib/webhook";

@@ -2,6 +2,7 @@ import { expect } from "vitest";
 import { z } from "zod";
 import { defineIsolationCases } from "@/db/testing/isolation";
 import type { TwoOrgs } from "@/db/testing/two-org-fixture";
+import { systemCtx } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
 import { fakeNango } from "@/testing/fake-nango";
 import * as server from "../server";
@@ -91,6 +92,15 @@ export const isolationCases = defineIsolationCases(server, {
       id: mine?.id,
       ownerUserId: orgs.orgA.member.id,
     });
+  },
+
+  listConnectionsForJobs: async (orgs) => {
+    await seedOrgBConnection(orgs);
+    await connectGmail(orgs.orgA.member.ctx, orgs.orgA.member.email);
+
+    const listed = await server.listConnectionsForJobs(systemCtx(orgs.orgA.id));
+
+    expect(listed.map((c) => c.ownerUserId)).toEqual([orgs.orgA.member.id]);
   },
 
   proxyGet: async (orgs) => {

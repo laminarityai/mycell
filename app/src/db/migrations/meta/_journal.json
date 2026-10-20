@@ -85,6 +85,13 @@
       "when": 1792523218364,
       "tag": "0011_drop-connection-ingest-columns",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1792523526375,
+      "tag": "0012_runs",
+      "breakpoints": true
     }
   ]
 }

@@ -3,9 +3,10 @@ import { defineIsolationCases } from "@/db/testing/isolation";
 import type { TwoOrgs } from "@/db/testing/two-org-fixture";
 import { grantCredits, listLedger } from "@/features/credits/server";
 import { systemCtx } from "@/lib/ctx";
-import { OutOfCreditsError } from "@/lib/errors";
+import { NotFoundError, OutOfCreditsError } from "@/lib/errors";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import * as server from "../server";
+import { connectInbox, pricingQuestion, publish, threadSpec } from "./run-helpers";
 
 // Org B points every role at its own models and has credits; org A has neither, so a call as
 // org A that read org B's rows would use org B's model or pass on org B's balance.
@@ -19,7 +20,60 @@ async function seedOrgB({ orgB }: TwoOrgs) {
 
 const question = { question: "Which?", labels: ["a", "b"], state: "text" };
 
+// Org B has a workflow and a running run on its admin's inbox.
+async function seedOrgBRun({ orgB }: TwoOrgs) {
+  const inbox = await connectInbox(orgB.admin.ctx, orgB.admin.email, [pricingQuestion()]);
+  const workflowId = await publish(orgB.admin.ctx, threadSpec());
+  const { runId } = await server.startRun(
+    orgB.admin.ctx,
+    workflowId,
+    inbox.connectionId,
+    inbox.messages[0].id,
+  );
+  return { connectionId: inbox.connectionId, workflowId, runId };
+}
+
 export const isolationCases = defineIsolationCases(server, {
+  startRun: async (orgs) => {
+    const orgB = await seedOrgBRun(orgs);
+    const admin = orgs.orgA.admin.ctx;
+    await connectInbox(admin, orgs.orgA.admin.email, []);
+    const ownWorkflow = await publish(admin, threadSpec());
+
+    await expect(server.startRun(admin, orgB.workflowId, orgB.connectionId, "m")).rejects.toThrow(
+      NotFoundError,
+    );
+    await expect(server.startRun(admin, ownWorkflow, orgB.connectionId, "m")).rejects.toThrow(
+      NotFoundError,
+    );
+    expect(await server.listRuns(orgs.orgB.admin.ctx, orgB.workflowId)).toHaveLength(1);
+  },
+
+  getRun: async (orgs) => {
+    const { runId } = await seedOrgBRun(orgs);
+
+    await expect(server.getRun(orgs.orgA.admin.ctx, runId)).rejects.toThrow(NotFoundError);
+  },
+
+  listRuns: async (orgs) => {
+    const { workflowId } = await seedOrgBRun(orgs);
+
+    expect(await server.listRuns(orgs.orgA.admin.ctx, workflowId)).toEqual([]);
+  },
+
+  executeRun: async (orgs) => {
+    const { runId } = await seedOrgBRun(orgs);
+
+    expect(await server.executeRun(systemCtx(orgs.orgA.id), runId)).toEqual({
+      status: "cancelled",
+    });
+    expect(await server.getRun(orgs.orgB.admin.ctx, runId)).toMatchObject({
+      status: "running",
+      steps: [],
+    });
+    expect(fakeAiGateway.requests()).toEqual([]);
+  },
+
   resolveModel: async (orgs) => {
     await seedOrgB(orgs);
 

@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
+import { listConnections } from "@/features/connections/server";
 import { getCtx } from "@/features/orgs/server";
+import { listRuns } from "@/features/runtime/server";
+import { RecentRuns, RunOnMessageForm } from "@/features/runtime/ui";
 import { getWorkflow } from "@/features/workflows/server";
 import { WorkflowEditor } from "@/features/workflows/ui";
 import { NotFoundError } from "@/lib/errors";
@@ -30,5 +33,22 @@ async function Workflow({ params }: Pick<PageProps<"/workflows/[workflowId]">, "
     if (error instanceof NotFoundError) notFound();
     throw error;
   });
-  return <WorkflowEditor workflow={workflow} />;
+  const [runs, listing] = await Promise.all([listRuns(ctx, workflowId), listConnections(ctx)]);
+  // The connections the spec's credentials allow: the admin's own, or the org's.
+  const usable =
+    workflow.workingSpec.credentials === "member" ? listing.connections : listing.orgConnections;
+  const connections = usable.map((connection) => ({
+    id: connection.id,
+    label: connection.accountEmail,
+  }));
+  return (
+    <div className="flex flex-col gap-8">
+      <WorkflowEditor workflow={workflow} />
+      <section className="flex flex-col gap-3" aria-label="Runs">
+        <h2 className="text-lg font-semibold">Runs</h2>
+        <RunOnMessageForm workflowId={workflow.id} connections={connections} />
+        <RecentRuns runs={runs} />
+      </section>
+    </div>
+  );
 }

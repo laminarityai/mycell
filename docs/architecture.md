@@ -237,7 +237,8 @@ The catalog is code (`features/policy/catalog.ts`), each action with its risk le
 
 ## Failures and observability
 
-- Steps retry with backoff (3 attempts). Every failure is recorded in observability.
+- Steps retry with backoff (3 attempts). The attempts run inside the step's Inngest step, so each step's record counts them, and a step whose last attempt fails records the failure and ends the run `failed` instead of throwing. Some failures aren't retried: out of credits, a connection that's gone (the run ends `cancelled`), an action whose executor isn't built yet, a bad reference, and Gmail having no such message. Every failure is recorded in observability.
+- **Run records** (`runs`, `run_steps`) cascade from their connection and hold derived data only: labels and probabilities, IDs, counts, an `extract` step's field names and whether each was filled (never the values, ADR-0012), error codes and messages built from codes, the model role and ID, and cost. The message is fetched through the Nango proxy inside each step that reads it, and its text never leaves that step.
 - After **3 consecutive failed runs**, the workflow pauses automatically and the owning admin gets an email. Members see a "paused" badge.
 - Observability is **admin-only**: runs, step traces, inputs/outputs (scoped), cost, failures. It's built in our UI on our own `runs` and `run_steps` tables, written by the interpreter. Inngest's dashboard is for development and debugging only.
 

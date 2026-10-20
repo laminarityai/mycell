@@ -1,5 +1,6 @@
 // A fake Gmail mailbox, served through the fake Nango's proxy. It answers the Gmail API calls
-// Mycel makes (users.getProfile, users.messages.list, users.messages.get, users.history.list)
+// Mycel makes (users.getProfile, users.messages.list, users.messages.get, users.history.list,
+// users.threads.get)
 // in the shapes Google documents, from messages a test seeds.
 import { randomUUID } from "node:crypto";
 import { HttpResponse } from "msw";
@@ -138,6 +139,13 @@ export class FakeMailbox {
   get(id: string): GmailMessage | undefined {
     return this.messages.find((m) => m.id === id);
   }
+
+  /** users.threads.get with format=minimal: the thread's messages, oldest first. */
+  thread(id: string) {
+    const messages = this.messages.filter((m) => m.threadId === id).map(minimal);
+    if (messages.length === 0) return undefined;
+    return { id, historyId: String(this.historyId), messages };
+  }
 }
 
 function gmailMessage(input: FakeMessageInput, historyId: string): GmailMessage {
@@ -218,11 +226,27 @@ export function gmailResponse(mailbox: FakeMailbox, path: string, params: URLSea
       throw error;
     }
   }
+  const threadId = /^\/gmail\/v1\/users\/me\/threads\/([^/]+)$/.exec(path)?.[1];
+  if (threadId !== undefined) {
+    if (params.get("format") !== "minimal") throw new Error("The fake serves minimal threads only");
+    const thread = mailbox.thread(decodeURIComponent(threadId));
+    return thread === undefined ? gmailError(404, "NOT_FOUND") : HttpResponse.json(thread);
+  }
   const id = /^\/gmail\/v1\/users\/me\/messages\/([^/]+)$/.exec(path)?.[1];
   if (id === undefined) throw new Error(`The fake Gmail doesn't serve ${path}`);
-  if (params.get("format") !== "full") throw new Error("The fake Gmail serves format=full only");
+  const format = params.get("format");
+  if (format !== "full" && format !== "minimal") {
+    throw new Error("The fake Gmail serves format=full and format=minimal only");
+  }
   const message = mailbox.get(decodeURIComponent(id));
-  return message === undefined ? gmailError(404, "NOT_FOUND") : HttpResponse.json(message);
+  if (message === undefined) return gmailError(404, "NOT_FOUND");
+  return HttpResponse.json(format === "full" ? message : minimal(message));
+}
+
+// A message with format=minimal: its IDs and labels, no headers or body.
+function minimal(message: GmailMessage) {
+  const { id, threadId, labelIds, snippet, historyId, internalDate, sizeEstimate } = message;
+  return { id, threadId, labelIds, snippet, historyId, internalDate, sizeEstimate };
 }
 
 // An error as Google's APIs return it.

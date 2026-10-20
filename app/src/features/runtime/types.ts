@@ -1,6 +1,7 @@
 // Runtime's public types: what a model call takes and returns, and the error it throws.
 import type { z } from "zod";
-import type { ModelRole } from "@/features/spec/types";
+import type { ActionName } from "@/features/policy/catalog";
+import type { ModelRole, StepType } from "@/features/spec/types";
 
 /** What a model call is for; recorded on its ledger entry. */
 export type CallAttribution = { workflowId?: string; runId?: string };
@@ -77,3 +78,82 @@ export class ModelCallError extends Error {
     this.status = status;
   }
 }
+
+/** JSON: what a step hands on, since Inngest stores it and replays it instead of re-running. */
+export type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
+
+/**
+ * Runs one named step: Inngest's `step.run` in the job, called straight through elsewhere. A
+ * finished step's result is replayed, never re-run, so a retry repeats no earlier step.
+ */
+export type RunStep = <T extends Json>(id: string, run: () => Promise<T>) => Promise<T>;
+
+/**
+ * How often a failing step is tried, and how long it waits before attempt `attempt + 1`. The
+ * attempts run inside the step, so each one is counted on the step's record.
+ */
+export type RetryPolicy = {
+  attempts: number;
+  delayMs: (attempt: number) => number;
+  sleep: (ms: number) => Promise<void>;
+};
+
+export const runStatuses = [
+  "running",
+  "succeeded",
+  // A branch's condition failed and its `else` was `stop`.
+  "skipped",
+  "escalated",
+  // The connection went before the run finished.
+  "cancelled",
+  "failed",
+] as const;
+export type RunStatus = (typeof runStatuses)[number];
+
+export const runStepStatuses = ["succeeded", "failed", "check_failed", "skipped"] as const;
+export type RunStepStatus = (typeof runStepStatuses)[number];
+
+/** How a run ended, as `executeRun` returns it. */
+export type RunOutcome = { status: Exclude<RunStatus, "running"> };
+
+/**
+ * One step of a run, as recorded: derived data only (labels, probabilities, IDs, counts, field
+ * names), never message content or generated text (invariant 8, ADR-0012).
+ */
+export type RunStepRecord = {
+  stepId: string;
+  type: StepType;
+  status: RunStepStatus;
+  attempts: number;
+  output: Json;
+  errorCode: string | null;
+  errorMessage: string | null;
+  modelRole: ModelRole | null;
+  modelId: string | null;
+  costUsd: number;
+  startedAt: Date;
+  finishedAt: Date;
+};
+
+/** A run of a workflow version on one message, with its steps in order. */
+export type RunRecord = {
+  id: string;
+  workflowId: string;
+  workflowVersionId: string;
+  connectionId: string;
+  ownerScope: "member" | "org";
+  enablementId: string | null;
+  /** The triggering Gmail message's ID. */
+  sourceRef: string;
+  status: RunStatus;
+  costUsd: number;
+  startedAt: Date;
+  finishedAt: Date | null;
+  steps: RunStepRecord[];
+};
+
+/** Whether runtime can execute each catalog action and step type yet. */
+export type ExecutorCoverage = {
+  actions: Record<ActionName, "ready" | "pending">;
+  steps: Record<StepType, "ready" | "pending">;
+};

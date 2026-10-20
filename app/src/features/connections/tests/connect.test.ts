@@ -4,7 +4,7 @@ import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { removeUser } from "@/features/orgs/server";
 import { fakeNango } from "@/testing/fake-nango";
 import { handleNangoWebhook, listConnections, startConnect } from "../server";
-import { connectGmail } from "./connect-helpers";
+import { connectGmail } from "@/testing/connect-helpers";
 
 beforeEach(resetDatabase);
 

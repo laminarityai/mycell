@@ -7,7 +7,7 @@ import { NotFoundError } from "@/lib/errors";
 import { fakeNango } from "@/testing/fake-nango";
 import * as server from "../server";
 import type { ConnectionsListing } from "../types";
-import { connectGmail, connectOrgInbox } from "./connect-helpers";
+import { connectGmail, connectOrgInbox } from "@/testing/connect-helpers";
 
 // Org B's member connects their Gmail and org B's admin a shared inbox, so every case can
 // check org B is left as it was. Org B's admin sees all of it.

@@ -8,7 +8,7 @@ import type { Ctx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import { fakeNango } from "@/testing/fake-nango";
 import { handleNangoWebhook, listConnections, startReconnect } from "../server";
-import { connectGmail, connectOrgInbox } from "./connect-helpers";
+import { connectGmail, connectOrgInbox } from "@/testing/connect-helpers";
 
 beforeEach(resetDatabase);
 

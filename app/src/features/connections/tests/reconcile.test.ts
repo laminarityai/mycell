@@ -4,7 +4,7 @@ import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import type { Ctx } from "@/lib/ctx";
 import { fakeNango } from "@/testing/fake-nango";
 import { disconnect, listConnections, reconcileConnections, startConnect } from "../server";
-import { connectGmail, connectOrgInbox } from "./connect-helpers";
+import { connectGmail, connectOrgInbox } from "@/testing/connect-helpers";
 
 beforeEach(resetDatabase);
 

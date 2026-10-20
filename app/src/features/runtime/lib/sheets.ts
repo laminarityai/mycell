@@ -55,14 +55,14 @@ export async function appendRow(
   ctx: Ctx,
   connectionId: string,
   input: RangeInput & { values: Cell[] },
-  runStep: string,
+  marker: string,
 ): Promise<{ updatedRange: string }> {
-  const marker = `mycel:${runStep}`;
-  const earlier = await markedRow(ctx, connectionId, input, marker);
+  const cell = `mycel:${marker}`;
+  const earlier = await markedRow(ctx, connectionId, input, cell);
   if (earlier !== undefined) return { updatedRange: earlier };
   const query = new URLSearchParams({ valueInputOption: "RAW", insertDataOption: "INSERT_ROWS" });
   const path = `${valuesPath(input.spreadsheetId, input.range)}:append?${query.toString()}`;
-  const body = { majorDimension: "ROWS", values: [[...input.values, marker]] };
+  const body = { majorDimension: "ROWS", values: [[...input.values, cell]] };
   const result = await sheets(proxyPost(ctx, connectionId, path, body, appended));
   return { updatedRange: result.updates.updatedRange };
 }

@@ -45,10 +45,11 @@ export async function rangeText(
 
 /**
  * The append-row action: appends `values` as one row after the range's table, with the run
- * step's marker (`mycel:<runId>/<stepId>`) in the cell after the last, as typed (RAW: nothing is read as a formula). Sheets' append isn't
- * idempotent, so it first looks for a row carrying the marker, from an earlier try whose answer
- * was lost, and records that row instead of appending again. The marker is looked for in the
- * range's whole sheet; a range without a sheet name is searched as given.
+ * step's marker (`mycel:<runId>/<stepId>`) in the cell after the last, as typed (RAW: nothing
+ * is read as a formula). Sheets' append isn't idempotent, so it first looks for a row carrying
+ * the marker, from an earlier try whose answer was lost, and records that row instead of
+ * appending again. The catalog makes the range name its sheet, and the marker is looked for in
+ * that whole sheet.
  */
 export async function appendRow(
   ctx: Ctx,
@@ -73,8 +74,7 @@ async function markedRow(
   input: RangeInput & { values: Cell[] },
   marker: string,
 ): Promise<string | undefined> {
-  const bang = input.range.lastIndexOf("!");
-  const sheet = bang === -1 ? input.range : input.range.slice(0, bang);
+  const sheet = input.range.slice(0, input.range.lastIndexOf("!"));
   const read = await getValues(ctx, connectionId, input.spreadsheetId, sheet);
   const rowIndex = read.values.findIndex((row) => row.includes(marker));
   if (rowIndex === -1) return undefined;

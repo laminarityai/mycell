@@ -104,4 +104,38 @@ describe("applyPolicy", () => {
 
     expect(result).toMatchObject({ ok: true, inserted: [{ stepId: "draft-approval-2" }] });
   });
+
+  it("refuses a Sheets range that doesn't name its sheet, at the input's path", () => {
+    const steps = exampleSteps();
+    steps[2] = { ...steps[2], input: { spreadsheetId: "sheet-1", range: "A1:C50" } };
+    steps.push({
+      id: "log",
+      type: "tool",
+      action: "google-sheet.append-row",
+      input: { spreadsheetId: "sheet-1", range: "A:C", values: ["pricing"] },
+    });
+
+    const result = applyPolicy(specWithSteps(steps));
+
+    expect(result).toMatchObject({
+      ok: false,
+      issues: [
+        {
+          path: ["steps", 2, "input", "range"],
+          message: expect.stringContaining("Sheet1!A:C") as string,
+        },
+        { path: ["steps", 5, "input", "range"] },
+      ],
+    });
+  });
+
+  it("leaves a range given by a reference to the run", () => {
+    const steps = exampleSteps();
+    steps[2] = {
+      ...steps[2],
+      input: { spreadsheetId: "sheet-1", range: { from: "classify.label" } },
+    };
+
+    expect(applyPolicy(specWithSteps(steps))).toMatchObject({ ok: true });
+  });
 });

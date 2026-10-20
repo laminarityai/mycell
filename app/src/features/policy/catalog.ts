@@ -21,6 +21,8 @@ const SHEETS_WRITE = [scope("spreadsheets")];
 
 const id = z.string().min(1);
 const cell = z.union([z.string(), z.number(), z.boolean(), z.null()]);
+// An A1 range naming its sheet, so a write's marker search covers the whole sheet it writes to.
+const sheetRange = z.string().regex(/^.+![^!]+$/, "Name the sheet in the range, as in Sheet1!A:C.");
 
 const actions = [
   {
@@ -66,7 +68,7 @@ const actions = [
     integration: "google",
     host: SHEETS_HOST,
     scopes: SHEETS_READ,
-    input: z.object({ spreadsheetId: id, range: z.string().min(1) }),
+    input: z.object({ spreadsheetId: id, range: sheetRange }),
     output: z.object({
       range: z.string(),
       rowCount: z.number().int().nonnegative(),
@@ -79,7 +81,7 @@ const actions = [
     integration: "google",
     host: SHEETS_HOST,
     scopes: SHEETS_WRITE,
-    input: z.object({ spreadsheetId: id, range: z.string().min(1), values: z.array(cell).min(1) }),
+    input: z.object({ spreadsheetId: id, range: sheetRange, values: z.array(cell).min(1) }),
     output: z.object({ updatedRange: z.string() }),
   },
 ] as const satisfies readonly CatalogAction[];

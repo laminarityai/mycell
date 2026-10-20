@@ -127,6 +127,23 @@ async function logRun() {
 }
 
 describe("the append-row action", () => {
+  it("finds its earlier row anywhere in the range's sheet, past the range it was given", async () => {
+    const narrow = { ...logStep, input: { ...logStep.input, range: "Log!A1:C1" } };
+    const { admin, system, google, runId } = await sheetRun(threadSpec({ steps: [narrow] }));
+    google.sheets.add("sheet-1", "Log", [["Message", "Kind", "Note"]]);
+    google.sheets.loseNextAnswer();
+
+    expect(await executeRun(system, runId, undefined, recordedBackoff())).toEqual({
+      status: "succeeded",
+    });
+
+    expect(google.sheets.appends).toHaveLength(1);
+    expect(google.sheets.rows("sheet-1", "Log")).toHaveLength(2);
+    expect((await getRun(admin, runId)).steps).toMatchObject([
+      { stepId: "log", attempts: 2, output: { updatedRange: "Log!A2:D2" } },
+    ]);
+  });
+
   it("appends one row after the table, as typed, and records the range it wrote", async () => {
     const { admin, system, google, message, runId } = await logRun();
 

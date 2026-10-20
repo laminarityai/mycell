@@ -1,8 +1,15 @@
 // The policy engine (invariant 4): a spec's risk comes only from the catalog's fixed levels.
 // Pure: no IO, no ctx.
+import { z } from "zod";
 import type { Spec, SpecIssue, Step } from "@/features/spec/types";
 import { findAction } from "./catalog";
-import { riskLevelSchema, type InsertedApproval, type PolicyResult, type RiskLevel } from "./types";
+import {
+  riskLevelSchema,
+  type CatalogAction,
+  type InsertedApproval,
+  type PolicyResult,
+  type RiskLevel,
+} from "./types";
 
 const ORDER = riskLevelSchema.options;
 
@@ -49,7 +56,10 @@ export function applyPolicy(spec: Spec): PolicyResult {
   return { ok: true, spec: result, maxRisk: maxRisk(result), inserted };
 }
 
-/** Unknown actions, and actions used where their risk level doesn't allow. */
+/**
+ * Unknown actions, actions used where their risk level doesn't allow, and literal inputs the
+ * action's input schema refuses.
+ */
 function actionIssues(spec: Spec): SpecIssue[] {
   const issues: SpecIssue[] = [];
   spec.steps.forEach((step, index) => {
@@ -66,9 +76,32 @@ function actionIssues(spec: Spec): SpecIssue[] {
       });
     } else if (step.type === "draft" && action.risk !== "external_send") {
       issues.push({ path, message: `"${name}" doesn't create a draft; use it in a tool step.` });
+    } else if (step.type === "tool") {
+      issues.push(...literalInputIssues(step, index, action));
     }
   });
   return issues;
+}
+
+/**
+ * Each literal input value the action's schema refuses for its field. A reference is resolved
+ * only in a run, so the run checks it then; so do fields the action doesn't name.
+ */
+function literalInputIssues(
+  step: Extract<Step, { type: "tool" }>,
+  index: number,
+  action: CatalogAction,
+): SpecIssue[] {
+  if (!(action.input instanceof z.ZodObject)) return [];
+  const shape = action.input.shape as Record<string, z.ZodType | undefined>;
+  return Object.entries(step.input).flatMap(([name, value]) => {
+    const field = shape[name];
+    if (field === undefined || (typeof value === "object" && value !== null)) return [];
+    const parsed = field.safeParse(value);
+    if (parsed.success) return [];
+    const reason = parsed.error.issues.at(0)?.message ?? "It isn't valid.";
+    return [{ path: ["steps", index, "input", name], message: `${name}: ${reason}` }];
+  });
 }
 
 function freeId(wanted: string, taken: Set<string>): string {

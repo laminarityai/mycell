@@ -1,9 +1,10 @@
 import { defineConfig } from "vitest/config";
+import { checkoutIsolation } from "./checkout-isolation";
 
 // Tests use their own database on the local Postgres (`pnpm db:up`) or the CI service
-// container, never the one in .env. TEST_DATABASE_URL overrides it.
-process.env.DATABASE_URL =
-  process.env.TEST_DATABASE_URL ?? "postgres://mycel:mycel@localhost:5433/mycel_test";
+// container, never the one in .env: mycel_test_<suffix>, named for this checkout so parallel
+// worktrees don't share it. TEST_DATABASE_URL overrides it.
+process.env.DATABASE_URL = checkoutIsolation(import.meta.dirname).testDatabaseUrl;
 // Tests never reach Google or issue real sessions, so placeholders satisfy the env schema.
 process.env.BETTER_AUTH_SECRET = "test-secret-that-is-at-least-32-characters";
 process.env.BETTER_AUTH_URL = "http://localhost:3000";

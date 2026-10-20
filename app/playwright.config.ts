@@ -1,11 +1,14 @@
 import { defineConfig, devices } from "@playwright/test";
+import { checkoutIsolation } from "./checkout-isolation";
 
 // End-to-end tests drive the production build (`pnpm build` first; `pnpm verify` builds before
-// it runs them) against their own database, never the one in .env or Vitest's mycel_test.
-// E2E_DATABASE_URL overrides it. A port of its own keeps them clear of a running `pnpm dev`.
-const port = 3100;
+// it runs them) against their own database, never the one in .env or Vitest's: mycel_e2e_<suffix>,
+// named for this checkout. A port of its own (3100-3999, also derived from the checkout) keeps
+// them clear of a running `pnpm dev` and of another worktree's run. E2E_DATABASE_URL and E2E_PORT
+// override them.
+const { e2eDatabaseUrl, e2ePort: port } = checkoutIsolation(__dirname);
 const e2eEnv = {
-  DATABASE_URL: process.env.E2E_DATABASE_URL ?? "postgres://mycel:mycel@localhost:5433/mycel_e2e",
+  DATABASE_URL: e2eDatabaseUrl,
   // The tests sign browsers in by signing a session cookie with this secret (e2e/sign-in-as.ts),
   // so they never reach Google and the placeholders satisfy the env schema.
   BETTER_AUTH_SECRET: "e2e-secret-that-is-at-least-32-characters",

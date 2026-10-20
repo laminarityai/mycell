@@ -41,5 +41,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # The browser the e2e tests in `pnpm verify` drive, with its system dependencies.
       - run: pnpm --filter app exec playwright install --with-deps chromium
-      # CI is this one script, so it checks exactly what a laptop checks.
+      # CI is this one script, so it checks exactly what a laptop checks. The tests name their
+      # databases and e2e port for the checkout (app/checkout-isolation.ts), as on a laptop.
       - run: pnpm verify

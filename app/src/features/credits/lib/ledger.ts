@@ -37,6 +37,8 @@ export async function recordUsage(ctx: Ctx, usage: Usage): Promise<LedgerEntry> 
     runId: usage.runId ?? null,
   });
   const row = inserted.at(0);
+  // An insert returns its row, so this is a bug, not something a user can act on: it's left a
+  // plain Error for the action boundary to rethrow (src/lib/errors.ts, actionError).
   if (row === undefined) throw new Error("The usage entry wasn't recorded.");
   return toEntry(row);
 }
@@ -53,6 +55,7 @@ export async function grantCredits(ctx: Ctx, amount: number): Promise<LedgerEntr
     amount,
   });
   const row = inserted.at(0);
+  // A bug, as above.
   if (row === undefined) throw new Error("The grant wasn't recorded.");
   return toEntry(row);
 }

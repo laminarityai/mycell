@@ -2,6 +2,7 @@
 // Pure: no IO, no ctx.
 import { z } from "zod";
 import type { Spec, SpecIssue, Step } from "@/features/spec/types";
+import { SpecInvalidError } from "@/lib/errors";
 import { findAction } from "./catalog";
 import {
   riskLevelSchema,
@@ -15,14 +16,19 @@ const ORDER = riskLevelSchema.options;
 
 /**
  * The highest risk level among the spec's `tool` actions and `draft` outputs. Model steps
- * count as `read`. Any `risk` field in the spec is ignored. Throws on an action the catalog
- * doesn't have; `applyPolicy` reports those as issues instead.
+ * count as `read`. Any `risk` field in the spec is ignored. Throws SpecInvalidError on actions
+ * the catalog doesn't have; `applyPolicy` reports those as issues instead.
  */
 export function maxRisk(spec: Spec): RiskLevel {
   let highest: RiskLevel = "read";
-  for (const name of actionsOf(spec)) {
-    const action = findAction(name);
-    if (action === undefined) throw new Error(`"${name}" isn't a catalog action.`);
+  for (const [index, step] of spec.steps.entries()) {
+    const used = actionOf(step);
+    if (used === undefined) continue;
+    const action = findAction(used.name);
+    if (action === undefined) {
+      const path = ["steps", index, used.field];
+      throw new SpecInvalidError([{ path, message: `"${used.name}" isn't a catalog action.` }]);
+    }
     if (ORDER.indexOf(action.risk) > ORDER.indexOf(highest)) highest = action.risk;
   }
   return highest;
@@ -110,8 +116,9 @@ function freeId(wanted: string, taken: Set<string>): string {
   return id;
 }
 
-function actionsOf(spec: Spec): string[] {
-  return spec.steps.flatMap((step) =>
-    step.type === "tool" ? [step.action] : step.type === "draft" ? [step.output] : [],
-  );
+// The catalog action a step uses, and the field that names it.
+function actionOf(step: Step): { name: string; field: "action" | "output" } | undefined {
+  if (step.type === "tool") return { name: step.action, field: "action" };
+  if (step.type === "draft") return { name: step.output, field: "output" };
+  return undefined;
 }

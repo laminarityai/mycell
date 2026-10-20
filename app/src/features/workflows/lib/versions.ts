@@ -41,6 +41,8 @@ export async function publishWorkflow(ctx: Ctx, workflowId: string): Promise<Wor
         publishedBy: ctx.userId,
       })
     ).at(0);
+    // An insert returns its row, so this is a bug, not something a user can act on: it's left
+    // a plain Error for the action boundary to rethrow (src/lib/errors.ts, actionError).
     if (row === undefined) throw new Error("insert returned no version");
     return version(row);
   } catch (error) {

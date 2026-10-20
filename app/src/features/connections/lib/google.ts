@@ -27,7 +27,11 @@ const API_HOSTS: { prefix: string; host: string }[] = [
   { prefix: "/tasks/", host: "https://tasks.googleapis.com" },
 ];
 
-/** Where a Google API path is served: its host, found from the path's prefix. */
+/**
+ * Where a Google API path is served: its host, found from the path's prefix. Our own code
+ * builds every path, so one no API serves is a bug, not a user's mistake: it's a plain Error,
+ * which the action boundary rethrows (src/lib/errors.ts, actionError).
+ */
 export function proxyTarget(path: string): ProxyTarget {
   const api = API_HOSTS.find(({ prefix }) => path.startsWith(prefix));
   if (api === undefined) throw new Error(`No Google API serves ${path}`);

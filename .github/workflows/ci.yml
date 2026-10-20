@@ -37,5 +37,7 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # The browser the e2e tests in `pnpm verify` drive, with its system dependencies.
+      - run: pnpm --filter app exec playwright install --with-deps chromium
       # CI is this one script, so it checks exactly what a laptop checks.
       - run: pnpm verify

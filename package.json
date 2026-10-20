@@ -6,7 +6,7 @@
     "node": ">=24"
   },
   "scripts": {
-    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm boundaries && pnpm test && pnpm build",
+    "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm boundaries && pnpm test && pnpm build && pnpm e2e",
     "dev": "pnpm --filter app dev",
     "db:up": "docker compose up --detach --wait",
     "db:down": "docker compose down",
@@ -19,6 +19,7 @@
     "boundaries": "pnpm --filter app boundaries",
     "test": "pnpm --filter app test",
     "build": "pnpm --filter app build",
+    "e2e": "pnpm --filter app e2e",
     "prepare": "husky"
   },
   "devDependencies": {

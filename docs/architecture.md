@@ -10,10 +10,10 @@ An **admin** connects Google Workspace and describes workflows to the **builder 
 
 ## v1 scope
 
-- First customer: our own company (dogfood). Sources: **Gmail plus Google Sheets/Drive only**. Outlook comes after v1, behind the same connector interface. Discord is not a source.
+- First customer: our own company (dogfood). Mycel **reads** Gmail and Sheets/Drive and **acts** in Gmail, Sheets, Calendar, Docs and Tasks, all through one Google connection per account (ADR-0014). Slack, Outlook and the rest of Microsoft come after v1, through the same four parts (see Adding an app). Discord is not a source.
 - The full loop, kept thin at every stage: builder chat (fed by discovery and suggestions) → publish to tags → member toggles → run → observability.
 - No admin-level data access: no Admin SDK Reports API and no domain-wide delegation (ADR-0008).
-- Workflows may act **autonomously only on read and internal-reversible actions** (e.g. labels). Anything sent externally is a **draft** that a human sends or approves. Financial and destructive actions don't exist in v1.
+- Workflows may act **autonomously only on read and internal-reversible actions** (e.g. labels). Anything that reaches other people waits in its app's **pending form** (a Gmail draft, a Calendar event with no guests) until a human approves it on the Reviews page. Financial and destructive actions don't exist in v1.
 
 ## Stack
 
@@ -148,12 +148,30 @@ Specs are JSON, validated by zod, and run by our own interpreter in `features/ru
 
 **Capability requests:** when no catalog action fits, the builder emits a structured `capability_request` (API, operation, inputs, outputs) to an internal queue. Our team builds the Nango function. The interface stays the same so an auto-builder can take over later.
 
+## Adding an app (ADR-0013)
+
+Every app plugs in through the same four parts, so a new app is mostly catalog work by our team:
+
+1. **Source:** a connector that reads what discovery needs, if anything (start cursor, backfill, poll). An app can act without being a source.
+2. **Triggers:** what can start a run, such as a new email or a new Calendar invite.
+3. **Catalog actions:** what a workflow may do in the app, each with a fixed risk level.
+4. **Pending form:** where an `external_send` action waits for a person, inside the app itself. Mycel's **review** stores only a pointer to it and fetches it live.
+
+| App      | Pending form                                               | Approving in Mycel                      |
+| -------- | ---------------------------------------------------------- | --------------------------------------- |
+| Gmail    | A draft                                                    | Sends the draft (or edit it, then send) |
+| Calendar | The event on the person's calendar, with no guests yet     | Adds the guests and sends invitations   |
+| Docs     | Suggested edits in the doc                                 | Not possible; the review links to Docs  |
+| Tasks    | None needed: tasks on the person's own list are reversible |                                         |
+
+A review ends as approved, edited and approved, declined (which deletes the waiting item, where the app allows), done in the app, or gone. An app with no natural pending form, such as Slack, waits until we design one.
+
 ## Risk policy (`features/policy`)
 
 Each catalog action has a fixed level: `read` < `internal_reversible` < `external_send` < `financial` < `destructive`.
 
 - `read`, `internal_reversible`: may run autonomously.
-- `external_send`: must go through a draft or an explicit approval (in v1, approved in the web app or as a Gmail draft).
+- `external_send`: must wait in the app's pending form for a person's review (ADR-0013). M3 approves by sending the Gmail draft; from M5 on, every review also appears on the Reviews page.
 - `financial`, `destructive`: not available in v1.
 
 ## Models (`features/runtime`)

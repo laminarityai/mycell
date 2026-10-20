@@ -25,7 +25,7 @@ _Avoid_: Group, team, role
 ### Sources and data
 
 **Connection**:
-One authorised link between a user or the org and an external source such as a Gmail inbox.
+One authorised link between a user or the org and an external account, such as one person's Google account.
 _Avoid_: Integration, account, link
 
 **Member connection**:
@@ -99,9 +99,21 @@ _Avoid_: Config, definition, recipe
 An immutable snapshot of a workflow's spec, created each time the workflow is published.
 _Avoid_: Revision, release
 
+**Working spec**:
+A workflow's current, unpublished spec, which admins edit and which becomes a workflow version when published.
+_Avoid_: Draft spec, draft (a draft is outgoing mail)
+
 **Enablement**:
 One member's switch-on of one member-credential workflow, following its latest version.
 _Avoid_: Instance, subscription, install, activation
+
+**Run**:
+One execution of one workflow version on one trigger, such as one incoming email.
+_Avoid_: Execution, job, invocation
+
+**Model role**:
+The kind of model a step asks for (`classify`, `fast`, `smart` or `judge`), which each org maps to a concrete model.
+_Avoid_: Model, model tier
 
 **Paused**:
 The state of a workflow or enablement that will not run, always shown together with its reason.
@@ -115,7 +127,15 @@ _Avoid_: Tool, integration, capability
 The fixed danger class of a catalog action: read, internal-reversible, external-send, financial, or destructive.
 
 **Draft**:
-Output intended for the outside world that waits for a human to send or approve it.
+An unsent Gmail message a workflow prepared, waiting for a person to send it; Gmail's pending form.
+
+**Pending form**:
+An app's own way of holding an action until a person approves it, such as a Gmail draft, a Calendar event with no guests yet, or suggested edits in a Doc.
+_Avoid_: Staged action, preview
+
+**Review**:
+One action waiting for a person's decision, shown on their Reviews page, which points at the waiting item in its app.
+_Avoid_: Approval (the step that creates a review), task (a Google Tasks item), notification
 
 **Capability request**:
 A structured ask, raised when no catalog action fits, for our team to build a new one.
@@ -124,6 +144,14 @@ _Avoid_: Feature request
 **Builder chat**:
 The admin-only agent that turns descriptions and suggestions into proposed spec changes.
 _Avoid_: Copilot, assistant
+
+**Builder conversation**:
+One chat between admins and the builder chat, optionally about one workflow.
+_Avoid_: Thread (an email thread), session
+
+**Proposal**:
+A change to a workflow that the builder chat suggests and an admin accepts or rejects.
+_Avoid_: Spec diff, suggestion (a suggestion comes from discovery)
 
 ### Money
 

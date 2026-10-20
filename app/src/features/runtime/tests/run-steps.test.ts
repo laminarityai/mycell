@@ -153,7 +153,7 @@ describe("the steps", () => {
 });
 
 describe("executorCoverage", () => {
-  it("lists every catalog action and step type, all but the Sheets actions ready", () => {
+  it("lists every catalog action and step type, all ready", () => {
     expect(Object.keys(executorCoverage.actions).sort()).toEqual([...actionNames].sort());
     expect(Object.keys(executorCoverage.steps).sort()).toEqual([...stepTypes].sort());
     expect(executorCoverage).toEqual({
@@ -162,8 +162,8 @@ describe("executorCoverage", () => {
         "google-mail.read-thread": "ready",
         "google-mail.add-label": "ready",
         "google-mail.create-draft": "ready",
-        "google-sheet.read-range": "pending",
-        "google-sheet.append-row": "pending",
+        "google-sheet.read-range": "ready",
+        "google-sheet.append-row": "ready",
       },
       steps: {
         classify: "ready",

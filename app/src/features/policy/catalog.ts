@@ -67,7 +67,11 @@ const actions = [
     host: SHEETS_HOST,
     scopes: SHEETS_READ,
     input: z.object({ spreadsheetId: id, range: z.string().min(1) }),
-    output: z.object({ range: z.string(), rowCount: z.number().int().nonnegative() }),
+    output: z.object({
+      range: z.string(),
+      rowCount: z.number().int().nonnegative(),
+      columnCount: z.number().int().nonnegative(),
+    }),
   },
   {
     name: "google-sheet.append-row",

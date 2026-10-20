@@ -14,8 +14,10 @@ export const runStepErrorCodes = [
   "bad_reference",
   // A tool's resolved input didn't match its catalog action's input schema.
   "invalid_input",
-  // The source has no such item (Gmail answered 404).
+  // The source has no such item (Gmail or Sheets answered 404).
   "source_item_missing",
+  // The source refused the account access to the item (Sheets answered 403).
+  "source_forbidden",
   // An executor's result didn't match its catalog action's output schema.
   "invalid_output",
 ] as const;

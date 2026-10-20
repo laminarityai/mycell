@@ -15,7 +15,7 @@ export const DRAFT_MARKER_HEADER = "X-Mycel-Draft";
  * What the action takes. `compose` generates the reply's text; it's called only when the step
  * hasn't made its draft yet, and its text is held in memory only (invariant 8).
  */
-export type DraftInput = { messageId: string; marker: string; compose: () => Promise<string> };
+export type DraftInput = { messageId: string; compose: () => Promise<string> };
 
 const REPLY_HEADERS = ["From", "Reply-To", "Subject", "Message-ID", "References"];
 
@@ -33,11 +33,12 @@ const draftsPage = z.object({
 });
 const createdDraft = z.object({ id: z.string(), message: z.object({ threadId: z.string() }) });
 
-/** Makes the reply draft, or finds the one this step made on an earlier try. */
+/** Makes the reply draft, or finds the one this step (`marker`) made on an earlier try. */
 export async function createReplyDraft(
   ctx: Ctx,
   connectionId: string,
   input: DraftInput,
+  marker: string,
 ): Promise<{ draftId: string; threadId: string }> {
   const query = new URLSearchParams({ format: "metadata" });
   for (const name of REPLY_HEADERS) query.append("metadataHeaders", name);
@@ -49,10 +50,10 @@ export async function createReplyDraft(
       metadataSchema,
     ),
   );
-  const earlier = await findMarkedDraft(ctx, connectionId, original.threadId, input.marker);
+  const earlier = await findMarkedDraft(ctx, connectionId, original.threadId, marker);
   if (earlier !== undefined) return { draftId: earlier, threadId: original.threadId };
 
-  const raw = replyMessage(original.payload.headers, await input.compose(), input.marker);
+  const raw = replyMessage(original.payload.headers, await input.compose(), marker);
   const draft = await found(
     proxyPost(
       ctx,

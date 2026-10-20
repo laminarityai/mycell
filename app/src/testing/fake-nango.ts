@@ -8,6 +8,7 @@ import { FakeMailbox } from "./fake-gmail";
 import { connectionsApiHandlers, type ListingBehaviour } from "./fake-nango-connections";
 import { proxyHandlers } from "./fake-nango-proxy";
 import { DEFAULT_SCOPES } from "./fake-proxied-sources";
+import { FakeSheets } from "./fake-sheets";
 
 const API = "https://api.nango.dev";
 
@@ -29,10 +30,11 @@ export type FakeConnection = {
   account: FakeAccount;
   // The OAuth scopes Google granted, as Nango reports them in the token response.
   scopes: readonly string[];
-  // The account's Gmail mailbox and Drive. The proxy reaches each through its API's host, if
-  // the connection's scopes allow that API.
+  // The account's Gmail mailbox, Drive and spreadsheets. The proxy reaches each through its
+  // API's host, if the connection's scopes allow that API.
   mailbox: FakeMailbox;
   drive: FakeDrive;
+  sheets: FakeSheets;
 };
 
 /** Runs before the fake proxies a request to a source, given the source API path. */
@@ -71,6 +73,9 @@ class FakeNango {
 
   /** The connected account's Drive, for seeding files. */
   drive = (connectionId: string): FakeDrive => this.connection(connectionId).drive;
+
+  /** The connected account's spreadsheets, for seeding sheets. */
+  sheets = (connectionId: string): FakeSheets => this.connection(connectionId).sheets;
 
   private connection(connectionId: string): FakeConnection {
     const connection = this.connections.get(connectionId);
@@ -149,6 +154,7 @@ class FakeNango {
       scopes: scopes ?? DEFAULT_SCOPES[session.integration] ?? [],
       mailbox: new FakeMailbox(account.emailAddress),
       drive: new FakeDrive(account.emailAddress),
+      sheets: new FakeSheets(),
     });
     return { connectionId, ...this.authWebhook(connectionId, "creation", true) };
   }
@@ -161,7 +167,8 @@ class FakeNango {
   /**
    * A user finishes OAuth in Connect UI opened with a reconnect session: Nango replaces the
    * connection's credentials and returns the `override` webhook it then sends. Choosing a
-   * different Google account than before swaps in that account's (empty) mailbox and Drive.
+   * different Google account than before swaps in that account's (empty) mailbox, Drive and
+   * spreadsheets.
    * `scopes`, when given, are what the new token was granted; otherwise they stay as they were.
    */
   completeReconnect(token: string, account?: FakeAccount, scopes?: readonly string[]): FakeWebhook {
@@ -173,6 +180,7 @@ class FakeNango {
       connection.account = account;
       connection.mailbox = new FakeMailbox(account.emailAddress);
       connection.drive = new FakeDrive(account.emailAddress);
+      connection.sheets = new FakeSheets();
     }
     return this.authWebhook(session.connectionId, "override", true);
   }

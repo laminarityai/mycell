@@ -5,6 +5,7 @@ import type { ActionName } from "@/features/policy/catalog";
 import { messageRef, threadRef } from "./gmail";
 import { createReplyDraft } from "./gmail-drafts";
 import { addLabel } from "./gmail-labels";
+import { appendRow, readRange } from "./sheets";
 import type { ActionRun, Executor } from "./step-context";
 
 export const actionExecutors: Record<ActionName, Executor<ActionRun>> = {
@@ -25,6 +26,7 @@ export const actionExecutors: Record<ActionName, Executor<ActionRun>> = {
   "google-mail.add-label": { status: "ready", run: addLabel },
   // Run by a draft step, which hands it the generated text; a tool step may not send (policy).
   "google-mail.create-draft": { status: "ready", run: createReplyDraft },
-  "google-sheet.read-range": { status: "pending", ticket: "#40" },
-  "google-sheet.append-row": { status: "pending", ticket: "#40" },
+  // Records the range's counts; a draft step that names it re-reads the values (invariant 8).
+  "google-sheet.read-range": { status: "ready", run: readRange },
+  "google-sheet.append-row": { status: "ready", run: appendRow },
 };

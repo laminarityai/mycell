@@ -1,12 +1,14 @@
 // The Google APIs the fake Nango's proxy serves, each by its host and path prefix, answering
-// from the connection's own fake (its Gmail mailbox or its Drive). Like Google, an API answers
-// 403 to a connection whose token holds none of the scopes it accepts (for a write, none of
-// the scopes its writes accept), and a host answers 404 for a path it doesn't serve.
+// from the connection's own fake (its Gmail mailbox, its Drive or its spreadsheets). Like
+// Google, an API answers 403 to a connection whose token holds none of the scopes it accepts
+// (for a write, none of the scopes its writes accept), and a host answers 404 for a path it
+// doesn't serve.
 import { HttpResponse } from "msw";
 import { GOOGLE_APP_SCOPES } from "@/features/connections/types";
 import { driveError, driveResponse } from "./fake-drive";
 import { gmailError, gmailResponse, gmailWrite } from "./fake-gmail";
 import type { FakeConnection } from "./fake-nango";
+import { sheetsError } from "./fake-sheets";
 
 type Respond = (connection: FakeConnection, path: string, params: URLSearchParams) => Response;
 type RespondToWrite = (
@@ -30,6 +32,9 @@ export type ProxiedSource = {
 const GMAIL_READONLY = "https://www.googleapis.com/auth/gmail.readonly";
 const GMAIL_COMPOSE = "https://www.googleapis.com/auth/gmail.compose";
 const DRIVE_READONLY = GOOGLE_APP_SCOPES.drive;
+const DRIVE = "https://www.googleapis.com/auth/drive";
+const DRIVE_FILE = "https://www.googleapis.com/auth/drive.file";
+const SPREADSHEETS_READONLY = "https://www.googleapis.com/auth/spreadsheets.readonly";
 
 export const PROXIED_SOURCES: ProxiedSource[] = [
   {
@@ -47,9 +52,21 @@ export const PROXIED_SOURCES: ProxiedSource[] = [
   {
     host: "https://www.googleapis.com",
     prefix: "/drive/v3",
-    scopes: [DRIVE_READONLY, "https://www.googleapis.com/auth/drive"],
+    scopes: [DRIVE_READONLY, DRIVE],
     respond: (connection, path, params) => driveResponse(connection.drive, path, params),
     rateLimited: () => driveError(429),
+  },
+  {
+    host: "https://sheets.googleapis.com",
+    prefix: "/v4/spreadsheets",
+    // values.get takes any Drive or Sheets scope; values.append a read-write one.
+    scopes: [GOOGLE_APP_SCOPES.sheets, SPREADSHEETS_READONLY, DRIVE, DRIVE_READONLY, DRIVE_FILE],
+    respond: (connection, path) => connection.sheets.respond(path),
+    write: {
+      scopes: [GOOGLE_APP_SCOPES.sheets, DRIVE, DRIVE_FILE],
+      respond: (connection, path, params, body) => connection.sheets.write(path, params, body),
+    },
+    rateLimited: () => sheetsError(429, "RESOURCE_EXHAUSTED"),
   },
 ];
 

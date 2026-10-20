@@ -58,3 +58,26 @@ export function labelSpec(overrides: Record<string, unknown> = {}): Record<strin
     ...overrides,
   };
 }
+
+/** Read the price sheet, then log the message to another: both Sheets actions. */
+export function sheetSpec(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    ...draftSpec(),
+    id: "price-log",
+    steps: [
+      {
+        id: "prices",
+        type: "tool",
+        action: "google-sheet.read-range",
+        input: { spreadsheetId: "sheet-1", range: "Prices!A1:C50" },
+      },
+      {
+        id: "log",
+        type: "tool",
+        action: "google-sheet.append-row",
+        input: { spreadsheetId: "sheet-1", range: "Log!A:C", values: ["pricing"] },
+      },
+    ],
+    ...overrides,
+  };
+}

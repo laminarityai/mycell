@@ -6,7 +6,7 @@
 import { eq } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { getConnection } from "@/features/connections/server";
-import type { Step } from "@/features/spec/types";
+import type { Spec, Step } from "@/features/spec/types";
 import { getWorkflowVersion, listSwitchedOn } from "@/features/workflows/server";
 import type { Ctx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
@@ -45,7 +45,7 @@ export async function executeRun(
   for (const [position, step] of spec.steps.entries()) {
     const isLast = position === spec.steps.length - 1;
     const result = await runStep(step.id, () =>
-      executeStep(ctx, run, step, { position, isLast, outputs, retry }),
+      executeStep(ctx, run, step, { spec, position, isLast, outputs, retry }),
     );
     if (result.ended !== null) return { status: result.ended };
     outputs[step.id] = result.output;
@@ -54,6 +54,7 @@ export async function executeRun(
 }
 
 type StepPlace = {
+  spec: Spec;
   position: number;
   isLast: boolean;
   outputs: Record<string, Json>;
@@ -71,6 +72,7 @@ async function executeStep(ctx: Ctx, run: Run, step: Step, place: StepPlace): Pr
       connectionId: run.connectionId,
       sourceRef: run.sourceRef,
     },
+    spec: place.spec,
     outputs: { ...place.outputs },
   };
   const attempted = await withRetries(place.retry, () => attempt(step, context));

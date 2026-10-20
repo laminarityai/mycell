@@ -25,7 +25,13 @@ export async function toolStep(step: ToolStep, context: StepContext): Promise<St
       `The input to ${step.action} is invalid at: ${fields.join(", ")}.`,
     );
   }
-  const result = await executor.run(context.ctx, context.run.connectionId, input.data as never);
+  const marker = `${context.run.id}/${step.id}`;
+  const result = await executor.run(
+    context.ctx,
+    context.run.connectionId,
+    input.data as never,
+    marker,
+  );
   const output = action.output.safeParse(result);
   if (!output.success) {
     throw new RunStepError("invalid_output", `${step.action} returned an unexpected result.`);

@@ -90,3 +90,50 @@ describe("listRuns", () => {
     expect(listed.map((run) => run.id)).toEqual([second.runId, first.runId]);
   });
 });
+
+describe("reading runs", () => {
+  // Org A's admin has a run on their own inbox and one on an org inbox; the member, promoted to
+  // admin, has one on their own inbox.
+  async function threeRuns() {
+    const { orgA } = await seedTwoOrgs();
+    const admin = orgA.admin.ctx;
+    const promoted = { ...orgA.member.ctx, role: "admin" as const };
+    const own = await connectInbox(admin, orgA.admin.email, []);
+    const others = await connectInbox(promoted, orgA.member.email, []);
+    await connectOrgInbox(admin, `sales@${orgA.workspaceDomain}`);
+    const org = (await listConnections(admin)).orgConnections.at(0);
+    if (org === undefined) throw new Error("no org connection");
+    const memberWorkflow = await publish(admin, threadSpec());
+    const orgWorkflow = await publish(admin, threadSpec({ id: "org", credentials: "org" }));
+    const ownRun = await startRun(admin, memberWorkflow, own.connectionId, "m-1");
+    const otherRun = await startRun(promoted, memberWorkflow, others.connectionId, "m-2");
+    const orgRun = await startRun(admin, orgWorkflow, org.id, "m-3");
+    return { orgA, admin, promoted, memberWorkflow, orgWorkflow, ownRun, otherRun, orgRun };
+  }
+
+  it("shows an admin their own member runs and the org's runs, not another user's", async () => {
+    const { admin, memberWorkflow, orgWorkflow, ownRun, otherRun, orgRun } = await threeRuns();
+
+    expect((await listRuns(admin, memberWorkflow)).map((run) => run.id)).toEqual([ownRun.runId]);
+    expect((await listRuns(admin, orgWorkflow)).map((run) => run.id)).toEqual([orgRun.runId]);
+    expect(await getRun(admin, ownRun.runId)).toMatchObject({ id: ownRun.runId });
+    expect(await getRun(admin, orgRun.runId)).toMatchObject({ id: orgRun.runId });
+    await expect(getRun(admin, otherRun.runId)).rejects.toThrow(ForbiddenError);
+  });
+
+  it("shows another admin only their own member runs, and the org's", async () => {
+    const { promoted, memberWorkflow, orgWorkflow, ownRun, otherRun } = await threeRuns();
+
+    expect((await listRuns(promoted, memberWorkflow)).map((run) => run.id)).toEqual([
+      otherRun.runId,
+    ]);
+    expect(await listRuns(promoted, orgWorkflow)).toHaveLength(1);
+    await expect(getRun(promoted, ownRun.runId)).rejects.toThrow(ForbiddenError);
+  });
+
+  it("shows a member no runs, not even on their own connection", async () => {
+    const { orgA, otherRun } = await threeRuns();
+
+    await expect(getRun(orgA.member.ctx, otherRun.runId)).rejects.toThrow(ForbiddenError);
+  });
+});

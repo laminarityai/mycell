@@ -43,6 +43,16 @@ export async function getGrantedScopes(ctx: Ctx, connectionId: string): Promise<
 }
 
 /**
+ * The IDs of the org's connections the caller may read, by the same rule as every read here:
+ * for another feature to keep what it derived from a connection with that connection's reader
+ * (ADR-0001).
+ */
+export async function readableConnectionIds(ctx: Ctx): Promise<string[]> {
+  const rows = await forOrg(ctx).select(connections);
+  return rows.filter((row) => isReadableBy(ctx, row)).map((row) => row.id);
+}
+
+/**
  * Every connection in the org, for scheduled jobs (polling, reconciliation) acting as the
  * system ctx. Anyone else is ForbiddenError: users list connections with listConnections.
  */

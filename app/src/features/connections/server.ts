@@ -11,13 +11,15 @@ export { listConnections } from "./lib/list";
 export { reconcileConnections } from "./lib/reconcile";
 export { startReconnect } from "./lib/reconnect";
 // How other features use a connection, without touching Nango or the table: what it is and
-// was granted, GETs and POSTs to its Google APIs, and where each ingested app stands.
+// was granted, which ones the caller may read, GETs and POSTs to its Google APIs, and where
+// each ingested app stands.
 export {
   getConnection,
   getGrantedScopes,
   listConnectionsForJobs,
   proxyGet,
   proxyPost,
+  readableConnectionIds,
   recordIngestState,
 } from "./lib/source-access";
 // Called only by the Nango webhook route and tests: it checks Nango's signature itself.

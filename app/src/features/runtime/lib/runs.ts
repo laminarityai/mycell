@@ -1,9 +1,11 @@
 // Run records: starting a run by hand, and reading runs back. Reads and the manual start are
-// admin-only in M3; the interpreter writes as the system ctx (interpreter.ts).
+// admin-only in M3; the interpreter writes as the system ctx (interpreter.ts). A run is read
+// only by whoever may read its connection (connections' rule): a run on a member connection
+// holds what that member's mail made, so it stays with them (invariant 2, ADR-0001).
 import { randomUUID } from "node:crypto";
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
-import { getConnection } from "@/features/connections/server";
+import { getConnection, readableConnectionIds } from "@/features/connections/server";
 import { getWorkflow, getWorkflowVersion } from "@/features/workflows/server";
 import type { Ctx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
@@ -61,21 +63,28 @@ export async function startRun(
   return { runId };
 }
 
-/** One run with its steps. */
+/** One run with its steps, on a connection the caller may read. */
 export async function getRun(ctx: Ctx, runId: string): Promise<RunRecord> {
   requireAdmin(ctx);
   const run = await findRun(ctx, runId);
   if (run === undefined) throw new NotFoundError("run");
+  const readable = await readableConnectionIds(ctx);
+  if (!readable.includes(run.connectionId)) throw new ForbiddenError();
   const record = (await withSteps(ctx, [run])).at(0);
   if (record === undefined) throw new NotFoundError("run");
   return record;
 }
 
-/** The workflow's most recent runs, newest first, each with its steps. */
+/**
+ * The workflow's most recent runs on connections the caller may read, newest first, each with
+ * its steps.
+ */
 export async function listRuns(ctx: Ctx, workflowId: string): Promise<RunRecord[]> {
   requireAdmin(ctx);
+  const readable = await readableConnectionIds(ctx);
+  if (readable.length === 0) return [];
   const rows = await forOrg(ctx).select(runs, {
-    where: eq(runs.workflowId, workflowId),
+    where: and(eq(runs.workflowId, workflowId), inArray(runs.connectionId, readable)),
     orderBy: [desc(runs.startedAt)],
     limit: RECENT_RUNS,
   });

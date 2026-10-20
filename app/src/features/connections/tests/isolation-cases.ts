@@ -123,6 +123,15 @@ export const isolationCases = defineIsolationCases(server, {
     }
   },
 
+  readableConnectionIds: async (orgs) => {
+    await seedOrgBConnection(orgs);
+    const { orgA } = orgs;
+
+    for (const ctx of [orgA.admin.ctx, orgA.member.ctx, systemCtx(orgA.id)]) {
+      expect(await server.readableConnectionIds(ctx)).toEqual([]);
+    }
+  },
+
   listConnectionsForJobs: async (orgs) => {
     await seedOrgBConnection(orgs);
     await connectGmail(orgs.orgA.member.ctx, orgs.orgA.member.email);

@@ -1,0 +1,4 @@
+// The tags feature: admin-made labels on users that decide, from M5 on, which workflows each
+// member can see.
+export { assignTag, unassignTag } from "./lib/assignments";
+export { createTag, deleteTag, listMyTags, listTags, renameTag } from "./lib/tags";

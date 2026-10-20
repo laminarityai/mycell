@@ -8,6 +8,9 @@ export const isolationCases = defineIsolationCases(server, {
   getCtx: notTenantScoped(
     "takes no org or ID: it reads the session's own membership, so a caller can't name another org",
   ),
+  findSessionCtx: notTenantScoped(
+    "getCtx without the redirect: it reads the session's own membership, and takes no org or ID",
+  ),
   handleAuthRequest: notTenantScoped(
     "Better Auth's sign-in endpoints; the organization plugin's endpoints are switched off",
   ),

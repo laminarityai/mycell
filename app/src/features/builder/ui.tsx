@@ -1,0 +1,47 @@
+import Link from "next/link";
+import { BuilderChat } from "./lib/builder-chat";
+import { toUIMessages } from "./lib/history";
+import { NewConversationButton } from "./lib/new-conversation-button";
+import type { BuilderConversation, ConversationSummary } from "./types";
+
+export { NewConversationButton };
+
+/** The org's builder conversations, the open one marked. */
+export function ConversationList({
+  conversations,
+  activeId,
+}: {
+  conversations: ConversationSummary[];
+  activeId?: string;
+}) {
+  if (conversations.length === 0) {
+    return <p className="text-sm text-muted-foreground">No conversations yet.</p>;
+  }
+  return (
+    <ul className="flex flex-col gap-1" aria-label="Conversations">
+      {conversations.map((conversation) => (
+        <li key={conversation.id}>
+          <Link
+            href={`/builder/${conversation.id}`}
+            aria-current={conversation.id === activeId ? "page" : undefined}
+            className="block truncate rounded px-2 py-1 text-sm hover:bg-muted aria-[current=page]:bg-muted aria-[current=page]:font-medium"
+          >
+            {conversation.title ?? "New conversation"}
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** One conversation: its stored messages, and new turns as they stream in. */
+export function Conversation({ conversation }: { conversation: BuilderConversation }) {
+  return (
+    <BuilderChat
+      // A new conversation gets a fresh chat rather than the last one's state.
+      key={conversation.id}
+      conversationId={conversation.id}
+      initialMessages={toUIMessages(conversation.messages)}
+    />
+  );
+}

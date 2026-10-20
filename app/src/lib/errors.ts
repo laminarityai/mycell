@@ -93,3 +93,24 @@ export function actionError(error: unknown): ActionResult {
   if (error instanceof SpecInvalidError) return { error: error.message, issues: error.issues };
   throw error;
 }
+
+/**
+ * The route-boundary half: a typed error becomes a status with its message as the body, and
+ * anything else is a bug, rethrown for Next.js's error handling.
+ */
+export function routeError(error: unknown): Response {
+  const status =
+    error instanceof ForbiddenError
+      ? 403
+      : error instanceof NotFoundError
+        ? 404
+        : error instanceof ConflictError
+          ? 409
+          : error instanceof ValidationError
+            ? 400
+            : error instanceof OutOfCreditsError
+              ? 402
+              : undefined;
+  if (status === undefined || !(error instanceof Error)) throw error;
+  return new Response(error.message, { status });
+}

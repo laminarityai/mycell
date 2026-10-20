@@ -216,7 +216,7 @@ The catalog is code (`features/policy/catalog.ts`), each action with its risk le
 - Jev is called through the AI SDK's experimental `experimental_decide`, so its version is pinned exactly. An adapter normalises Jev's two output shapes into one `{ label, p }`. Specs never see Jev's own format.
 - Use Jev's probabilities as confidence gates: high confidence proceeds, low confidence goes to a human. Treat a gate threshold (e.g. `0.85`) as a number tuned per workflow by shadow eval, not as a trusted calibrated probability.
 - The per-org role→model table lives in the DB, with a global default table in config.
-- Every call goes through one gateway client (`callModel` and `classify` in `runtime`), which resolves the role, checks credits, calls with the SDK's retries off (the run's step retries instead), records the cost, and turns any failure into a `ModelCallError` holding only codes, never the model's output (invariant 8).
+- Every call goes through one gateway client (`callModel` and `classify` in `runtime`), which resolves the role, checks credits, calls with the SDK's retries off (the run's step retries instead), records the cost, and turns any failure into a `ModelCallError` holding only codes, never the model's output (invariant 8). A caller that streams (the builder chat) opens `openMeteredStream` instead: the same role resolution and credit check, then one usage entry with the summed cost of the steps it metered, however the stream ended.
 - `classify` falls back to a structured-output call on `fast` when Jev fails, refuses, answers without probabilities or with a label it wasn't offered, or when the org's classify model isn't a decision model. The answer is marked as a fallback, and its `p` is the model's stated confidence.
 
 ## Credits (`features/credits`)
@@ -253,10 +253,14 @@ The catalog is code (`features/policy/catalog.ts`), each action with its risk le
 - After **3 consecutive failed runs**, the workflow pauses automatically and the owning admin gets an email. Members see a "paused" badge.
 - Observability is **admin-only**: runs, step traces, inputs/outputs (scoped), cost, failures. It's built in our UI on our own `runs` and `run_steps` tables, written by the interpreter. Inngest's dashboard is for development and debugging only.
 
-## Builder chat
+## Builder chat (`features/builder`)
 
-- Admin-only agent. Its context: suggestions and mined patterns, existing workflows, the action catalog, org settings, and (once built) org-scope memories.
-- Its output is always a spec diff for the admin to review, never a direct publish. The same spec can also be edited in a visual/JSON editor.
+- Admin-only agent. Its output is always a **proposal** for an admin to accept or reject, never a direct publish. The same working spec can also be edited in a visual/JSON editor.
+- **Builder conversations** belong to the org, record the admin who started one, and may be about one workflow. Any admin can open and continue any of the org's conversations; members get `ForbiddenError` on the page, the route and every `builder` function.
+- **A turn** is one `streamText` call on the `smart` role (resolved per org, invariant 6), at most 8 model steps, run by the streaming route `POST /api/builder/turn`, which resolves the session to `ctx` and calls `streamTurn(ctx, conversationId, message)`. `runtime`'s `openMeteredStream` resolves the role and passes the credit pre-flight before the first model call; the turn sums each step's `providerMetadata.gateway.cost` and records one ledger entry when it ends, including a turn that fails partway (the failed step reports no cost). Out of credits, no model is called, and the conversation and the stream get an `out_of_credits` notice. The turn runs to its end even if the page goes away, so its reply is still stored.
+- **Context providers** (`builder/lib/context.ts`) are functions `(ctx, turn) => { title, content }` called when a turn starts, each a section of the agent's instructions: org settings, the action catalog (each action's app, description, inputs, outputs, fixed risk level and, for an external send, its pending form), the org's workflows (with the conversation's workflow's whole working spec), the admin's own and the org's connections with their granted apps (other members' connections as a count only, ADR-0001), and tags. Discovery's suggestions and mined patterns join in M2, and org memory in M9, as more providers.
+- **Tools** (`builder/lib/tools.ts`) run with the admin's `ctx`, so the agent reaches only what the admin could. Each says what the conversation stores of its result. M6 starts with `get_workflow` (the current working spec, hand edits included); `propose_spec` and `read_examples` follow.
+- **Conversations hold no source content (invariant 8).** A message stores its text, and each tool call with its input and its result as the tool stores it (`read_examples` keeps only the source refs it returned). Messages carry `org_id` but no `connection_id`, so disconnecting leaves them alone. Reopening a conversation rebuilds the model's context from what's stored.
 
 ## Memory (after the core loop; `features/memory`)
 

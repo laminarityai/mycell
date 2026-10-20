@@ -21,7 +21,9 @@ connection, "org" on an org connection), a trigger, and steps that run in order.
 - extract: a model role fills named fields from the message.
 - tool: calls one catalog action with inputs, literal or { "from": "<step>.<field>" }.
 - draft: a model role writes a reply from its context, output through a catalog action.
-- approval: waits for a person's review.
+- approval: marks where a person reviews what waits in a pending form (channel "gmail_drafts").
+  Mycel adds one after any external send that lacks it.
+- escalate: hands the message to a person, with a reason.
 Steps name a model role (classify, fast, smart, judge), never a model.
 
 When the admin's description is ambiguous (which inbox, which sheet, what counts as a match),

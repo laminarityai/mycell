@@ -1,6 +1,6 @@
 # Mycel
 
-Mycel mines a small company's Gmail and Sheets for repetitive work and turns it into supervised AI workflows the team switches on. v1 is dogfooded on our own Google Workspace.
+Mycel lets a small company's admins describe supervised AI workflows to a builder chat, and the team switches them on. Discovery mines Gmail and Sheets for repetitive work to suggest workflows and give the builder context. v1 is dogfooded on our own Google Workspace.
 
 ## Verify
 
@@ -38,7 +38,7 @@ Every change keeps all eight true.
 - **Naming anything**: `GLOSSARY.md`.
 - **Touching a subsystem** (data handling, discovery, spec, policy, runtime, credits, memory): `docs/architecture.md`.
 - **Reversing or questioning a decision**: `docs/adr/`.
-- **Scoping work or cutting it**: `docs/intent.md`.
+- **Scoping work or cutting it**: `docs/intent.md` and ADR-0007 (builder primary).
 - **Choosing what to build next**: `docs/roadmap.md`.
 
 ## Agent skills

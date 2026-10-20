@@ -41,6 +41,13 @@ Whether a piece of data belongs to one member or to the whole org.
 **Promotion**:
 The step by which a member-scoped fact becomes org-scoped.
 
+**Object**:
+A business thing, such as a customer, order, or file, that several events refer to.
+_Avoid_: Entity, record
+
+**Object ref**:
+A deterministic link from an event to an object, matched on an exact key such as an email address, ID, or file reference.
+
 **Source ref**:
 A pointer to the original item in its source, used to re-fetch content Mycel never keeps.
 _Avoid_: Link, reference, copy
@@ -61,6 +68,10 @@ The real past items that justify a suggestion, re-fetched from their source on d
 **Shadow eval**:
 A replay of a candidate workflow against held-out past cases, scored against what the human actually did.
 _Avoid_: Backtest, simulation, dry run
+
+**Experiment**:
+A throwaway investigation that settles one open decision against a rule written before it runs. Its code never ships; its only lasting output is the ADR that records the result.
+_Avoid_: Spike, prototype, POC
 
 **Rung**:
 A level on the solution ladder, from 0 (rule or template, no AI) to 5 (multi-step across people).

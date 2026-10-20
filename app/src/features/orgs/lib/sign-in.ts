@@ -22,7 +22,10 @@ export async function signIn(profile: VerifiedGoogleProfile): Promise<Ctx> {
         workspaceDomain: domain,
         createdAt: new Date(),
       })
-      .onConflictDoNothing({ target: organization.workspaceDomain })
+      // No conflict target: the slug is the domain too, and a racing first sign-in can trip
+      // its unique constraint before the domain's. Any conflict means the org exists, so this
+      // user joins it as a member, found by its domain.
+      .onConflictDoNothing()
       .returning({ id: organization.id });
     const created = inserted.at(0);
     const role: Role = created === undefined ? "member" : "admin";

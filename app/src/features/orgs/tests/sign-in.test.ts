@@ -53,15 +53,26 @@ describe("signIn", () => {
   });
 
   it("creates exactly one org when two first users of a domain sign in at once", async () => {
-    for (const domain of ["one.test", "two.test", "three.test", "four.test", "five.test"]) {
-      const ada = await seedUserWithoutOrg(`ada@${domain}`);
-      const bob = await seedUserWithoutOrg(`bob@${domain}`);
+    // Many pairs race at once, so a losing insert regularly meets the winner's row in flight.
+    const domains = Array.from({ length: 20 }, (_, i) => `race-${String(i)}.test`);
+    const pairs = await Promise.all(
+      domains.map(async (domain) => ({
+        domain,
+        ada: await seedUserWithoutOrg(`ada@${domain}`),
+        bob: await seedUserWithoutOrg(`bob@${domain}`),
+      })),
+    );
 
-      const [adaCtx, bobCtx] = await Promise.all([
-        signIn({ userId: ada.id, hd: domain }),
-        signIn({ userId: bob.id, hd: domain }),
-      ]);
+    const results = await Promise.all(
+      pairs.map(({ domain, ada, bob }) =>
+        Promise.all([
+          signIn({ userId: ada.id, hd: domain }),
+          signIn({ userId: bob.id, hd: domain }),
+        ]),
+      ),
+    );
 
+    for (const [adaCtx, bobCtx] of results) {
       expect(bobCtx.orgId).toBe(adaCtx.orgId);
       expect([adaCtx.role, bobCtx.role].sort()).toEqual(["admin", "member"]);
       const users = await listUsers(adaCtx);

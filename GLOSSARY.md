@@ -162,11 +162,15 @@ An app's own way of holding an action until a person approves it, such as a Gmai
 _Avoid_: Staged action, preview
 
 **Review**:
-One action waiting for a person's decision, shown on their Reviews page, which points at the waiting item in its app.
+One action waiting for a person's decision, shown on their Reviews page, which points at the waiting item in its app, or holds it when the app can't.
 _Avoid_: Approval (the step that creates a review), task (a Google Tasks item), notification
 
+**Custom action**:
+An action one company's builder chat described as a single call to an app, usable only by that company, with its risk set by a fixed rule.
+_Avoid_: Builder-made action, integration, tool
+
 **Capability request**:
-A structured ask, raised when no catalog action fits, for our team to build a new one.
+Code the builder chat drafts when a custom action can't do the job, sent to our team to review into the catalog.
 _Avoid_: Feature request
 
 **Builder chat**:

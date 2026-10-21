@@ -13,7 +13,7 @@ An **admin** connects Google Workspace and describes workflows to the **builder 
 - First customer: our own company (dogfood). Mycel **reads** Gmail and Sheets/Drive and **acts** in Gmail, Sheets, Calendar, Docs and Tasks, all through one Google connection per account (ADR-0014). Slack, Outlook and the rest of Microsoft come after v1, through the same four parts (see Adding an app). Discord is not a source.
 - The full loop, kept thin at every stage: builder chat (fed by discovery and suggestions) → publish to tags → member toggles → run → observability.
 - No admin-level data access: no Admin SDK Reports API and no domain-wide delegation (ADR-0008).
-- Workflows may act **autonomously only on read and internal-reversible actions** (e.g. labels). Anything that reaches other people waits in its app's **pending form** (a Gmail draft, a Calendar event with no guests) until a human approves it on the Reviews page. Financial and destructive actions don't exist in v1.
+- Workflows may act **autonomously only on read and internal-reversible actions** (e.g. labels, task changes). Anything said in someone's name waits in its app's **pending form** (a Gmail draft, a Calendar event with no guests), or, where the app has none, is held by Mycel (ADR-0019), until a human approves it on the Reviews page (ADR-0018). Financial and destructive actions don't exist in v1.
 
 ## Stack
 
@@ -185,7 +185,7 @@ Specs are JSON, validated by zod, and run by our own interpreter in `features/ru
 - Before each step, a triggered run checks its enablement or org switch is still on for its connection; if not, it ends `cancelled` after the step it was on.
 - Storing and sending are separate steps. The poll step (or a recovery's page step) hands on the inbound, non-draft Gmail messages its insert newly created, as IDs, times and labels only; the step after it (`gmail-poll-announce`, or `<prefix>page-<n>-announce`) sends them. A failed send is retried with the memoized messages, so none is lost, and only newly inserted rows are ever sent.
 
-**Capability requests:** when no catalog action fits, the builder emits a structured `capability_request` (API, operation, inputs, outputs) to an internal queue. Our team builds the Nango function. The interface stays the same so an auto-builder can take over later.
+**Custom actions** (ADR-0017): when no catalog action fits, the builder describes one call to a registered app (address, where each input goes, which results come back) as a custom action of the admin's org. Mycel's runtime makes the call through Nango; a fixed rule sets its risk (a read is `read`, any other call at least `external_send`; deletes, refunds, voids and writes in accounting or payments apps are refused). When one call can't do the job, the builder drafts code and sends it to our team as a **capability request**; it reaches workflows only once we review it into the catalog.
 
 ## Adding an app (ADR-0013)
 
@@ -203,7 +203,7 @@ Every app plugs in through the same four parts, so a new app is mostly catalog w
 | Docs     | Suggested edits in the doc                                                    | Accepts the step's suggestions (ADR-0016) |
 | Tasks    | None needed: tasks on the person's own list are reversible                    |                                           |
 
-A review ends as approved, edited and approved, declined (which deletes the waiting item, where the app allows), done in the app, or gone. An app with no natural pending form, such as Slack, waits until we design one.
+A review ends as approved, edited and approved, declined (which deletes the waiting item, where the app allows), done in the app, or gone. Where an app has no pending form (Slack, Teams, Chat, comments), Mycel holds the waiting send itself, encrypted, and deletes it when the review ends; a held send's review ends as expired after 30 days (ADR-0019).
 
 ## Risk policy (`features/policy`)
 
@@ -213,7 +213,7 @@ Each catalog action has a fixed level: `read` < `internal_reversible` < `externa
 - `external_send`: must wait in the app's pending form for a person's review (ADR-0013). M3 approves by sending the Gmail draft; from M5 on, every review also appears on the Reviews page.
 - `financial`, `destructive`: not available in v1.
 
-The catalog is code (`features/policy/catalog.ts`), each action with its risk level, integration, the API host its proxy calls reach, the scopes that allow it, and input and output schemas. Outputs are derived data and IDs only (ADR-0012).
+The catalog is code (`features/policy/catalog.ts`), each action with its risk level, integration, the API host its proxy calls reach, the scopes that allow it, and input and output schemas. An action's output may carry content to later steps (ADR-0020), but never into its run record.
 
 | Action                     | Risk level            | Host (on the one `google` integration) | Scope needed                             |
 | -------------------------- | --------------------- | -------------------------------------- | ---------------------------------------- |

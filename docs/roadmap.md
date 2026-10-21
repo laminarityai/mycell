@@ -2,7 +2,7 @@
 
 Build order for the v1 full loop, dogfooded on our own Google Workspace. Every milestone ends with something we can actually use ourselves. `docs/architecture.md` holds the architecture and invariants. This file only covers sequencing.
 
-The builder chat is primary (ADR-0007), so it comes before mining. Milestones keep their numbers as stable names and are listed in build order: **M0 → M1 → M3 → M6 → M12 → M5 → M11 → M2 → M4 → M7 → M8 → M9 → M10.**
+The builder chat is primary (ADR-0007), so it comes before mining. Milestones keep their numbers as stable names and are listed in build order: **M0 → M1 → M3 → M6 → M12 → M5 → M11 → M13 → M2 → M4 → M7 → M8 → M9 → M10.**
 
 ## Status (2026-10-20)
 
@@ -15,6 +15,7 @@ The builder chat is primary (ADR-0007), so it comes before mining. Milestones ke
 | M12       | Grilling    |      | Branches and the workflow graph. Decisions in ADR-0015 (paths that never join); research in `docs/research/workflow-builders.md`.                                           |
 | M5        | Ready       | #51  | Grilled; tickets ready for agents. Adds the Reviews page (ADR-0013), whose outcomes measure the builder ship bar in `docs/intent.md`.                                       |
 | M11       | Ready       | #67  | Calendar, Docs and Tasks, each through its pending form (ADR-0013); tickets ready for agents.                                                                               |
+| M13       | Grilled     |      | Custom actions made by the builder chat. Decisions in ADR-0017 to ADR-0020; research in `docs/research/integrations/`.                                                      |
 | M2 onward | Not started |      |                                                                                                                                                                             |
 
 ## M0: Scaffold and tenancy
@@ -86,6 +87,15 @@ Planned in this order, each its own milestone or part of one, after M12:
 - No new connection: the one Google connection already asks for them (ADR-0014). Mining them stays gated by ADR-0008.
 - **Done when:** a workflow that reads an email and books a meeting runs on one of our inboxes, and its guests are invited only after approval.
 
+## M13: Custom actions
+
+- When no catalog action fits, the builder chat describes one call to a registered app as a custom action of the org, with its risk set by a fixed rule; anything but a read waits for a person every time (ADR-0017, ADR-0018).
+- Where an app can't hold a waiting send, Mycel holds it until its review ends (ADR-0019).
+- Capability requests (moved from M10): code the builder drafts, reviewed by our team into the catalog.
+- Our team registers apps in `docs/research/integrations/ranking.md`'s order.
+- **To revisit:** letting admins connect a vendor's MCP server by its address alone, once those servers leave preview and their terms allow apps like ours.
+- **Done when:** an admin describes a workflow in an app with no catalog actions, and it runs with each of its writes approved on the Reviews page.
+
 ## M2: Mining and suggestions
 
 - **Entry task:** the eval-grade synthetic company generator (planted workflows and decoys), to measure discovery's recall and precision.
@@ -118,6 +128,5 @@ Planned in this order, each its own milestone or part of one, after M12:
 
 - Google OAuth verification and the restricted-scope security assessment.
 - Outlook and the rest of Microsoft, and Slack once it has a pending form, through the same four parts (ADR-0013).
-- Capability requests: a structured ask for a new catalog action, raised by the builder chat (moved from M6).
 - Onboarding flow tuned for non-technical admins.
 - Revisit admin-level data access if a customer needs it (ADR-0008).

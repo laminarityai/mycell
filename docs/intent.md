@@ -23,10 +23,10 @@ This bar is ours to revise as we learn. Change it here when it changes.
 
 These are "no for v1", not "never". Where a later "yes" is likely, the architecture keeps the door open.
 
-1. **No unsupervised external effects.** Nothing leaves the company without a human sending or approving it. No financial or destructive actions.
+1. **No unsupervised words in anyone's name.** Nothing is said in someone's name, inside or outside the company, without a human sending or approving it; changing records may run on its own (ADR-0018). No financial or destructive actions.
 2. **Google apps only.** Mycel reads Gmail and Sheets/Drive, and acts in Gmail, Sheets, Calendar, Docs and Tasks. No Slack, Outlook or the rest of Microsoft, Discord, or CRMs yet. Mining Calendar or Forms comes in only if the discovery-lens experiment shows tasks that need it (ADR-0008). _More apps are likely, so each app plugs in through the same four parts (ADR-0013), and nothing outside its connector assumes Google._
 3. **Nothing installed.** No browser extension, desktop app, or Gmail add-on.
-4. **The builder chat never writes code.** New capabilities are built by our team via capability requests. _We are likely to try code-generating agents, so the capability-request interface stays stable enough for an agent to take over._
+4. **The builder chat never deploys code.** When no catalog action fits, it describes one call as a custom action, ranked by a fixed rule, or drafts code that our team reviews into the catalog (ADR-0017).
 5. **No earned autonomy, personal agent, or full cross-app entity resolution.** _An entity backbone comes after v1, and only if the discovery-lens experiment passes (ADR-0008)._
 6. **No real payments.** Credits are internal accounting. No Stripe, no self-serve signup.
 7. **No admin-level data access.** No Admin SDK Reports API and no domain-wide delegation. Only member and org connections exist (ADR-0008).

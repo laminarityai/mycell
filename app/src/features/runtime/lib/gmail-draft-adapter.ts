@@ -99,7 +99,11 @@ export const gmailDraftAdapter: PendingFormAdapter<ReplyDraftInput> = {
       `${GMAIL}/messages/${encodeURIComponent(item.sourceRef)}?format=full`,
       fullMessageSchema,
     );
-    return { message: message === null ? null : mailOf(message), draft: mailOf(draft.message) };
+    return {
+      kind: "draft",
+      message: message === null ? null : mailOf(message),
+      draft: mailOf(draft.message),
+    };
   },
 };
 

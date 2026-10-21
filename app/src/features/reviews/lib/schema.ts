@@ -23,10 +23,14 @@ export const reviews = pgTable(
     ownerScope: text("owner_scope", { enum: ["member", "org"] }).notNull(),
     // The member connection's owner; null for an org review.
     ownerUserId: text("owner_user_id"),
-    // The item in its app (a Gmail draft's ID), its thread, and the message that started the run.
+    // The item in its app (a Gmail draft's ID, or an escalated message's), its thread, and the
+    // message that started the run.
     itemRef: text("item_ref").notNull(),
     threadRef: text("thread_ref").notNull(),
     sourceRef: text("source_ref").notNull(),
+    // An escalation's reason, from the escalate step in the spec (never the message); null for
+    // an approval.
+    reason: text("reason"),
     // Hand-off (#65) adds handed_to_user_id and handed_by_user_id here.
     status: text("status", { enum: reviewStatuses }).notNull().default("waiting"),
     // Who ended it (a plain user ID, kept for the counts after they leave), and when. Null while
@@ -36,7 +40,8 @@ export const reviews = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
-    // One review per waiting item of a run: an approval step retried makes no second one.
+    // One review per waiting item of a run: an approval step retried makes no second one, and
+    // a run escalates its message once, however many of its steps hand it over.
     unique("reviews_org_id_run_id_item_ref_unique").on(table.orgId, table.runId, table.itemRef),
     unique("reviews_org_id_id_unique").on(table.orgId, table.id),
     index("reviews_org_id_status_idx").on(table.orgId, table.status),

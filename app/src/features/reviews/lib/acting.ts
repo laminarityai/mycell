@@ -5,6 +5,7 @@
 import { and, eq } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import {
+  escalationAdapter,
   gmailDraftAdapter,
   ItemGoneError,
   type PendingFormAdapter,
@@ -13,11 +14,11 @@ import {
 } from "@/features/runtime/adapters";
 import type { Ctx } from "@/lib/ctx";
 import { AlreadyHandledError, ConflictError, ValidationError } from "@/lib/errors";
-import type { OpenedReview, PendingForms } from "../types";
+import { reviewActions, type OpenedReview, type PendingForms, type ReviewAction } from "../types";
 import { endReview, itemOf, reviewOf, visibleReview, type ReviewRow } from "./reviews";
 import { reviews } from "./schema";
 
-const pendingForms: PendingForms = { approval: gmailDraftAdapter };
+const pendingForms: PendingForms = { approval: gmailDraftAdapter, escalation: escalationAdapter };
 
 /**
  * Opens a review the caller may see: asks its adapter where the item stands, ends the review
@@ -52,7 +53,7 @@ export async function approveReview(
   reviewId: string,
   adapters: PendingForms = pendingForms,
 ): Promise<void> {
-  await act(ctx, reviewId, "approved", adapters, (adapter, item) => adapter.approve(ctx, item));
+  await act(ctx, reviewId, "approve", adapters, (adapter, item) => adapter.approve(ctx, item));
 }
 
 /** Sends the item with the caller's edits, held in memory only. Ends it `edited_approved`. */
@@ -63,9 +64,7 @@ export async function approveEditedReview(
   adapters: PendingForms = pendingForms,
 ): Promise<void> {
   if (edits.text.trim() === "") throw new ValidationError("Write the reply before sending it.");
-  await act(ctx, reviewId, "edited_approved", adapters, (adapter, item) =>
-    adapter.approve(ctx, item, edits),
-  );
+  await act(ctx, reviewId, "edit", adapters, (adapter, item) => adapter.approve(ctx, item, edits));
 }
 
 /** Removes the waiting item from its app. Ends the review `declined`. */
@@ -74,24 +73,49 @@ export async function declineReview(
   reviewId: string,
   adapters: PendingForms = pendingForms,
 ): Promise<void> {
-  await act(ctx, reviewId, "declined", adapters, (adapter, item) => adapter.decline(ctx, item));
+  await act(ctx, reviewId, "decline", adapters, async (adapter, item) => {
+    await adapter.decline?.(ctx, item);
+  });
 }
 
-type Ending = "approved" | "edited_approved" | "declined";
+/**
+ * Marks an escalation done: the person handled the message themselves. Changes nothing in
+ * Gmail. Ends the review `done_in_app`, by the caller.
+ */
+export async function markDone(
+  ctx: Ctx,
+  reviewId: string,
+  adapters: PendingForms = pendingForms,
+): Promise<void> {
+  await act(ctx, reviewId, "done", adapters, (adapter, item) => adapter.approve(ctx, item));
+}
+
+const ENDINGS = {
+  approve: "approved",
+  edit: "edited_approved",
+  decline: "declined",
+  done: "done_in_app",
+} as const satisfies Record<ReviewAction, string>;
+type Ending = (typeof ENDINGS)[ReviewAction];
 
 /**
- * Claims the review as `ending` by the caller, then carries it out through its adapter.
- * AlreadyHandledError, with nothing carried out, when it isn't waiting any more. If carrying it
- * out fails, the claim is undone: the review waits again, or ends `gone` with its item.
+ * Claims the review by the caller with the ending `action` gives it, then carries the action
+ * out through its adapter. ValidationError when the review's kind doesn't offer the action, and
+ * AlreadyHandledError when it isn't waiting any more, each with nothing carried out. If carrying
+ * it out fails, the claim is undone: the review waits again, or ends `gone` with its item.
  */
 async function act(
   ctx: Ctx,
   reviewId: string,
-  ending: Ending,
+  action: ReviewAction,
   adapters: PendingForms,
   carryOut: (adapter: PendingFormAdapter, item: PendingItem) => Promise<void>,
 ): Promise<void> {
   const row = await visibleReview(ctx, reviewId);
+  if (!(reviewActions[row.kind] as readonly ReviewAction[]).includes(action)) {
+    throw new ValidationError(`This review can't be ${ACTION_WORDS[action]}.`);
+  }
+  const ending = ENDINGS[action];
   const claimed = await endReview(ctx, row.id, ending, ctx.userId);
   if (claimed === undefined) throw new AlreadyHandledError();
   try {
@@ -104,6 +128,13 @@ async function act(
     throw error;
   }
 }
+
+const ACTION_WORDS: Record<ReviewAction, string> = {
+  approve: "approved",
+  edit: "edited",
+  decline: "declined",
+  done: "marked done",
+};
 
 async function undoClaim(ctx: Ctx, row: ReviewRow, ending: Ending, gone: boolean) {
   await forOrg(ctx).update(

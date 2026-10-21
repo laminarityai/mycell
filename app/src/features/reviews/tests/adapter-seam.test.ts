@@ -11,14 +11,17 @@ import {
   approveReview,
   declineReview,
   listReviews,
+  markDone,
   openReview,
 } from "../server";
 import type { PendingForms } from "../types";
+import { memberEscalation } from "./escalation-helpers";
 import { memberReview } from "./review-helpers";
 
 beforeEach(resetDatabase);
 
 const VIEW = {
+  kind: "draft" as const,
   message: { from: "a@b.test", to: "c@d.test", subject: "Hi", date: "", text: "Question" },
   draft: { from: "", to: "a@b.test", subject: "Re: Hi", date: "", text: "Answer" },
 };
@@ -29,27 +32,26 @@ function recordingAdapter(state: ItemState = "waiting") {
   const record = (operation: string, item: PendingItem, edits?: ReviewEdits) => {
     calls.push({ operation, itemRef: item.itemRef, ...(edits ? { edits } : {}) });
   };
-  const adapters: PendingForms = {
-    approval: {
-      prepare: () => Promise.reject(new Error("reviews never prepares")),
-      approve: (_ctx, item, edits) => {
-        record("approve", item, edits);
-        return Promise.resolve();
-      },
-      decline: (_ctx, item) => {
-        record("decline", item);
-        return Promise.resolve();
-      },
-      check: (_ctx, item) => {
-        record("check", item);
-        return Promise.resolve(state);
-      },
-      view: (_ctx, item) => {
-        record("view", item);
-        return Promise.resolve(VIEW);
-      },
+  const adapter: PendingForms["approval"] = {
+    prepare: () => Promise.reject(new Error("reviews never prepares")),
+    approve: (_ctx, item, edits) => {
+      record("approve", item, edits);
+      return Promise.resolve();
+    },
+    decline: (_ctx, item) => {
+      record("decline", item);
+      return Promise.resolve();
+    },
+    check: (_ctx, item) => {
+      record("check", item);
+      return Promise.resolve(state);
+    },
+    view: (_ctx, item) => {
+      record("view", item);
+      return Promise.resolve(VIEW);
     },
   };
+  const adapters: PendingForms = { approval: adapter, escalation: adapter };
   return { adapters, calls };
 }
 
@@ -116,6 +118,23 @@ describe("the adapter seam", () => {
     await act(owner, reviewId, adapters);
 
     expect(calls).toEqual([{ ...expected, itemRef: draft.id }]);
+    expect(proxied).toEqual([]);
+  });
+
+  it("marks an escalation done through its adapter's approve only", async () => {
+    const orgs = await seedTwoOrgs();
+    const owner = orgs.orgA.member.ctx;
+    const { message } = await memberEscalation(orgs);
+    const reviewId = (await listReviews(owner)).at(0)?.id ?? "";
+    const proxied: string[] = [];
+    fakeNango.beforeProxy((path) => {
+      proxied.push(path);
+    });
+    const { adapters, calls } = recordingAdapter();
+
+    await markDone(owner, reviewId, adapters);
+
+    expect(calls).toEqual([{ operation: "approve", itemRef: message.id }]);
     expect(proxied).toEqual([]);
   });
 });

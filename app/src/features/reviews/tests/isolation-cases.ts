@@ -5,6 +5,7 @@ import type { TwoOrgs } from "@/db/testing/two-org-fixture";
 import { systemCtx, type Ctx } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
 import * as server from "../server";
+import { memberEscalation } from "./escalation-helpers";
 import { memberReview } from "./review-helpers";
 
 // Org B's member has a review waiting. Org A's users, admin included, can't reach it.
@@ -90,5 +91,16 @@ export const isolationCases = defineIsolationCases(server, {
       await expect(server.declineReview(ctx, b.review.id)).rejects.toThrow(NotFoundError);
     }
     await untouched(orgs, b);
+  },
+
+  markDone: async (orgs) => {
+    await memberEscalation(orgs, "orgB");
+    const escalation = (await server.listReviews(orgs.orgB.member.ctx)).at(0);
+    if (escalation === undefined) throw new Error("no escalation in org B");
+
+    for (const ctx of orgAUsers(orgs)) {
+      await expect(server.markDone(ctx, escalation.id)).rejects.toThrow(NotFoundError);
+    }
+    expect(await server.listReviews(orgs.orgB.member.ctx)).toEqual([escalation]);
   },
 });

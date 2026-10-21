@@ -9,11 +9,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { MailView } from "@/features/runtime/adapters";
-import { ReviewActions } from "./lib/review-actions";
-import type { OpenedReview, ReviewKind, ReviewStatus, ReviewSummary } from "./types";
+import type { ItemView, MailView } from "@/features/runtime/adapters";
+import { EscalationActions, ReviewActions } from "./lib/review-actions";
+import type { OpenedReview, Review, ReviewKind, ReviewStatus, ReviewSummary } from "./types";
 
-const KIND_LABELS: Record<ReviewKind, string> = { approval: "Draft reply" };
+const KIND_LABELS: Record<ReviewKind, string> = {
+  approval: "Draft reply",
+  escalation: "Escalated message",
+};
 
 const ENDINGS: Record<Exclude<ReviewStatus, "waiting">, string> = {
   approved: "It was approved and sent.",
@@ -22,6 +25,18 @@ const ENDINGS: Record<Exclude<ReviewStatus, "waiting">, string> = {
   done_in_app: "It was sent from Gmail.",
   gone: "Its draft is no longer in Gmail.",
 };
+
+/**
+ * How a review ended. An escalation ends done by the person in Mycel, or by their reply in
+ * Gmail (no one named), or with its message gone.
+ */
+function ending(review: Review): string {
+  if (review.status === "waiting") return "";
+  if (review.kind !== "escalation") return ENDINGS[review.status];
+  if (review.status === "gone") return "The message is no longer in Gmail.";
+  if (review.endedByUserId === null) return "It was replied to from Gmail.";
+  return "It was marked done.";
+}
 
 /** The caller's waiting reviews, oldest first: each one's workflow, kind and age. */
 export function ReviewsList({ reviews, now }: { reviews: ReviewSummary[]; now: Date }) {
@@ -58,7 +73,8 @@ export function ReviewsList({ reviews, now }: { reviews: ReviewSummary[]; now: D
 
 /**
  * An open review: the message and the drafted reply, fetched live, with approve, edit and
- * decline; or, once it has ended, how it ended.
+ * decline; or the escalated message, why it was handed over and a link to it in Gmail, with
+ * done. Once it has ended, how it ended.
  */
 export function ReviewDetail({ opened, now }: { opened: OpenedReview; now: Date }) {
   const { review, view } = opened;
@@ -68,19 +84,46 @@ export function ReviewDetail({ opened, now }: { opened: OpenedReview; now: Date 
         {review.workflowName} · {KIND_LABELS[review.kind]} · waiting {age(review.createdAt, now)}
       </p>
       {review.status !== "waiting" || view === null ? (
-        <p>This review has ended. {review.status === "waiting" ? "" : ENDINGS[review.status]}</p>
+        <p>This review has ended. {ending(review)}</p>
       ) : (
-        <>
-          {view.message === null ? (
-            <p className="text-sm text-muted-foreground">The message it replies to is gone.</p>
-          ) : (
-            <Mail title="The message" mail={view.message} who={`From ${view.message.from}`} />
-          )}
-          <Mail title="The drafted reply" mail={view.draft} who={`To ${view.draft.to}`} />
-          <ReviewActions reviewId={review.id} draftText={view.draft.text} />
-        </>
+        <WaitingItem review={review} view={view} />
       )}
     </div>
+  );
+}
+
+function WaitingItem({ review, view }: { review: Review; view: ItemView }) {
+  if (view.kind === "message") {
+    return (
+      <>
+        {review.reason === null ? null : (
+          <p className="text-sm">
+            <span className="font-medium">Why it needs you:</span> {review.reason}
+          </p>
+        )}
+        <Mail title="The message" mail={view.message} who={`From ${view.message.from}`} />
+        <a
+          href={view.link}
+          target="_blank"
+          rel="noreferrer"
+          className="text-sm underline underline-offset-4"
+        >
+          Open it in Gmail
+        </a>
+        <EscalationActions reviewId={review.id} />
+      </>
+    );
+  }
+  return (
+    <>
+      {view.message === null ? (
+        <p className="text-sm text-muted-foreground">The message it replies to is gone.</p>
+      ) : (
+        <Mail title="The message" mail={view.message} who={`From ${view.message.from}`} />
+      )}
+      <Mail title="The drafted reply" mail={view.draft} who={`To ${view.draft.to}`} />
+      <ReviewActions reviewId={review.id} draftText={view.draft.text} />
+    </>
   );
 }
 

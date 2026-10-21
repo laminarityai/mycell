@@ -80,6 +80,7 @@ function details(
     id: connection.id,
     source: connection.source,
     kind: connection.kind,
+    accountEmail: connection.accountEmail,
     ownerUserId: connection.ownerUserId,
     needsReauth: connection.needsReauth,
     grantedScopes: connection.grantedScopes,

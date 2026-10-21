@@ -133,6 +133,7 @@ describe("enabling twice and disabling", () => {
         name: expect.any(String) as string,
         status: "on",
         pausedReason: null,
+        pausedChange: null,
         since: first?.since,
       },
     ]);

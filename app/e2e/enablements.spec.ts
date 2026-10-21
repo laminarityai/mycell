@@ -85,3 +85,71 @@ test("a member sees a workflow published to their tag and switches it on", async
   const row = page.getByRole("row").filter({ hasText: "Pricing labels" });
   await expect(row).toContainText(orgA.member.email);
 });
+
+// LABELS, then a reply drafted for a person to send: an external send, so riskier.
+const LABELS_AND_REPLIES = {
+  ...LABELS,
+  visibility: { tags: ["sales"] },
+  steps: [
+    ...LABELS.steps,
+    {
+      id: "reply",
+      type: "draft",
+      role: "smart",
+      instructions: "Reply with our current prices.",
+      context: ["trigger.message"],
+      output: "google-mail.create-draft",
+    },
+  ],
+};
+
+test("a riskier version pauses a member's switch until they re-enable it", async ({
+  page,
+  orgs: { orgA },
+  signInAs,
+}) => {
+  await withGmail(orgA.admin, orgA.id);
+  await withGmail(orgA.member, orgA.id);
+  await signInAs(orgA.admin);
+  await makeTag(page, "sales", orgA.member);
+  await publishTo(page, "Pricing labels", LABELS, "sales");
+  const workflowPage = page.url();
+
+  await page.context().clearCookies();
+  await signInAs(orgA.member);
+  await page.goto("/workflows");
+  const card = page.getByRole("listitem").filter({ hasText: "Pricing labels" });
+  await card.getByRole("switch", { name: "Pricing labels" }).click();
+  await expect(card).toContainText("On for your Google account");
+
+  // The admin adds a drafted reply; the publish dialog warns before it pauses anyone.
+  await page.context().clearCookies();
+  await signInAs(orgA.admin);
+  await page.goto(workflowPage);
+  await page.getByRole("tab", { name: "JSON" }).click();
+  await page.getByRole("textbox", { name: "Spec (JSON)" }).fill(JSON.stringify(LABELS_AND_REPLIES));
+  await expect(page.getByText("Ready to save.")).toBeVisible();
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText("All changes saved.")).toBeVisible();
+  await page.getByRole("button", { name: "Publish" }).click();
+  const dialog = page.getByRole("dialog", { name: "Publish version 2" });
+  const warning = dialog.getByRole("note", { name: "What publishing pauses" });
+  await expect(warning).toContainText(
+    "Its risk level went up from Internal, reversible to External send.",
+  );
+  await expect(warning).toContainText("Publishing pauses it for 1 person");
+  await dialog.getByRole("button", { name: "Publish version 2" }).click();
+  await expect(page.getByText("Version 2 is the latest.")).toBeVisible();
+
+  await page.context().clearCookies();
+  await signInAs(orgA.member);
+  await page.goto("/workflows");
+  await expect(card).toContainText("Paused: needs your OK for a riskier version");
+  await expect(card.getByRole("group", { name: "What changed" })).toContainText(
+    "Its risk level went up from Internal, reversible to External send.",
+  );
+  await card.getByRole("button", { name: "Re-enable" }).click();
+
+  await expect(card).toContainText("On for your Google account");
+  await expect(card.getByRole("switch", { name: "Pricing labels" })).toBeChecked();
+});

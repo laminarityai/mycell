@@ -7,7 +7,7 @@ import { getCtx } from "@/features/orgs/server";
 import { listRuns } from "@/features/runtime/server";
 import { listTags } from "@/features/tags/server";
 import { RecentRuns, RunOnMessageForm } from "@/features/runtime/ui";
-import { getWorkflow, runnableConnections } from "@/features/workflows/server";
+import { getWorkflow, previewPublish, runnableConnections } from "@/features/workflows/server";
 import { GraphTraceProvider, WorkflowEditor, WorkflowSwitchSection } from "@/features/workflows/ui";
 import { NotFoundError } from "@/lib/errors";
 import { TryIt } from "./try-it";
@@ -48,11 +48,16 @@ async function Workflow({ params }: Pick<PageProps<"/workflows/[workflowId]">, "
     if (error instanceof NotFoundError) notFound();
     throw error;
   });
-  const [runs, runnable, conversations, tags] = await Promise.all([
+  const [runs, runnable, conversations, tags, preview] = await Promise.all([
     listRuns(ctx, workflowId),
     runnableConnections(ctx, workflowId),
     listConversations(ctx, { workflowId }),
     listTags(ctx),
+    // What publishing would pause; nothing to say when there's nothing new to publish, or the
+    // policy refuses the working spec (publishing says why).
+    workflow.unpublishedChanges && workflow.maxRisk !== null
+      ? previewPublish(ctx, workflowId, workflow.workingSpec)
+      : null,
   ]);
   // Only the connections a run could use, the one it's switched on for first.
   const connections = runnable.map((connection) => ({
@@ -64,6 +69,7 @@ async function Workflow({ params }: Pick<PageProps<"/workflows/[workflowId]">, "
       <WorkflowEditor
         workflow={workflow}
         tags={tags.map((tag) => ({ id: tag.id, name: tag.name }))}
+        preview={preview}
       />
       <WorkflowSwitchSection workflow={workflow} connections={connections} />
       <section className="flex flex-col gap-3" aria-label="Builder conversations">

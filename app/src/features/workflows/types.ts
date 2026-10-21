@@ -1,4 +1,4 @@
-import type { InsertedApproval, RiskLevel } from "@/features/policy/types";
+import type { InsertedApproval, RequirementsGained, RiskLevel } from "@/features/policy/types";
 import type { Spec, SpecIssue } from "@/features/spec/types";
 import type { Tag } from "@/features/tags/types";
 
@@ -122,6 +122,8 @@ export type WorkflowSwitch = {
   status: EnablementStatus;
   /** Why it's paused; null while on. */
   pausedReason: PausedReason | null;
+  /** What a `needs_reenable` pause is about; null while on. */
+  pausedChange: PausedChange | null;
   needsReconnect: boolean;
 };
 
@@ -134,11 +136,18 @@ export type EnablementStatus = "on" | "paused";
  */
 export type PausedReason = "needs_reenable";
 
-/** What a `needs_reenable` pause is about: what the new version needs that the old didn't. */
-export type PausedChange = {
-  maxRiskRaised?: { from: RiskLevel; to: RiskLevel };
-  newApps?: string[];
-};
+/**
+ * What a `needs_reenable` pause is about: what the versions published since its member last
+ * enabled it need that the one they enabled didn't (a higher max risk, new apps, new scopes).
+ */
+export type PausedChange = RequirementsGained;
+
+/**
+ * What publishing a spec would do to the workflow's enablements, for the publish dialog: what it
+ * needs that the latest version didn't (null when nothing, or when it's the first version), and
+ * how many enablements that are on it would pause.
+ */
+export type PublishPreview = { gained: RequirementsGained | null; pauses: number };
 
 /**
  * What enabling did: switched the enablement on, or what the caller's Google connection must
@@ -157,6 +166,7 @@ export type EnablementSummary = {
   name: string;
   status: EnablementStatus;
   pausedReason: PausedReason | null;
+  pausedChange: PausedChange | null;
   since: Date;
 };
 

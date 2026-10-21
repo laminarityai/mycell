@@ -57,6 +57,7 @@ describe("switching a member workflow on", () => {
       since: expect.any(Date) as Date,
       status: "on",
       pausedReason: null,
+      pausedChange: null,
       needsReconnect: false,
     });
     expect(workflow.switch?.since.getTime()).toBeGreaterThanOrEqual(before.getTime() - 1000);
@@ -136,6 +137,7 @@ describe("switching an org workflow on", () => {
       since: expect.any(Date) as Date,
       status: "on",
       pausedReason: null,
+      pausedChange: null,
       needsReconnect: false,
     });
     expect(await listSwitchedOn(systemCtx(orgA.id), support.id)).toEqual([

@@ -68,6 +68,14 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await server.getWorkflow(orgs.orgB.admin.ctx, id)).toEqual(before);
   },
 
+  previewPublish: async (orgs) => {
+    const { id } = await seedOrgBWorkflow(orgs);
+
+    await expect(
+      server.previewPublish(orgs.orgA.admin.ctx, id, labelSpec({ id: "pricing-replies" })),
+    ).rejects.toThrow(NotFoundError);
+  },
+
   switchWorkflowOn: async (orgs) => {
     const { orgA, orgB } = orgs;
     const b = await switchedOnInOrgB(orgs);

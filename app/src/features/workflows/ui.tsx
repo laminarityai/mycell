@@ -17,10 +17,11 @@ import type { Tag } from "@/features/tags/types";
 import { PublishDialog } from "./lib/workflow-editor";
 import { WorkflowGraph, type WorkflowGraphProps } from "./lib/workflow-graph";
 import { WorkingSpecEditor, type EditableWorkflow } from "./lib/working-spec-editor";
-import { pausedReasonText } from "./lib/visible-workflows";
+import { pausedText } from "./lib/paused-text";
 import type {
   Audience,
   EnablementSummary,
+  PublishPreview,
   WorkflowDetails,
   WorkflowSummary,
   WorkflowSwitch,
@@ -175,7 +176,7 @@ function EnabledBy({ enablements }: { enablements: EnablementSummary[] }) {
         <li key={enablement.userId}>
           {enablement.name}
           {enablement.status === "paused"
-            ? ` (paused: ${pausedReasonText(enablement.pausedReason)})`
+            ? ` (paused: ${pausedText(enablement.pausedReason, enablement.pausedChange)})`
             : null}
         </li>
       ))}
@@ -187,7 +188,16 @@ function EnabledBy({ enablements }: { enablements: EnablementSummary[] }) {
  * One workflow: its working spec in the editor (a graph or JSON, validated live), then Publish
  * (to the org's `tags`) and its versions. The editor starts again from each save's revision.
  */
-export function WorkflowEditor({ workflow, tags }: { workflow: WorkflowDetails; tags: Tag[] }) {
+export function WorkflowEditor({
+  workflow,
+  tags,
+  preview,
+}: {
+  workflow: WorkflowDetails;
+  tags: Tag[];
+  /** What publishing the working spec would pause (`previewPublish`). */
+  preview: PublishPreview | null;
+}) {
   const latest = workflow.versions.at(0);
   return (
     <div className="flex flex-col gap-6">
@@ -213,6 +223,7 @@ export function WorkflowEditor({ workflow, tags }: { workflow: WorkflowDetails; 
           nextNumber={(latest?.number ?? 0) + 1}
           tags={tags}
           chosen={workflow.workingSpec.visibility?.tags ?? []}
+          preview={preview}
         />
         {workflow.versions.length === 0 ? null : (
           <ul className="flex flex-col gap-1 text-sm">

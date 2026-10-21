@@ -2,7 +2,7 @@
 // (ADR-0014) and the scope of each catalog action it calls. Both come from the catalog, never
 // from a model.
 import { GOOGLE_APP_SCOPES, type GoogleApp } from "@/features/connections/types";
-import { findAction } from "@/features/policy/catalog";
+import { appsUsed, findAction } from "@/features/policy/catalog";
 import type { CatalogAction } from "@/features/policy/types";
 import type { WorkflowVersion } from "../types";
 import { scopeName } from "./scope-check";
@@ -18,8 +18,7 @@ export type MissingAccess = { apps: CatalogAction["app"][]; scopes: string[] };
  * catalog action it calls belongs to, each once.
  */
 export function requiredApps(version: Pick<WorkflowVersion, "requiredActions">) {
-  const apps = version.requiredActions.flatMap((name) => findAction(name)?.app ?? []);
-  return [...new Set<CatalogAction["app"]>(["Gmail", ...apps])];
+  return appsUsed(version.requiredActions);
 }
 
 /**

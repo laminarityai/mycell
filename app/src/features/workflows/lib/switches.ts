@@ -159,6 +159,7 @@ function switchFrom(
       since: own.enabledAt,
       status: own.status,
       pausedReason: own.pausedReason,
+      pausedChange: own.pausedChange,
     };
   }
   if (workflow.orgConnectionId === null || workflow.orgSwitchedOnAt === null) return null;
@@ -168,6 +169,7 @@ function switchFrom(
     since: workflow.orgSwitchedOnAt,
     status: "on",
     pausedReason: null,
+    pausedChange: null,
   };
 }
 

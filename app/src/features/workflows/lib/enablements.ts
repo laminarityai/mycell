@@ -70,6 +70,7 @@ export async function listEnablements(ctx: Ctx, workflowId: string): Promise<Ena
     name: names.get(row.userId) ?? "",
     status: row.status,
     pausedReason: row.pausedReason,
+    pausedChange: row.pausedChange,
     since: row.enabledAt,
   }));
 }

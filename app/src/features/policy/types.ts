@@ -52,3 +52,21 @@ export type InsertedApproval = {
 export type PolicyResult =
   | { ok: true; spec: Spec; maxRisk: RiskLevel; inserted: InsertedApproval[] }
   | { ok: false; issues: SpecIssue[] };
+
+/** What a workflow version needs, as the policy engine compares one version with the next. */
+export type Requirements = {
+  maxRisk: RiskLevel;
+  /** The catalog actions the version calls. */
+  requiredActions: readonly string[];
+};
+
+/**
+ * What a new version needs that the previous one didn't: a higher max risk level, apps it
+ * didn't use (as admins name them), scopes by short name (`gmail.modify`). Each is left out
+ * when nothing was gained there.
+ */
+export type RequirementsGained = {
+  maxRiskRaised?: { from: RiskLevel; to: RiskLevel };
+  newApps?: CatalogAction["app"][];
+  newScopes?: string[];
+};

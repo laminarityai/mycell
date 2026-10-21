@@ -4,13 +4,16 @@ import { z } from "zod";
 import { eachStep, mapStepLists, type PlacedStep } from "@/features/spec/tree";
 import type { Spec, SpecIssue, Step } from "@/features/spec/types";
 import { SpecInvalidError } from "@/lib/errors";
-import { findAction } from "./catalog";
+import { GOOGLE_SCOPE_PREFIX } from "@/lib/google";
+import { appsUsed, findAction } from "./catalog";
 import { conditionIssues } from "./condition-fields";
 import {
   riskLevelSchema,
   type CatalogAction,
   type InsertedApproval,
   type PolicyResult,
+  type Requirements,
+  type RequirementsGained,
   type RiskLevel,
 } from "./types";
 
@@ -62,6 +65,43 @@ export function applyPolicy(spec: Spec): PolicyResult {
 
   const result = inserted.length === 0 ? spec : withApprovals;
   return { ok: true, spec: result, maxRisk: maxRisk(result), inserted };
+}
+
+/**
+ * What `after` needs that `before` didn't, or null when nothing: a higher max risk level, an app
+ * `before` didn't use, or a scope no action of `before` was allowed by less. An action allowed
+ * by any one of several scopes needs nothing new when an action of `before` was allowed only by
+ * some of them; otherwise it's its first scope, by short name. Decided from the catalog alone.
+ */
+export function requirementsGained(
+  before: Requirements,
+  after: Requirements,
+): RequirementsGained | null {
+  const gained: RequirementsGained = {};
+  if (ORDER.indexOf(after.maxRisk) > ORDER.indexOf(before.maxRisk)) {
+    gained.maxRiskRaised = { from: before.maxRisk, to: after.maxRisk };
+  }
+  const apps = appsUsed(before.requiredActions);
+  const newApps = appsUsed(after.requiredActions).filter((app) => !apps.includes(app));
+  if (newApps.length > 0) gained.newApps = newApps;
+  const needed = scopeSets(before.requiredActions);
+  const newScopes = scopeSets(after.requiredActions)
+    .filter((anyOf) => !needed.some((old) => old.every((scope) => anyOf.includes(scope))))
+    .flatMap((anyOf) => anyOf.slice(0, 1).map(shortScope));
+  if (newScopes.length > 0) gained.newScopes = [...new Set(newScopes)];
+  return Object.keys(gained).length === 0 ? null : gained;
+}
+
+// Each action's scopes, any one of which allows it.
+function scopeSets(actionNames: readonly string[]): (readonly string[])[] {
+  return actionNames.flatMap((name) => {
+    const action = findAction(name);
+    return action === undefined ? [] : [action.scopes];
+  });
+}
+
+function shortScope(scope: string): string {
+  return scope.startsWith(GOOGLE_SCOPE_PREFIX) ? scope.slice(GOOGLE_SCOPE_PREFIX.length) : scope;
 }
 
 /**

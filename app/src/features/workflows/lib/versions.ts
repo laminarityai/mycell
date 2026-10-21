@@ -14,6 +14,7 @@ import type { PublishSettings, WorkflowVersion } from "../types";
 import { workflows, workflowVersions, workflowVersionTags } from "./schema";
 import { validateWorkflowSpec } from "./validation";
 import { findWorkflow } from "./access";
+import { gainedForEnablements, pauseEnablements } from "./version-pauses";
 
 type Version = typeof workflowVersions.$inferSelect;
 
@@ -22,7 +23,9 @@ type Version = typeof workflowVersions.$inferSelect;
  * it, after the policy engine, as the workflow's next version, published to the tags its
  * `visibility.tags` names. A name no tag in the org has is refused with ValidationError.
  * `settings` are what the publish dialog chose: they're saved into the working spec first, in
- * the same transaction, so the working spec and the version agree.
+ * the same transaction, so the working spec and the version agree. Enablements follow the new
+ * version, unless it needs more than the latest one did: then, in the same transaction, each
+ * one that's on pauses until its member enables it again (version-pauses.ts).
  */
 export async function publishWorkflow(
   ctx: Ctx,
@@ -43,8 +46,13 @@ export async function publishWorkflow(
       limit: 1,
     })
   ).at(0);
+  const gained = gainedForEnablements(latest, {
+    ...validated,
+    credentials: validated.applied.credentials,
+  });
   try {
-    // The version and its tags together: a version is never seen without who it's for.
+    // The version, its tags and the pauses together: a version is never seen without who it's
+    // for, nor runs for anyone who hasn't agreed to what it needs.
     const row = await db.transaction(async (tx) => {
       if (!sameValue(working, workflow.workingSpec)) {
         // Only over the working spec this read: a save in between is never overwritten.
@@ -81,6 +89,7 @@ export async function publishWorkflow(
         workflowVersionTags,
         tags.map((tag) => ({ workflowVersionId: inserted.id, tagId: tag.id })),
       );
+      if (gained !== null) await pauseEnablements(tx, workflowId, gained);
       return inserted;
     });
     return version(row);

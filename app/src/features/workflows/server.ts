@@ -1,6 +1,8 @@
 // The workflows feature: specs saved as workflows, published as immutable workflow versions to
 // tags. Editing and publishing are admin-only; members see the workflows published to their tags.
 export { getWorkflowVersion, publishWorkflow } from "./lib/versions";
+// What publishing would pause, for the publish dialog to say before the admin confirms.
+export { previewPublish } from "./lib/publish-preview";
 export { getVisibleWorkflow, listVisibleWorkflows } from "./lib/visibility";
 export { getWorkflow, listWorkflows, saveWorkflow } from "./lib/workflows";
 export { switchWorkflowOff, switchWorkflowOn } from "./lib/switches";

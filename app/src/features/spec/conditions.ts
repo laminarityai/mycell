@@ -106,7 +106,7 @@ export function subjectWords(spec: Spec, action?: DeclaredFields["action"]): Sub
     if (source === "trigger") return labelIn(triggerFacts[spec.trigger.type], field);
     const step = steps.get(source);
     if (step?.type === "extract") {
-      return Object.hasOwn(step.fields, field) ? step.fields[field]?.description : undefined;
+      return Object.hasOwn(step.fields, field) ? step.fields[field].description : undefined;
     }
     return step?.type === "tool" ? labelIn(action?.(step.action) ?? [], field) : undefined;
   };

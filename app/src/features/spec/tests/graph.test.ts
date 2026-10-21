@@ -202,7 +202,7 @@ describe("graphView", () => {
 
     const view = graphView(current, { action, proposal: { spec: proposed } });
 
-    const pricing = branchOf(view.steps[2])[1];
+    const pricing = branchOf(view.steps[2]).at(1);
     expect([pricing?.condition, pricing?.before]).toEqual([
       `the sender's domain is "acme.test"`,
       '"kind" says "pricing" with at least 85% confidence or what they ask about contains "Chair"',

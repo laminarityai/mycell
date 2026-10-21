@@ -13,6 +13,7 @@ import { ProposeSpecPart, PublishBar, type ConversationWorkflow } from "./propos
 
 const TOOL_LABELS: Record<string, string> = {
   get_workflow: "Read a workflow",
+  read_examples: "Read example messages",
 };
 
 /** Tools whose calls show more than their label. */

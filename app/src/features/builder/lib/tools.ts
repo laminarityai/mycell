@@ -7,11 +7,12 @@ import { z } from "zod";
 import { getWorkflow } from "@/features/workflows/server";
 import type { Ctx } from "@/lib/ctx";
 import { proposeSpec } from "./proposals";
+import { readExamples } from "./read-examples";
 
 /** What a tool knows about the turn calling it. */
 export type TurnInfo = { conversationId: string; workflowId: string | null };
 
-type ToolDefinition<I, O> = {
+export type ToolDefinition<I, O> = {
   description: string;
   inputSchema: z.ZodType<I>;
   execute(ctx: Ctx, input: I, turn: TurnInfo): Promise<O>;
@@ -74,4 +75,5 @@ const proposeSpecTool = builderTool({
 export const builderTools: Record<string, BuilderTool> = {
   get_workflow: getWorkflowTool,
   propose_spec: proposeSpecTool,
+  read_examples: builderTool(readExamples),
 };

@@ -1,8 +1,9 @@
 // The draft and approval steps. A draft step fetches its context, generates the reply on its
 // role and hands it to its output action, all inside the one step, so the generated text never
-// reaches the step state or the run's records (invariant 8). In v1 the approval is the person
-// sending the Gmail draft: we never send it, so the draft is itself what awaits them. The
-// approval step records that, and the run goes on to its later steps.
+// reaches the step state or the run's records (invariant 8). A run never sends the draft: the
+// draft is itself what awaits the person (Gmail's pending form). The approval step records a
+// review of it, which the person approves, edits or declines on the Reviews page (or finishes in
+// Gmail), and the run goes on to its later steps.
 import { z } from "zod";
 import { findAction } from "@/features/policy/catalog";
 import { findStep, stepsAbove } from "@/features/spec/tree";

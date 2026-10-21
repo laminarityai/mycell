@@ -4,6 +4,11 @@
 // Called by a run's approval step, as the org's system ctx.
 export { createReview } from "./lib/reviews";
 export { listReviews } from "./lib/reviews";
+// Ending the reviews in a thread their people finished in Gmail: a job calls it, as the system
+// ctx, for each message discovery saw sent.
+export { endReviewsInThread } from "./lib/ended-in-app";
+// The ship bar's measurement: how reviews ended, per workflow and per member.
+export { reviewStats } from "./lib/stats";
 // Handing a review to a colleague, when its workflow allows it.
 export { handOff } from "./lib/hand-off";
 export {

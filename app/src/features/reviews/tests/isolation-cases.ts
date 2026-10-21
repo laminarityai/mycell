@@ -106,6 +106,44 @@ export const isolationCases = defineIsolationCases(server, {
     await untouched(orgs, b);
   },
 
+  endReviewsInThread: async (orgs) => {
+    const b = await orgBReview(orgs);
+    // Org B's member sent the draft from Gmail; org A's jobs hear of it.
+    b.mailbox.sendDraft(b.draft.id);
+
+    await server.endReviewsInThread(systemCtx(orgs.orgA.id), {
+      connectionId: b.google.id,
+      threadId: b.message.threadId,
+    });
+
+    expect(await server.listReviews(orgs.orgB.member.ctx)).toEqual([b.review]);
+  },
+
+  reviewStats: async (orgs) => {
+    const b = await orgBReview(orgs);
+    const since = new Date(Date.now() - 60 * 60 * 1000);
+    const none = {
+      waiting: 0,
+      approved: 0,
+      edited_approved: 0,
+      declined: 0,
+      done_in_app: 0,
+      gone: 0,
+    };
+    const nothing = { approvals: none, escalations: none, approvedWithoutEdits: null, byUser: [] };
+
+    expect(await server.reviewStats(orgs.orgA.admin.ctx, { since, groupBy: "user" })).toEqual(
+      nothing,
+    );
+    expect(
+      await server.reviewStats(orgs.orgA.admin.ctx, { workflowId: b.review.workflowId, since }),
+    ).toEqual(nothing);
+    expect(await server.reviewStats(orgs.orgA.member.ctx, { since: "current_version" })).toEqual(
+      nothing,
+    );
+    expect((await server.reviewStats(orgs.orgB.member.ctx, { since })).approvals.waiting).toBe(1);
+  },
+
   markDone: async (orgs) => {
     await memberEscalation(orgs, "orgB");
     const escalation = (await server.listReviews(orgs.orgB.member.ctx)).at(0);

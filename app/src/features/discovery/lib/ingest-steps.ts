@@ -5,7 +5,14 @@ import { getConnection, proxyGet, recordIngestState } from "@/features/connectio
 import type { IngestedApp } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
-import { announceReceived, receivedOf, type Received } from "./announce";
+import {
+  announcedOf,
+  sendAnnounced,
+  NOTHING,
+  type Announced,
+  type Received,
+  type Sent,
+} from "./announce";
 import type { Connector, SourceClient } from "./connector";
 import { driveConnector } from "./drive/connector";
 import { gmailConnector } from "./gmail/connector";
@@ -17,7 +24,7 @@ export const CONNECTORS: Record<IngestedApp, Connector> = {
   drive: driveConnector,
 };
 
-type StepValue = string | number | boolean | null | string[] | Received[];
+type StepValue = string | number | boolean | null | string[] | Received[] | Sent[];
 
 /** A step result: JSON, since Inngest stores it and replays it instead of re-running. */
 export type StepResult = Record<string, StepValue>;
@@ -62,8 +69,9 @@ export function sourceClient(ctx: Ctx, connectionId: string): SourceClient {
 /**
  * Stores everything that occurred in one app since `since`, one page per step named
  * `<stepPrefix>page-<n>`. With `recordProgress`, the app's ingest state shows the running
- * count (the backfill's progress). With `announce` (a recovery's), each page's new inbound Gmail
- * messages are sent on as discovery/gmail.message_received, in a step after the page's
+ * count (the backfill's progress). With `announce` (a recovery's), each page's new Gmail
+ * messages are sent on as discovery/gmail.message_received (inbound) and
+ * discovery/gmail.message_sent (sent), in a step after the page's
  * (`<stepPrefix>page-<n>-announce`). Returns how many items it stored.
  */
 export async function storeWindow(
@@ -83,7 +91,7 @@ export async function storeWindow(
     );
     if (result.gone) return { gone: true };
     const announceId = `${options.stepPrefix}page-${String(page)}-announce`;
-    await announceReceived(ctx, connectionId, result.received, runStep, announceId);
+    await sendAnnounced(ctx, connectionId, result, runStep, announceId);
     progress = { pageToken: result.pageToken, items: result.items };
   }
   return { gone: false, items: progress.items };
@@ -94,7 +102,7 @@ export async function storeWindow(
 type PageProgress = { pageToken: string | null; items: number };
 
 // A stored page: where the window has got to, and what to announce (when it announces).
-type StoredPage = PageProgress & { received: Received[] };
+type StoredPage = PageProgress & Announced;
 
 type WindowOptions = { stepPrefix: string; recordProgress: boolean; announce: boolean };
 
@@ -112,10 +120,10 @@ async function storePage(
     from.pageToken,
   );
   const created = await storeEvents(ctx, connection, app, page.events);
-  const received = announce && app === "gmail" ? receivedOf(created) : [];
+  const announced = announce && app === "gmail" ? announcedOf(created) : NOTHING;
   const items = from.items + page.events.length;
   if (recordProgress) {
     await recordIngestState(ctx, connectionId, app, { backfilledItems: items });
   }
-  return { pageToken: page.nextPageToken, items, received };
+  return { pageToken: page.nextPageToken, items, ...announced };
 }

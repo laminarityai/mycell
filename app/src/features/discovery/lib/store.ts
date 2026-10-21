@@ -15,7 +15,7 @@ const REF_CHUNK = 1000;
 /** An event a store call created, rather than one stored already. */
 export type NewEvent = Pick<
   typeof events.$inferSelect,
-  "sourceRef" | "direction" | "occurredAt" | "labelIds"
+  "sourceRef" | "direction" | "occurredAt" | "labelIds" | "threadId"
 >;
 
 /**
@@ -77,11 +77,12 @@ export async function storeEvents(
       onConflictDoNothing: true,
     });
   }
-  return created.map(({ sourceRef, direction, occurredAt, labelIds }) => ({
+  return created.map(({ sourceRef, direction, occurredAt, labelIds, threadId }) => ({
     sourceRef,
     direction,
     occurredAt,
     labelIds,
+    threadId,
   }));
 }
 

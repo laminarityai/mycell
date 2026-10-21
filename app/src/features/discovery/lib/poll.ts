@@ -15,7 +15,7 @@ import { getConnection, recordIngestState } from "@/features/connections/server"
 import { ingestedAppSchema, type IngestedApp } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
 import type { PollOutcome } from "../types";
-import { announceReceived, receivedOf, type Received } from "./announce";
+import { announcedOf, sendAnnounced, NOTHING, type Announced } from "./announce";
 import { BACKFILL_DAYS, DAY_MS } from "./backfill";
 import { CONNECTORS, runInline, sourceClient, storeWindow, untilGone } from "./ingest-steps";
 import type { RunStep } from "./ingest-steps";
@@ -64,32 +64,32 @@ async function pollApp(
   if (polled.gone) return { outcome: "gone" };
   if (polled.result === "skipped") return { outcome: "skipped" };
   if (polled.result === "polled") {
-    await announceReceived(ctx, connectionId, polled.received, runStep, `${app}-poll-announce`);
+    await sendAnnounced(ctx, connectionId, polled, runStep, `${app}-poll-announce`);
     return { outcome: "polled", items: polled.items };
   }
   return recover(ctx, connectionId, app, runStep);
 }
 
-type PollOnce = { result: "skipped" | "expired" | "polled"; items: number; received: Received[] };
+type PollOnce = { result: "skipped" | "expired" | "polled"; items: number } & Announced;
 
-// Stores what's new, and hands on the inbound Gmail messages it newly stored, for the step
-// after it to send.
+// Stores what's new, and hands on the Gmail messages it newly stored, received and sent, for the
+// step after it to announce.
 async function pollOnce(ctx: Ctx, connectionId: string, app: IngestedApp): Promise<PollOnce> {
   const connection = await getConnection(ctx, connectionId);
   const state = connection.ingest[app];
   if (connection.needsReauth || state?.status !== "active") {
-    return { result: "skipped", items: 0, received: [] };
+    return { result: "skipped", items: 0, ...NOTHING };
   }
-  if (state.cursor === null) return { result: "expired", items: 0, received: [] };
+  if (state.cursor === null) return { result: "expired", items: 0, ...NOTHING };
   const found = await CONNECTORS[app].poll(sourceClient(ctx, connectionId), state.cursor);
-  if ("cursorExpired" in found) return { result: "expired", items: 0, received: [] };
+  if ("cursorExpired" in found) return { result: "expired", items: 0, ...NOTHING };
   const created = await storeEvents(ctx, connection, app, found.events);
   await recordIngestState(ctx, connectionId, app, {
     cursor: found.nextCursor,
     lastPolledAt: new Date(),
   });
-  const received = app === "gmail" ? receivedOf(created) : [];
-  return { result: "polled", items: found.events.length, received };
+  const announced = app === "gmail" ? announcedOf(created) : NOTHING;
+  return { result: "polled", items: found.events.length, ...announced };
 }
 
 // The source no longer knows the app's cursor: backfill the app from the latest stored event,

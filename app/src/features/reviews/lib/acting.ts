@@ -11,6 +11,7 @@ import {
   escalationAdapter,
   gmailDraftAdapter,
   ItemGoneError,
+  type ItemState,
   type PendingFormAdapter,
   type PendingItem,
   type ReviewEdits,
@@ -35,22 +36,33 @@ export async function openReview(
   adapters: PendingForms = pendingForms,
 ): Promise<OpenedReview> {
   let row = await visibleReview(ctx, reviewId);
-  if (row.status === "waiting") {
-    const adapter = adapters[row.kind];
-    const acting = delegatedCtx(ctx, row.connectionId);
-    const state = await adapter.check(acting, itemOf(row));
-    if (state === "waiting") {
-      try {
-        const view = await adapter.view(acting, itemOf(row));
-        return { review: await reviewOf(ctx, row), view, handOffTo: await handOffTo(ctx, row) };
-      } catch (error) {
-        if (!(error instanceof ItemGoneError)) throw error;
-      }
+  if (row.status === "waiting" && (await checkWaiting(ctx, row, adapters)) === "waiting") {
+    try {
+      const view = await adapters[row.kind].view(delegatedCtx(ctx, row.connectionId), itemOf(row));
+      return { review: await reviewOf(ctx, row), view, handOffTo: await handOffTo(ctx, row) };
+    } catch (error) {
+      if (!(error instanceof ItemGoneError)) throw error;
+      await endReview(ctx, row.id, "gone", null);
     }
-    const ending = state === "waiting" ? "gone" : state;
-    row = (await endReview(ctx, row.id, ending, null)) ?? (await visibleReview(ctx, row.id));
   }
+  if (row.status === "waiting") row = await visibleReview(ctx, row.id);
   return { review: await reviewOf(ctx, row), view: null, handOffTo: [] };
+}
+
+/**
+ * Asks a waiting review's adapter where its item stands, on the review's connection, and ends
+ * the review there, by nobody, when the item was finished in its app (`done_in_app`) or is
+ * `gone`. Returns what the adapter said. Opening a review calls it, and so do the jobs that end
+ * reviews their people finished outside Mycel, as the org's system ctx.
+ */
+export async function checkWaiting(
+  ctx: Ctx,
+  row: ReviewRow,
+  adapters: PendingForms = pendingForms,
+): Promise<ItemState> {
+  const state = await adapters[row.kind].check(delegatedCtx(ctx, row.connectionId), itemOf(row));
+  if (state !== "waiting") await endReview(ctx, row.id, state, null);
+  return state;
 }
 
 /** Sends the item as it was prepared. Ends the review `approved`. */

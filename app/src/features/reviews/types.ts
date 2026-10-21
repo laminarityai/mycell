@@ -98,3 +98,39 @@ export type Review = ReviewSummary & {
  * may not hand it on).
  */
 export type OpenedReview = { review: Review; view: ItemView | null; handOffTo: ReviewPerson[] };
+
+/** How many reviews stand each way: waiting, or ended each way. */
+export type ReviewCounts = Record<ReviewStatus, number>;
+
+/**
+ * Some reviews, counted: approval reviews (drafts) apart from escalations, and the ship bar's
+ * share (docs/intent.md): of the approval reviews that ended `approved`, `edited_approved`,
+ * `declined` or `gone`, the part `approved`, from 0 to 1, or null while none has. A draft sent
+ * from Gmail (`done_in_app`) is left out: Mycel can't tell whether it was edited first.
+ */
+export type ReviewTally = {
+  approvals: ReviewCounts;
+  escalations: ReviewCounts;
+  approvedWithoutEdits: number | null;
+};
+
+/**
+ * Which reviews `reviewStats` counts: those of one workflow (or every one), of one person (a
+ * member's own, always, for a member), and made since a time or since each workflow's current
+ * version (only its runs on that version). `groupBy: "user"`, for admins, counts each person's
+ * apart too.
+ */
+export type ReviewStatsQuery = {
+  workflowId?: string;
+  userId?: string;
+  since: Date | "current_version";
+  groupBy?: "user";
+};
+
+/**
+ * The counts of the reviews asked about, and with `groupBy: "user"` each person's apart: whose
+ * mailbox each review's item waited in. `user` is null for a shared inbox's reviews.
+ */
+export type ReviewStats = ReviewTally & {
+  byUser: (ReviewTally & { user: ReviewPerson | null })[];
+};

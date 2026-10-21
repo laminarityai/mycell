@@ -184,6 +184,17 @@ export const isolationCases = defineIsolationCases(server, {
     }
   },
 
+  currentVersionIds: async (orgs) => {
+    const b = await publishedToSalesInOrgB(orgs);
+
+    for (const ctx of [orgs.orgA.admin.ctx, orgs.orgA.member.ctx, systemCtx(orgs.orgA.id)]) {
+      expect(await server.currentVersionIds(ctx, [b.workflowId])).toEqual(new Map());
+    }
+    expect(await server.currentVersionIds(orgs.orgB.member.ctx, [b.workflowId])).toEqual(
+      new Map([[b.workflowId, b.version.id]]),
+    );
+  },
+
   reviewSharing: async (orgs) => {
     const b = await publishedToSalesInOrgB(orgs);
     await tagUsers(orgs.orgA.admin.ctx, "sales", [orgs.orgA.member]);

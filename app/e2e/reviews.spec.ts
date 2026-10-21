@@ -3,6 +3,7 @@ import { seedGoogleConnection } from "@/db/testing/seed-connection";
 import { createReview } from "@/features/reviews/server";
 import { publishWorkflow, saveWorkflow } from "@/features/workflows/server";
 import { systemCtx } from "@/lib/ctx";
+import { tagUsers } from "@/testing/visibility-helpers";
 import { googleScope } from "@/lib/google";
 import type { FixtureOrg } from "@/db/testing/two-org-fixture";
 import type { E2eNango } from "./fake-nango";
@@ -138,6 +139,52 @@ test("a member hands a drafted reply to the admin, who approves it from the memb
   await expect(page.getByText("Nothing is waiting for you.")).toBeVisible();
   expect((await nango.mailbox(nangoConnectionId)).sent).toMatchObject([
     { threadId: message.threadId, text: REPLY },
+  ]);
+});
+
+test("the Workflows page counts how reviews ended: a member's own, an admin's per workflow and member", async ({
+  page,
+  orgs: { orgA },
+  signInAs,
+  nango,
+}) => {
+  await tagUsers(orgA.admin.ctx, "sales", [orgA.member]);
+  await draftWaiting(orgA, nango, { ...REPLY_SPEC, visibility: { tags: ["sales"] } });
+  await signInAs(orgA.member);
+  await page.goto("/reviews");
+  await page.getByRole("link", { name: "Pricing replies" }).click();
+  await page.getByRole("button", { name: "Approve and send" }).click();
+  await expect(page).toHaveURL("/reviews");
+
+  // Waiting, approved, edited, declined, sent from Gmail, gone, the share, escalations.
+  const approvedOnce = ["0", "1", "0", "0", "0", "0", "100%", "None"];
+  await page.goto("/workflows");
+  const own = page.getByRole("table", { name: "Review counts" });
+  await expect(page.getByRole("link", { name: "Last 7 days" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  await expect(own.getByRole("row").nth(1).getByRole("cell")).toHaveText([
+    "Pricing replies",
+    ...approvedOnce,
+  ]);
+  await page.getByRole("link", { name: "Since current version" }).click();
+  await expect(page).toHaveURL("/workflows?period=current_version");
+  await expect(own.getByRole("row").nth(1).getByRole("cell")).toHaveText([
+    "Pricing replies",
+    ...approvedOnce,
+  ]);
+
+  await signInAs(orgA.admin);
+  await page.goto("/workflows");
+  const all = page.getByRole("table", { name: "Review counts" });
+  await expect(all.getByRole("row").nth(1).getByRole("cell")).toHaveText([
+    "Pricing replies",
+    ...approvedOnce,
+  ]);
+  await expect(all.getByRole("row").nth(2).getByRole("cell")).toHaveText([
+    orgA.member.email,
+    ...approvedOnce,
   ]);
 });
 

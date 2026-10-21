@@ -11,6 +11,7 @@ import {
   escalationAdapter,
   gmailDraftAdapter,
   ItemGoneError,
+  type ItemState,
   type PendingFormAdapter,
   type PendingItem,
   type ReviewEdits,
@@ -35,28 +36,40 @@ export async function openReview(
   adapters: PendingForms = pendingForms,
 ): Promise<OpenedReview> {
   let row = await visibleReview(ctx, reviewId);
-  if (row.status === "waiting") {
-    const adapter = adapters[row.kind];
-    const acting = delegatedCtx(ctx, row.connectionId);
-    const state = await adapter.check(acting, itemOf(row));
-    if (state === "waiting") {
-      try {
-        const view = await adapter.view(acting, itemOf(row));
-        return { review: await reviewOf(ctx, row), view, handOffTo: await handOffTo(ctx, row) };
-      } catch (error) {
-        if (!(error instanceof ItemGoneError)) throw error;
-      }
+  if (row.status === "waiting" && (await checkWaiting(ctx, row, adapters)) === "waiting") {
+    try {
+      const view = await adapters[row.kind].view(delegatedCtx(ctx, row.connectionId), itemOf(row));
+      return { review: await reviewOf(ctx, row), view, handOffTo: await handOffTo(ctx, row) };
+    } catch (error) {
+      if (!(error instanceof ItemGoneError)) throw error;
+      await endReview(ctx, row.id, "gone", null);
     }
-    const ending = state === "waiting" ? "gone" : state;
-    row = (await endReview(ctx, row.id, ending, null)) ?? (await visibleReview(ctx, row.id));
   }
+  if (row.status === "waiting") row = await visibleReview(ctx, row.id);
   return { review: await reviewOf(ctx, row), view: null, handOffTo: [] };
 }
 
 /**
- * Asks each waiting review's adapter where its item stands, and ends the ones finished in their
- * app or gone, with no one named. For the daily digest, as the org's system ctx, before it
- * counts. A review whose app can't be asked now (a connection needing reauthorization) waits on.
+ * Asks a waiting review's adapter where its item stands, on the review's connection, and ends
+ * the review there, by nobody, when the item was finished in its app (`done_in_app`) or is
+ * `gone`. Returns what the adapter said. Opening a review calls it, and so do the jobs that end
+ * reviews their people finished outside Mycel (the sent-message job and the daily digest), as
+ * the org's system ctx.
+ */
+export async function checkWaiting(
+  ctx: Ctx,
+  row: ReviewRow,
+  adapters: PendingForms = pendingForms,
+): Promise<ItemState> {
+  const state = await adapters[row.kind].check(delegatedCtx(ctx, row.connectionId), itemOf(row));
+  if (state !== "waiting") await endReview(ctx, row.id, state, null);
+  return state;
+}
+
+/**
+ * Runs checkWaiting on every waiting review in the org. For the daily digest, as the org's
+ * system ctx, before it counts. A review whose app can't be asked now (a connection needing
+ * reauthorization) waits on.
  */
 export async function checkWaitingReviews(
   ctx: Ctx,
@@ -65,14 +78,11 @@ export async function checkWaitingReviews(
   if (ctx.role !== "system") throw new ForbiddenError();
   const waiting = await forOrg(ctx).select(reviews, { where: eq(reviews.status, "waiting") });
   for (const row of waiting) {
-    let state: Awaited<ReturnType<PendingFormAdapter["check"]>>;
     try {
-      state = await adapters[row.kind].check(ctx, itemOf(row));
+      await checkWaiting(ctx, row, adapters);
     } catch (error) {
       console.warn(`Couldn't check review ${row.id}; it waits on.`, error);
-      continue;
     }
-    if (state !== "waiting") await endReview(ctx, row.id, state, null);
   }
 }
 

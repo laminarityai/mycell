@@ -98,3 +98,61 @@ export type Review = ReviewSummary & {
  * may not hand it on).
  */
 export type OpenedReview = { review: Review; view: ItemView | null; handOffTo: ReviewPerson[] };
+
+/** How many reviews stand each way: waiting, or ended each way. */
+export type ReviewCounts = Record<ReviewStatus, number>;
+
+/**
+ * Some reviews, counted: approval reviews (drafts) apart from escalations, and the ship bar's
+ * share (docs/intent.md): of the approval reviews that ended `approved`, `edited_approved`,
+ * `declined` or `gone`, the part `approved`, from 0 to 1, or null while none has. A draft sent
+ * from Gmail (`done_in_app`) is left out: Mycel can't tell whether it was edited first.
+ */
+export type ReviewTally = {
+  approvals: ReviewCounts;
+  escalations: ReviewCounts;
+  approvedWithoutEdits: number | null;
+};
+
+/**
+ * Which reviews `reviewStats` counts: those of one workflow (or every one), of one person (a
+ * member's own, always, for a member), and made since a time or since each workflow's current
+ * version (only its runs on that version). `groupBy: "user"`, for admins, counts each person's
+ * apart too.
+ */
+export type ReviewStatsQuery = {
+  workflowId?: string;
+  userId?: string;
+  since: Date | "current_version";
+  groupBy?: "user";
+};
+
+/**
+ * The counts of the reviews asked about, and with `groupBy: "user"` each person's apart: whose
+ * mailbox each review's item waited in. `user` is null for a shared inbox's reviews.
+ */
+export type ReviewStats = ReviewTally & {
+  byUser: (ReviewTally & { user: ReviewPerson | null })[];
+};
+
+/**
+ * The periods review counts are shown over: the last 2, 7 or 30 days, or since each workflow's
+ * current version. The Workflows page shows the last 7 days until another is chosen.
+ */
+export const reviewPeriods = ["2d", "7d", "30d", "current_version"] as const;
+export type ReviewPeriod = (typeof reviewPeriods)[number];
+export const DEFAULT_REVIEW_PERIOD: ReviewPeriod = "7d";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const PERIOD_DAYS = { "2d": 2, "7d": 7, "30d": 30 } as const;
+
+/** The period a page's `period` search parameter names, or the default for anything else. */
+export function reviewPeriodOf(value: unknown): ReviewPeriod {
+  return reviewPeriods.find((period) => period === value) ?? DEFAULT_REVIEW_PERIOD;
+}
+
+/** Where `period` starts, as `reviewStats` takes it, counting back from `now`. */
+export function sinceOf(period: ReviewPeriod, now: Date): ReviewStatsQuery["since"] {
+  if (period === "current_version") return period;
+  return new Date(now.getTime() - PERIOD_DAYS[period] * DAY_MS);
+}

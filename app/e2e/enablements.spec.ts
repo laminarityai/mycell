@@ -82,7 +82,10 @@ test("a member sees a workflow published to their tag and switches it on", async
   await page.context().clearCookies();
   await signInAs(orgA.admin);
   await page.goto("/workflows");
-  const row = page.getByRole("row").filter({ hasText: "Pricing labels" });
+  const row = page
+    .getByRole("table", { name: "Workflows" })
+    .getByRole("row")
+    .filter({ hasText: "Pricing labels" });
   await expect(row).toContainText(orgA.member.email);
 });
 
@@ -180,9 +183,12 @@ test("archiving hides a workflow from members, and restoring brings back their s
   await archive.getByRole("button", { name: "Archive" }).click();
   await expect(archive).toContainText("Archived since");
   await page.goto("/workflows");
-  await expect(page.getByRole("row").filter({ hasText: "Pricing labels" })).toContainText(
-    "Archived",
-  );
+  await expect(
+    page
+      .getByRole("table", { name: "Workflows" })
+      .getByRole("row")
+      .filter({ hasText: "Pricing labels" }),
+  ).toContainText("Archived");
 
   await page.context().clearCookies();
   await signInAs(orgA.member);

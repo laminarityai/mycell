@@ -5,6 +5,7 @@ import { listUsers } from "@/features/orgs/server";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import { requireTag } from "./access";
+import { sendAssignmentRemoved } from "./events";
 import { tagAssignments } from "./schema";
 
 /** Gives the user the tag; does nothing if they already have it. */
@@ -41,11 +42,16 @@ export async function listTagIdsByUser(
   return byUser;
 }
 
+/**
+ * Takes the tag from the user, and announces it when they had it (`tags/assignment.removed`), so
+ * workflows they no longer see stop being switched on for them.
+ */
 export async function unassignTag(ctx: Ctx, tagId: string, userId: string): Promise<void> {
   requireAdmin(ctx);
   await requireTag(ctx, tagId);
-  await forOrg(ctx).delete(
+  const removed = await forOrg(ctx).delete(
     tagAssignments,
     and(eq(tagAssignments.tagId, tagId), eq(tagAssignments.userId, userId)),
   );
+  if (removed.length > 0) await sendAssignmentRemoved(ctx, tagId, userId);
 }

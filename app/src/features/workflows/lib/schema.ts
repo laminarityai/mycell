@@ -39,6 +39,9 @@ export const workflows = pgTable(
     // since when. Null while off. Deleting the connection switches it off.
     orgConnectionId: text("org_connection_id"),
     orgSwitchedOnAt: timestamp("org_switched_on_at", { withTimezone: true }),
+    // Set while an admin has it archived: hidden from members, and no new runs start for its
+    // enablements or its org switch, which are kept for when it's restored.
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },

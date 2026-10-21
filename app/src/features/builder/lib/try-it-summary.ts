@@ -1,8 +1,10 @@
 // A try-it result as the conversation keeps it, for the agent to react to: one line per step
 // saying what it did, in words built from the spec's own literals (labels, step IDs, ranges)
 // and counts only. No message content, draft text, row value or extracted value reaches it
-// (invariant 8): those stay on the admin's page.
+// (invariant 8): those stay on the admin's page. A tool input the spec fills from a reference
+// is named by its reference, never by the value it resolved to, which may come from the email.
 import type { DryRunResult, DryRunStep } from "@/features/runtime/types";
+import type { Spec } from "@/features/spec/types";
 import type { TryItSummary } from "../types";
 
 const ENDINGS: Record<DryRunResult["ended"], string> = {
@@ -12,25 +14,32 @@ const ENDINGS: Record<DryRunResult["ended"], string> = {
   failed: "It failed at the step above.",
 };
 
-export function summarizeTryIt(result: DryRunResult): TryItSummary {
+/** Summarizes a dry run of `spec`. */
+export function summarizeTryIt(result: DryRunResult, spec: Spec): TryItSummary {
   return {
-    lines: [...result.steps.map(lineOf), ENDINGS[result.ended]],
+    lines: [...result.steps.map((step) => lineOf(step, spec)), ENDINGS[result.ended]],
     costUsd: result.costUsd,
   };
 }
 
-function lineOf(step: DryRunStep): string {
+function lineOf(step: DryRunStep, spec: Spec): string {
   const name = `${step.stepId} (${step.type})`;
   if (step.error !== null) return `${name}: failed, ${step.error.code}: ${step.error.message}`;
+  const input = (field: string) => specInput(spec, step.stepId, field);
   const effect = step.effect;
-  if (effect?.kind === "review") {
-    return `${name}: would wait for a review${step.insertedByPolicy ? " (required by policy)" : ""}.`;
-  }
-  if (effect?.kind === "draft") return `${name}: drafted a reply (not saved).`;
-  if (effect?.kind === "label") return `${name}: would add the label "${effect.label}".`;
-  if (effect?.kind === "row") return `${name}: would append a row to ${effect.range}.`;
-  if (effect?.kind === "rows_read") {
-    return `${name}: read ${String(effect.rows.length)} rows from ${effect.range}.`;
+  switch (effect?.kind) {
+    case "review":
+      return `${name}: would wait for a review${step.insertedByPolicy ? " (required by policy)" : ""}.`;
+    case "draft":
+      return `${name}: drafted a reply (not saved).`;
+    case "label":
+      return `${name}: would add ${input("label")}.`;
+    case "row":
+      return `${name}: would append a row to ${input("range")}.`;
+    case "rows_read":
+      return `${name}: read ${String(effect.rows.length)} rows from ${input("range")}.`;
+    case undefined:
+      break;
   }
   const output = step.output;
   if (step.type === "classify" && isRecord(output)) {
@@ -44,6 +53,18 @@ function lineOf(step: DryRunStep): string {
     return `${name}: filled ${filled.map(([field]) => field).join(", ") || "no fields"}.`;
   }
   return `${name}: done.`;
+}
+
+// A tool step's input as the spec writes it: `the label "Pricing"` for a literal, `a label from
+// details.city` for a reference.
+function specInput(spec: Spec, stepId: string, field: string): string {
+  const step = spec.steps.find((candidate) => candidate.id === stepId);
+  const value = step?.type === "tool" ? step.input[field] : undefined;
+  if (typeof value === "string") return `the ${field} ${JSON.stringify(value)}`;
+  if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+    return `a ${field} from ${value.from}`;
+  }
+  return `the ${field} the spec names`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

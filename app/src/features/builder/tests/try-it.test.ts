@@ -7,7 +7,7 @@ import { ValidationError } from "@/lib/errors";
 import { connectGoogle } from "@/testing/connect-helpers";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import { getConversation, startConversation, streamTurn, tryInConversation } from "../server";
-import { draftSpec } from "./specs";
+import { draftSpec, labelSpec } from "./specs";
 import { fundOrg, readTurn } from "./turn-helpers";
 
 beforeEach(resetDatabase);
@@ -75,6 +75,37 @@ describe("tryInConversation", () => {
     const turn = JSON.stringify(fakeAiGateway.requests("language").at(-1)?.body);
     expect(turn).toContain("drafted a reply");
     expect(turn).not.toContain(REPLY);
+  });
+
+  it("names where a label comes from, never the value a reference resolved to", async () => {
+    const { admin, google, message } = await setUp();
+    const spec = labelSpec({
+      steps: [
+        {
+          id: "details",
+          type: "extract",
+          role: "fast",
+          fields: { city: { type: "string", description: "Where to deliver" } },
+        },
+        { ...labelStep, input: { ...labelStep.input, label: { from: "details.city" } } },
+      ],
+    });
+    const { id: workflowId } = await saveWorkflow(admin, { name: "City labels", spec });
+    const { id: conversationId } = await startConversation(admin, { workflowId });
+    fakeAiGateway.object({ city: "Leeds" }, { costUsd: 0 });
+
+    const { result } = await tryInConversation(admin, conversationId, {
+      connectionId: google.id,
+      sourceRef: message.id,
+    });
+
+    expect(result.steps.at(-1)?.effect).toEqual({ kind: "label", label: "Leeds" });
+    const { messages } = await getConversation(admin, conversationId);
+    expect(JSON.stringify(messages)).not.toContain("Leeds");
+    const lines = messages.flatMap((m) =>
+      m.parts.flatMap((part) => (part.type === "try_it" ? part.lines : [])),
+    );
+    expect(lines).toContain("label (tool): would add a label from details.city.");
   });
 
   it("needs the conversation to be about a workflow", async () => {

@@ -29,7 +29,7 @@ export async function tryInConversation(
   }
   const workflow = await getWorkflow(ctx, conversation.workflowId);
   const result = await dryRun(ctx, workflow.workingSpec, { ...input, workflowId: workflow.id });
-  const summary = summarizeTryIt(result);
+  const summary = summarizeTryIt(result, workflow.workingSpec);
   const id = randomUUID();
   await appendMessage(ctx, conversation, {
     id,

@@ -3,7 +3,7 @@ import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { assignTag, deleteTag, renameTag } from "@/features/tags/server";
 import { NotFoundError, ValidationError } from "@/lib/errors";
-import { connectGmail } from "@/testing/connect-helpers";
+import { connectGmail, connectOrgInbox } from "@/testing/connect-helpers";
 import { publishTo, tagUsers } from "@/testing/visibility-helpers";
 import {
   getVisibleWorkflow,
@@ -13,7 +13,7 @@ import {
   publishWorkflow,
   saveWorkflow,
 } from "../server";
-import { draftSpec, labelSpec } from "./specs";
+import { draftSpec, labelSpec, sheetSpec } from "./specs";
 
 beforeEach(resetDatabase);
 
@@ -44,6 +44,45 @@ describe("a member's workflows", () => {
       switch: null,
     });
     expect(visible[0]?.description.length).toBeGreaterThan(0);
+  });
+
+  it("include org-credential ones, which say so, and what they need from Sheets", async () => {
+    const { admin, member } = await salesAndSupport();
+    await connectOrgInbox(admin.ctx, "support@org-a.test");
+    const shared = await publishTo(
+      admin.ctx,
+      "Shared",
+      labelSpec({ id: "shared", credentials: "org" }),
+      ["sales"],
+    );
+    const prices = await publishTo(admin.ctx, "Prices", sheetSpec(), ["sales"]);
+
+    expect(await getVisibleWorkflow(member.ctx, shared.workflowId)).toMatchObject({
+      credentials: "org",
+      maxRisk: "internal_reversible",
+      requiredApps: ["Gmail"],
+    });
+    expect((await getVisibleWorkflow(member.ctx, prices.workflowId)).requiredApps).toEqual([
+      "Gmail",
+      "Sheets",
+    ]);
+  });
+
+  it("leave out a workflow not yet published, and one published to no tags", async () => {
+    const { orgA } = await seedTwoOrgs();
+    await connectGmail(orgA.admin.ctx, orgA.admin.email);
+    await tagUsers(orgA.admin.ctx, "sales", [orgA.member]);
+    await saveWorkflow(orgA.admin.ctx, {
+      name: "Draft",
+      spec: draftSpec({ visibility: { tags: ["sales"] } }),
+    });
+    const untagged = await publishTo(orgA.admin.ctx, "Labels", labelSpec(), []);
+
+    expect(await listVisibleWorkflows(orgA.member.ctx)).toEqual([]);
+    // Admins see every published workflow, untagged too.
+    expect((await listVisibleWorkflows(orgA.admin.ctx)).map((workflow) => workflow.id)).toEqual([
+      untagged.workflowId,
+    ]);
   });
 
   it("can be read one by one; one published elsewhere is not found", async () => {

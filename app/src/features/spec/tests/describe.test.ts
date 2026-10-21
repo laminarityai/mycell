@@ -3,6 +3,7 @@ import { describeSpec } from "../describe";
 import type { Spec } from "../types";
 import { validateSpec } from "../validate";
 import { exampleSpec } from "./example-spec";
+import { pathOf, triageSpec } from "./triage-spec";
 
 function parsed(input: unknown): Spec {
   const result = validateSpec(input);
@@ -40,6 +41,24 @@ describe("describeSpec", () => {
       ],
       ["approve", "Waits for a person to review the Gmail drafts before they go anywhere.", null],
     ]);
+  });
+
+  it("says in plain words that an every-match branch runs each path that applies", () => {
+    const spec = triageSpec();
+    spec.steps[2] = {
+      ...spec.steps[2],
+      mode: "every",
+      paths: [
+        pathOf("urgent", [{ subject: { from: "details.urgent" }, op: "is_yes" }]),
+        pathOf("pricing", [{ classify: "kind", is: "pricing", minP: 0.85 }]),
+      ],
+    };
+
+    const route = describeSpec(parsed(spec)).find((step) => step.id === "route");
+
+    expect(route?.text).toBe(
+      'Every match: runs each path that applies, one after another, left to right: "urgent" if details.urgent is yes; "pricing" if "kind" says "pricing" with at least 85% confidence; if none applies, stops.',
+    );
   });
 
   it("marks the steps that wait for a review, and those the policy engine added", () => {

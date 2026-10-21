@@ -19,13 +19,13 @@ import { defaultRetryPolicy, runInline, withRetries } from "./run-step";
 import { findRun, stepsOf } from "./runs";
 import { runs, runSteps } from "./schema";
 import type { StepContext, StepExecution } from "./step-context";
-import { walkSteps, type StepPlace, type WalkedStep } from "./walk";
+import { walkSteps, type StepEnding, type StepPlace, type WalkedStep } from "./walk";
 
 type Run = NonNullable<Awaited<ReturnType<typeof findRun>>>;
 type Ended = RunOutcome["status"];
 
-/** One step's result as the step state keeps it: whether it ended the run, and its output. */
-type StepResult = WalkedStep<Ended>;
+/** One step's result as the step state keeps it: whether it ended its path, and its output. */
+type StepResult = WalkedStep<StepEnding>;
 
 /**
  * The run can't go on: its switch went off or its connection went. When the connection row is
@@ -79,7 +79,9 @@ async function executeStep(ctx: Ctx, run: Run, step: Step, place: RunPlace): Pro
       await recordStep(ctx, run, step, place.position, startedAt, attempted, {
         failure: attempted.failure,
       });
-      return { ended: "failed", output: null };
+      // A failure ends its own path; out of credits, every path would meet it, so the run.
+      const endsRun = attempted.failure.code === "out_of_credits";
+      return { ended: "failed", output: null, endsRun };
     }
     const execution = attempted.value;
     await recordStep(ctx, run, step, place.position, startedAt, attempted, {

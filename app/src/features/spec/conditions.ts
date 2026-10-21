@@ -1,11 +1,17 @@
 // What a path's condition may test, and with which checks (ADR-0015): a classify answer, or a
-// value read from above the branch on its own path, typed by what declares it. Today that's an
-// extract step's fields; facts about the trigger and catalog actions' result fields come later.
+// value typed by what declares it: a fact the trigger declares, an extract step's field, or a
+// field a catalog action declares on its result, from above the branch on its own path.
 // Pure, so client code may import it.
-import { checkOperators, type Check, type Step } from "./types";
+import {
+  checkOperators,
+  type Check,
+  type ConditionField,
+  type SpecIssue,
+  type Step,
+  type ValueType,
+} from "./types";
 
-/** The type of a value a check tests, which decides the operators it may use. */
-export type ValueType = "text" | "number" | "yesNo";
+export type { ValueType };
 
 /** A check that tests a value rather than a classify answer. */
 export type ValueCheck = Exclude<Check, { classify: string }>;
@@ -49,7 +55,8 @@ export function describeCheck(check: Check): string {
   return "value" in check ? `${words} ${JSON.stringify(check.value)}` : words;
 }
 
-const DECLARED: Record<"string" | "number" | "boolean", ValueType> = {
+/** The type a check gives an extract step's field, by the type the step declares it with. */
+export const EXTRACTED: Record<"string" | "number" | "boolean", ValueType> = {
   string: "text",
   number: "number",
   boolean: "yesNo",
@@ -62,30 +69,80 @@ export function subjectParts(from: string): { source: string; field: string } {
 }
 
 /**
+ * The fields declared outside the spec's steps: the facts its trigger declares, and each
+ * catalog action's result fields. `spec` doesn't know the catalog, so its own validation leaves
+ * `action` out, and the policy engine, which does, checks a tool step's fields.
+ */
+export type DeclaredFields = {
+  trigger: readonly ConditionField[];
+  action?: (name: string) => readonly ConditionField[] | undefined;
+};
+
+/**
  * The type of the value `from` names, given the steps above the branch on its own path, or why
- * a check can't test it. The step must be above the branch, which the caller checks first.
+ * a check can't test it. The type is undefined for a tool step's field when `declared` has no
+ * `action`: only the catalog knows it.
  */
 export function subjectType(
   from: string,
   above: readonly Step[],
-): { ok: true; type: ValueType } | { ok: false; message: string } {
+  declared: DeclaredFields,
+): { ok: true; type: ValueType | undefined } | { ok: false; message: string } {
   const { source, field } = subjectParts(from);
   if (source === "trigger") {
-    return { ok: false, message: "Facts about the message can't be checked yet." };
+    return fieldIn(declared.trigger, field, `The trigger has no fact "${field}"`);
   }
   const step = above.findLast((candidate) => candidate.id === source);
   if (step === undefined) {
     return { ok: false, message: `"${source}" isn't above this branch on its path.` };
   }
+  if (step.type === "tool") {
+    if (declared.action === undefined) return { ok: true, type: undefined };
+    const fields = declared.action(step.action) ?? [];
+    return fieldIn(fields, field, `"${source}" (${step.action}) gives no field "${field}" to test`);
+  }
   if (step.type !== "extract") {
     return {
       ok: false,
-      message: `A check can test an extract step's fields, and "${source}" is a ${step.type} step.`,
+      message: `A check can test the trigger's facts or an extract or tool step's fields, and "${source}" is a ${step.type} step.`,
     };
   }
-  const declared = Object.hasOwn(step.fields, field) ? step.fields[field] : undefined;
-  if (declared === undefined) {
+  const extracted = Object.hasOwn(step.fields, field) ? step.fields[field] : undefined;
+  if (extracted === undefined) {
     return { ok: false, message: `"${source}" has no field "${field}".` };
   }
-  return { ok: true, type: DECLARED[declared.type] };
+  return { ok: true, type: EXTRACTED[extracted.type] };
 }
+
+function fieldIn(fields: readonly ConditionField[], name: string, missing: string) {
+  const found = fields.find((candidate) => candidate.name === name);
+  if (found !== undefined) return { ok: true as const, type: found.type };
+  const named = fields.map((candidate) => candidate.name).join(", ");
+  const message = `${missing}; it may test ${named === "" ? "none" : named}.`;
+  return { ok: false as const, message };
+}
+
+/**
+ * Why a check on a value can't run: its subject isn't something above the branch it may test,
+ * or its operator doesn't fit the subject's type. `checkAt` places each issue.
+ */
+export function valueCheckIssues(
+  check: ValueCheck,
+  checkAt: (...field: string[]) => SpecIssue["path"],
+  above: readonly Step[],
+  declared: DeclaredFields,
+): SpecIssue[] {
+  const subject = subjectType(check.subject.from, above, declared);
+  if (!subject.ok) return [{ path: checkAt("subject", "from"), message: subject.message }];
+  if (subject.type !== undefined && !operatorsFor(subject.type).includes(check.op)) {
+    const message = `${check.subject.from} is ${TYPE_WORDS[subject.type]}, so "${check.op}" can't check it.`;
+    return [{ path: checkAt("op"), message }];
+  }
+  return [];
+}
+
+const TYPE_WORDS: Record<ValueType, string> = {
+  text: "text",
+  number: "a number",
+  yesNo: "a yes or no",
+};

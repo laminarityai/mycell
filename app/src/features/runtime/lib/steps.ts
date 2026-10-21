@@ -5,9 +5,10 @@ import type { Step } from "@/features/spec/types";
 import type { Json } from "../types";
 import { callModel } from "./call-model";
 import { classify } from "./classify";
-import { chooseFirstMatch } from "./conditions";
+import { chooseEveryMatch, chooseFirstMatch } from "./conditions";
 import { messageText } from "./gmail";
 import type { StepContext, StepExecution } from "./step-context";
+import { withTriggerFacts } from "./trigger-facts";
 
 type StepOf<T extends Step["type"]> = Extract<Step, { type: T }>;
 
@@ -79,13 +80,17 @@ export async function extractStep(
 }
 
 /**
- * Chooses where the run goes: the first path, left to right, whose condition holds, or the
- * otherwise path when none does; with nothing on the otherwise path, the run stops here. The
- * output names the path taken, for the walker. The record keeps each path's checks as passed
- * or failed, never the values they tested.
+ * Chooses where the run goes: the first path, left to right, whose condition holds (first
+ * match) or every one that holds (every match), or the otherwise path when none does; with
+ * nothing on the otherwise path, the run stops here. The output names the paths taken, for the
+ * walker. The record keeps each path's checks as passed or failed, never the values they tested.
  */
-export function branchStep(step: StepOf<"branch">, context: StepContext): Promise<StepExecution> {
-  const { taken, paths } = chooseFirstMatch(step, context.outputs);
+export async function branchStep(
+  step: StepOf<"branch">,
+  context: StepContext,
+): Promise<StepExecution> {
+  const choose = step.mode === "every" ? chooseEveryMatch : chooseFirstMatch;
+  const { taken, paths } = choose(step, await withTriggerFacts(step, context));
   const stops = taken.includes(step.otherwise.id) && step.otherwise.steps.length === 0;
   // The paths checked, with each check's pass or fail; never a reason, which may quote a value.
   const checked = paths
@@ -95,12 +100,12 @@ export function branchStep(step: StepOf<"branch">, context: StepContext): Promis
       holds: path.status === "taken",
       checks: path.checks.map((check) => check.passed),
     }));
-  return Promise.resolve({
+  return {
     next: stops ? "skipped" : "continue",
     output: { taken },
     record: { taken, paths: checked },
     paths,
-  });
+  };
 }
 
 export function escalateStep(): Promise<StepExecution> {

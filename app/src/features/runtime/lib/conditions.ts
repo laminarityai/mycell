@@ -40,6 +40,30 @@ export function chooseFirstMatch(branch: BranchStep, outputs: Outputs): BranchCh
   return { taken: [taken ?? otherwise], paths };
 }
 
+/**
+ * Every match: checks every path, left to right, and takes each whose condition holds, in that
+ * order, or the otherwise path when none does.
+ */
+export function chooseEveryMatch(branch: BranchStep, outputs: Outputs): BranchChoice {
+  const paths = branch.paths.map((path) => checkedPath(path, outputs));
+  const taken = paths.filter((path) => path.status === "taken").map((path) => path.id);
+  const otherwise = branch.otherwise.id;
+  const status = taken.length === 0 ? "taken" : "not_needed";
+  paths.push({ id: otherwise, name: null, status, checks: [] });
+  return { taken: taken.length === 0 ? [otherwise] : taken, paths };
+}
+
+/** A path with each of its checks' outcomes, taken when its condition holds. */
+function checkedPath(path: BranchStep["paths"][number], outputs: Outputs): BranchPath {
+  const checks = path.condition.checks.map((check): CheckResult => ({
+    check: describeCheck(check),
+    ...outcome(check, outputs),
+  }));
+  const passed = checks.map((check) => check.passed);
+  const holds = path.condition.combine === "all" ? passed.every(Boolean) : passed.some(Boolean);
+  return { id: path.id, name: path.name, status: holds ? "taken" : "not_taken", checks };
+}
+
 /** Whether the check passes on the outputs above its branch, and why. */
 function outcome(check: Check, outputs: Outputs): Outcome {
   if ("classify" in check) {

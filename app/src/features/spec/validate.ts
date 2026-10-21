@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import { branchIssues } from "./branch-issues";
 import { eachStep } from "./tree";
+import { triggerFacts } from "./triggers";
 import {
   MAX_BRANCH_DEPTH,
   specSchema,
@@ -61,7 +62,8 @@ function structuralIssues(spec: Spec): SpecIssue[] {
     seen.add(step.id);
 
     if (step.type === "branch") {
-      issues.push(...branchIssues(step, at, above, refersBack, seen));
+      const declared = { trigger: triggerFacts[spec.trigger.type] };
+      issues.push(...branchIssues(step, at, above, refersBack, seen, declared));
       const depth = above.filter((candidate) => candidate.type === "branch").length + 1;
       if (depth > MAX_BRANCH_DEPTH) {
         const message = `Branches nest at most ${String(MAX_BRANCH_DEPTH)} deep, and this one is ${String(depth)} deep.`;

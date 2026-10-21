@@ -228,6 +228,8 @@ describe("graphView", () => {
       ["pricing", null, ["reply", "reply-approval"]],
       ["rest", null, ["to-person"]],
     ]);
+    // Marked as the diff marks it where it went.
+    expect(paths[2].steps[0].change).toBe("added");
   });
 
   it("draws a new workflow's proposal as all new, and no workflow as no steps", () => {

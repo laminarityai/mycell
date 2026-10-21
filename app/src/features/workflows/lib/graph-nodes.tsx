@@ -8,12 +8,28 @@ import { CircleCheck, CircleX, Inbox, Octagon } from "lucide-react";
 import type { RiskLevel } from "@/features/policy/types";
 import type { LayoutNode } from "@/features/spec/layout";
 import { cn } from "@/lib/utils";
-import { ChangeBadge, PathRunSummary, ReviewBadge, StepIcon, changeClasses } from "./graph-parts";
+import type { BoxMarks } from "./graph-drawing";
+import {
+  ChangeBadge,
+  IssueMark,
+  PathRunSummary,
+  ReviewBadge,
+  StepIcon,
+  changeClasses,
+} from "./graph-parts";
 import { RiskBadge } from "./risk-badge";
 
 type Of<Kind extends LayoutNode["kind"]> = NodeProps<
-  Node<Extract<LayoutNode<RiskLevel>, { kind: Kind }>, Kind>
+  Node<Extract<LayoutNode<RiskLevel>, { kind: Kind }> & BoxMarks, Kind>
 >;
+
+/** A box selected for the side panel, or with issues, while the graph is edited. */
+function marked(data: BoxMarks): string {
+  return cn(
+    (data.issues?.length ?? 0) > 0 && "border-red-500",
+    data.selected === true && "ring-2 ring-primary",
+  );
+}
 
 const HIDDEN = "!h-1 !min-h-0 !w-1 !min-w-0 !border-0 !bg-transparent";
 
@@ -38,6 +54,7 @@ export function TriggerNode({ data }: Of<"trigger">) {
       className={cn(
         "flex h-full flex-col gap-0.5 rounded-lg border bg-card px-3 py-2 shadow-sm",
         data.run === "taken" && "border-emerald-500",
+        marked(data),
       )}
     >
       <p className={HEADING}>
@@ -64,12 +81,14 @@ export function StepNode({ data }: Of<"step">) {
         step.run === "taken" && "border-emerald-500 ring-1 ring-emerald-500/40",
         step.run === "failed" && "border-red-500 ring-1 ring-red-500/40",
         step.run === "skipped" && "opacity-35",
+        marked(data),
       )}
     >
       <div className={HEADING}>
         <StepIcon step={step} />
         <span className="truncate">{step.title}</span>
         <span className="ml-auto flex items-center gap-1 normal-case">
+          <IssueMark issues={data.issues} />
           <ChangeBadge change={step.change} />
           {step.run === "taken" ? (
             <CircleCheck aria-label="Ran" className="size-3.5 text-emerald-600" />
@@ -112,11 +131,13 @@ export function PathNode({ data }: Of<"path">) {
         changeClasses(path.change),
         status === "taken" && "border-emerald-500 bg-emerald-50 ring-1 ring-emerald-500/40",
         (status === "not_checked" || status === "not_needed") && "opacity-50",
+        marked(data),
       )}
     >
       <div className="flex items-center gap-1 text-xs font-semibold">
         <span className="truncate">{path.name ?? "Otherwise"}</span>
-        <span className="ml-auto">
+        <span className="ml-auto flex items-center gap-1">
+          <IssueMark issues={data.issues} />
           <ChangeBadge change={path.change} />
         </span>
       </div>

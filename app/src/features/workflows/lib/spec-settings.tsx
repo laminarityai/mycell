@@ -1,7 +1,7 @@
 "use client";
 
 // The top of the form: the spec's ID, whose credentials it runs with, its trigger and its rung.
-import type { SpecDraft } from "@/features/spec/edit";
+import type { SpecDraft } from "@/features/spec/draft";
 import type { SpecIssue } from "@/features/spec/types";
 import { issuesAt, ListField, NumberField, record, SelectField, TextField } from "./spec-fields";
 

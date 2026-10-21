@@ -22,6 +22,38 @@ export function operatorsFor(type: ValueType): readonly Operator[] {
   return [...checkOperators[type], ...checkOperators.any];
 }
 
+/** A new check on a field: its type's first operator, and a blank value of its type. */
+export function checkOn(field: { from: string; type: ValueType }): ValueCheck {
+  const [first] = checkOperators[field.type];
+  return withOperator({ subject: { from: field.from }, op: "is_empty" }, first);
+}
+
+/**
+ * The check with another operator: a value it had is kept when the operator takes one of its
+ * type, a blank of the right type is given when it had none, and none is kept for an operator
+ * that takes no value.
+ */
+export function withOperator(check: ValueCheck, op: Operator): ValueCheck {
+  const value = "value" in check ? check.value : undefined;
+  const { subject } = check;
+  if (isOneOf(checkOperators.text, op)) {
+    return { subject, op, value: typeof value === "string" ? value : "" };
+  }
+  if (isOneOf(checkOperators.number, op)) {
+    return { subject, op, value: typeof value === "number" ? value : 0 };
+  }
+  return { subject, op };
+}
+
+function isOneOf<Op extends Operator>(ops: readonly Op[], op: Operator): op is Op {
+  return (ops as readonly Operator[]).includes(op);
+}
+
+/** An operator in words: "is more than", "doesn't contain". */
+export function operatorWords(op: Operator): string {
+  return OPERATOR_WORDS[op];
+}
+
 const OPERATOR_WORDS: Record<Operator, string> = {
   is: "is",
   is_not: "is not",

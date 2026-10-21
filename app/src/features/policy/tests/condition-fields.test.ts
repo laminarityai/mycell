@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { ValueType } from "@/features/spec/types";
 import { catalog } from "../catalog";
-import { testableFields } from "../condition-fields";
+import { checkChoices, testableFields } from "../condition-fields";
 import { applyPolicy } from "../engine";
 import { parsedSpec } from "./specs";
 
@@ -171,5 +171,148 @@ describe("testableFields", () => {
     ]);
     expect(testableFields(spec, "route").map((field) => field.from)).not.toContain("count.chairs");
     expect(testableFields(spec, "lookup")).toEqual([]);
+  });
+});
+
+describe("checkChoices", () => {
+  /** Classify the message, then a branch with a sorting path and a sizing path, each with its own steps. */
+  function sortingSpec() {
+    const sizing = {
+      id: "big",
+      name: "Big",
+      condition: { combine: "all", checks: [value("order.rush", "is_yes")] },
+      steps: [
+        {
+          id: "count",
+          type: "extract",
+          role: "fast",
+          fields: { chairs: { type: "number", description: "How many chairs" } },
+        },
+        {
+          id: "size",
+          type: "branch",
+          paths: [
+            {
+              id: "many",
+              name: "Many",
+              condition: { combine: "all", checks: [value("count.chairs", "more_than", 10)] },
+              steps: [escalate("big-one")],
+            },
+          ],
+          otherwise: { id: "few", steps: [] },
+        },
+      ],
+    };
+    const sorting = {
+      id: "sorted",
+      name: "Sorted",
+      condition: { combine: "all", checks: [{ classify: "kind", is: "sales", minP: 0.8 }] },
+      steps: [
+        { id: "mood", type: "classify", role: "classify", question: "Happy?", labels: ["y", "n"] },
+        {
+          id: "notes",
+          type: "extract",
+          role: "fast",
+          fields: { tone: { type: "string", description: "Their tone" } },
+        },
+        {
+          id: "inner",
+          type: "branch",
+          paths: [
+            {
+              id: "happy",
+              name: "Happy",
+              condition: { combine: "all", checks: [{ classify: "mood", is: "y", minP: 0.8 }] },
+              steps: [],
+            },
+          ],
+          otherwise: { id: "unhappy", steps: [] },
+        },
+      ],
+    };
+    return parsedSpec({
+      specVersion: 2,
+      id: "sorting",
+      credentials: "member",
+      trigger: { type: "gmail.message_received" },
+      autonomy: { rung: 3 },
+      steps: [
+        {
+          id: "kind",
+          type: "classify",
+          role: "classify",
+          question: "What is it?",
+          labels: ["sales", "support"],
+        },
+        {
+          id: "order",
+          type: "extract",
+          role: "fast",
+          fields: { rush: { type: "boolean", description: "Whether they need it fast" } },
+        },
+        {
+          id: "route",
+          type: "branch",
+          paths: [sorting, sizing],
+          otherwise: { id: "rest", steps: [] },
+        },
+      ],
+    });
+  }
+
+  it("offers a branch's classify answers and fields from above it on its own path only", () => {
+    const spec = sortingSpec();
+
+    const choices = checkChoices(spec, "size");
+
+    expect(choices.answers).toEqual([
+      { classify: "kind", is: "sales", label: '"kind" says "sales"' },
+      { classify: "kind", is: "support", label: '"kind" says "support"' },
+    ]);
+    expect(choices.fields.map((field) => field.from)).toEqual([
+      "trigger.sender",
+      "trigger.senderDomain",
+      "trigger.subject",
+      "trigger.hasAttachment",
+      "trigger.isReply",
+      "order.rush",
+      "count.chairs",
+    ]);
+    const inner = checkChoices(spec, "inner");
+    expect(inner.answers.map((answer) => answer.classify)).toEqual([
+      "kind",
+      "kind",
+      "mood",
+      "mood",
+    ]);
+    expect(inner.fields.map((field) => field.from)).toContain("notes.tone");
+    expect(inner.fields.map((field) => field.from)).not.toContain("count.chairs");
+  });
+
+  it("gives each field the operators its type allows", () => {
+    const fields = checkChoices(sortingSpec(), "size").fields;
+    const operators = (from: string) => fields.find((field) => field.from === from)?.operators;
+
+    expect(operators("count.chairs")).toEqual([
+      "equals",
+      "does_not_equal",
+      "more_than",
+      "less_than",
+      "at_least",
+      "at_most",
+      "is_empty",
+      "is_not_empty",
+    ]);
+    expect(operators("order.rush")).toEqual(["is_yes", "is_no", "is_empty", "is_not_empty"]);
+    expect(operators("trigger.subject")).toEqual([
+      "is",
+      "is_not",
+      "contains",
+      "does_not_contain",
+      "starts_with",
+      "ends_with",
+      "is_empty",
+      "is_not_empty",
+    ]);
   });
 });

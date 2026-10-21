@@ -162,6 +162,36 @@ describe("layoutTree", () => {
     );
   });
 
+  it("says where each line adds a step: its list and the step before, past policy's reviews", () => {
+    const spec = parsed(triageSpec());
+    const branch = spec.steps[2];
+    if (branch.type !== "branch") throw new Error("the triage spec has a branch");
+    branch.paths[1].steps.push({ id: "reply-approval", type: "approval", channel: "gmail_drafts" });
+    const view = graphView(spec, { insertedApprovals: ["reply-approval"] });
+
+    const { edges } = layoutTree(view);
+
+    const insert = (source: string, target: string) =>
+      edges.find((edge) => edge.source === source && edge.target === target)?.insert;
+    expect(insert("trigger", "step:kind")).toEqual({ list: "root", after: null });
+    expect(insert("step:details", "step:route")).toEqual({ list: "root", after: "details" });
+    expect(insert("step:route", "path:complaint")).toBeNull();
+    expect(insert("path:complaint", "step:to-person")).toEqual({ list: "complaint", after: null });
+    expect(insert("step:to-person", "end:complaint")).toEqual({
+      list: "complaint",
+      after: "to-person",
+    });
+    expect(insert("step:reply", "step:reply-approval")).toEqual({
+      list: "pricing",
+      after: "reply",
+    });
+    expect(insert("step:reply-approval", "end:pricing")).toEqual({
+      list: "pricing",
+      after: "reply",
+    });
+    expect(insert("path:rest", "end:rest")).toEqual({ list: "rest", after: null });
+  });
+
   it("lights the lines a Try it's message took, and dims the rest", () => {
     const view = graphView(parsed(triageSpec()), {
       trace: {

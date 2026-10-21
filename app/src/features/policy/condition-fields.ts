@@ -4,12 +4,14 @@
 // Pure: no IO, no ctx, so client code may import it.
 import {
   EXTRACTED,
+  operatorsFor,
   subjectParts,
   valueCheckIssues,
   type DeclaredFields,
+  type Operator,
   type ValueCheck,
 } from "@/features/spec/conditions";
-import { eachStep } from "@/features/spec/tree";
+import { eachStep, stepsAbove } from "@/features/spec/tree";
 import { triggerFacts } from "@/features/spec/triggers";
 import type { Spec, SpecIssue, Step, ValueType } from "@/features/spec/types";
 import { findAction } from "./catalog";
@@ -55,6 +57,31 @@ export function testableFields(spec: Spec, branchId: string): TestableField[] {
     }));
   });
   return [...facts, ...fields];
+}
+
+/** A classify answer a check may test: the classify step, one of its labels, and the words. */
+export type AnswerChoice = { classify: string; is: string; label: string };
+
+/** What a check on one of a branch's paths may test, as the condition editor offers it. */
+export type CheckChoices = {
+  /** Each classify step's answers above the branch on its own path, top down. */
+  answers: AnswerChoice[];
+  /** Each value it may test (`testableFields`), with the operators its type allows. */
+  fields: (TestableField & { operators: readonly Operator[] })[];
+};
+
+/** Everything a check on one of `branchId`'s paths may test, and how. */
+export function checkChoices(spec: Spec, branchId: string): CheckChoices {
+  const answers = stepsAbove(spec, branchId).flatMap((step) =>
+    step.type === "classify"
+      ? step.labels.map((is) => ({ classify: step.id, is, label: `"${step.id}" says "${is}"` }))
+      : [],
+  );
+  const fields = testableFields(spec, branchId).map((field) => ({
+    ...field,
+    operators: operatorsFor(field.type),
+  }));
+  return { answers, fields };
 }
 
 /**

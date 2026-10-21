@@ -1,137 +1,119 @@
-// Editing a working spec by hand, as the workflow editor does. The editor edits a draft: any
-// JSON object with a list of step objects, which needn't be a valid spec yet (validation says
-// what's wrong, at the step and field it's about). Pure, so client code may import it.
-import type { SpecIssue, StepType } from "./types";
-
-/** One step as the form edits it: whatever fields it has, not yet validated. */
-export type StepDraft = { id?: unknown; type?: unknown; [field: string]: unknown };
-
-/** A spec as the form edits it. */
-export type SpecDraft = { steps: StepDraft[]; [field: string]: unknown };
-
-export type SpecJsonRead = { ok: true; draft: SpecDraft } | { ok: false; message: string };
+// Editing a spec on the workflow graph: each edit names the step, path or list it changes by
+// ID and returns a new spec, leaving the one it was given as it was. An edit may leave the spec
+// invalid (a path with no checks, a blank question); validation says what's wrong, where.
+// Pure, so client code may import it.
+import { eachStep, mapStepLists } from "./tree";
+import type { BranchStep, Path, Spec, Step } from "./types";
 
 /**
- * The JSON view's text as a draft, or why it can't be one: it isn't JSON, or isn't an object
- * whose `steps` is a list of objects. A spec with no `steps` yet gets an empty list.
+ * Where a new step goes: a list (`root`, or a path's ID) and the step it follows there, or
+ * null for the top of the list.
  */
-export function readSpecJson(text: string): SpecJsonRead {
-  let value: unknown;
-  try {
-    value = JSON.parse(text);
-  } catch {
-    return {
-      ok: false,
-      message: "This isn't valid JSON. Check for a missing comma, quote or bracket.",
-    };
-  }
-  if (!isObject(value)) return { ok: false, message: "The spec must be a JSON object." };
-  const steps = value.steps ?? [];
-  if (!Array.isArray(steps) || !steps.every(isObject)) {
-    return { ok: false, message: "The spec's steps must be a list of objects." };
-  }
-  return { ok: true, draft: { ...value, steps } };
-}
+export type InsertAt = { list: string; after: string | null };
 
 /**
- * The draft with step `index`'s fields changed: each key of `fields` is set, or removed when
- * its value is undefined. The draft itself is left as it was.
+ * The spec with `step` inserted. A branch ends its list, since paths never join, so the steps
+ * below a new branch move onto its otherwise path, after any it already has: nothing built is
+ * lost, and a message no path takes goes on as before.
  */
-export function updateStep(
-  draft: SpecDraft,
-  index: number,
-  fields: Record<string, unknown>,
-): SpecDraft {
-  return {
-    ...draft,
-    steps: draft.steps.map((step, at) => (at === index ? withFields(step, fields) : step)),
-  };
+export function insertStep(spec: Spec, at: InsertAt, step: Step): Spec {
+  return editList(spec, at.list, (steps) => {
+    const index = at.after === null ? 0 : steps.findIndex((s) => s.id === at.after) + 1;
+    const below = steps.slice(index);
+    if (step.type !== "branch") return [...steps.slice(0, index), step, ...below];
+    const otherwise = { ...step.otherwise, steps: [...step.otherwise.steps, ...below] };
+    return [...steps.slice(0, index), { ...step, otherwise }];
+  });
 }
 
-/** The draft with a new step of `type` at the end, its blanks for the admin to fill in. */
-export function addStep(draft: SpecDraft, type: StepType): SpecDraft {
-  const taken = new Set(draft.steps.map((step) => step.id));
-  let id: string = type;
-  for (let n = 2; taken.has(id); n += 1) id = `${type}-${String(n)}`;
-  return { ...draft, steps: [...draft.steps, { id, type, ...blankFields(type, draft) }] };
+/** The spec with the step with this ID, at any depth, replaced by what `change` makes of it. */
+export function updateStep(spec: Spec, stepId: string, change: (step: Step) => Step): Spec {
+  return mapStepLists(spec, (steps) =>
+    steps.map((step) => (step.id === stepId ? change(step) : step)),
+  );
 }
 
-export function removeStep(draft: SpecDraft, index: number): SpecDraft {
-  return { ...draft, steps: draft.steps.filter((_, at) => at !== index) };
+/** The spec without the step with this ID; a branch goes with every step on its paths. */
+export function removeStep(spec: Spec, stepId: string): Spec {
+  return mapStepLists(spec, (steps) => steps.filter((step) => step.id !== stepId));
 }
 
-/** The draft with step `index` moved one place up (-1) or down (1); unchanged at either end. */
-export function moveStep(draft: SpecDraft, index: number, by: -1 | 1): SpecDraft {
+/** The spec with `path` added to the branch, last before its otherwise path. */
+export function addPath(spec: Spec, branchId: string, path: Path): Spec {
+  return editBranch(spec, branchId, (branch) => ({ ...branch, paths: [...branch.paths, path] }));
+}
+
+/** The spec without the path with this ID, and the steps on it. */
+export function removePath(spec: Spec, pathId: string): Spec {
+  const branch = branchOf(spec, pathId);
+  if (branch === undefined) return spec;
+  return editBranch(spec, branch.id, (step) => ({
+    ...step,
+    paths: step.paths.filter((path) => path.id !== pathId),
+  }));
+}
+
+/** The spec with the path moved one place left (-1) or right (1); unchanged at either end. */
+export function movePath(spec: Spec, pathId: string, by: -1 | 1): Spec {
+  const branch = branchOf(spec, pathId);
+  if (branch === undefined) return spec;
+  const index = branch.paths.findIndex((path) => path.id === pathId);
   const to = index + by;
-  const step = draft.steps.at(index);
-  const other = draft.steps.at(to);
-  if (index < 0 || to < 0) return draft;
-  if (step === undefined || other === undefined) return draft;
-  const steps = [...draft.steps];
-  steps[to] = step;
-  steps[index] = other;
-  return { ...draft, steps };
+  const path = branch.paths.at(index);
+  const other = branch.paths.at(to);
+  if (path === undefined || other === undefined || to < 0) return spec;
+  const paths = [...branch.paths];
+  paths[to] = path;
+  paths[index] = other;
+  return editBranch(spec, branch.id, (step) => ({ ...step, paths }));
 }
 
-/**
- * Issues grouped for the form: those about step `i` (path `steps.i…`) under `steps.get(i)`,
- * with paths relative to the step; the rest, about the spec's settings, under `spec`.
- */
-export function issuesByStep(issues: readonly SpecIssue[]): {
-  spec: SpecIssue[];
-  steps: Map<number, SpecIssue[]>;
-} {
-  const spec: SpecIssue[] = [];
-  const steps = new Map<number, SpecIssue[]>();
-  for (const issue of issues) {
-    const [first, index, ...rest] = issue.path;
-    if (first !== "steps" || typeof index !== "number") {
-      spec.push(issue);
-      continue;
-    }
-    steps.set(index, [...(steps.get(index) ?? []), { path: rest, message: issue.message }]);
+/** The spec with the path with this ID replaced by what `change` makes of it. */
+export function updatePath(spec: Spec, pathId: string, change: (path: Path) => Path): Spec {
+  const branch = branchOf(spec, pathId);
+  if (branch === undefined) return spec;
+  return editBranch(spec, branch.id, (step) => ({
+    ...step,
+    paths: step.paths.map((path) => (path.id === pathId ? change(path) : path)),
+  }));
+}
+
+/** The spec with the branch running the first path that holds, or every one. */
+export function setBranchMode(spec: Spec, branchId: string, mode: BranchStep["mode"]): Spec {
+  return editBranch(spec, branchId, (branch) => ({ ...branch, mode }));
+}
+
+/** The branch one of whose paths (not its otherwise path) has this ID. */
+export function branchOf(spec: Spec, pathId: string): BranchStep | undefined {
+  for (const { step } of eachStep(spec)) {
+    if (step.type === "branch" && step.paths.some((path) => path.id === pathId)) return step;
   }
-  return { spec, steps };
+  return undefined;
 }
 
-function blankFields(type: StepType, draft: SpecDraft): Record<string, unknown> {
-  switch (type) {
-    case "classify":
-      return { role: "classify", question: "", labels: ["yes", "no"] };
-    case "branch": {
-      const classify = draft.steps.findLast((step) => step.type === "classify");
+function editBranch(spec: Spec, branchId: string, change: (branch: BranchStep) => Step): Spec {
+  return updateStep(spec, branchId, (step) => (step.type === "branch" ? change(step) : step));
+}
+
+/** The spec with `change` applied to the list with this ID: `root`, or a path's. */
+function editList(spec: Spec, listId: string, change: (steps: Step[]) => Step[]): Spec {
+  const inList = (steps: Step[]): Step[] =>
+    steps.map((step) => {
+      if (step.type !== "branch") return step;
       return {
-        when: {
-          step: typeof classify?.id === "string" ? classify.id : "",
-          label: "yes",
-          minP: 0.8,
+        ...step,
+        paths: step.paths.map((path) => ({
+          ...path,
+          steps: path.id === listId ? change(path.steps) : inList(path.steps),
+        })),
+        otherwise: {
+          ...step.otherwise,
+          steps:
+            step.otherwise.id === listId
+              ? change(step.otherwise.steps)
+              : inList(step.otherwise.steps),
         },
-        else: "stop",
       };
-    }
-    case "extract":
-      return { role: "fast", fields: { field: { type: "string", description: "" } } };
-    case "tool":
-      return { action: "", input: {} };
-    case "draft":
-      return {
-        role: "smart",
-        instructions: "",
-        context: ["trigger.message"],
-        output: "google-mail.create-draft",
-      };
-    case "approval":
-      return { channel: "gmail_drafts" };
-    case "escalate":
-      return { reason: "" };
-  }
-}
-
-function withFields(step: StepDraft, fields: Record<string, unknown>): StepDraft {
-  const entries = Object.entries({ ...step, ...fields });
-  return Object.fromEntries(entries.filter(([, value]) => value !== undefined));
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+    });
+  return { ...spec, steps: listId === "root" ? change(spec.steps) : inList(spec.steps) };
 }

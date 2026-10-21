@@ -157,6 +157,101 @@ test("an admin writes a branching workflow in the JSON view and sees its paths o
   expect(JSON.parse(await jsonView(page).inputValue())).toEqual(renamed);
 });
 
+test("an admin edits the workflow on the graph: a step and a path in the side panel, a step added with +", async ({
+  page,
+  context,
+  orgs: { orgA },
+  signInAs,
+}) => {
+  await withGmail(orgA.admin, orgA.id);
+  await signInAs(orgA.admin);
+  await page.goto("/workflows/new");
+  await page.getByRole("textbox", { name: "Name" }).fill("Triage");
+  await saveInJson(page, TRIAGE);
+  await expect(page.getByRole("heading", { name: "Workflow", exact: true })).toBeVisible();
+  // A second tab opens the same revision, to save over it later.
+  const other = await context.newPage();
+  await other.goto(page.url());
+
+  // A step, edited in the side panel, changes on the graph as it's typed.
+  const panel = graph(page).getByRole("complementary", { name: "Editor" });
+  await graph(page).getByRole("group", { name: "Step kind", exact: true }).click();
+  await panel.getByRole("textbox", { name: "Question" }).fill("What is this message about?");
+  await expect(graph(page).getByRole("group", { name: "Step kind", exact: true })).toContainText(
+    "What is this message about?",
+  );
+
+  // A path: its name, and its check's confidence. The check offers only what's above it.
+  await graph(page).getByRole("group", { name: "Path Pricing" }).click();
+  await panel.getByRole("textbox", { name: "Name" }).fill("Prices");
+  await panel.getByRole("spinbutton", { name: "Minimum confidence (%)" }).fill("90");
+  await expect(panel.getByRole("combobox", { name: "What to test" })).toContainText(
+    '"kind" says "pricing"',
+  );
+  await expect(graph(page).getByRole("group", { name: "Path Prices" })).toContainText(
+    "at least 90% confidence",
+  );
+  await panel.getByRole("button", { name: "Move left" }).click();
+  await expect(graph(page).getByRole("group", { name: /^Path / })).toHaveText([
+    /^Prices/,
+    /^Complaint/,
+    /^Otherwise/,
+  ]);
+
+  // "+" under the complaint's hand-over adds a catalog action, with its risk.
+  await graph(page).getByRole("button", { name: "Add a step after to-person" }).click();
+  const menu = graph(page).getByRole("menu", { name: "Add a step" });
+  await expect(menu.getByRole("menuitem", { name: /Gmail · Add label/ })).toContainText(
+    "Internal, reversible",
+  );
+  await menu.getByRole("menuitem", { name: /Gmail · Add label/ }).click();
+  await panel.getByRole("textbox", { name: "label" }).fill("Complaints");
+  await expect(
+    graph(page).getByRole("group", { name: "Step add-label", exact: true }),
+  ).toContainText("Internal, reversible");
+
+  await expect(page.getByText("Ready to save.")).toBeVisible();
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText("All changes saved.")).toBeVisible();
+
+  // What was saved is what the graph showed, in the JSON view too.
+  await page.reload();
+  await expect(graph(page).getByRole("group", { name: "Path Prices" })).toBeVisible();
+  await expect(
+    graph(page).getByRole("group", { name: "Step add-label", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("tab", { name: "JSON" }).click();
+  const saved = JSON.parse(await jsonView(page).inputValue()) as {
+    steps: [object, { paths: { name: string; condition: object; steps: object[] }[] }];
+  };
+  const [kind, route] = saved.steps;
+  expect(kind).toMatchObject({ question: "What is this message about?" });
+  expect(route.paths.map((path) => path.name)).toEqual(["Prices", "Complaint"]);
+  expect(route.paths[0]?.condition).toEqual({
+    combine: "all",
+    checks: [{ classify: "kind", is: "pricing", minP: 0.9 }],
+  });
+  expect(route.paths[1]?.steps).toEqual([
+    { id: "to-person", type: "escalate", reason: "A person handles complaints." },
+    {
+      id: "add-label",
+      type: "tool",
+      action: "google-mail.add-label",
+      input: { messageId: { from: "trigger.messageId" }, label: "Complaints" },
+    },
+  ]);
+
+  // The other tab's edit on the graph is over the revision it opened, so it's refused.
+  await graph(other).getByRole("group", { name: "Step kind", exact: true }).click();
+  await graph(other)
+    .getByRole("complementary", { name: "Editor" })
+    .getByRole("textbox", { name: "Question" })
+    .fill("Saved second?");
+  await expect(other.getByText("Ready to save.")).toBeVisible();
+  await other.getByRole("button", { name: "Save" }).click();
+  await expect(other.getByText("The working spec was saved again")).toBeVisible();
+});
+
 test("saving over a newer working spec is refused, and members can't reach the editor", async ({
   page,
   context,

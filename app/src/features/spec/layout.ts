@@ -3,6 +3,7 @@
 // side under it, left to right in the order they're checked, each as wide as what's under it.
 // Box sizes follow from what a box shows, so the same view always gets the same positions.
 // Pure, so client code may import it.
+import type { InsertAt } from "./edit";
 import type { GraphPath, GraphStep, GraphView } from "./graph";
 
 export const STEP_WIDTH = 272;
@@ -35,6 +36,11 @@ export type LayoutEdge = {
   run: LayoutRun;
   /** It leads to something a proposal removes. */
   removed: boolean;
+  /**
+   * Where "+" on the line adds a step: its list and the step it follows there. Null on a line
+   * into a path, or into something a proposal removes.
+   */
+  insert: InsertAt | null;
 };
 
 export type GraphLayout<Risk extends string = string> = {
@@ -65,13 +71,14 @@ export function layoutTree<Risk extends string>(view: GraphView<Risk>): GraphLay
   const edges: LayoutEdge[] = [];
   const tried = view.tried;
   const runOf = (ran: boolean): LayoutRun => (tried ? (ran ? "taken" : "skipped") : null);
-  const connect = (source: Placed, target: Placed) => {
+  const connect = (source: Placed, target: Placed, insert: InsertAt | null = null) => {
     edges.push({
       id: `${source.id}->${target.id}`,
       source: source.id,
       target: target.id,
       run: tried ? (source.ran && target.ran ? "taken" : "skipped") : null,
       removed: target.removed,
+      insert: target.removed ? null : insert,
     });
   };
 
@@ -84,6 +91,8 @@ export function layoutTree<Risk extends string>(view: GraphView<Risk>): GraphLay
     end: EndOf,
   ) => {
     let previous = from;
+    // The step a new one would follow: not one the policy engine inserted, or a proposal removes.
+    let after: string | null = null;
     let y = top;
     for (const step of steps) {
       const height = stepHeight(step);
@@ -98,8 +107,9 @@ export function layoutTree<Risk extends string>(view: GraphView<Risk>): GraphLay
       };
       nodes.push(node);
       const placed = { id: node.id, ran: ranStep(step), removed: step.change === "removed" };
-      connect(previous, placed);
+      connect(previous, placed, { list: end.listId, after });
       previous = placed;
+      if (step.review !== "policy" && step.change !== "removed") after = step.id;
       y += height + ROW_GAP;
       // A branch ends its list: its paths go on side by side.
       if (step.branch !== null) {
@@ -121,7 +131,8 @@ export function layoutTree<Risk extends string>(view: GraphView<Risk>): GraphLay
       removed: previous.removed,
     };
     nodes.push(node);
-    connect(previous, { id: node.id, ran: previous.ran, removed: previous.removed });
+    const placed = { id: node.id, ran: previous.ran, removed: previous.removed };
+    connect(previous, placed, { list: end.listId, after });
   };
 
   const placePaths = (

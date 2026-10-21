@@ -12,3 +12,8 @@ const RISK_LABELS: Record<RiskLevel, string> = {
 export function RiskBadge({ risk }: { risk: RiskLevel }) {
   return <Badge variant={risk === "read" ? "secondary" : "outline"}>{RISK_LABELS[risk]}</Badge>;
 }
+
+/** A risk level in words: "Internal, reversible". */
+export function riskLabel(risk: RiskLevel): string {
+  return RISK_LABELS[risk];
+}

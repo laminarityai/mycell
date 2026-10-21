@@ -1,26 +1,23 @@
 "use client";
 
-// The workflow editor: a workflow's name and working spec, shown as a graph with its settings
-// or edited as JSON (the same spec, switchable at any time), validated live as saving would,
-// and saved over the revision it was opened at. Editing on the graph comes later; until then
-// the steps are edited in the JSON view.
-import { useActionState, useEffect, useMemo, useRef, useState } from "react";
+// The workflow editor: a workflow's name and working spec, edited on its graph with its
+// settings or as JSON (the same spec, switchable at any time), validated live as saving would,
+// and saved over the revision it was opened at.
+import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import type { RiskLevel } from "@/features/policy/types";
-import { issuesByStep, readSpecJson, type SpecDraft } from "@/features/spec/edit";
 import { sameValue } from "@/features/spec/diff";
+import { issuesByTarget, readSpecJson, type SpecDraft } from "@/features/spec/draft";
 import { formatSpec } from "@/features/spec/format";
-import { validateSpec } from "@/features/spec/validate";
-import { checkWorkflowSpecAction, saveWorkflowAction } from "../actions";
-import type { SpecCheckResult } from "../types";
-import { useGraphTrace } from "./graph-trace";
+import { saveWorkflowAction } from "../actions";
+import { GraphEditor } from "./graph-editor";
+import { saveHint, useLiveCheck } from "./live-check";
 import { RiskBadge } from "./risk-badge";
 import { IssueList } from "./spec-fields";
 import { SpecSettings } from "./spec-settings";
-import { WorkflowGraph } from "./workflow-graph";
 import { Problems } from "./workflow-editor";
 
 export type SpecEditorProps = {
@@ -32,8 +29,6 @@ export type SpecEditorProps = {
   revision?: number;
   maxRisk: RiskLevel | null;
 };
-
-const CHECK_DELAY_MS = 400;
 
 export function SpecEditor(props: SpecEditorProps) {
   const [result, save, saving] = useActionState(saveWorkflowAction, {});
@@ -47,11 +42,10 @@ export function SpecEditor(props: SpecEditorProps) {
   const [settingsKey, setSettingsKey] = useState(0);
   const [json, setJson] = useState("");
   const [switchError, setSwitchError] = useState<string | null>(null);
-  const [check, setCheck] = useState<{ text: string; result: SpecCheckResult } | null>(null);
 
   const specText = mode === "graph" ? formatSpec(draft) : json;
   const parsed = mode === "graph" ? ({ ok: true, value: draft } as const) : parseJson(json);
-  useLiveCheck(specText, parsed.ok, setCheck);
+  const current = useLiveCheck(specText, parsed.ok);
 
   // The page refreshes after a save, so the editor then holds what was saved.
   const saved =
@@ -59,7 +53,6 @@ export function SpecEditor(props: SpecEditorProps) {
     parsed.ok &&
     sameValue(parsed.value, props.spec) &&
     name === props.name;
-  const current = check?.text === specText ? check.result : null;
   const issues = current?.issues ?? [];
   const maxRisk = current === null ? props.maxRisk : current.maxRisk;
 
@@ -116,12 +109,12 @@ export function SpecEditor(props: SpecEditorProps) {
           </p>
         )}
         <TabsContent value="graph" className="flex flex-col gap-6 pt-2">
-          <DraftGraph draft={draft} />
+          <GraphEditor key={settingsKey} draft={draft} onChange={setDraft} issues={issues} />
           <IssueList issues={issues} label="Issues with the spec" />
           <SpecSettings
             key={settingsKey}
             draft={draft}
-            issues={issuesByStep(issues).spec}
+            issues={issuesByTarget(draft, issues).spec}
             onChange={(fields) => {
               setDraft((before) => withSettings(before, fields));
             }}
@@ -160,61 +153,12 @@ export function SpecEditor(props: SpecEditorProps) {
   );
 }
 
-/**
- * The draft as a graph, lit up by the page's Try it, once it's a valid spec. Until then the
- * issues say what to fix.
- */
-function DraftGraph({ draft }: { draft: SpecDraft }) {
-  const trace = useGraphTrace();
-  const checked = useMemo(() => validateSpec(draft), [draft]);
-  if (checked.ok) return <WorkflowGraph spec={checked.spec} trace={trace} />;
-  return (
-    <p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-      {draft.steps.length === 0
-        ? "No steps yet. Write them in the JSON view, or ask the builder to propose them."
-        : "The graph shows the workflow once its spec is valid. Fix the issues below, or in the JSON view."}
-    </p>
-  );
-}
-
 function withSettings(draft: SpecDraft, fields: Record<string, unknown>): SpecDraft {
   const updated = { ...draft, ...fields };
   for (const [key, value] of Object.entries(fields)) {
     if (value === undefined) Reflect.deleteProperty(updated, key);
   }
   return updated;
-}
-
-function saveHint(parses: boolean, current: SpecCheckResult | null, issues: number): string {
-  if (!parses) return "Fix the JSON to save.";
-  if (current === null) return "Checking…";
-  if (current.error !== undefined) return current.error;
-  if (issues > 0) return `Fix ${issues === 1 ? "1 issue" : `${String(issues)} issues`} to save.`;
-  return "Ready to save.";
-}
-
-/**
- * Checks the spec on the server a moment after the admin stops typing, as saving would. An
- * answer for text that has since changed is dropped.
- */
-function useLiveCheck(
-  specText: string,
-  parses: boolean,
-  setCheck: (check: { text: string; result: SpecCheckResult }) => void,
-) {
-  const latest = useRef(specText);
-  useEffect(() => {
-    latest.current = specText;
-    if (!parses) return;
-    const timer = setTimeout(() => {
-      void checkWorkflowSpecAction(JSON.parse(specText)).then((result) => {
-        if (latest.current === specText) setCheck({ text: specText, result });
-      });
-    }, CHECK_DELAY_MS);
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [specText, parses, setCheck]);
 }
 
 type Parsed = { ok: true; value: unknown } | { ok: false; message: string };

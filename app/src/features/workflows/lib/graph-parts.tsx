@@ -1,6 +1,7 @@
 // The workflow graph's small pieces: a step's icon, the review and change badges, the colours a
 // change gives a box, and a path's Try it result.
 import {
+  CircleAlert,
   CircleCheck,
   CircleDashed,
   CircleX,
@@ -16,7 +17,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { GraphChange, GraphPath, GraphStep } from "@/features/spec/graph";
-import type { StepType } from "@/features/spec/types";
+import type { SpecIssue, StepType } from "@/features/spec/types";
 import { cn } from "@/lib/utils";
 
 const STEP_ICONS: Record<StepType, LucideIcon> = {
@@ -78,6 +79,24 @@ export function changeClasses(change: GraphChange | null): string {
     case null:
       return "";
   }
+}
+
+/** How many issues live validation found with a box; its title lists them. */
+export function IssueMark({ issues }: { issues: readonly SpecIssue[] | undefined }) {
+  const count = issues?.length ?? 0;
+  if (issues === undefined || count === 0) return null;
+  const words = count === 1 ? "1 issue" : `${String(count)} issues`;
+  return (
+    <span
+      role="img"
+      aria-label={words}
+      title={issues.map((issue) => issue.message).join("\n")}
+      className="flex items-center gap-0.5 text-[11px] font-medium text-red-700 normal-case"
+    >
+      <CircleAlert aria-hidden className="size-3.5" />
+      {count}
+    </span>
+  );
 }
 
 const NOT_RUN: Record<"not_checked" | "not_needed", string> = {

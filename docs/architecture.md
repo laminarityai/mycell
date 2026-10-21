@@ -261,6 +261,7 @@ The catalog is code (`features/policy/catalog.ts`), each action with its risk le
 
 - Publishing an edited workflow creates a new **workflow version**. Members' enablements **auto-upgrade**.
 - **Exception:** if the new version raises the max risk level or needs a new connection or data source, members' enablements **pause until they re-enable**. Keep everything else simple and automatic.
+- **How (M5):** `policy`'s `requirementsGained(before, after)` compares the new version's max risk, apps and scopes (all from the catalog) with the latest version's. A scope counts as new when no earlier action was allowed by a subset of the new action's scopes. If anything was gained and the workflow is member-credential, `publishWorkflow` pauses every `on` enablement with `needs_reenable` and `paused_change` (`maxRiskRaised`, `newApps`, `newScopes`) in the same transaction as the version (`workflows/lib/version-pauses.ts`); an enablement already paused gets the new gains added to what it waits for. Org switches always follow: the admin publishing would be the one to switch it on again. `previewPublish(ctx, workflowId, spec)` returns what's gained and how many enablements publishing would pause, for the publish dialog. Re-enabling goes through `enable`, so a new app or scope sends the member through reconnecting first. Runs pin their version at fan-out, and `listSwitchedOn` ignores pauses, so a run under way finishes on the version it started on.
 
 ## Pausing
 

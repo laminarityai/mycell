@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { ConnectButton, ReconnectButton } from "@/features/connections/ui";
 import { disableWorkflowAction, enableWorkflowAction } from "../actions";
@@ -16,8 +17,9 @@ const RETRY_MS = 1500;
 /**
  * A member's switch for one member-credential workflow. Switching on enables it for their own
  * Google connection; when that's missing or short of an app, it offers connecting or
- * reconnecting, and enables once they're back from Google. A paused enablement shows as off
- * until switched on again.
+ * reconnecting, and enables once they're back from Google. A paused enablement has buttons
+ * instead: enabling it again (which takes them through reconnecting too when the new version
+ * needs an app or scope their connection lacks), or switching it off.
  */
 export function EnableSwitch({
   workflowId,
@@ -33,6 +35,7 @@ export function EnableSwitch({
   const [finishing, setFinishing] = useState(false);
   const [pending, startTransition] = useTransition();
   const on = current?.kind === "member" && current.status === "on";
+  const paused = current?.kind === "member" && current.status === "paused";
 
   function show(result: EnableResult | { error: string }) {
     if ("error" in result) {
@@ -72,7 +75,31 @@ export function EnableSwitch({
 
   return (
     <div className="flex flex-col gap-2">
-      <Switch checked={on} onCheckedChange={change} disabled={pending} aria-label={name} />
+      {paused ? (
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            onClick={() => {
+              change(true);
+            }}
+            disabled={pending}
+          >
+            Re-enable
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              change(false);
+            }}
+            disabled={pending}
+          >
+            Switch off
+          </Button>
+        </div>
+      ) : (
+        <Switch checked={on} onCheckedChange={change} disabled={pending} aria-label={name} />
+      )}
       {finishing ? <p className="text-muted-foreground">Finishing switching it on…</p> : null}
       {needs === null || finishing ? null : <NeedsNotice needs={needs} onDone={enableAgain} />}
       {error === undefined ? null : (

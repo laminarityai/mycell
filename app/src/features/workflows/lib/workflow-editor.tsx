@@ -15,17 +15,21 @@ import {
 import type { Tag } from "@/features/tags/types";
 import type { ActionResult } from "@/lib/errors";
 import { publishWorkflowAction } from "../actions";
+import type { PublishPreview } from "../types";
+import { pausedChangeText } from "./paused-text";
 
 /**
  * Publish, in a dialog that picks the tags the version is published to. It starts from the
  * working spec's `visibility.tags`; a name no tag has any more (renamed or deleted) is shown
- * and left out.
+ * and left out. When the version needs more than the latest one did, it says what, and how many
+ * enablements publishing pauses.
  */
 export function PublishDialog({
   workflowId,
   nextNumber,
   tags,
   chosen,
+  preview,
 }: {
   workflowId: string;
   nextNumber: number;
@@ -33,6 +37,8 @@ export function PublishDialog({
   tags: Tag[];
   /** The tag names the working spec is published to. */
   chosen: string[];
+  /** What publishing the working spec would pause; null when there's nothing to publish. */
+  preview: PublishPreview | null;
 }) {
   const [open, setOpen] = useState(false);
   const [result, publish, publishing] = useActionState(
@@ -88,6 +94,7 @@ export function PublishDialog({
               </p>
             )}
           </fieldset>
+          <PauseWarning preview={preview} />
           <Problems result={result} />
           <DialogFooter>
             <Button type="submit" disabled={publishing}>
@@ -97,6 +104,27 @@ export function PublishDialog({
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// What the new version needs that the latest didn't, and whose switches that pauses.
+function PauseWarning({ preview }: { preview: PublishPreview | null }) {
+  if (preview?.gained == null) return null;
+  const people = preview.pauses === 1 ? "1 person" : `${String(preview.pauses)} people`;
+  return (
+    <div role="note" aria-label="What publishing pauses" className="flex flex-col gap-1 text-sm">
+      <p className="font-medium">This version needs more than the latest one.</p>
+      <ul className="list-disc pl-5">
+        {pausedChangeText(preview.gained).map((change) => (
+          <li key={change}>{change}</li>
+        ))}
+      </ul>
+      {preview.pauses === 0 ? null : (
+        <p>
+          Publishing pauses it for {people} who switched it on, until each switches it on again.
+        </p>
+      )}
+    </div>
   );
 }
 

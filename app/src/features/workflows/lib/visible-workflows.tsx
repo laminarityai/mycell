@@ -3,8 +3,9 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ReconnectButton } from "@/features/connections/ui";
-import type { PausedReason, VisibleWorkflow, WorkflowSwitch } from "../types";
+import type { VisibleWorkflow, WorkflowSwitch } from "../types";
 import { EnableSwitch } from "./enable-switch";
+import { pausedChangeText, pausedText } from "./paused-text";
 import { RiskBadge } from "./risk-badge";
 
 export function VisibleWorkflowsList({ workflows }: { workflows: VisibleWorkflow[] }) {
@@ -50,6 +51,7 @@ function VisibleWorkflowCard({ workflow }: { workflow: VisibleWorkflow }) {
             <StateBadge current={workflow.switch} />
           </dd>
         </dl>
+        <PausedNotice current={workflow.switch} />
         {workflow.credentials === "member" ? (
           <EnableSwitch workflowId={workflow.id} name={workflow.name} current={workflow.switch} />
         ) : null}
@@ -72,7 +74,11 @@ function VisibleWorkflowCard({ workflow }: { workflow: VisibleWorkflow }) {
 function StateBadge({ current }: { current: WorkflowSwitch | null }) {
   if (current === null) return <Badge variant="secondary">Off</Badge>;
   if (current.status === "paused") {
-    return <Badge variant="secondary">Paused: {pausedReasonText(current.pausedReason)}</Badge>;
+    return (
+      <Badge variant="secondary">
+        Paused: {pausedText(current.pausedReason, current.pausedChange)}
+      </Badge>
+    );
   }
   return (
     <Badge variant="outline">
@@ -81,14 +87,21 @@ function StateBadge({ current }: { current: WorkflowSwitch | null }) {
   );
 }
 
-/** Why an enablement is paused, as the member reads it. */
-export function pausedReasonText(reason: PausedReason | null): string {
-  switch (reason) {
-    case "needs_reenable":
-      return "needs your OK for a riskier version";
-    case null:
-      return "no reason given";
-  }
+// What a paused enablement is waiting for the member's OK on: what the new version changed.
+function PausedNotice({ current }: { current: WorkflowSwitch | null }) {
+  if (current?.status !== "paused") return null;
+  const changes = pausedChangeText(current.pausedChange);
+  if (changes.length === 0) return null;
+  return (
+    <div role="group" aria-label="What changed" className="flex flex-col gap-1">
+      <p>An admin published a new version. It stays paused until you switch it on again:</p>
+      <ul className="list-disc pl-5">
+        {changes.map((change) => (
+          <li key={change}>{change}</li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 // Google stopped accepting the member's connection: their switch is kept, but nothing runs on

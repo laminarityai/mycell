@@ -1,18 +1,18 @@
 "use client";
 
-// Where the workflow graph opens: at full size when it fits, or no smaller than a readable
-// zoom, after which the admin scrolls.
+// Where the workflow graph opens: at full size, shrunk a little when that makes it fit, and
+// otherwise at full size with the admin scrolling. Zooming out is on the graph's controls.
 import { useReactFlow, type Node } from "@xyflow/react";
 import { useEffect, useState, type RefObject } from "react";
 
-/** Space around the drawing, and the smallest zoom it opens at before it scrolls instead. */
+/** Space around the drawing, and the smallest zoom it shrinks to so that it fits. */
 export const MARGIN = 24;
-const READABLE_ZOOM = 0.75;
+const SMALLEST_FIT = 0.9;
 
 /**
- * Opens the drawing at full size when it fits, or shrunk no further than a readable size;
- * past that, it starts at the top, centred on the trigger, and the admin scrolls. A graph
- * hidden when it was drawn (a tab not shown) opens once it has a width.
+ * Opens the drawing at full size when it fits, or shrunk to fit when that keeps it at least
+ * 90%; past that, it opens at full size at the top, centred on the trigger, and the admin
+ * scrolls. A graph hidden when it was drawn (a tab not shown) opens once it has a width.
  */
 export function OpenReadable({
   layout,
@@ -38,9 +38,10 @@ export function OpenReadable({
   useEffect(() => {
     if (!shown) return;
     const room = width - 2 * MARGIN;
-    const zoom = Math.min(1, Math.max(READABLE_ZOOM, room / layout.width));
+    const fitting = room / layout.width;
+    const fits = fitting >= SMALLEST_FIT;
+    const zoom = fits ? Math.min(1, fitting) : 1;
     const trigger = layout.nodes.find((node) => node.type === "trigger");
-    const fits = layout.width * zoom <= room;
     const center =
       fits || trigger === undefined
         ? layout.width / 2

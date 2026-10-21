@@ -2,8 +2,8 @@
 
 // The workflow as a graph, top to bottom: the spec as the policy engine leaves it (reviews and
 // risk levels from the catalog), a proposal drawn as its changes, or a Try it's route lit up.
-// The layout is automatic; the admin pans and zooms. It opens at a readable size and scrolls
-// rather than shrinking a big workflow to fit. Being edited, its boxes open a side panel and
+// The layout is automatic; the admin pans and zooms. It opens at full size and scrolls rather
+// than shrinking a big workflow to fit. Being edited, its boxes open a side panel and
 // "+" on its lines adds a step; the caller draws the panel and the menu over it.
 import "@xyflow/react/dist/style.css";
 import { Background, Controls, ReactFlow, ReactFlowProvider } from "@xyflow/react";
@@ -164,7 +164,7 @@ function Canvas({
           }}
           onPaneClick={editing?.onPaneClick}
           onMoveStart={(event) => {
-            // The admin panned or zoomed; opening at a readable size isn't them.
+            // The admin panned or zoomed; where the graph opened isn't them.
             if (event !== null) editing?.onPaneClick();
           }}
         >

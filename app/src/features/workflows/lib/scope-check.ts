@@ -59,6 +59,6 @@ function allows(connection: ConnectionSummary, use: ActionUse): boolean {
 }
 
 // gmail.modify rather than its full URL, as Google's consent screen and docs name it.
-function scopeName(scope: string): string {
+export function scopeName(scope: string): string {
   return scope.startsWith(SCOPE_PREFIX) ? scope.slice(SCOPE_PREFIX.length) : scope;
 }

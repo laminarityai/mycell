@@ -26,18 +26,26 @@ const saveInput = z.object({
   // The working spec's revision the editor opened; left out for a new workflow.
   baseRevision: z.coerce.number().int().positive().optional(),
 });
-const publishInput = z.object({ workflowId: z.string().min(1) });
-const tagNames = z.array(z.string().min(1));
-
-// The publish dialog's ticked tags: one `tag` field each.
-function chosenTags(form: FormData): string[] {
-  const parsed = tagNames.safeParse(form.getAll("tag"));
-  if (!parsed.success) {
-    throw new ValidationError("The form was missing something. Reload the page and try again.");
-  }
-  return parsed.data;
-}
-const switchOnInput = z.object({ workflowId: z.string().min(1), connectionId: z.string().min(1) });
+const workflowIdInput = z.string().min(1);
+/** A form about one workflow: its switch off, archive or restore. */
+const workflowForm = z.object({ workflowId: workflowIdInput });
+const switchOnInput = z.object({ workflowId: workflowIdInput, connectionId: z.string().min(1) });
+/**
+ * Publish's form. The dialog sends `chooseTags`, a `tag` field per ticked tag and the `handoff`
+ * switch (sent only when on), which become the version's settings; a bare publish (the
+ * builder's) sends the workflow alone and keeps the working spec's.
+ */
+const publishForm = z
+  .object({
+    workflowId: workflowIdInput,
+    chooseTags: z.literal("1").optional(),
+    tag: z.array(z.string().min(1)),
+    handoff: z.literal("on").optional(),
+  })
+  .transform(({ workflowId, chooseTags, tag, handoff }) => ({
+    workflowId,
+    settings: chooseTags === undefined ? {} : { tags: tag, handoff: handoff === "on" },
+  }));
 
 /**
  * Saves the editor's spec. A new workflow goes to its own page; an edit refreshes this one. An
@@ -116,7 +124,7 @@ export async function switchWorkflowOffAction(
 ): Promise<ActionResult> {
   const ctx = await getCtx();
   try {
-    const { workflowId } = parseForm(publishInput, form);
+    const { workflowId } = parseForm(workflowForm, form);
     await switchWorkflowOff(ctx, workflowId);
   } catch (error) {
     return actionError(error);
@@ -132,7 +140,7 @@ export async function archiveWorkflowAction(
 ): Promise<ActionResult> {
   const ctx = await getCtx();
   try {
-    await archiveWorkflow(ctx, parseForm(publishInput, form).workflowId);
+    await archiveWorkflow(ctx, parseForm(workflowForm, form).workflowId);
   } catch (error) {
     return actionError(error);
   }
@@ -147,15 +155,13 @@ export async function restoreWorkflowAction(
 ): Promise<ActionResult> {
   const ctx = await getCtx();
   try {
-    await restoreWorkflow(ctx, parseForm(publishInput, form).workflowId);
+    await restoreWorkflow(ctx, parseForm(workflowForm, form).workflowId);
   } catch (error) {
     return actionError(error);
   }
   refresh();
   return {};
 }
-
-const workflowIdInput = z.string().min(1);
 
 /**
  * Switches a workflow on for the caller's own Google connection. When the connection is missing
@@ -207,12 +213,8 @@ export async function publishWorkflowAction(
 ): Promise<ActionResult> {
   const ctx = await getCtx();
   try {
-    const { workflowId } = parseForm(publishInput, form);
-    // The dialog sends its choices with `chooseTags`; a bare publish keeps the working spec's.
-    const chosen = form.has("chooseTags");
-    const tags = chosen ? chosenTags(form) : undefined;
-    const handoff = chosen ? form.get("handoff") === "on" : undefined;
-    await publishWorkflow(ctx, workflowId, { tags, handoff });
+    const { workflowId, settings } = parseForm(publishForm, form, ["tag"]);
+    await publishWorkflow(ctx, workflowId, settings);
   } catch (error) {
     return actionError(error);
   }

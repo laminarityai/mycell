@@ -5,6 +5,7 @@
 // approval step records that, and the run goes on to its later steps.
 import { z } from "zod";
 import { findAction } from "@/features/policy/catalog";
+import { findStep } from "@/features/spec/tree";
 import type { Step } from "@/features/spec/types";
 import type { Json } from "../types";
 import { callModel } from "./call-model";
@@ -75,7 +76,7 @@ const RANGE_READ = findAction("google-sheet.read-range");
  * range's counts, so the values never crossed a step boundary. Undefined for any other step.
  */
 async function sheetText(name: string, context: StepContext): Promise<string | undefined> {
-  const step = context.spec.steps.find((candidate) => candidate.id === name);
+  const step = findStep(context.spec, name);
   if (step?.type !== "tool" || RANGE_READ === undefined || step.action !== RANGE_READ.name) {
     return undefined;
   }

@@ -3,6 +3,7 @@
 import { gmailConnections, listConnections } from "@/features/connections/server";
 import type { ConnectionSummary } from "@/features/connections/types";
 import { applyPolicy } from "@/features/policy/engine";
+import { eachStep } from "@/features/spec/tree";
 import type { Spec, SpecIssue } from "@/features/spec/types";
 import { validateSpec } from "@/features/spec/validate";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
@@ -106,7 +107,7 @@ export async function readSetup(ctx: Ctx): Promise<OrgSetup> {
 }
 
 function requiredActions(spec: Spec): string[] {
-  const names = spec.steps.flatMap((step) =>
+  const names = eachStep(spec).flatMap(({ step }) =>
     step.type === "tool" ? [step.action] : step.type === "draft" ? [step.output] : [],
   );
   return [...new Set(names)];

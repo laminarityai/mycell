@@ -1,3 +1,4 @@
+import { eachStep } from "./tree";
 import { specSchema, type Spec, type SpecIssue, type SpecValidation, type Step } from "./types";
 
 /**
@@ -19,21 +20,21 @@ export function validateSpec(input: unknown): SpecValidation {
   return issues.length === 0 ? { ok: true, spec: parsed.data } : { ok: false, issues };
 }
 
-/** Rules that span steps: unique IDs, references only to earlier steps or the trigger. */
+/** Rules that span steps: unique IDs, references only to steps above or the trigger. */
 function structuralIssues(spec: Spec): SpecIssue[] {
   const issues: SpecIssue[] = [];
-  const earlier = new Map<string, Step>();
-  spec.steps.forEach((step, index) => {
-    const at = (...path: (string | number)[]) => ["steps", index, ...path];
+  const seen = new Set<string>();
+  for (const { step, location, above } of eachStep(spec)) {
+    const at = (...path: (string | number)[]) => [...location, ...path];
     const refersBack = (stepId: string, path: (string | number)[]) => {
-      const target = earlier.get(stepId);
+      const target = above.findLast((candidate) => candidate.id === stepId);
       if (target === undefined) {
         issues.push({ path, message: `"${stepId}" isn't a step before this one.` });
       }
       return target;
     };
 
-    if (earlier.has(step.id)) {
+    if (seen.has(step.id)) {
       issues.push({ path: at("id"), message: `Step ID "${step.id}" is used twice.` });
     }
 
@@ -78,8 +79,8 @@ function structuralIssues(spec: Spec): SpecIssue[] {
     }
 
     issues.push(...checkIssues(step, at));
-    earlier.set(step.id, step);
-  });
+    seen.add(step.id);
+  }
   return issues;
 }
 

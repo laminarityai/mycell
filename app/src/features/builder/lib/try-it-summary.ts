@@ -4,6 +4,7 @@
 // (invariant 8): those stay on the admin's page. A tool input the spec fills from a reference
 // is named by its reference, never by the value it resolved to, which may come from the email.
 import type { DryRunResult, DryRunStep } from "@/features/runtime/types";
+import { findStep } from "@/features/spec/tree";
 import type { Spec } from "@/features/spec/types";
 import type { TryItSummary } from "../types";
 
@@ -58,7 +59,7 @@ function lineOf(step: DryRunStep, spec: Spec): string {
 // A tool step's input as the spec writes it: `the label "Pricing"` for a literal, `a label from
 // details.city` for a reference.
 function specInput(spec: Spec, stepId: string, field: string): string {
-  const step = spec.steps.find((candidate) => candidate.id === stepId);
+  const step = findStep(spec, stepId);
   const value = step?.type === "tool" ? step.input[field] : undefined;
   if (typeof value === "string") return `the ${field} ${JSON.stringify(value)}`;
   if (value !== null && typeof value === "object" && !Array.isArray(value)) {

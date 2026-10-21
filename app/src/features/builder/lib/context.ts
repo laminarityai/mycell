@@ -9,6 +9,7 @@ import type { ConnectionSummary } from "@/features/connections/types";
 import { getOrgSettings } from "@/features/orgs/server";
 import { catalog } from "@/features/policy/catalog";
 import { formatSpec } from "@/features/spec/format";
+import { eachStep } from "@/features/spec/tree";
 import type { Spec } from "@/features/spec/types";
 import { listTags } from "@/features/tags/server";
 import { getWorkflow, listWorkflows } from "@/features/workflows/server";
@@ -61,7 +62,7 @@ const workflows: ContextProvider = async (ctx, turn) => {
 };
 
 function stepsOf(spec: Spec): string {
-  const steps = spec.steps.map((step) =>
+  const steps = eachStep(spec).map(({ step }) =>
     step.type === "tool" ? `${step.id} (tool ${step.action})` : `${step.id} (${step.type})`,
   );
   return `${spec.credentials} credentials, steps ${steps.join(", ")}`;

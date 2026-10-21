@@ -2,6 +2,7 @@
 // of the action it uses, and whether it waits for a person's review. Pure, so client code may
 // import it. `spec` doesn't know the catalog (policy imports spec), so callers pass what it
 // says about each action, and which approvals the policy engine inserted.
+import { eachStep } from "./tree";
 import type { Spec, Step } from "./types";
 
 /** What the caller knows about one catalog action. */
@@ -31,7 +32,7 @@ export function describeSpec<Risk extends string = string>(
   options: DescribeOptions<Risk> = {},
 ): StepDescription<Risk>[] {
   const inserted = new Set(options.insertedApprovals ?? []);
-  return spec.steps.map((step) => {
+  return eachStep(spec).map(({ step }) => {
     const name = step.type === "tool" ? step.action : step.type === "draft" ? step.output : null;
     const action = name === null ? undefined : options.action?.(name);
     return {

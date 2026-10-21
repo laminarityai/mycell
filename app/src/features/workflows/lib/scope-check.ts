@@ -3,6 +3,7 @@
 // (ADR-0011) holds only gmail.readonly, and its owner reconnects it to grant write access.
 import type { ConnectionSummary } from "@/features/connections/types";
 import { findAction } from "@/features/policy/catalog";
+import { eachStep } from "@/features/spec/tree";
 import type { Spec, SpecIssue } from "@/features/spec/types";
 import { GOOGLE_SCOPE_PREFIX as SCOPE_PREFIX } from "@/lib/google";
 
@@ -33,7 +34,7 @@ export function scopeIssues(spec: Spec, connections: ConnectionSummary[]): SpecI
 }
 
 function actionUses(spec: Spec): ActionUse[] {
-  return spec.steps.flatMap((step, index): ActionUse[] => {
+  return eachStep(spec).flatMap(({ step, location }): ActionUse[] => {
     const named =
       step.type === "tool"
         ? { field: "action", action: step.action }
@@ -44,7 +45,7 @@ function actionUses(spec: Spec): ActionUse[] {
     if (named === undefined || action === undefined) return [];
     return [
       {
-        path: ["steps", index, named.field],
+        path: [...location, named.field],
         action: action.name,
         scopes: action.scopes,
         writes: action.risk !== "read",

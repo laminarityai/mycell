@@ -6,6 +6,7 @@
 // check and are recorded, marked as a dry run's (invariant 7).
 import { randomUUID } from "node:crypto";
 import { requireBuildableConnection } from "@/features/connections/server";
+import { eachStep } from "@/features/spec/tree";
 import type { Spec, Step } from "@/features/spec/types";
 import { checkWorkflowSpec } from "@/features/workflows/server";
 import { checkCredits } from "@/features/credits/server";
@@ -110,7 +111,7 @@ function attempt(step: Step, context: StepContext): Promise<StepExecution> {
 
 /** Refuses up front when the balance can't cover the dearest of the spec's model steps. */
 async function preflight(ctx: Ctx, spec: Spec): Promise<void> {
-  const estimates = spec.steps.flatMap((step) =>
+  const estimates = eachStep(spec).flatMap(({ step }) =>
     "role" in step ? [CREDIT_ESTIMATES[step.role]] : [],
   );
   if (estimates.length > 0) await checkCredits(ctx, Math.max(...estimates));

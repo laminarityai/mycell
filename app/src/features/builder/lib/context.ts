@@ -8,9 +8,9 @@ import { gmailConnections, listConnections } from "@/features/connections/server
 import type { ConnectionSummary } from "@/features/connections/types";
 import { getOrgSettings } from "@/features/orgs/server";
 import { catalog } from "@/features/policy/catalog";
+import { operatorsFor, type ValueType } from "@/features/spec/conditions";
 import { formatSpec } from "@/features/spec/format";
-import { eachStep } from "@/features/spec/tree";
-import type { Spec } from "@/features/spec/types";
+import type { Spec, Step } from "@/features/spec/types";
 import { listTags } from "@/features/tags/server";
 import { getWorkflow, listWorkflows } from "@/features/workflows/server";
 import type { Ctx } from "@/lib/ctx";
@@ -38,6 +38,33 @@ const actionCatalog: ContextProvider = () => {
   return Promise.resolve({ title: "Action catalog", content: lines.join("\n") });
 };
 
+/** How an extract field's declared type reads, and the type of value a check sees. */
+const FIELD_TYPES: { reads: string; type: ValueType }[] = [
+  { reads: "string field (text)", type: "text" },
+  { reads: "number field", type: "number" },
+  { reads: "boolean field (yes/no)", type: "yesNo" },
+];
+
+/**
+ * Every kind of value a path's condition may test, and the checks each allows. Facts about the
+ * trigger's message and catalog actions' result fields join this list as they're declared.
+ */
+const conditionFields: ContextProvider = () => {
+  const lines = [
+    "A path's condition tests values from the steps above its branch on its own path. Each check is one of:",
+    '- A classify step\'s answer: { "classify": "<classify step id>", "is": "<label>", "minP": 0.85 }. ' +
+      "It holds when the step picked that label with at least that probability.",
+    '- An extract step\'s field: { "subject": { "from": "<extract step id>.<field>" }, "op": "<check>", "value": <value> }. ' +
+      "The checks a field allows come from the type it declares. Text checks ignore upper and lower " +
+      "case and take a string, number checks take a number, and is_yes, is_no, is_empty and " +
+      "is_not_empty take no value.",
+    ...FIELD_TYPES.map(({ reads, type }) => `  - ${reads}: ${operatorsFor(type).join(", ")}`),
+    "Facts about the message, such as its sender or subject, and what a catalog action returned " +
+      "can't be tested yet.",
+  ];
+  return Promise.resolve({ title: "Fields a condition may test", content: lines.join("\n") });
+};
+
 /** The org's workflows with a summary of each working spec; the whole one for this turn's. */
 const workflows: ContextProvider = async (ctx, turn) => {
   const summaries = await listWorkflows(ctx);
@@ -62,10 +89,20 @@ const workflows: ContextProvider = async (ctx, turn) => {
 };
 
 function stepsOf(spec: Spec): string {
-  const steps = eachStep(spec).map(({ step }) =>
-    step.type === "tool" ? `${step.id} (tool ${step.action})` : `${step.id} (${step.type})`,
-  );
-  return `${spec.credentials} credentials, steps ${steps.join(", ")}`;
+  return `${spec.credentials} credentials, steps ${listOf(spec.steps)}`;
+}
+
+/** A list of steps in order, each branch with its paths' steps in turn. */
+function listOf(steps: Step[]): string {
+  return steps.length === 0 ? "stops" : steps.map(stepOf).join(", ");
+}
+
+function stepOf(step: Step): string {
+  if (step.type === "tool") return `${step.id} (tool ${step.action})`;
+  if (step.type !== "branch") return `${step.id} (${step.type})`;
+  const paths = step.paths.map((path) => `path ${path.id} "${path.name}": ${listOf(path.steps)}`);
+  const otherwise = `otherwise ${step.otherwise.id}: ${listOf(step.otherwise.steps)}`;
+  return `${step.id} (branch, ${step.mode} match: ${[...paths, otherwise].join("; ")})`;
 }
 
 /**
@@ -143,6 +180,7 @@ const proposals: ContextProvider = async (ctx, turn) => {
 export const contextProviders: ContextProvider[] = [
   orgSettings,
   actionCatalog,
+  conditionFields,
   workflows,
   connections,
   tags,

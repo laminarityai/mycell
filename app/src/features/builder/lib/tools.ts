@@ -65,7 +65,7 @@ const proposeSpecTool = builderTool({
   description:
     "Propose a whole workflow spec for the admin to accept or reject: for a new workflow, or a " +
     "change to an existing one (the conversation's workflow unless you pass another's " +
-    "workflowId). Send the complete spec, not a patch. It is validated as saving would; when " +
+    "workflowId). Send the complete spec (specVersion 2), not a patch. It is validated as saving would; when " +
     "it fails you get every issue to fix and call again. Nothing is saved until an admin " +
     "accepts it, and nothing is ever published by you.",
   inputSchema: z.object({

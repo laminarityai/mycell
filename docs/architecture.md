@@ -196,12 +196,12 @@ Every app plugs in through the same four parts, so a new app is mostly catalog w
 3. **Catalog actions:** what a workflow may do in the app, each with a fixed risk level.
 4. **Pending form:** where an `external_send` action waits for a person, inside the app itself. Mycel's **review** stores only a pointer to it and fetches it live.
 
-| App      | Pending form                                               | Approving in Mycel                        |
-| -------- | ---------------------------------------------------------- | ----------------------------------------- |
-| Gmail    | A draft                                                    | Sends the draft (or edit it, then send)   |
-| Calendar | The event on the person's calendar, with no guests yet     | Adds the guests and sends invitations     |
-| Docs     | Suggested edits in the doc                                 | Accepts the step's suggestions (ADR-0016) |
-| Tasks    | None needed: tasks on the person's own list are reversible |                                           |
+| App      | Pending form                                                                  | Approving in Mycel                        |
+| -------- | ----------------------------------------------------------------------------- | ----------------------------------------- |
+| Gmail    | A draft                                                                       | Sends the draft (or edit it, then send)   |
+| Calendar | The event on the person's calendar: no guests yet, private, not blocking time | Adds the guests and sends invitations     |
+| Docs     | Suggested edits in the doc                                                    | Accepts the step's suggestions (ADR-0016) |
+| Tasks    | None needed: tasks on the person's own list are reversible                    |                                           |
 
 A review ends as approved, edited and approved, declined (which deletes the waiting item, where the app allows), done in the app, or gone. An app with no natural pending form, such as Slack, waits until we design one.
 

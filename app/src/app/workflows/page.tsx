@@ -1,25 +1,24 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { getCtx } from "@/features/orgs/server";
-import { countWaitingReviews, reviewCountsByWorkflow } from "@/features/reviews/server";
+import { reviewCountsByWorkflow } from "@/features/reviews/server";
 import { reviewPeriodSchema } from "@/features/reviews/types";
-import { ReviewCountsSection, ReviewsNavLink } from "@/features/reviews/ui";
-import { listEnablements, listVisibleWorkflows, listWorkflows } from "@/features/workflows/server";
+import { ReviewCountsSection } from "@/features/reviews/ui";
+import {
+  listEnablements,
+  listVisibleWorkflows,
+  listWorkflows,
+  runnableConnections,
+} from "@/features/workflows/server";
 import { VisibleWorkflowsList, WorkflowsList } from "@/features/workflows/ui";
+import { AppNav } from "@/app/app-nav";
 
 export default function WorkflowsPage({ searchParams }: PageProps<"/workflows">) {
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">
-      <header className="flex items-center justify-between">
+      <header className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold tracking-tight">Workflows</h1>
-        <nav className="flex gap-4 text-sm text-muted-foreground">
-          <Suspense fallback={<span>Reviews</span>}>
-            <WaitingReviews />
-          </Suspense>
-          <Link href="/org" className="hover:text-foreground">
-            Back to your org
-          </Link>
-        </nav>
+        <AppNav />
       </header>
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading workflows…</p>}>
         <Workflows searchParams={searchParams} />
@@ -49,12 +48,29 @@ async function Workflows({ searchParams }: Pick<PageProps<"/workflows">, "search
     );
   }
   const workflows = await listWorkflows(ctx);
-  const enablements = await Promise.all(
-    workflows.map(
-      async (workflow) => [workflow.id, await listEnablements(ctx, workflow.id)] as const,
-    ),
-  );
   const published = workflows.filter((workflow) => workflow.latestVersion !== null);
+  const [enablements, orgConnections] = await Promise.all([
+    Promise.all(
+      workflows.map(
+        async (workflow) => [workflow.id, await listEnablements(ctx, workflow.id)] as const,
+      ),
+    ),
+    // The connections each published org workflow's switch may choose from.
+    Promise.all(
+      published
+        .filter((workflow) => workflow.credentials === "org")
+        .map(async (workflow) => {
+          const connections = await runnableConnections(ctx, workflow.id);
+          return [
+            workflow.id,
+            connections.map((connection) => ({
+              id: connection.id,
+              label: connection.accountEmail,
+            })),
+          ] as const;
+        }),
+    ),
+  ]);
   return (
     <>
       <Link
@@ -63,7 +79,11 @@ async function Workflows({ searchParams }: Pick<PageProps<"/workflows">, "search
       >
         New workflow
       </Link>
-      <WorkflowsList workflows={workflows} enablements={new Map(enablements)} />
+      <WorkflowsList
+        workflows={workflows}
+        enablements={new Map(enablements)}
+        orgConnections={new Map(orgConnections)}
+      />
       <ReviewCountsSection
         title="Reviews"
         description="How each workflow's reviews ended, and each member's under it. Counts only."
@@ -72,12 +92,5 @@ async function Workflows({ searchParams }: Pick<PageProps<"/workflows">, "search
         rows={await reviewCountsByWorkflow(ctx, published, period)}
       />
     </>
-  );
-}
-
-async function WaitingReviews() {
-  const ctx = await getCtx();
-  return (
-    <ReviewsNavLink count={await countWaitingReviews(ctx)} className="hover:text-foreground" />
   );
 }

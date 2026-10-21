@@ -11,18 +11,21 @@ export type SwitchConnectionOption = { id: string; label: string };
 
 /**
  * The workflow's switch: where it's on and since when, with Switch off; or, while off, the
- * connections it may run on, with Switch on.
+ * connections it may run on, with Switch on. `compact`, for a row of the workflows list, leaves
+ * out the explanations.
  */
 export function SwitchForm({
   workflowId,
   current,
   connections,
   published,
+  compact = false,
 }: {
   workflowId: string;
   current: WorkflowSwitch | null;
   connections: SwitchConnectionOption[];
   published: boolean;
+  compact?: boolean;
 }) {
   const [onResult, switchOn, switchingOn] = useActionState(switchWorkflowOnAction, {});
   const [offResult, switchOff, switchingOff] = useActionState(switchWorkflowOffAction, {});
@@ -34,8 +37,9 @@ export function SwitchForm({
       <form action={switchOff} className="flex flex-col gap-2 text-sm">
         <input type="hidden" name="workflowId" value={workflowId} />
         <p>
-          On for {label} since {current.since.toLocaleString("en-US")}. It runs on each new inbound
-          message from then on.
+          {compact
+            ? `On for ${label}`
+            : `On for ${label} since ${current.since.toLocaleString("en-US")}. It runs on each new inbound message from then on.`}
         </p>
         <div>
           <Button type="submit" variant="outline" disabled={switchingOff}>
@@ -52,7 +56,9 @@ export function SwitchForm({
   if (connections.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        Connect a Google account this workflow can run on to switch it on.
+        {compact
+          ? "No connection can run it"
+          : "Connect a Google account this workflow can run on to switch it on."}
       </p>
     );
   }
@@ -73,9 +79,11 @@ export function SwitchForm({
           ))}
         </select>
       </label>
-      <p className="text-sm text-muted-foreground">
-        It runs on messages that arrive after you switch it on, never on earlier ones.
-      </p>
+      {compact ? null : (
+        <p className="text-sm text-muted-foreground">
+          It runs on messages that arrive after you switch it on, never on earlier ones.
+        </p>
+      )}
       <div>
         <Button type="submit" disabled={switchingOn}>
           Switch on

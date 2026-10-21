@@ -67,6 +67,8 @@ export type WorkflowSummary = {
   name: string;
   specId: string;
   latestVersion: WorkflowVersionSummary | null;
+  /** Whose connections the latest version runs on; null while not published. */
+  credentials: Spec["credentials"] | null;
   /** The caller's enablement, or the org switch; null while off. */
   switch: WorkflowSwitch | null;
   /** Who the latest version is published to; null while not published. */

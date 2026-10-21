@@ -1,18 +1,19 @@
-import Link from "next/link";
 import { Suspense } from "react";
+import { AppNav } from "@/app/app-nav";
 import { getCtx, listUsers } from "@/features/orgs/server";
 import { OrgUsersTable, SignOutButton } from "@/features/orgs/ui";
-import { countWaitingReviews } from "@/features/reviews/server";
-import { ReviewsNavLink } from "@/features/reviews/ui";
 import { listMyTags } from "@/features/tags/server";
 import { MyTags } from "@/features/tags/ui";
 
 export default function OrgPage() {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
-      <header className="flex items-center justify-between">
+      <header className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold tracking-tight">Your org</h1>
-        <SignOutButton />
+        <div className="flex flex-wrap items-center gap-4">
+          <AppNav />
+          <SignOutButton />
+        </div>
       </header>
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading users…</p>}>
         <OrgUsers />
@@ -23,42 +24,10 @@ export default function OrgPage() {
 
 async function OrgUsers() {
   const ctx = await getCtx();
-  const [users, myTags, waiting] = await Promise.all([
-    listUsers(ctx),
-    listMyTags(ctx),
-    countWaitingReviews(ctx),
-  ]);
+  const [users, myTags] = await Promise.all([listUsers(ctx), listMyTags(ctx)]);
   return (
     <>
       <MyTags tags={myTags} />
-      <nav className="flex gap-4">
-        <ReviewsNavLink
-          count={waiting}
-          className="text-sm font-medium underline-offset-4 hover:underline"
-        />
-        <Link
-          href="/connections"
-          className="text-sm font-medium underline-offset-4 hover:underline"
-        >
-          Connections
-        </Link>
-        <Link href="/workflows" className="text-sm font-medium underline-offset-4 hover:underline">
-          Workflows
-        </Link>
-        {ctx.role === "admin" ? (
-          <>
-            <Link href="/tags" className="text-sm font-medium underline-offset-4 hover:underline">
-              Manage tags
-            </Link>
-            <Link
-              href="/builder"
-              className="text-sm font-medium underline-offset-4 hover:underline"
-            >
-              Builder chat
-            </Link>
-          </>
-        ) : null}
-      </nav>
       <OrgUsersTable users={users} viewer={ctx} />
     </>
   );

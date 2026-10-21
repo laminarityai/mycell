@@ -6,7 +6,7 @@ import { systemCtx } from "@/lib/ctx";
 import { googleScope } from "@/lib/google";
 import { expect, test } from "./fixtures";
 
-test("the navigation counts the member's waiting reviews, and they can turn the daily email off", async ({
+test("every page's navigation counts the member's waiting reviews, and they can turn the daily email off", async ({
   page,
   orgs: { orgA },
   signInAs,
@@ -18,24 +18,38 @@ test("the navigation counts the member's waiting reviews, and they can turn the 
     accountEmail: orgA.member.email,
     scopes: [googleScope("gmail.modify")],
   });
-  await createReview(systemCtx(orgA.id), {
-    runId: randomUUID(),
-    connectionId,
-    workflowId: randomUUID(),
-    workflowVersionId: randomUUID(),
-    kind: "approval",
-    itemRef: "draft-1",
-    threadRef: "thread-1",
-    sourceRef: "message-1",
-  });
+  const waitingOn = (n: number) =>
+    createReview(systemCtx(orgA.id), {
+      runId: randomUUID(),
+      connectionId,
+      workflowId: randomUUID(),
+      workflowVersionId: randomUUID(),
+      kind: "approval",
+      itemRef: `draft-${String(n)}`,
+      threadRef: `thread-${String(n)}`,
+      sourceRef: `message-${String(n)}`,
+    });
+  await waitingOn(1);
   await signInAs(orgA.member);
+  const nav = page.getByRole("navigation", { name: "Main" });
 
   await page.goto("/org");
-  await expect(page.getByRole("link", { name: "Reviews 1 waiting" })).toBeVisible();
-  await page.goto("/workflows");
-  await expect(page.getByRole("link", { name: "Reviews 1 waiting" })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Reviews 1 waiting" })).toBeVisible();
+  // Every page's navigation reads the count again, following its links too.
+  await waitingOn(2);
+  for (const [link, heading] of [
+    ["Workflows", "Workflows"],
+    ["Connections", "Connections"],
+    ["Your org", "Your org"],
+  ] as const) {
+    await nav.getByRole("link", { name: link }).click();
+    await expect(page.getByRole("heading", { name: heading, level: 1 })).toBeVisible();
+    await expect(nav.getByRole("link", { name: "Reviews 2 waiting" })).toBeVisible();
+  }
 
-  await page.goto("/reviews");
+  await nav.getByRole("link", { name: "Reviews 2 waiting" }).click();
+  await expect(page.getByRole("heading", { name: "Reviews", level: 1 })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Reviews 2 waiting" })).toBeVisible();
   const digest = page.getByRole("switch", { name: "Email me each day when reviews are waiting" });
   await expect(digest).toBeChecked();
   await digest.click();

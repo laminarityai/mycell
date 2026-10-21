@@ -94,6 +94,7 @@ export async function listWorkflows(ctx: Ctx): Promise<WorkflowSummary[]> {
       name: row.name,
       specId: row.specId,
       latestVersion: version === undefined ? null : versionSummary(version),
+      credentials: version === undefined ? null : version.spec.credentials,
       switch: switches.get(row.id) ?? null,
       audience: version === undefined ? null : (audiences.get(version.id) ?? null),
       archivedAt: row.archivedAt,

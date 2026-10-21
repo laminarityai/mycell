@@ -183,23 +183,24 @@ test("archiving hides a workflow from members, and restoring brings back their s
   await archive.getByRole("button", { name: "Archive" }).click();
   await expect(archive).toContainText("Archived since");
   await page.goto("/workflows");
-  await expect(
-    page
-      .getByRole("table", { name: "Workflows" })
-      .getByRole("row")
-      .filter({ hasText: "Pricing labels" }),
-  ).toContainText("Archived");
+  const row = page
+    .getByRole("table", { name: "Workflows" })
+    .getByRole("row")
+    .filter({ hasText: "Pricing labels" });
+  await expect(row).toContainText("Archived");
 
   await page.context().clearCookies();
   await signInAs(orgA.member);
   await page.goto("/workflows");
   await expect(page.getByText("Pricing labels")).toHaveCount(0);
 
+  // Restored from the workflows list this time.
   await page.context().clearCookies();
   await signInAs(orgA.admin);
-  await page.goto(workflowPage);
-  await archive.getByRole("button", { name: "Restore" }).click();
-  await expect(archive.getByRole("button", { name: "Archive" })).toBeVisible();
+  await page.goto("/workflows");
+  await row.getByRole("button", { name: "Restore" }).click();
+  await expect(row.getByRole("button", { name: "Archive" })).toBeVisible();
+  await expect(row).not.toContainText("Archived");
 
   await page.context().clearCookies();
   await signInAs(orgA.member);

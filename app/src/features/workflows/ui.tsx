@@ -29,6 +29,7 @@ import type {
 } from "./types";
 
 export { VisibleWorkflowsList } from "./lib/visible-workflows";
+export type { SwitchConnectionOption };
 
 export {
   GraphTraceProvider,
@@ -82,15 +83,19 @@ export function WorkflowArchiveSection({ workflow }: { workflow: WorkflowDetails
 
 /**
  * The admin's workflows: name, latest version, its max risk level, the tags it's published to
- * and how many users they reach, whether it's on for them or the org, and who has it on or
- * paused (`enablements`, by workflow ID).
+ * and how many users they reach, whether it's on for them or the org, who has it on or paused
+ * (`enablements`, by workflow ID), and Archive or Restore. A published org workflow has its org
+ * switch right in the row, over the connections it may run on (`orgConnections`, by workflow
+ * ID), the same form as on its page.
  */
 export function WorkflowsList({
   workflows,
   enablements,
+  orgConnections,
 }: {
   workflows: WorkflowSummary[];
   enablements: ReadonlyMap<string, EnablementSummary[]>;
+  orgConnections: ReadonlyMap<string, SwitchConnectionOption[]>;
 }) {
   if (workflows.length === 0) {
     return <p className="text-sm text-muted-foreground">No workflows yet.</p>;
@@ -106,6 +111,7 @@ export function WorkflowsList({
           <TableHead>Reach</TableHead>
           <TableHead>Switch</TableHead>
           <TableHead>Enabled by</TableHead>
+          <TableHead>Archive</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -140,11 +146,28 @@ export function WorkflowsList({
               <AudienceTags audience={workflow.audience} />
             </TableCell>
             <TableCell>{reach(workflow.audience)}</TableCell>
-            <TableCell>
-              <SwitchBadge current={workflow.switch} />
+            <TableCell className="whitespace-normal">
+              {workflow.credentials === "org" ? (
+                <SwitchForm
+                  compact
+                  workflowId={workflow.id}
+                  current={workflow.switch}
+                  connections={orgConnections.get(workflow.id) ?? []}
+                  published
+                />
+              ) : (
+                <SwitchBadge current={workflow.switch} />
+              )}
             </TableCell>
             <TableCell className="whitespace-normal">
               <EnabledBy enablements={enablements.get(workflow.id) ?? []} />
+            </TableCell>
+            <TableCell>
+              {workflow.latestVersion === null ? (
+                "—"
+              ) : (
+                <ArchiveForm compact workflowId={workflow.id} archivedAt={workflow.archivedAt} />
+              )}
             </TableCell>
           </TableRow>
         ))}

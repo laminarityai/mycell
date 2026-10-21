@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { listConversations } from "@/features/builder/server";
@@ -16,6 +15,7 @@ import {
 } from "@/features/workflows/ui";
 import { NotFoundError } from "@/lib/errors";
 import { TryIt } from "./try-it";
+import { AppNav } from "@/app/app-nav";
 
 // A Server Action here may try the working spec on a message, model steps and all.
 export const maxDuration = 300;
@@ -26,11 +26,9 @@ export default function WorkflowPage({
 }: PageProps<"/workflows/[workflowId]">) {
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">
-      <header className="flex items-center justify-between">
+      <header className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold tracking-tight">Workflow</h1>
-        <Link href="/workflows" className="text-sm text-muted-foreground hover:text-foreground">
-          Back to workflows
-        </Link>
+        <AppNav />
       </header>
       {/* Try it lights up the steps it ran and the paths it took on the workflow's graph. */}
       <GraphTraceProvider>

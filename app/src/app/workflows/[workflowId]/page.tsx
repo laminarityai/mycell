@@ -8,7 +8,12 @@ import { listRuns } from "@/features/runtime/server";
 import { listTags } from "@/features/tags/server";
 import { RecentRuns, RunOnMessageForm } from "@/features/runtime/ui";
 import { getWorkflow, previewPublish, runnableConnections } from "@/features/workflows/server";
-import { GraphTraceProvider, WorkflowEditor, WorkflowSwitchSection } from "@/features/workflows/ui";
+import {
+  GraphTraceProvider,
+  WorkflowArchiveSection,
+  WorkflowEditor,
+  WorkflowSwitchSection,
+} from "@/features/workflows/ui";
 import { NotFoundError } from "@/lib/errors";
 import { TryIt } from "./try-it";
 
@@ -72,6 +77,7 @@ async function Workflow({ params }: Pick<PageProps<"/workflows/[workflowId]">, "
         preview={preview}
       />
       <WorkflowSwitchSection workflow={workflow} connections={connections} />
+      {workflow.versions.length > 0 ? <WorkflowArchiveSection workflow={workflow} /> : null}
       <section className="flex flex-col gap-3" aria-label="Builder conversations">
         <h2 className="text-lg font-semibold">Builder conversations</h2>
         <p className="text-sm text-muted-foreground">

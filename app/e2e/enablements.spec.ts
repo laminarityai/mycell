@@ -153,3 +153,50 @@ test("a riskier version pauses a member's switch until they re-enable it", async
   await expect(card).toContainText("On for your Google account");
   await expect(card.getByRole("switch", { name: "Pricing labels" })).toBeChecked();
 });
+
+test("archiving hides a workflow from members, and restoring brings back their switch", async ({
+  page,
+  orgs: { orgA },
+  signInAs,
+}) => {
+  await withGmail(orgA.admin, orgA.id);
+  await withGmail(orgA.member, orgA.id);
+  await signInAs(orgA.admin);
+  await makeTag(page, "sales", orgA.member);
+  await publishTo(page, "Pricing labels", LABELS, "sales");
+  const workflowPage = page.url();
+
+  await page.context().clearCookies();
+  await signInAs(orgA.member);
+  await page.goto("/workflows");
+  const card = page.getByRole("listitem").filter({ hasText: "Pricing labels" });
+  await card.getByRole("switch", { name: "Pricing labels" }).click();
+  await expect(card).toContainText("On for your Google account");
+
+  await page.context().clearCookies();
+  await signInAs(orgA.admin);
+  await page.goto(workflowPage);
+  const archive = page.getByRole("region", { name: "Archive" });
+  await archive.getByRole("button", { name: "Archive" }).click();
+  await expect(archive).toContainText("Archived since");
+  await page.goto("/workflows");
+  await expect(page.getByRole("row").filter({ hasText: "Pricing labels" })).toContainText(
+    "Archived",
+  );
+
+  await page.context().clearCookies();
+  await signInAs(orgA.member);
+  await page.goto("/workflows");
+  await expect(page.getByText("Pricing labels")).toHaveCount(0);
+
+  await page.context().clearCookies();
+  await signInAs(orgA.admin);
+  await page.goto(workflowPage);
+  await archive.getByRole("button", { name: "Restore" }).click();
+  await expect(archive.getByRole("button", { name: "Archive" })).toBeVisible();
+
+  await page.context().clearCookies();
+  await signInAs(orgA.member);
+  await page.goto("/workflows");
+  await expect(card).toContainText("On for your Google account");
+});

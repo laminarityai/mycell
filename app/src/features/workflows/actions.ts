@@ -7,10 +7,12 @@ import { getCtx } from "@/features/orgs/server";
 import { actionError, ValidationError, type ActionResult } from "@/lib/errors";
 import { parseForm } from "@/lib/forms";
 import {
+  archiveWorkflow,
   checkWorkflowSpec,
   disable,
   enable,
   publishWorkflow,
+  restoreWorkflow,
   saveWorkflow,
   switchWorkflowOff,
   switchWorkflowOn,
@@ -116,6 +118,36 @@ export async function switchWorkflowOffAction(
   try {
     const { workflowId } = parseForm(publishInput, form);
     await switchWorkflowOff(ctx, workflowId);
+  } catch (error) {
+    return actionError(error);
+  }
+  refresh();
+  return {};
+}
+
+/** Archives a workflow: it stops everywhere and members no longer see it. */
+export async function archiveWorkflowAction(
+  _previous: ActionResult,
+  form: FormData,
+): Promise<ActionResult> {
+  const ctx = await getCtx();
+  try {
+    await archiveWorkflow(ctx, parseForm(publishInput, form).workflowId);
+  } catch (error) {
+    return actionError(error);
+  }
+  refresh();
+  return {};
+}
+
+/** Restores an archived workflow, with everyone's switches as they were. */
+export async function restoreWorkflowAction(
+  _previous: ActionResult,
+  form: FormData,
+): Promise<ActionResult> {
+  const ctx = await getCtx();
+  try {
+    await restoreWorkflow(ctx, parseForm(publishInput, form).workflowId);
   } catch (error) {
     return actionError(error);
   }

@@ -13,6 +13,7 @@ import type { Spec } from "@/features/spec/types";
 import { saveWorkflowAction } from "../actions";
 import { GraphEditor } from "./graph-editor";
 import { saveHint, useLiveCheck } from "./live-check";
+import { SaveInputs } from "./save-inputs";
 import { Problems } from "./workflow-editor";
 
 export type EditableWorkflow = { id: string; name: string; workingSpec: Spec; revision: number };
@@ -37,10 +38,8 @@ export function WorkingSpecEditor({ workflow }: { workflow: EditableWorkflow }) 
           aria-label="Save the workflow"
           className="flex flex-col gap-2 border-t bg-background px-4 py-2 text-sm"
         >
-          <input type="hidden" name="workflowId" value={workflow.id} />
           <input type="hidden" name="name" value={workflow.name} />
-          <input type="hidden" name="baseRevision" value={workflow.revision} />
-          <input type="hidden" name="spec" value={specText} />
+          <SaveInputs workflowId={workflow.id} revision={workflow.revision} specText={specText} />
           <div className="flex items-center justify-between gap-2">
             <p aria-live="polite">
               <span className="font-medium">Unsaved changes.</span>{" "}

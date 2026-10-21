@@ -16,6 +16,7 @@ import { saveWorkflowAction } from "../actions";
 import { GraphEditor } from "./graph-editor";
 import { saveHint, useLiveCheck } from "./live-check";
 import { RiskBadge } from "./risk-badge";
+import { SaveInputs } from "./save-inputs";
 import { IssueList } from "./spec-fields";
 import { SpecSettings } from "./spec-settings";
 import { Problems } from "./workflow-editor";
@@ -76,13 +77,7 @@ export function SpecEditor(props: SpecEditorProps) {
 
   return (
     <form action={save} className="flex flex-col gap-4" aria-label="Workflow editor">
-      {props.workflowId === undefined ? null : (
-        <input type="hidden" name="workflowId" value={props.workflowId} />
-      )}
-      {props.revision === undefined ? null : (
-        <input type="hidden" name="baseRevision" value={props.revision} />
-      )}
-      <input type="hidden" name="spec" value={specText} />
+      <SaveInputs workflowId={props.workflowId} revision={props.revision} specText={specText} />
       <label className="flex flex-col gap-1 text-sm font-medium">
         Name
         <Input

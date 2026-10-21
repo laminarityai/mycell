@@ -42,8 +42,9 @@ _Avoid_: Shared connection
 **Owner scope**:
 Whether a piece of data belongs to one member or to the whole org.
 
-**Promotion**:
-The step by which a member-scoped fact becomes org-scoped.
+**Access list**:
+Who the source app says can see an item, kept on Mycel's record of it; a fact is visible to anyone who can see one of its sources.
+_Avoid_: Promotion (replaced), ACL, permissions
 
 **Event**:
 One normalized thing that happened in a source, such as an email received or sent or a Drive file created or modified, kept as its provenance and shape (time, people, thread, attachment metadata, MIME type) without its content. The code's type is `IngestedEvent`, to stay clear of the DOM's `Event`.
@@ -198,5 +199,11 @@ _Avoid_: Limit, quota
 ### Memory
 
 **Fact**:
-A piece of business knowledge extracted from source data, carrying its source ref and owner scope.
-_Avoid_: Memory (for a single item), note, insight
+A short statement about an object that a source states or a person told Mycel, linked to the sources it came from.
+_Avoid_: Memory (for a single item), note, insight, inference
+
+**Exclusion**:
+A Gmail label, Drive folder or similar that an admin keeps out of memory for the whole company.
+
+**Do-not-learn list**:
+The addresses of people an admin asked Mycel to forget, which memory never learns about again.

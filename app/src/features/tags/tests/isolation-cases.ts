@@ -1,7 +1,7 @@
 import { expect } from "vitest";
 import { defineIsolationCases } from "@/db/testing/isolation";
 import type { TwoOrgs } from "@/db/testing/two-org-fixture";
-import { NotFoundError } from "@/lib/errors";
+import { NotFoundError, ValidationError } from "@/lib/errors";
 import * as server from "../server";
 
 // Org B gets a tag on its member, so every case can check org B is left exactly as it was.
@@ -61,6 +61,22 @@ export const isolationCases = defineIsolationCases(server, {
     ).rejects.toThrow(NotFoundError);
     expect(await server.listTags(orgs.orgB.admin.ctx)).toEqual(before);
     expect((await server.listTags(orgs.orgA.admin.ctx))[0]?.userIds).toEqual([]);
+  },
+
+  findTagsByName: async (orgs) => {
+    const { tag } = await seedOrgBTag(orgs);
+    const own = await server.createTag(orgs.orgA.admin.ctx, "support");
+
+    // Org B's "sales" is no tag of org A's.
+    await expect(server.findTagsByName(orgs.orgA.admin.ctx, ["sales"])).rejects.toThrow(
+      ValidationError,
+    );
+    expect(await server.findTagsByName(orgs.orgA.admin.ctx, ["support"])).toEqual([
+      { id: own.id, name: "support" },
+    ]);
+    expect(await server.findTagsByName(orgs.orgB.admin.ctx, ["sales"])).toEqual([
+      { id: tag.id, name: "sales" },
+    ]);
   },
 
   unassignTag: async (orgs) => {

@@ -4,6 +4,7 @@ import type { TwoOrgs } from "@/db/testing/two-org-fixture";
 import { systemCtx } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
 import { connectGmail, connectMailbox } from "@/testing/connect-helpers";
+import { publishTo, tagUsers } from "@/testing/visibility-helpers";
 import * as server from "../server";
 import { draftSpec, labelSpec } from "./specs";
 
@@ -24,6 +25,13 @@ async function switchedOnInOrgB({ orgB }: TwoOrgs) {
   await server.publishWorkflow(admin, id);
   await server.switchWorkflowOn(admin, id, own.id);
   return { workflowId: id, connectionId: own.id, before: await server.getWorkflow(admin, id) };
+}
+
+// Org B publishes a workflow to its own `sales` tag, which its member has.
+async function publishedToSalesInOrgB({ orgB }: TwoOrgs) {
+  await connectGmail(orgB.admin.ctx, orgB.admin.email);
+  await tagUsers(orgB.admin.ctx, "sales", [orgB.member]);
+  return publishTo(orgB.admin.ctx, "B", labelSpec(), ["sales"]);
 }
 
 export const isolationCases = defineIsolationCases(server, {
@@ -118,6 +126,37 @@ export const isolationCases = defineIsolationCases(server, {
 
     expect(checked.ok ? [] : checked.issues.map((issue) => issue.path)).toEqual([["credentials"]]);
     expect((await server.checkWorkflowSpec(orgs.orgB.admin.ctx, draftSpec())).ok).toBe(true);
+  },
+
+  listVisibleWorkflows: async (orgs) => {
+    const { orgA, orgB } = orgs;
+    const b = await publishedToSalesInOrgB(orgs);
+    // Org A has a `sales` tag on its member too, and publishes a workflow to it.
+    await connectGmail(orgA.admin.ctx, orgA.admin.email);
+    await tagUsers(orgA.admin.ctx, "sales", [orgA.member]);
+    const a = await publishTo(orgA.admin.ctx, "A", labelSpec(), ["sales"]);
+
+    for (const user of [orgA.admin, orgA.member]) {
+      expect((await server.listVisibleWorkflows(user.ctx)).map((w) => w.id)).toEqual([
+        a.workflowId,
+      ]);
+    }
+    // Org B's admin sees its reach counted from org B's tags alone.
+    expect(
+      (await server.listVisibleWorkflows(orgB.admin.ctx)).map((w) => [w.id, w.audience?.reach]),
+    ).toEqual([[b.workflowId, 1]]);
+  },
+
+  getVisibleWorkflow: async (orgs) => {
+    const { orgA } = orgs;
+    const b = await publishedToSalesInOrgB(orgs);
+    await tagUsers(orgA.admin.ctx, "sales", [orgA.member]);
+
+    for (const user of [orgA.admin, orgA.member]) {
+      await expect(server.getVisibleWorkflow(user.ctx, b.workflowId)).rejects.toThrow(
+        NotFoundError,
+      );
+    }
   },
 
   getWorkflowVersion: async (orgs) => {

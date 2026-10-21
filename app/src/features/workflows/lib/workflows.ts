@@ -19,6 +19,7 @@ import { findWorkflow } from "./access";
 import { workflows, workflowVersions } from "./schema";
 import { switchesOf, switchOf } from "./switches";
 import { validateWorkflowSpec } from "./validation";
+import { audiencesOf } from "./visibility";
 
 type Version = typeof workflowVersions.$inferSelect;
 
@@ -82,6 +83,10 @@ export async function listWorkflows(ctx: Ctx): Promise<WorkflowSummary[]> {
     if (!latest.has(version.workflowId)) latest.set(version.workflowId, version);
   }
   const switches = await switchesOf(ctx, rows);
+  const audiences = await audiencesOf(
+    ctx,
+    [...latest.values()].map((version) => version.id),
+  );
   return rows.map((row) => {
     const version = latest.get(row.id);
     return {
@@ -90,6 +95,7 @@ export async function listWorkflows(ctx: Ctx): Promise<WorkflowSummary[]> {
       specId: row.specId,
       latestVersion: version === undefined ? null : versionSummary(version),
       switch: switches.get(row.id) ?? null,
+      audience: version === undefined ? null : (audiences.get(version.id) ?? null),
       updatedAt: row.updatedAt,
     };
   });

@@ -24,12 +24,23 @@ const metadataSchema = z.object({
 
 const HEADERS = ["Subject", "From", "Date"];
 
-export async function recentMessages(ctx: Ctx): Promise<RecentMessages[]> {
+/**
+ * The picker's messages, per connection. With `credentials`, only the connections a spec with
+ * them could run on: the admin's own for `member`, the org's for `org`.
+ */
+export async function recentMessages(
+  ctx: Ctx,
+  credentials?: "member" | "org",
+): Promise<RecentMessages[]> {
   requireAdmin(ctx);
   const listing = await listConnections(ctx);
-  const tryable = [...listing.connections, ...listing.orgConnections].filter((connection) =>
-    connection.apps.includes("gmail"),
-  );
+  const pool =
+    credentials === undefined
+      ? [...listing.connections, ...listing.orgConnections]
+      : credentials === "member"
+        ? listing.connections
+        : listing.orgConnections;
+  const tryable = pool.filter((connection) => connection.apps.includes("gmail"));
   return Promise.all(
     tryable.map(async (connection) => {
       const base = {

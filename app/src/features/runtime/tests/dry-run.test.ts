@@ -111,6 +111,15 @@ describe("recentMessages", () => {
     expect(listing[1]?.messages.map((m) => m.subject)).toEqual(["Shared inbox question"]);
     expect(JSON.stringify(listing)).not.toContain("A member's own mail");
   });
+
+  it("lists only the connections a spec's credentials could run on", async () => {
+    const { admin } = await tryItSetup();
+    const support = await connectGoogle(admin, "support@org-a.test", { kind: "org" });
+
+    const listing = await recentMessages(admin, "org");
+
+    expect(listing.map((connection) => connection.connectionId)).toEqual([support.id]);
+  });
 });
 
 describe("dryRun", () => {

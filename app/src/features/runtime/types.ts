@@ -203,6 +203,13 @@ export type DryRunResult = {
   costUsd: number;
 };
 
+/** What a "Try it" Server Action hands the panel: the result, or why it was refused. */
+export type TryItState = {
+  result?: DryRunResult;
+  error?: string;
+  issues?: { path: (string | number)[]; message: string }[];
+};
+
 /**
  * One connection's newest messages, for the "Try it" picker: fetched for display, never stored.
  * `unavailable` when Gmail couldn't be read just now.

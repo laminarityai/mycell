@@ -4,9 +4,11 @@ import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getCtx } from "@/features/orgs/server";
+import type { TryItState } from "@/features/runtime/types";
 import { actionError, type ActionResult } from "@/lib/errors";
 import { parseForm } from "@/lib/forms";
-import { acceptProposal, rejectProposal, startConversation } from "./server";
+import { acceptProposal, rejectProposal, startConversation, tryInConversation } from "./server";
+import type { BuilderUIMessage } from "./types";
 
 const startInput = z.object({ workflowId: z.string().min(1).optional() });
 
@@ -24,6 +26,29 @@ export async function startConversationAction(
     return actionError(error);
   }
   redirect(`/builder/${id}`);
+}
+
+const tryInput = z.object({
+  conversationId: z.string().min(1),
+  connectionId: z.string().min(1),
+  sourceRef: z.string().min(1),
+});
+
+/**
+ * Tries the conversation's working spec on one message. The page gets the whole result; the
+ * conversation gets only its content-free summary, returned as the message it now shows.
+ */
+export async function tryInConversationAction(
+  _previous: TryItState,
+  form: FormData,
+): Promise<TryItState & { message?: BuilderUIMessage }> {
+  const ctx = await getCtx();
+  try {
+    const { conversationId, ...input } = parseForm(tryInput, form);
+    return await tryInConversation(ctx, conversationId, input);
+  } catch (error) {
+    return actionError(error);
+  }
 }
 
 const proposalInput = z.object({ proposalId: z.string().min(1) });

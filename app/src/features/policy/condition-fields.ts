@@ -6,9 +6,11 @@ import {
   EXTRACTED,
   operatorsFor,
   subjectParts,
+  subjectWords,
   valueCheckIssues,
   type DeclaredFields,
   type Operator,
+  type SubjectWords,
   type ValueCheck,
 } from "@/features/spec/conditions";
 import { eachStep, stepsAbove } from "@/features/spec/tree";
@@ -25,6 +27,14 @@ export function declaredFields(spec: Spec): DeclaredFields {
     trigger: triggerFacts[spec.trigger.type],
     action: (name) => findAction(name)?.conditionFields,
   };
+}
+
+/**
+ * What each of the spec's checks tests, in the words the condition editor labels it with: a
+ * trigger fact's label, an extract field's description, a catalog action field's label.
+ */
+export function checkWords(spec: Spec): SubjectWords {
+  return subjectWords(spec, (name) => findAction(name)?.conditionFields);
 }
 
 /**

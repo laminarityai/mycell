@@ -3,6 +3,7 @@
 // and counts only. No message content, draft text, row value or extracted value reaches it
 // (invariant 8): those stay on the admin's page. A tool input the spec fills from a reference
 // is named by its reference, never by the value it resolved to, which may come from the email.
+import { checkWords } from "@/features/policy/condition-fields";
 import type { BranchPath, DryRunResult, DryRunStep } from "@/features/runtime/types";
 import { describeCheck } from "@/features/spec/conditions";
 import { findStep } from "@/features/spec/tree";
@@ -74,13 +75,15 @@ const PATH_WORDS: Record<BranchPath["status"], string> = {
 };
 
 /**
- * A line per path out of a branch, naming the path and each check as the spec writes them,
+ * A line per path out of a branch, naming the path and each check as the spec writes them, in
+ * the words the condition editor labels what it tests with,
  * with whether it passed: never its reason, which may quote the value it tested. The branch's
  * own line already says whether it took the otherwise path.
  */
 function pathLines(step: DryRunStep, spec: Spec): string[] {
   const branch = findStep(spec, step.stepId);
   if (branch?.type !== "branch" || step.paths === undefined) return [];
+  const words = checkWords(spec);
   return step.paths.flatMap((result) => {
     const path = branch.paths.find((candidate) => candidate.id === result.id);
     if (path === undefined) return [];
@@ -88,7 +91,7 @@ function pathLines(step: DryRunStep, spec: Spec): string[] {
       const passed = result.checks.at(index)?.passed;
       return passed === undefined
         ? []
-        : [`${describeCheck(check)}: ${passed ? "passed" : "failed"}`];
+        : [`${describeCheck(check, words)}: ${passed ? "passed" : "failed"}`];
     });
     const said = checks.length === 0 ? "" : ` ${checks.join("; ")}.`;
     return [

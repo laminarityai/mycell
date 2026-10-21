@@ -2,6 +2,7 @@
 // tree diff. The graph draws each step once, so a step or path that moved to another list is
 // drawn only where it went, marked as the diff marks it there (added). Pure, so client code may
 // import it.
+import type { SubjectWords } from "./conditions";
 import { describeCondition } from "./describe";
 import { diffSpecs, type PathDiff, type StepDiff } from "./diff";
 import { eachStep } from "./tree";
@@ -23,8 +24,11 @@ export type ChangeMarks = {
   pathGone: (id: string) => boolean;
 };
 
-/** The marks of `next` against `base`; a null base is a new workflow, all of it added. */
-export function changeMarks(base: Spec | null, next: Spec): ChangeMarks {
+/**
+ * The marks of `next` against `base`; a null base is a new workflow, all of it added. `words`
+ * names what the base's checks test.
+ */
+export function changeMarks(base: Spec | null, next: Spec, words?: SubjectWords): ChangeMarks {
   const steps = new Map<string, StepDiff>();
   const paths = new Map<string, PathDiff>();
   const collect = (list: StepDiff[]) => {
@@ -64,7 +68,7 @@ export function changeMarks(base: Spec | null, next: Spec): ChangeMarks {
       if (diff === undefined || diff.change === "added") return { change: "added", before: null };
       const before = diff.before;
       if (diff.change !== "changed" || before === undefined) return { change: null, before: null };
-      const condition = describeCondition(before.condition);
+      const condition = describeCondition(before.condition, words);
       const renamed = before.name !== diff.after?.name;
       return { change: "changed", before: renamed ? `${before.name}: ${condition}` : condition };
     },

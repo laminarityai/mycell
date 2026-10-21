@@ -4,9 +4,11 @@
 import { findAction } from "@/features/policy/catalog";
 import { applyPolicy } from "@/features/policy/engine";
 import type { InsertedApproval, RiskLevel } from "@/features/policy/types";
+import type { SubjectWords } from "@/features/spec/conditions";
 import {
   describeCondition,
   describeSpec,
+  specWords,
   type ActionInfo,
   type StepDescription,
 } from "@/features/spec/describe";
@@ -48,7 +50,10 @@ export function toProposal(row: ProposalRow): Proposal {
     summary: row.summary,
     status: row.status,
     maxRisk: row.maxRisk,
-    groups: groupsOf(diff.steps, step),
+    groups: groupsOf(diff.steps, step, {
+      after: specWords(after.spec, actionInfo),
+      before: before === null ? undefined : specWords(before.spec, actionInfo),
+    }),
     settings: diff.settings,
     spec,
     baseSpec,
@@ -62,7 +67,11 @@ export function toProposal(row: ProposalRow): Proposal {
  * then each branch's paths left to right and its otherwise path, each followed by the paths
  * nested in it. A list is left out when neither its path nor any of its steps changed.
  */
-function groupsOf(diff: StepDiff[], step: (change: StepDiff) => ProposalStep[]): ProposalGroup[] {
+function groupsOf(
+  diff: StepDiff[],
+  step: (change: StepDiff) => ProposalStep[],
+  words: PathWords,
+): ProposalGroup[] {
   const groups: ProposalGroup[] = [];
   const walk = (steps: StepDiff[], path: ProposalPath | null) => {
     const changed = steps.filter((change) => change.change !== "unchanged").flatMap(step);
@@ -73,7 +82,7 @@ function groupsOf(diff: StepDiff[], step: (change: StepDiff) => ProposalStep[]):
     for (const branch of steps) {
       for (const change of branch.paths) {
         const path = change.after ?? change.before;
-        if (path !== undefined) walk(change.steps, pathOf(branch.id, change, path, within));
+        if (path !== undefined) walk(change.steps, pathOf(branch.id, change, path, within, words));
       }
       if (branch.otherwise !== null) {
         const { id, change, steps: otherwiseSteps } = branch.otherwise;
@@ -97,7 +106,18 @@ function groupsOf(diff: StepDiff[], step: (change: StepDiff) => ProposalStep[]):
   return groups;
 }
 
-function pathOf(branchId: string, change: PathDiff, path: Path, within: string[]): ProposalPath {
+/** What each side's checks test, in words: the proposal's, and the spec it was made against. */
+type PathWords = { after: SubjectWords; before: SubjectWords | undefined };
+
+function pathOf(
+  branchId: string,
+  change: PathDiff,
+  path: Path,
+  within: string[],
+  words: PathWords,
+): ProposalPath {
+  // A removed path is described as the base had it.
+  const pathWords = change.change === "removed" ? words.before : words.after;
   return {
     id: change.id,
     branchId,
@@ -105,16 +125,16 @@ function pathOf(branchId: string, change: PathDiff, path: Path, within: string[]
     within,
     otherwise: false,
     change: change.change,
-    text: runsWhen(path),
+    text: runsWhen(path, pathWords),
     before:
       change.change === "changed" && change.before !== undefined
-        ? { name: change.before.name, text: runsWhen(change.before) }
+        ? { name: change.before.name, text: runsWhen(change.before, words.before) }
         : null,
   };
 }
 
-function runsWhen(path: Path): string {
-  return `Runs when ${describeCondition(path.condition)}.`;
+function runsWhen(path: Path, words: SubjectWords | undefined): string {
+  return `Runs when ${describeCondition(path.condition, words)}.`;
 }
 
 type WithPolicy = { spec: Spec; inserted: InsertedApproval[] };
@@ -136,5 +156,7 @@ function described(side: WithPolicy | null): Map<string, StepDescription<RiskLev
 
 function actionInfo(name: string): ActionInfo<RiskLevel> | undefined {
   const action = findAction(name);
-  return action === undefined ? undefined : { risk: action.risk, description: action.description };
+  if (action === undefined) return undefined;
+  const { risk, description, conditionFields } = action;
+  return { risk, description, conditionFields };
 }

@@ -68,7 +68,7 @@ describe("graphView", () => {
       [
         "pricing",
         "Pricing",
-        '"kind" says "pricing" with at least 85% confidence or details.product contains "Chair"',
+        '"kind" says "pricing" with at least 85% confidence or what they ask about contains "Chair"',
       ],
       ["rest", null, null],
     ]);
@@ -188,6 +188,24 @@ describe("graphView", () => {
       ["pricing", null, null],
       ["refund", "added", null],
       ["rest", null, null],
+    ]);
+  });
+
+  it("names what a changed path's condition tested before in plain words", () => {
+    const current = triageWithApproval();
+    const proposed = structuredClone(current);
+    const route = proposed.steps[2];
+    if (route.type !== "branch") throw new Error("triage shape");
+    route.paths[1].condition.checks = [
+      { subject: { from: "trigger.senderDomain" }, op: "is", value: "acme.test" },
+    ];
+
+    const view = graphView(current, { action, proposal: { spec: proposed } });
+
+    const pricing = branchOf(view.steps[2])[1];
+    expect([pricing?.condition, pricing?.before]).toEqual([
+      `the sender's domain is "acme.test"`,
+      '"kind" says "pricing" with at least 85% confidence or what they ask about contains "Chair"',
     ]);
   });
 

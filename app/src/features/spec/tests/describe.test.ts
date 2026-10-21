@@ -57,7 +57,43 @@ describe("describeSpec", () => {
     const route = describeSpec(parsed(spec)).find((step) => step.id === "route");
 
     expect(route?.text).toBe(
-      'Every match: runs each path that applies, one after another, left to right: "urgent" if details.urgent is yes; "pricing" if "kind" says "pricing" with at least 85% confidence; if none applies, stops.',
+      `Every match: runs each path that applies, one after another, left to right: "urgent" if whether they say it's urgent is yes; "pricing" if "kind" says "pricing" with at least 85% confidence; if none applies, stops.`,
+    );
+  });
+
+  it("names what each check tests in plain words, never as a reference", () => {
+    const spec = triageSpec();
+    spec.steps.splice(2, 0, {
+      id: "thread",
+      type: "tool",
+      action: "google-mail.read-thread",
+      input: { threadId: { from: "trigger.threadId" } },
+    });
+    spec.steps[3] = {
+      ...spec.steps[3],
+      paths: [
+        pathOf("big", [
+          { subject: { from: "details.total" }, op: "more_than", value: 1000 },
+          { subject: { from: "trigger.senderDomain" }, op: "is", value: "acme.test" },
+          { subject: { from: "thread.messageCount" }, op: "at_least", value: 3 },
+        ]),
+      ],
+    };
+    const action = (name: string) =>
+      name === "google-mail.read-thread"
+        ? {
+            risk: "read",
+            description: "Read the thread a message belongs to.",
+            conditionFields: [
+              { name: "messageCount", type: "number" as const, label: "The number of messages" },
+            ],
+          }
+        : undefined;
+
+    const route = describeSpec(parsed(spec), { action }).find((step) => step.id === "route");
+
+    expect(route?.text).toBe(
+      'Goes on only if the order total is more than 1000 and the sender\'s domain is "acme.test" and the number of messages is at least 3; otherwise stops.',
     );
   });
 

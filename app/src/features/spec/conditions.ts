@@ -2,10 +2,13 @@
 // value typed by what declares it: a fact the trigger declares, an extract step's field, or a
 // field a catalog action declares on its result, from above the branch on its own path.
 // Pure, so client code may import it.
+import { eachStep } from "./tree";
+import { triggerFacts } from "./triggers";
 import {
   checkOperators,
   type Check,
   type ConditionField,
+  type Spec,
   type SpecIssue,
   type Step,
   type ValueType,
@@ -73,18 +76,65 @@ const OPERATOR_WORDS: Record<Operator, string> = {
   is_not_empty: "isn't empty",
 };
 
+/** What a check's subject names, in words: `{ from }` as a check names it, to its label. */
+export type SubjectWords = (from: string) => string;
+
 /**
- * A check in words, from the spec's own literals only: `"kind" says "pricing" with at least 85%
- * confidence`, `details.total is more than 1000`. Never a value a run tested, so it may go
- * anywhere the spec may, the builder's conversation included.
+ * A check in words, from the spec's own literals and the labels of what it tests only:
+ * `"kind" says "pricing" with at least 85% confidence`, `the order total is more than 1000`.
+ * Never a value a run tested, so it may go anywhere the spec may, the builder's conversation
+ * included. `words` names the subject (`subjectWords`); without it, by its field's name.
  */
-export function describeCheck(check: Check): string {
+export function describeCheck(check: Check, words: SubjectWords = readableSubject): string {
   if ("classify" in check) {
     const percent = String(Math.round(check.minP * 100));
     return `"${check.classify}" says "${check.is}" with at least ${percent}% confidence`;
   }
-  const words = `${check.subject.from} ${OPERATOR_WORDS[check.op]}`;
-  return "value" in check ? `${words} ${JSON.stringify(check.value)}` : words;
+  const phrase = `${inSentence(words(check.subject.from))} ${OPERATOR_WORDS[check.op]}`;
+  return "value" in check ? `${phrase} ${JSON.stringify(check.value)}` : phrase;
+}
+
+/**
+ * Each subject of the spec's checks in words, as the condition editor labels it: a trigger
+ * fact by the label its trigger declares, an extract step's field by its description, and a
+ * tool step's field by the label its catalog action declares. `spec` doesn't know the catalog,
+ * so `action` gives each action's fields; a field nothing labels is named by its own name.
+ */
+export function subjectWords(spec: Spec, action?: DeclaredFields["action"]): SubjectWords {
+  const steps = new Map(eachStep(spec).map(({ step }) => [step.id, step]));
+  const labelOf = (source: string, field: string): string | undefined => {
+    if (source === "trigger") return labelIn(triggerFacts[spec.trigger.type], field);
+    const step = steps.get(source);
+    if (step?.type === "extract") {
+      return Object.hasOwn(step.fields, field) ? step.fields[field]?.description : undefined;
+    }
+    return step?.type === "tool" ? labelIn(action?.(step.action) ?? [], field) : undefined;
+  };
+  return (from) => {
+    const { source, field } = subjectParts(from);
+    const label = labelOf(source, field)?.trim();
+    return label === undefined || label === "" ? readableSubject(from) : label;
+  };
+}
+
+function labelIn(fields: readonly ConditionField[], name: string): string | undefined {
+  return fields.find((candidate) => candidate.name === name)?.label;
+}
+
+/** A subject by its field's own name, in words: `details.orderTotal` is "order total". */
+function readableSubject(from: string): string {
+  return subjectParts(from)
+    .field.replaceAll(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replaceAll(/[_.]+/g, " ")
+    .toLocaleLowerCase("en");
+}
+
+/** A label that starts a sentence, made to read inside one; an acronym ("PO number") is kept. */
+function inSentence(label: string): string {
+  const [first = "", second = ""] = label;
+  return second === second.toLocaleUpperCase("en") && second !== " "
+    ? label
+    : first.toLocaleLowerCase("en") + label.slice(1);
 }
 
 /** The type a check gives an extract step's field, by the type the step declares it with. */

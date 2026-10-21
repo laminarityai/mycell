@@ -102,7 +102,8 @@ function withPolicy(spec: Spec): GraphSide {
 function actionInfo(name: string): GraphActionInfo<RiskLevel> | undefined {
   const action = findAction(name);
   if (action === undefined) return undefined;
-  return { risk: action.risk, description: action.description, app: action.app };
+  const { risk, description, app, conditionFields } = action;
+  return { risk, description, app, conditionFields };
 }
 
 /** Filling a pane, the drawing starts lower, leaving room for a caption over its top. */

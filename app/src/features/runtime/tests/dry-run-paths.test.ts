@@ -128,8 +128,8 @@ describe("Try it on a branch with several paths", () => {
         name: "big",
         status: "not_taken",
         checks: [
-          { check: 'details.product contains "oak"', passed: true, reason: 'was "Oak chairs"' },
-          { check: "details.total is more than 1000", passed: false, reason: "had no value" },
+          { check: 'what they ask about contains "oak"', passed: true, reason: 'was "Oak chairs"' },
+          { check: "the order total is more than 1000", passed: false, reason: "had no value" },
         ],
       },
       { id: "rest", name: null, status: "taken", checks: [] },

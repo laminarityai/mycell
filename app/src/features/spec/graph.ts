@@ -3,7 +3,8 @@
 // route. Pure, so client code may import it; `layout.ts` places it, and the page draws it.
 // `spec` doesn't know the catalog (policy imports spec), so callers pass what it says about each
 // action and which approvals the policy engine inserted, as `describeSpec` takes them.
-import { describeCondition, type ActionInfo } from "./describe";
+import type { SubjectWords } from "./conditions";
+import { describeCondition, specWords, type ActionInfo } from "./describe";
 import { changeMarks, type ChangeMarks } from "./graph-changes";
 import { stepWords } from "./graph-words";
 import type { BranchStep, Condition, Spec, Step, StepType } from "./types";
@@ -108,7 +109,10 @@ export function graphView<Risk extends string = string>(
   const { proposal } = options;
   const drawn = proposal?.spec ?? spec;
   if (drawn === null) return { steps: [], tried: false };
-  const marks = proposal === undefined ? null : changeMarks(spec, proposal.spec);
+  // Each check's subject in words: the drawn spec's, and the base's for what it removes.
+  const drawnWords = specWords(drawn, options.action);
+  const baseWords = spec === null ? drawnWords : specWords(spec, options.action);
+  const marks = proposal === undefined ? null : changeMarks(spec, proposal.spec, baseWords);
   const words = stepWords(
     options.action,
     new Set(proposal?.insertedApprovals ?? options.insertedApprovals),
@@ -135,7 +139,7 @@ export function graphView<Risk extends string = string>(
         : null,
   });
   const removedPath = (path: AnyPath): GraphPath<Risk> => ({
-    ...pathHeading(path),
+    ...pathHeading(path, baseWords),
     change: "removed",
     before: null,
     run: null,
@@ -166,7 +170,7 @@ export function graphView<Risk extends string = string>(
           ? marks?.path(path.id)
           : { change: branchAdded ? "added" : null, before: null };
       return {
-        ...pathHeading(path),
+        ...pathHeading(path, drawnWords),
         change: mark?.change ?? null,
         before: mark?.before ?? null,
         run: route.path(path.id),
@@ -189,11 +193,14 @@ function pathsOf(step: BranchStep): AnyPath[] {
   return [...step.paths, { ...step.otherwise, name: null }];
 }
 
-function pathHeading(path: AnyPath): Pick<GraphPath, "id" | "name" | "condition"> {
+function pathHeading(
+  path: AnyPath,
+  words: SubjectWords,
+): Pick<GraphPath, "id" | "name" | "condition"> {
   return {
     id: path.id,
     name: path.name,
-    condition: path.condition === undefined ? null : describeCondition(path.condition),
+    condition: path.condition === undefined ? null : describeCondition(path.condition, words),
   };
 }
 

@@ -2,7 +2,12 @@
 // carries a reason, which may quote the value it tested (an extracted value, from the email):
 // Try it shows it to the admin, and nothing records or stores it (invariant 8).
 import { z } from "zod";
-import { describeCheck, subjectParts, type ValueCheck } from "@/features/spec/conditions";
+import {
+  describeCheck,
+  subjectParts,
+  type SubjectWords,
+  type ValueCheck,
+} from "@/features/spec/conditions";
 import type { BranchStep, Check } from "@/features/spec/types";
 import type { BranchPath, CheckResult, Json } from "../types";
 import { RunStepError } from "./failures";
@@ -15,9 +20,14 @@ export type BranchChoice = { taken: string[]; paths: BranchPath[] };
 
 /**
  * First match: checks the paths left to right until one's condition holds, and takes it, or
- * the otherwise path when none does. Paths after the one taken aren't checked.
+ * the otherwise path when none does. Paths after the one taken aren't checked. `words` names
+ * what each check tests, as the spec's editor labels it.
  */
-export function chooseFirstMatch(branch: BranchStep, outputs: Outputs): BranchChoice {
+export function chooseFirstMatch(
+  branch: BranchStep,
+  outputs: Outputs,
+  words?: SubjectWords,
+): BranchChoice {
   const paths: BranchPath[] = [];
   let taken: string | undefined;
   for (const path of branch.paths) {
@@ -26,7 +36,7 @@ export function chooseFirstMatch(branch: BranchStep, outputs: Outputs): BranchCh
       continue;
     }
     const checks = path.condition.checks.map((check): CheckResult => ({
-      check: describeCheck(check),
+      check: describeCheck(check, words),
       ...outcome(check, outputs),
     }));
     const passed = checks.map((check) => check.passed);
@@ -44,8 +54,12 @@ export function chooseFirstMatch(branch: BranchStep, outputs: Outputs): BranchCh
  * Every match: checks every path, left to right, and takes each whose condition holds, in that
  * order, or the otherwise path when none does.
  */
-export function chooseEveryMatch(branch: BranchStep, outputs: Outputs): BranchChoice {
-  const paths = branch.paths.map((path) => checkedPath(path, outputs));
+export function chooseEveryMatch(
+  branch: BranchStep,
+  outputs: Outputs,
+  words?: SubjectWords,
+): BranchChoice {
+  const paths = branch.paths.map((path) => checkedPath(path, outputs, words));
   const taken = paths.filter((path) => path.status === "taken").map((path) => path.id);
   const otherwise = branch.otherwise.id;
   const status = taken.length === 0 ? "taken" : "not_needed";
@@ -54,7 +68,11 @@ export function chooseEveryMatch(branch: BranchStep, outputs: Outputs): BranchCh
 }
 
 /** A path with each of its checks' outcomes, taken when its condition holds. */
-function checkedPath(path: BranchStep["paths"][number], outputs: Outputs): BranchPath {
+function checkedPath(
+  path: BranchStep["paths"][number],
+  outputs: Outputs,
+  words: SubjectWords | undefined,
+): BranchPath {
   const checks = path.condition.checks.map((check): CheckResult => ({
     check: describeCheck(check),
     ...outcome(check, outputs),

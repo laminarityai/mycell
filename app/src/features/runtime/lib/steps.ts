@@ -1,6 +1,7 @@
 // The model and control steps: classify, extract, branch and escalate. A model step fetches
 // the triggering message inside itself and holds its text in memory only (invariant 8).
 import { z } from "zod";
+import { checkWords } from "@/features/policy/condition-fields";
 import type { Step } from "@/features/spec/types";
 import type { Json } from "../types";
 import { callModel } from "./call-model";
@@ -90,7 +91,8 @@ export async function branchStep(
   context: StepContext,
 ): Promise<StepExecution> {
   const choose = step.mode === "every" ? chooseEveryMatch : chooseFirstMatch;
-  const { taken, paths } = choose(step, await withTriggerFacts(step, context));
+  const outputs = await withTriggerFacts(step, context);
+  const { taken, paths } = choose(step, outputs, checkWords(context.spec));
   const stops = taken.includes(step.otherwise.id) && step.otherwise.steps.length === 0;
   // The paths checked, with each check's pass or fail; never a reason, which may quote a value.
   const checked = paths

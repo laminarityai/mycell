@@ -134,7 +134,7 @@ describe("propose_spec", () => {
       ],
       [
         "Big order",
-        'Runs when details.product contains "walnut" and details.total is more than 1000.',
+        'Runs when what they ask about contains "walnut" and the order total is more than 1000.',
         ["big-label added"],
       ],
       ["Otherwise", "Runs when no other path applies, and stops the run.", []],
@@ -171,7 +171,7 @@ describe("propose_spec", () => {
       ["Complaints", 'Runs when "kind" says "complaint" with at least 90% confidence.', []],
       [
         "Big order",
-        'Runs when details.product contains "walnut" and details.total is more than 1000.',
+        'Runs when what they ask about contains "walnut" and the order total is more than 1000.',
         ["big-label removed"],
       ],
     ]);

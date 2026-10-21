@@ -74,8 +74,8 @@ describe("tryInConversation on a branch that tests the message's facts", () => {
       m.parts.flatMap((part) => (part.type === "try_it" ? part.lines : [])),
     );
     expect(lines).toContain(
-      'route, path "Quote": didn\'t apply. trigger.subject contains "quote": passed; ' +
-        'trigger.senderDomain is "supplier.test": failed.',
+      'route, path "Quote": didn\'t apply. the subject contains "quote": passed; ' +
+        `the sender's domain is "supplier.test": failed.`,
     );
     const stored = JSON.stringify(messages);
     for (const content of [SUBJECT, "Ada", "ada@", "customer.test", "oak"]) {

@@ -131,8 +131,8 @@ describe("tryInConversation", () => {
       expect.arrayContaining([
         'route (branch): went on along "Big order".',
         'route, path "Complaint": didn\'t apply. "kind" says "complaint" with at least 80% confidence: failed.',
-        'route, path "Big order": ran. details.product contains "walnut": passed; ' +
-          "details.total is more than 1000: passed.",
+        'route, path "Big order": ran. what they ask about contains "walnut": passed; ' +
+          "the order total is more than 1000: passed.",
       ]),
     );
     const stored = JSON.stringify(messages);

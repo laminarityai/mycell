@@ -41,6 +41,10 @@ Branches and paths:
   own steps, which may include another branch.
 - Mode "first" is first match: paths are checked left to right, and only the first whose
   condition holds runs. Put the narrowest path first.
+- Mode "every" is every match: every path whose condition holds runs, one after another, left
+  to right. Use it when one message can need several independent things (label it urgent and
+  also log its invoice). Two paths that can run together mustn't both draft a reply or both
+  hand the message to a person. A failing path doesn't stop the others.
 - Every branch has an otherwise path, which runs when no other path applies. With no steps, the
   run stops there; give it steps (an escalate, say) when a message that fits no path still needs
   handling.

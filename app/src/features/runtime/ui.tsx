@@ -20,11 +20,12 @@ const STATUS_LABELS: Record<RunStatus | RunStepStatus, string> = {
   escalated: "Escalated",
   cancelled: "Cancelled",
   failed: "Failed",
+  partly_failed: "Partly failed",
   check_failed: "Check failed",
 };
 
 function StatusBadge({ status }: { status: RunStatus | RunStepStatus }) {
-  const failed = status === "failed" || status === "check_failed";
+  const failed = status === "failed" || status === "partly_failed" || status === "check_failed";
   return (
     <Badge variant={failed ? "destructive" : status === "succeeded" ? "secondary" : "outline"}>
       {STATUS_LABELS[status]}

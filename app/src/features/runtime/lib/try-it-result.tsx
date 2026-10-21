@@ -8,6 +8,8 @@ const ENDINGS: Record<DryRunResult["ended"], string> = {
   skipped: "Stopped at a branch: the workflow would do nothing more with this message.",
   escalated: "Escalated: the workflow would hand this message to a person.",
   failed: "Failed at the step marked below.",
+  partly_failed:
+    "Partly failed: the step marked below failed and ended its own path, and the other paths ran on.",
 };
 
 /** Rows of a read range shown, at most. */

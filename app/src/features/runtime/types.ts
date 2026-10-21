@@ -115,12 +115,16 @@ export type RetryPolicy = {
 export const runStatuses = [
   "running",
   "succeeded",
-  // A branch's condition failed and its `else` was `stop`.
+  // A branch took an otherwise path with no steps.
   "skipped",
   "escalated",
   // The connection went before the run finished.
   "cancelled",
+  // The steps above every branch failed, or every path that ran did.
   "failed",
+  // Some paths of an every-match branch failed and others finished. A failure wherever
+  // failures are counted.
+  "partly_failed",
 ] as const;
 export type RunStatus = (typeof runStatuses)[number];
 
@@ -225,7 +229,7 @@ export type DryRunStep = {
 
 /** How a dry run ended, and each step it reached. Returned to the page, never stored. */
 export type DryRunResult = {
-  ended: "succeeded" | "skipped" | "escalated" | "failed";
+  ended: "succeeded" | "skipped" | "escalated" | "failed" | "partly_failed";
   steps: DryRunStep[];
   costUsd: number;
 };

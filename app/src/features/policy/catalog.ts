@@ -45,6 +45,9 @@ const actions = [
     scopes: GMAIL_READ,
     input: z.object({ threadId: id }),
     output: z.object({ threadId: id, messageCount: z.number().int().nonnegative() }),
+    conditionFields: [
+      { name: "messageCount", type: "number", label: "The number of messages in the thread" },
+    ],
   },
   {
     name: "google-mail.add-label",
@@ -84,6 +87,9 @@ const actions = [
       rowCount: z.number().int().nonnegative(),
       columnCount: z.number().int().nonnegative(),
     }),
+    // Its rows' values stay out of the output (ADR-0012), so a check can test whether the
+    // lookup found rows, never what they hold.
+    conditionFields: [{ name: "rowCount", type: "number", label: "The number of rows read" }],
   },
   {
     name: "google-sheet.append-row",

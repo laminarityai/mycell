@@ -80,12 +80,12 @@ describe("validateSpec on a branch with several paths", () => {
     });
   });
 
-  it("refuses a check on a field the extract lacks, a step that isn't an extract, or the trigger", () => {
+  it("refuses a check on a field the extract lacks, a classify step's label, or an undeclared fact", () => {
     const spec = triageWithPaths([
       pathOf("checks", [
         value("details.city", "is_empty"),
         value("kind.label", "is", "pricing"),
-        value("trigger.subject", "contains", "quote"),
+        value("trigger.body", "contains", "quote"),
       ]),
     ]);
 

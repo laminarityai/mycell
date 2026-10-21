@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Spec, SpecIssue } from "@/features/spec/types";
+import type { ConditionField, Spec, SpecIssue } from "@/features/spec/types";
 
 /** Risk levels, least to most dangerous (docs/architecture.md, "Risk policy"). */
 export const riskLevelSchema = z.enum([
@@ -33,6 +33,11 @@ export type CatalogAction = {
   readonly input: z.ZodType;
   /** What the action hands on: derived data and IDs only, never content (ADR-0012). */
   readonly output: z.ZodType;
+  /**
+   * The fields of `output` a branch's condition may test (ADR-0015), each with its type, as
+   * `{ from: "<step>.<name>" }`. An explicit list, so no ID becomes something to branch on.
+   */
+  readonly conditionFields?: readonly ConditionField[];
 };
 
 /** An approval step the policy engine added because the spec was missing it. */

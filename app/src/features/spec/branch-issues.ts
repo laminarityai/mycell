@@ -1,7 +1,7 @@
 // The rules a branch and its paths must keep (ADR-0015), beyond their shape: path IDs unique
 // with the steps', and each check on something above the branch on its own path, with an
 // operator that fits it. Pure, so client code may import it.
-import { operatorsFor, subjectType, type ValueType } from "./conditions";
+import { valueCheckIssues, type DeclaredFields } from "./conditions";
 import type { BranchStep, Check, SpecIssue, Step } from "./types";
 
 type At = (...path: (string | number)[]) => SpecIssue["path"];
@@ -16,6 +16,7 @@ export function branchIssues(
   above: readonly Step[],
   refersBack: RefersBack,
   seen: Set<string>,
+  declared: DeclaredFields,
 ): SpecIssue[] {
   const issues: SpecIssue[] = [];
   const pathIds: [string, SpecIssue["path"]][] = [
@@ -32,14 +33,20 @@ export function branchIssues(
   branch.paths.forEach((path, p) => {
     path.condition.checks.forEach((check, c) => {
       const checkAt: At = (...field) => at("paths", p, "condition", "checks", c, ...field);
-      issues.push(...checkIssues(check, checkAt, above, refersBack));
+      issues.push(...checkIssues(check, checkAt, above, refersBack, declared));
     });
   });
   return issues;
 }
 
 /** A classify check names a classify step above and one of its labels; a value check fits. */
-function checkIssues(check: Check, checkAt: At, above: readonly Step[], refersBack: RefersBack) {
+function checkIssues(
+  check: Check,
+  checkAt: At,
+  above: readonly Step[],
+  refersBack: RefersBack,
+  declared: DeclaredFields,
+) {
   if ("classify" in check) {
     const target = refersBack(check.classify, checkAt("classify"));
     if (target !== undefined && target.type !== "classify") {
@@ -51,17 +58,5 @@ function checkIssues(check: Check, checkAt: At, above: readonly Step[], refersBa
     }
     return [];
   }
-  const subject = subjectType(check.subject.from, above);
-  if (!subject.ok) return [{ path: checkAt("subject", "from"), message: subject.message }];
-  if (!operatorsFor(subject.type).includes(check.op)) {
-    const message = `${check.subject.from} is ${TYPE_WORDS[subject.type]}, so "${check.op}" can't check it.`;
-    return [{ path: checkAt("op"), message }];
-  }
-  return [];
+  return valueCheckIssues(check, checkAt, above, declared);
 }
-
-const TYPE_WORDS: Record<ValueType, string> = {
-  text: "text",
-  number: "a number",
-  yesNo: "a yes or no",
-};

@@ -5,6 +5,7 @@ import { eachStep, mapStepLists, type PlacedStep } from "@/features/spec/tree";
 import type { Spec, SpecIssue, Step } from "@/features/spec/types";
 import { SpecInvalidError } from "@/lib/errors";
 import { findAction } from "./catalog";
+import { conditionIssues } from "./condition-fields";
 import {
   riskLevelSchema,
   type CatalogAction,
@@ -42,7 +43,7 @@ export function maxRisk(spec: Spec): RiskLevel {
  * inserted, or every issue at once.
  */
 export function applyPolicy(spec: Spec): PolicyResult {
-  const issues = actionIssues(spec);
+  const issues = [...actionIssues(spec), ...conditionIssues(spec)];
   if (issues.length > 0) return { ok: false, issues };
 
   const inserted: InsertedApproval[] = [];

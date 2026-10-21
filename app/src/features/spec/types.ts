@@ -178,6 +178,15 @@ export const checkOperators = {
   any: ["is_empty", "is_not_empty"],
 } as const;
 
+/** The type of a value a check tests, which decides the operators it may use. */
+export type ValueType = Exclude<keyof typeof checkOperators, "any">;
+
+/**
+ * A field a condition may test, as what declares it gives it: a trigger's fact, or a catalog
+ * action's result field (ADR-0015). `label` names it in an admin's words.
+ */
+export type ConditionField = { name: string; type: ValueType; label: string };
+
 // A check on a value read from above the branch (`{ from: "<step>.<field>" }`) or from the
 // trigger (`{ from: "trigger.<fact>" }`). The operator decides what `value` is: text for a text
 // check, a number for a number check, and none for a yes/no or an empty check.

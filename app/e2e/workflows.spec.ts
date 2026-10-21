@@ -129,12 +129,12 @@ test("an admin writes a branching workflow in the JSON view and sees its paths o
     /Pricing.*"kind" says "pricing" with at least 85% confidence/,
     /Otherwise.*no other path applies/,
   ]);
-  await expect(graph(page).getByRole("group", { name: "Step reply" })).toContainText(
+  await expect(graph(page).getByRole("group", { name: "Step reply", exact: true })).toContainText(
     "External send",
   );
-  await expect(graph(page).getByRole("group", { name: "Step reply-approval" })).toContainText(
-    "Waits for review (required by policy)",
-  );
+  await expect(
+    graph(page).getByRole("group", { name: "Step reply-approval", exact: true }),
+  ).toContainText("Waits for review (required by policy)");
   await expect(graph(page).getByText("Stops here")).toBeVisible();
 
   // An edit in the JSON view shows on the graph, saves, and comes back as written.
@@ -150,7 +150,7 @@ test("an admin writes a branching workflow in the JSON view and sees its paths o
 
   await page.reload();
   await expect(graph(page).getByRole("group", { name: "Path Prices" })).toBeVisible();
-  await expect(graph(page).getByRole("group", { name: "Step kind" })).toContainText(
+  await expect(graph(page).getByRole("group", { name: "Step kind", exact: true })).toContainText(
     "What is this message about?",
   );
   await page.getByRole("tab", { name: "JSON" }).click();
@@ -183,7 +183,9 @@ test("saving over a newer working spec is refused, and members can't reach the e
   await saveInJson(page, edited("Saved second?"));
   await expect(page.getByText("The working spec was saved again")).toBeVisible();
   await page.reload();
-  await expect(graph(page).getByRole("group", { name: "Step kind" })).toContainText("Saved first!");
+  await expect(graph(page).getByRole("group", { name: "Step kind", exact: true })).toContainText(
+    "Saved first!",
+  );
 
   await context.clearCookies();
   await signInAs(orgA.member);

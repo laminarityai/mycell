@@ -96,3 +96,74 @@ test("a member lands on Reviews, edits a drafted reply and approves it, and it l
   expect(mailbox.drafts).toEqual([]);
   expect(mailbox.sent).toMatchObject([{ threadId: message.threadId, text: EDITED }]);
 });
+
+// A member-credential workflow that hands every message to a person.
+const ESCALATE_SPEC = {
+  specVersion: 2,
+  id: "refund-requests",
+  credentials: "member",
+  trigger: { type: "gmail.message_received" },
+  steps: [{ id: "hand-over", type: "escalate", reason: "Not sure this is a refund request." }],
+  autonomy: { rung: 3 },
+};
+
+test("a member opens an escalated message, sees why and where it is in Gmail, and marks it done", async ({
+  page,
+  orgs: { orgA },
+  signInAs,
+  nango,
+}) => {
+  const gmail = [googleScope("gmail.modify")];
+  await seedGoogleConnection({
+    orgId: orgA.id,
+    ownerUserId: orgA.admin.id,
+    accountEmail: orgA.admin.email,
+    scopes: gmail,
+  });
+  const { id: workflowId } = await saveWorkflow(orgA.admin.ctx, {
+    name: "Refund requests",
+    spec: ESCALATE_SPEC,
+  });
+  const version = await publishWorkflow(orgA.admin.ctx, workflowId);
+  const nangoConnectionId = await nango.connect(orgA.member.email);
+  const complaint = "Two of the oak chairs arrived scratched. Can you sort this out?";
+  const message = await nango.receive(nangoConnectionId, {
+    from: "Ada Lovelace <ada@customer.test>",
+    subject: "The chairs arrived scratched",
+    text: complaint,
+  });
+  const { id: connectionId } = await seedGoogleConnection({
+    orgId: orgA.id,
+    ownerUserId: orgA.member.id,
+    accountEmail: orgA.member.email,
+    scopes: gmail,
+    nangoConnectionId,
+  });
+  await createReview(systemCtx(orgA.id), {
+    runId: randomUUID(),
+    connectionId,
+    workflowId,
+    workflowVersionId: version.id,
+    kind: "escalation",
+    itemRef: message.id,
+    threadRef: message.threadId,
+    sourceRef: message.id,
+    reason: "Not sure this is a refund request.",
+  });
+  await signInAs(orgA.member);
+
+  await page.goto("/reviews");
+  await expect(page.getByText("Escalated message")).toBeVisible();
+  await page.getByRole("link", { name: "Refund requests" }).click();
+  await expect(page.getByText(complaint)).toBeVisible();
+  await expect(page.getByText("Not sure this is a refund request.")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open it in Gmail" })).toHaveAttribute(
+    "href",
+    new RegExp(`^https://mail\\.google\\.com/.*${message.threadId}$`),
+  );
+  await page.getByRole("button", { name: "Done" }).click();
+
+  await expect(page).toHaveURL("/reviews");
+  await expect(page.getByText("Nothing is waiting for you.")).toBeVisible();
+  expect(await nango.mailbox(nangoConnectionId)).toEqual({ drafts: [], sent: [] });
+});

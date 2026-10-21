@@ -7,7 +7,9 @@ import type { Json } from "../types";
 import { callModel } from "./call-model";
 import { classify } from "./classify";
 import { chooseEveryMatch, chooseFirstMatch } from "./conditions";
+import { escalationAdapter } from "./escalation-adapter";
 import { messageText } from "./gmail";
+import { ItemGoneError } from "./pending-forms";
 import type { StepContext, StepExecution } from "./step-context";
 import { withTriggerFacts } from "./trigger-facts";
 
@@ -110,6 +112,24 @@ export async function branchStep(
   };
 }
 
-export function escalateStep(): Promise<StepExecution> {
-  return Promise.resolve({ next: "escalated", output: null, record: null });
+/**
+ * Hands the message to a person: an escalation review points at it, made once however often
+ * the step is retried. A message already gone leaves nothing to review, and the run still ends
+ * `escalated`.
+ */
+export async function escalateStep(
+  step: StepOf<"escalate">,
+  context: StepContext,
+): Promise<StepExecution> {
+  const { ctx, run } = context;
+  try {
+    const item = await escalationAdapter.prepare(ctx, {
+      connectionId: run.connectionId,
+      messageId: run.sourceRef,
+    });
+    await context.awaitReview({ kind: "escalation", ...item, reason: step.reason });
+  } catch (error) {
+    if (!(error instanceof ItemGoneError)) throw error;
+  }
+  return { next: "escalated", output: null, record: null };
 }

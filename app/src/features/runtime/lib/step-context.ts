@@ -24,8 +24,13 @@ export type StepContext = {
   awaitReview: (item: AwaitedItem) => Promise<void>;
 };
 
-/** An item waiting for a review: a Gmail draft, by its ID and its thread's. */
-export type AwaitedItem = { kind: "approval"; itemRef: string; threadRef: string };
+/**
+ * An item waiting for a review, by its ID and its thread's: a Gmail draft, or a message an
+ * escalate step handed to a person, with the step's reason for handing it over.
+ */
+export type AwaitedItem =
+  | { kind: "approval"; itemRef: string; threadRef: string }
+  | { kind: "escalation"; itemRef: string; threadRef: string; reason: string };
 
 /** What a step did. */
 export type StepExecution = {

@@ -108,6 +108,7 @@ describe("opening a review", () => {
 
     expect(opened.review).toMatchObject({ status: "waiting", workflowName: "Pricing replies" });
     expect(opened.view).toEqual({
+      kind: "draft",
       message: expect.objectContaining({
         from: "Ada Lovelace <ada@customer.test>",
         subject: SUBJECT,

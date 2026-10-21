@@ -72,6 +72,7 @@ export async function reviewOf(ctx: Ctx, row: ReviewRow): Promise<Review> {
   const names = await workflowNames(ctx, [row.workflowId]);
   return {
     ...summaryOf(row, names.get(row.workflowId)),
+    reason: row.reason,
     status: row.status,
     endedByUserId: row.endedByUserId,
     endedAt: row.endedAt,

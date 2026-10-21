@@ -4,7 +4,7 @@ import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { ActionResult } from "@/lib/errors";
-import { approveReviewAction, declineReviewAction } from "../actions";
+import { approveReviewAction, declineReviewAction, markDoneAction } from "../actions";
 
 /**
  * What a person does with an open review: approve the draft as it is, edit it and approve the
@@ -72,6 +72,22 @@ export function ReviewActions({ reviewId, draftText }: { reviewId: string; draft
       </div>
       <Problem result={approveResult} />
       <Problem result={declineResult} />
+    </div>
+  );
+}
+
+/** What a person does with an open escalation: mark it done once they've handled the message. */
+export function EscalationActions({ reviewId }: { reviewId: string }) {
+  const [result, done, marking] = useActionState(markDoneAction, {});
+  return (
+    <div className="flex flex-col gap-2">
+      <form action={done}>
+        <input type="hidden" name="reviewId" value={reviewId} />
+        <Button type="submit" disabled={marking}>
+          Done
+        </Button>
+      </form>
+      <Problem result={result} />
     </div>
   );
 }

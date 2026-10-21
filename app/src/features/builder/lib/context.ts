@@ -15,7 +15,7 @@ import { listTags } from "@/features/tags/server";
 import { getWorkflow, listWorkflows } from "@/features/workflows/server";
 import type { Ctx } from "@/lib/ctx";
 import type { ProposalStatus } from "../types";
-import { conditionFieldsSection } from "./condition-fields-context";
+import { declaredFieldLines } from "./condition-fields-context";
 import { listProposals } from "./proposals";
 import type { TurnInfo } from "./tools";
 
@@ -47,8 +47,8 @@ const FIELD_TYPES: { reads: string; type: ValueType }[] = [
 ];
 
 /**
- * Every kind of value a path's condition may test, and the checks each allows. Facts about the
- * trigger's message and catalog actions' result fields join this list as they're declared.
+ * Every kind of value a path's condition may test, and the checks each allows: classify answers,
+ * extract fields, the trigger's declared facts and catalog actions' declared result fields.
  */
 const conditionFields: ContextProvider = () => {
   const lines = [
@@ -60,8 +60,8 @@ const conditionFields: ContextProvider = () => {
       "case and take a string, number checks take a number, and is_yes, is_no, is_empty and " +
       "is_not_empty take no value.",
     ...FIELD_TYPES.map(({ reads, type }) => `  - ${reads}: ${operatorsFor(type).join(", ")}`),
-    "Facts about the message, such as its sender or subject, and what a catalog action returned " +
-      "can't be tested yet.",
+    "Trigger facts and tool step results take the same checks for their type:",
+    ...declaredFieldLines(),
   ];
   return Promise.resolve({ title: "Fields a condition may test", content: lines.join("\n") });
 };
@@ -177,8 +177,6 @@ const proposals: ContextProvider = async (ctx, turn) => {
             .join("\n"),
   };
 };
-
-const conditionFields: ContextProvider = () => Promise.resolve(conditionFieldsSection());
 
 export const contextProviders: ContextProvider[] = [
   orgSettings,

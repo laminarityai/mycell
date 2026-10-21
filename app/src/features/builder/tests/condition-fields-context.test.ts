@@ -28,6 +28,6 @@ describe("a turn's context", () => {
     }
     expect(request).toContain("google-mail.read-thread: <step>.messageCount (number)");
     expect(request).toContain("google-sheet.read-range: <step>.rowCount (number)");
-    expect(request).toContain("yesNo: is_yes, is_no");
+    expect(request).toContain("boolean field (yes/no): is_yes, is_no");
   });
 });

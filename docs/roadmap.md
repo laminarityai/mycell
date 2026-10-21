@@ -2,7 +2,7 @@
 
 Build order for the v1 full loop, dogfooded on our own Google Workspace. Every milestone ends with something we can actually use ourselves. `docs/architecture.md` holds the architecture and invariants. This file only covers sequencing.
 
-The builder chat is primary (ADR-0007), so it comes before mining. Milestones keep their numbers as stable names and are listed in build order: **M0 → M1 → M3 → M6 → M5 → M11 → M2 → M4 → M7 → M8 → M9 → M10.**
+The builder chat is primary (ADR-0007), so it comes before mining. Milestones keep their numbers as stable names and are listed in build order: **M0 → M1 → M3 → M6 → M12 → M5 → M11 → M2 → M4 → M7 → M8 → M9 → M10.**
 
 ## Status (2026-10-20)
 
@@ -12,6 +12,7 @@ The builder chat is primary (ADR-0007), so it comes before mining. Milestones ke
 | M1        | In progress | #11  | Merged: connect, org connections, disconnect cascade, Gmail backfill. Open: polling #15, reconciliation #16 (PR #31), Drive #17, dogfood #19.                               |
 | M3        | Ready       | #33  | Grilled; tickets ready for agents. Decisions in ADR-0010 (credits slice), ADR-0011 (write access up front), ADR-0012 (what runs keep) and ADR-0014 (one Google connection). |
 | M6        | Ready       | #43  | Grilled; tickets ready for agents. Capability requests moved to M10.                                                                                                        |
+| M12       | Grilling    |      | Branches and the workflow graph. Decisions in ADR-0015 (paths that never join); research in `docs/research/workflow-builders.md`.                                           |
 | M5        | Ready       | #51  | Grilled; tickets ready for agents. Adds the Reviews page (ADR-0013), whose outcomes measure the builder ship bar in `docs/intent.md`.                                       |
 | M11       | Ready       | #67  | Calendar, Docs and Tasks, each through its pending form (ADR-0013); tickets ready for agents.                                                                               |
 | M2 onward | Not started |      |                                                                                                                                                                             |
@@ -49,6 +50,26 @@ The builder chat is primary (ADR-0007), so it comes before mining. Milestones ke
 
 - Admin agent producing proposals in builder conversations, grounded in the admin's own and org inboxes; a "try it" dry run; visual/JSON editor.
 - **Done when:** an admin can describe a new workflow and publish it without touching JSON.
+
+## M12: Branches and the workflow graph
+
+- Branches split a workflow into paths, each with a condition, plus an otherwise path; first match or every match per branch; no joins yet (ADR-0015).
+- Conditions test classify answers, extracted values, trigger facts and catalog action results, through fields each of them declares.
+- A graph of the workflow, laid out automatically top to bottom: click a step to edit it in a side panel, "+" to add one. It sits beside the builder chat, shows waiting proposals as changes on the graph, and lights up the paths Try it took. On the workflow page it replaces the step form; the JSON view stays.
+- Admins only; members' read-only view is a candidate for M5.
+- **Done when:** an admin describes a workflow that sends some messages to a person and handles others alone, accepts it on the graph, and Try it shows which path each message took.
+
+## Later workflow features
+
+Planned in this order, each its own milestone or part of one, after M12:
+
+1. Wait, then check again ("wait 3 days; if no reply, draft a follow-up").
+2. Scheduled triggers ("every Monday at 9").
+3. More triggers: a new sheet row, a new calendar invite (M11).
+4. A path for when a step fails.
+5. Doing something for each item in a list.
+6. Asking a person and continuing with their answer (after M5's Reviews page).
+7. Joins and reusable sub-workflows: deliberately not yet (ADR-0015).
 
 ## M5: Publish, tags, member toggles
 

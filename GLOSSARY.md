@@ -99,6 +99,22 @@ _Avoid_: Automation, agent, bot, flow
 The declarative definition of a workflow: its trigger, steps, credentials, budget, and rung.
 _Avoid_: Config, definition, recipe
 
+**Branch**:
+A step where a workflow splits into paths, each with its own condition, plus an otherwise path.
+_Avoid_: Fork, switch, router, if-step
+
+**Path**:
+One route out of a branch: the steps a message follows when that path's condition holds. Paths never join back up.
+_Avoid_: Lane, route, arm
+
+**Otherwise path**:
+The path a message follows when no other path out of its branch applies. It stops the run unless it is given steps.
+_Avoid_: Default path, else
+
+**First match / every match**:
+A branch's two ways of choosing paths: only the first path, left to right, whose condition holds, or every path whose condition holds.
+_Avoid_: Exclusive / parallel, switch / router
+
 **Workflow version**:
 An immutable snapshot of a workflow's spec, created each time the workflow is published.
 _Avoid_: Revision, release

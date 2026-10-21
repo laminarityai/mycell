@@ -15,6 +15,7 @@ import { SpecEditor } from "./lib/spec-editor";
 import { SwitchForm, type SwitchConnectionOption } from "./lib/switch-form";
 import { PublishButton } from "./lib/workflow-editor";
 import { WorkflowGraph, type WorkflowGraphProps } from "./lib/workflow-graph";
+import { WorkingSpecEditor, type EditableWorkflow } from "./lib/working-spec-editor";
 import type { WorkflowDetails, WorkflowSummary, WorkflowSwitch } from "./types";
 
 export {
@@ -23,6 +24,8 @@ export {
   useGraphTrace,
   useShowOnGraph,
   WorkflowGraph,
+  WorkingSpecEditor,
+  type EditableWorkflow,
   type WorkflowGraphProps,
 };
 

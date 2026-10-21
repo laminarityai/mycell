@@ -6,18 +6,20 @@
 // a Try it is shown. Both stay mounted, so a turn streams on while the graph is looked at.
 import { MessageSquare, Workflow } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
-import type { Spec } from "@/features/spec/types";
 import {
   GraphTraceProvider,
   useGraphTrace,
   useShowOnGraph,
   WorkflowGraph,
+  WorkingSpecEditor,
+  type EditableWorkflow,
 } from "@/features/workflows/ui";
 import { cn } from "@/lib/utils";
 import type { Proposal } from "../types";
 import { ProposalOnGraphProvider, useProposalOnGraph } from "./proposal-on-graph";
 
-export type WorkspaceWorkflow = { id: string; workingSpec: Spec; revision: number };
+/** The conversation's workflow: its name, and its working spec at the revision it was read. */
+export type WorkspaceWorkflow = EditableWorkflow;
 
 export function BuilderWorkspace({
   proposals,
@@ -100,7 +102,6 @@ function Split({ workflow, chat }: { workflow: WorkspaceWorkflow | null; chat: R
  * edge, such as a side panel.
  */
 function GraphPane({ workflow }: { workflow: WorkspaceWorkflow | null }) {
-  const trace = useGraphTrace();
   const showTrace = useShowOnGraph();
   const drawn = useProposalOnGraph()?.drawn ?? null;
   // A Try it was of the working spec before it changed.
@@ -109,24 +110,35 @@ function GraphPane({ workflow }: { workflow: WorkspaceWorkflow | null }) {
     showTrace?.(null);
   }, [revision, showTrace]);
   return (
-    <section aria-label="Workflow" className="relative h-full min-h-0 overflow-hidden">
-      <WorkflowGraph
-        spec={drawn === null ? (workflow?.workingSpec ?? null) : drawn.baseSpec}
-        proposal={drawn?.spec}
-        trace={drawn === null ? trace : null}
-        placeholder
-        fill
-      >
-        {drawn === null ? null : (
-          <p
-            role="status"
-            className="absolute top-3 left-3 z-10 max-w-sm rounded-lg border bg-background/95 px-3 py-2 text-xs shadow-sm"
-          >
-            <span className="font-medium">Showing the proposal</span> “{drawn.name}” as its changes.
-            Accept or reject it in the chat.
-          </p>
-        )}
-      </WorkflowGraph>
+    <section
+      aria-label="Workflow"
+      className="relative flex h-full min-h-0 flex-col overflow-hidden"
+    >
+      {/* The working spec is edited on its graph, and kept, unsaved edits and all, while a
+          proposal is drawn in its place: nothing is edited that's about to change. */}
+      {workflow === null ? null : (
+        <div className={cn("flex min-h-0 flex-1 flex-col", drawn !== null && "hidden")}>
+          <WorkingSpecEditor key={revision} workflow={workflow} />
+        </div>
+      )}
+      {workflow !== null && drawn === null ? null : (
+        <WorkflowGraph
+          spec={drawn === null ? null : drawn.baseSpec}
+          proposal={drawn?.spec}
+          placeholder
+          fill
+        >
+          {drawn === null ? null : (
+            <p
+              role="status"
+              className="absolute top-3 left-3 z-10 max-w-sm rounded-lg border bg-background/95 px-3 py-2 text-xs shadow-sm"
+            >
+              <span className="font-medium">Showing the proposal</span> “{drawn.name}” as its
+              changes. Accept or reject it in the chat.
+            </p>
+          )}
+        </WorkflowGraph>
+      )}
     </section>
   );
 }

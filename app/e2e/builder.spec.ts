@@ -128,6 +128,8 @@ test("an admin sees the builder's branching proposal on the graph beside the cha
     "New",
   );
   await expect(graph(page).getByText("Stops here")).toBeVisible();
+  // Nothing is edited on the graph while a proposal is drawn on it.
+  await expect(graph(page).getByRole("button", { name: /^Add a step/ })).toHaveCount(0);
 
   // Hiding it shows the workflow as it is: nothing yet.
   await proposal.getByRole("button", { name: "Hide it on the graph" }).click();
@@ -148,6 +150,20 @@ test("an admin sees the builder's branching proposal on the graph beside the cha
     graph(page).getByRole("group", { name: "Step reply-approval", exact: true }),
   ).toContainText("Waits for review (required by policy)");
   await expect(page.getByRole("button", { name: "Publish" })).toBeVisible();
+
+  // Beside the chat, the working spec is edited on its graph and saved there too.
+  await graph(page).getByRole("group", { name: "Path Pricing" }).click();
+  await graph(page)
+    .getByRole("complementary", { name: "Editor" })
+    .getByRole("textbox", { name: "Name" })
+    .fill("Prices");
+  await expect(graph(page).getByRole("group", { name: "Path Prices" })).toBeVisible();
+  const saveBar = page.getByRole("form", { name: "Save the workflow" });
+  await expect(saveBar).toContainText("Ready to save.");
+  await saveBar.getByRole("button", { name: "Save" }).click();
+  await expect(saveBar).toBeHidden();
+  await page.reload();
+  await expect(graph(page).getByRole("group", { name: "Path Prices" })).toBeVisible();
 
   await proposal.getByRole("link", { name: "Open the workflow" }).click();
   await expect(page).toHaveURL(/\/workflows\/[\w-]+$/);

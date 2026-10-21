@@ -69,18 +69,22 @@ describe("reviewSharing", () => {
 
     expect(await reviewSharing(member.ctx, ids)).toEqual(
       new Map([
-        [pricing.workflowId, { seen: true, handOff: false }],
-        [id, { seen: true, handOff: true }],
+        [pricing.workflowId, { seen: true, handOff: false, tags: ["sales"] }],
+        [id, { seen: true, handOff: true, tags: ["sales"] }],
       ]),
     );
     expect(await reviewSharing(untagged.ctx, ids)).toEqual(
       new Map([
-        [pricing.workflowId, { seen: false, handOff: false }],
-        [id, { seen: false, handOff: true }],
+        [pricing.workflowId, { seen: false, handOff: false, tags: [] }],
+        [id, { seen: false, handOff: true, tags: [] }],
       ]),
     );
     for (const ctx of [admin.ctx, systemCtx(orgA.id)]) {
-      expect((await reviewSharing(ctx, ids)).get(id)).toEqual({ seen: true, handOff: true });
+      expect((await reviewSharing(ctx, ids)).get(id)).toEqual({
+        seen: true,
+        handOff: true,
+        tags: ["sales"],
+      });
     }
   });
 
@@ -90,7 +94,7 @@ describe("reviewSharing", () => {
     await unassignTag(admin.ctx, sales, member.id);
 
     expect((await reviewSharing(member.ctx, [pricing.workflowId])).get(pricing.workflowId)).toEqual(
-      { seen: false, handOff: false },
+      { seen: false, handOff: false, tags: [] },
     );
   });
 
@@ -101,11 +105,13 @@ describe("reviewSharing", () => {
     expect((await reviewSharing(admin.ctx, [pricing.workflowId])).get(pricing.workflowId)).toEqual({
       seen: true,
       handOff: true,
+      tags: ["sales"],
     });
     await publishWorkflow(admin.ctx, pricing.workflowId, { handoff: false });
     expect((await reviewSharing(admin.ctx, [pricing.workflowId])).get(pricing.workflowId)).toEqual({
       seen: true,
       handOff: false,
+      tags: ["sales"],
     });
   });
 

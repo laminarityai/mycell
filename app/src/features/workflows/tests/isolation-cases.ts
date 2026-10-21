@@ -203,7 +203,7 @@ export const isolationCases = defineIsolationCases(server, {
       expect(await server.reviewSharing(ctx, [b.workflowId])).toEqual(new Map());
     }
     expect(await server.reviewSharing(orgs.orgB.member.ctx, [b.workflowId])).toEqual(
-      new Map([[b.workflowId, { seen: true, handOff: false }]]),
+      new Map([[b.workflowId, { seen: true, handOff: false, tags: ["sales"] }]]),
     );
   },
 

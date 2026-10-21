@@ -66,15 +66,17 @@ export type ReviewPerson = { id: string; name: string };
 export type HandOff = { to: ReviewPerson; by: ReviewPerson };
 
 /**
- * A waiting review as the Reviews page lists it. `shared` is an org review, seen by everyone who
- * sees its workflow; `handOff` says who it was handed to, if anyone.
+ * A waiting review as the Reviews page lists it. `sharedWith` is set for an org review, seen by
+ * everyone who sees its workflow: the names of the workflow's tags the viewer may know (a
+ * member's own among them, every one for an admin), possibly none. It's null for a review in
+ * someone's own mailbox. `handOff` says who it was handed to, if anyone.
  */
 export type ReviewSummary = {
   id: string;
   kind: ReviewKind;
   workflowId: string;
   workflowName: string;
-  shared: boolean;
+  sharedWith: string[] | null;
   handOff: HandOff | null;
   createdAt: Date;
 };

@@ -4,7 +4,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs, seedUser } from "@/db/testing/two-org-fixture";
-import { unassignTag } from "@/features/tags/server";
+import { createTag, unassignTag } from "@/features/tags/server";
+import { publishWorkflow } from "@/features/workflows/server";
 import type { Ctx } from "@/lib/ctx";
 import { AlreadyHandledError, NotFoundError } from "@/lib/errors";
 import { approveReview, declineReview, listReviews, openReview } from "../server";
@@ -30,6 +31,22 @@ describe("an org review", () => {
       await expect(openReview(ctx, reviewId)).rejects.toThrow(NotFoundError);
       await expect(approveReview(ctx, reviewId)).rejects.toThrow(NotFoundError);
     }
+  });
+
+  it("says which tags it's shared with: a member their own of them, an admin all", async () => {
+    const orgs = await seedTwoOrgs();
+    const { orgA } = orgs;
+    const { reviewId, workflowId } = await orgReview(orgs);
+    // Published to `support` too, which the member doesn't have.
+    await createTag(orgA.admin.ctx, "support");
+    await publishWorkflow(orgA.admin.ctx, workflowId, { tags: ["support", "sales"] });
+
+    expect(await listReviews(orgA.member.ctx)).toMatchObject([
+      { id: reviewId, sharedWith: ["sales"] },
+    ]);
+    expect(await listReviews(orgA.admin.ctx)).toMatchObject([
+      { id: reviewId, sharedWith: ["sales", "support"] },
+    ]);
   });
 
   it("is sent from the shared inbox when a tagged member approves it", async () => {

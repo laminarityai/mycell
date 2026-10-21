@@ -37,10 +37,11 @@ export type PublishSettings = {
 
 /**
  * What a workflow's reviews need to know of it: whether the caller sees it through its tags
- * (an admin sees every one), so may see its org reviews, and whether its latest version lets a
- * review be handed on (`review.handoff`).
+ * (an admin sees every one), so may see its org reviews; the names of the tags its latest
+ * version is published to that the caller may know (a member's own among them, an admin's every
+ * one), by name; and whether that version lets a review be handed on (`review.handoff`).
  */
-export type ReviewSharing = { seen: boolean; handOff: boolean };
+export type ReviewSharing = { seen: boolean; handOff: boolean; tags: string[] };
 
 /** An immutable snapshot of a workflow's spec, after the policy engine ran on it. */
 export type WorkflowVersion = {

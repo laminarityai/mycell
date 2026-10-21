@@ -39,7 +39,10 @@ export async function createReview(ctx: Ctx, review: NewReview): Promise<void> {
   );
 }
 
-/** The caller's waiting reviews, oldest first, with each one's workflow's name. */
+/**
+ * The caller's waiting reviews, oldest first, with each one's workflow's name, and for an org
+ * review the tags it's shared with.
+ */
 export async function listReviews(ctx: Ctx): Promise<ReviewSummary[]> {
   const rows = await waitingFor(ctx);
   const names = await workflowNames(
@@ -49,7 +52,8 @@ export async function listReviews(ctx: Ctx): Promise<ReviewSummary[]> {
   const users = rows.some((row) => row.handedToUserId !== null)
     ? await userNames(ctx)
     : new Map<string, string>();
-  return rows.map((row) => summaryOf(row, users, names.get(row.workflowId)));
+  const sharing = await sharingOf(ctx, rows);
+  return rows.map((row) => summaryOf(row, users, sharing, names.get(row.workflowId)));
 }
 
 /**
@@ -86,14 +90,9 @@ export async function visibleReview(ctx: Ctx, reviewId: string): Promise<ReviewR
  */
 async function visibleOf(ctx: Ctx, rows: ReviewRow[]): Promise<ReviewRow[]> {
   if (ctx.role === "system") return rows;
-  const byTags = rows.filter((row) => row.ownerScope === "org" && ctx.role !== "admin");
+  // An admin sees every org review; anyone else those of workflows they see through a tag.
   const sharing =
-    byTags.length === 0
-      ? new Map<string, ReviewSharing>()
-      : await reviewSharing(
-          ctx,
-          byTags.map((row) => row.workflowId),
-        );
+    ctx.role === "admin" ? new Map<string, ReviewSharing>() : await sharingOf(ctx, rows);
   return rows.filter((row) => {
     if (row.handedToUserId === ctx.userId) return true;
     if (row.ownerScope === "member") return row.ownerUserId === ctx.userId;
@@ -101,12 +100,23 @@ async function visibleOf(ctx: Ctx, rows: ReviewRow[]): Promise<ReviewRow[]> {
   });
 }
 
+// How the org reviews among `rows` are shared, by workflow ID: who sees them, and with which tags.
+async function sharingOf(ctx: Ctx, rows: ReviewRow[]): Promise<Map<string, ReviewSharing>> {
+  const org = rows.filter((row) => row.ownerScope === "org");
+  if (org.length === 0) return new Map();
+  return reviewSharing(
+    ctx,
+    org.map((row) => row.workflowId),
+  );
+}
+
 /** The review as its row now stands, with its workflow's name and the names of its people. */
 export async function reviewOf(ctx: Ctx, row: ReviewRow): Promise<Review> {
   const names = await workflowNames(ctx, [row.workflowId]);
   const users = await userNames(ctx);
+  const sharing = await sharingOf(ctx, [row]);
   return {
-    ...summaryOf(row, users, names.get(row.workflowId)),
+    ...summaryOf(row, users, sharing, names.get(row.workflowId)),
     reason: row.reason,
     status: row.status,
     endedByUserId: row.endedByUserId,
@@ -159,6 +169,7 @@ export async function endReview(
 function summaryOf(
   row: ReviewRow,
   users: Map<string, string>,
+  sharing: Map<string, ReviewSharing>,
   workflowName = "A deleted workflow",
 ): ReviewSummary {
   return {
@@ -166,7 +177,7 @@ function summaryOf(
     kind: row.kind,
     workflowId: row.workflowId,
     workflowName,
-    shared: row.ownerScope === "org",
+    sharedWith: row.ownerScope === "org" ? (sharing.get(row.workflowId)?.tags ?? []) : null,
     handOff: handOffOf(row, users),
     createdAt: row.createdAt,
   };

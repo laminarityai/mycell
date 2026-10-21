@@ -25,7 +25,7 @@ describe("creating a review", () => {
         kind: "approval",
         workflowId,
         workflowName: "Pricing replies",
-        shared: false,
+        sharedWith: null,
         handOff: null,
         createdAt: expect.any(Date) as Date,
       },

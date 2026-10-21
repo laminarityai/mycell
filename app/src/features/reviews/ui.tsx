@@ -1,4 +1,3 @@
-import { cn } from "cn";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { ItemView, MailView } from "@/features/runtime/adapters";
+import { cn } from "@/lib/utils";
 import { EscalationActions, HandOffForm, ReviewActions } from "./lib/review-actions";
 import type {
   HandOff,
@@ -74,9 +74,14 @@ function handOffText(handOff: HandOff, viewerId: string): string {
     : `Handed to ${handOff.to.name}`;
 }
 
+/** Who an org review is shared with, as the viewer knows them: "Shared with sales, support". */
+function sharedText(tags: string[]): string {
+  return tags.length === 0 ? "Shared inbox" : `Shared with ${tags.join(", ")}`;
+}
+
 /**
- * The caller's waiting reviews, oldest first: each one's workflow, kind and age, whether it's
- * shared (an org inbox's) and who it was handed to.
+ * The caller's waiting reviews, oldest first: each one's workflow, kind and age, the tags it's
+ * shared with (an org inbox's) and who it was handed to.
  */
 export function ReviewsList({
   reviews,
@@ -106,10 +111,10 @@ export function ReviewsList({
               <Link href={`/reviews/${review.id}`} className="font-medium hover:underline">
                 {review.workflowName}
               </Link>
-              {review.handOff === null && !review.shared ? null : (
+              {review.handOff === null && review.sharedWith === null ? null : (
                 <p className="text-xs text-muted-foreground">
                   {[
-                    review.shared ? "Shared inbox" : null,
+                    review.sharedWith === null ? null : sharedText(review.sharedWith),
                     review.handOff === null ? null : handOffText(review.handOff, viewerId),
                   ]
                     .filter((part) => part !== null)

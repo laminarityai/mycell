@@ -120,7 +120,7 @@ async function visible(ctx: Ctx, rows: Workflow[]): Promise<VisibleWorkflow[]> {
 }
 
 /** The workflows whose latest version has one of the caller's tags. */
-export async function sharingATag<T extends { version: WorkflowVersion }>(
+async function sharingATag<T extends { version: WorkflowVersion }>(
   ctx: Ctx,
   published: T[],
   versionIds: string[],
@@ -133,8 +133,8 @@ export async function sharingATag<T extends { version: WorkflowVersion }>(
   );
 }
 
-// Each version's tag IDs, by version ID.
-async function tagIdsOf(
+/** Each version's tag IDs, by version ID. Read through `db`, which a publish passes. */
+export async function tagIdsOf(
   ctx: Ctx,
   versionIds: string[],
   db: OrgScopedDb = forOrg(ctx),

@@ -8,9 +8,18 @@ import type { SpecCheckResult } from "../types";
 
 const CHECK_DELAY_MS = 400;
 
+/** What the check says when it couldn't reach the server, or the server failed. */
+const UNCHECKED: SpecCheckResult = {
+  error: "Couldn't check the spec just now. Edit it again to retry.",
+  issues: [],
+  maxRisk: null,
+  inserted: [],
+};
+
 /**
  * What saving would make of `specText`: null while it's being checked, or when it doesn't
- * parse. An answer for text that has since changed is dropped.
+ * parse. An answer for text that has since changed is dropped. A check that fails says so,
+ * and holds the save back until a later edit checks again.
  */
 export function useLiveCheck(specText: string, parses: boolean): SpecCheckResult | null {
   const [check, setCheck] = useState<{ text: string; result: SpecCheckResult } | null>(null);
@@ -19,8 +28,11 @@ export function useLiveCheck(specText: string, parses: boolean): SpecCheckResult
     latest.current = specText;
     if (!parses) return;
     const timer = setTimeout(() => {
-      void checkWorkflowSpecAction(JSON.parse(specText)).then((result) => {
+      const answer = (result: SpecCheckResult) => {
         if (latest.current === specText) setCheck({ text: specText, result });
+      };
+      checkWorkflowSpecAction(JSON.parse(specText)).then(answer, () => {
+        answer(UNCHECKED);
       });
     }, CHECK_DELAY_MS);
     return () => {

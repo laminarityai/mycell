@@ -91,6 +91,6 @@ function describeBranch(step: BranchStep): string {
 }
 
 /** A condition in plain words: its checks joined by "and" (all of them) or "or" (any). */
-function describeCondition(condition: Condition): string {
+export function describeCondition(condition: Condition): string {
   return condition.checks.map(describeCheck).join(condition.combine === "all" ? " and " : " or ");
 }

@@ -47,14 +47,17 @@ export type GraphLayout<Risk extends string = string> = {
 /** A step box's height: heading, two lines of text, then what it was and its badges. */
 export function stepHeight(step: GraphStep): number {
   const badges = step.risk !== null || step.review !== null;
-  return 70 + (badges ? 24 : 0) + (step.before === null ? 0 : 18);
+  return 80 + (badges ? 24 : 0) + (step.before === null ? 0 : 20);
 }
 
-/** A path heading's height: its name and condition, what it was, and a Try it's checks. */
+/**
+ * A path heading's height: its name, its condition (two lines; the otherwise path's one), what
+ * it was, and a Try it's checks.
+ */
 export function pathHeight(path: GraphPath): number {
-  const condition = path.name === null ? 22 : 38;
+  const condition = path.name === null ? 18 : 34;
   const run = path.run === null ? 0 : 20 + path.run.checks.length * 32;
-  return 18 + condition + (path.before === null ? 0 : 18) + run;
+  return 36 + condition + (path.before === null ? 0 : 20) + run;
 }
 
 export function layoutTree<Risk extends string>(view: GraphView<Risk>): GraphLayout<Risk> {

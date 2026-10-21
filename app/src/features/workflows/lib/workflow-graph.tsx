@@ -12,8 +12,9 @@ import {
   ReactFlowProvider,
   useReactFlow,
   type Edge,
+  type Node,
 } from "@xyflow/react";
-import { useEffect, useMemo, useRef, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { findAction } from "@/features/policy/catalog";
 import { applyPolicy } from "@/features/policy/engine";
 import type { RiskLevel } from "@/features/policy/types";
@@ -35,10 +36,27 @@ export type WorkflowGraphProps = {
   proposal?: Spec;
   /** A Try it of `spec`, whose route the graph lights up. */
   trace?: GraphTrace | null;
+  /** With no steps to draw, a box under the trigger says where the workflow will appear. */
+  placeholder?: boolean;
+  /**
+   * The graph fills its parent's height, as beside the builder chat. Otherwise it is as tall as
+   * the workflow, within limits.
+   */
+  fill?: boolean;
+  /** Drawn over the graph, inside its frame: a caption, or a panel sliding over its edge. */
+  children?: ReactNode;
   className?: string;
 };
 
-export function WorkflowGraph({ spec, proposal, trace, className }: WorkflowGraphProps) {
+export function WorkflowGraph({
+  spec,
+  proposal,
+  trace,
+  placeholder = false,
+  fill = false,
+  children,
+  className,
+}: WorkflowGraphProps) {
   const view = useMemo(() => {
     const current = spec === null ? null : withPolicy(spec);
     return graphView<RiskLevel>(current?.spec ?? null, {
@@ -48,16 +66,21 @@ export function WorkflowGraph({ spec, proposal, trace, className }: WorkflowGrap
       trace: trace ?? undefined,
     });
   }, [spec, proposal, trace]);
-  const layout = useMemo(() => layoutTree(view), [view]);
+  const layout = useMemo(
+    () => withPlaceholder(layoutTree(view), placeholder && view.steps.length === 0),
+    [view, placeholder],
+  );
   return (
-    <div className={cn("flex flex-col gap-2", className)}>
+    <div className={cn("flex flex-col gap-2", fill && "h-full min-h-0", className)}>
       {view.tried ? (
-        <p className="text-sm text-muted-foreground">
+        <p className={cn("text-sm text-muted-foreground", fill && "px-4 pt-3")}>
           Try it: lit steps ran, faded ones didn&apos;t. Each path says why.
         </p>
       ) : null}
       <ReactFlowProvider>
-        <Canvas layout={layout} />
+        <Canvas layout={layout} fill={fill}>
+          {children}
+        </Canvas>
       </ReactFlowProvider>
     </div>
   );
@@ -78,41 +101,89 @@ function actionInfo(name: string): GraphActionInfo<RiskLevel> | undefined {
 
 /** Space around the drawing, and the smallest zoom it opens at before it scrolls instead. */
 const MARGIN = 24;
+/** Filling a pane, the drawing starts lower, leaving room for a caption over its top. */
+const FILL_TOP = 80;
 const READABLE_ZOOM = 0.75;
 /** The canvas's height grows with the workflow, between these. */
 const MIN_HEIGHT = 320;
 const MAX_HEIGHT = 720;
+/** The placeholder's box, under the trigger. */
+const PLACEHOLDER_HEIGHT = 116;
+const PLACEHOLDER_GAP = 40;
 
-function Canvas({ layout }: { layout: GraphLayout<RiskLevel> }) {
+type Drawing = {
+  nodes: Node[];
+  edges: Edge[];
+  width: number;
+  height: number;
+};
+
+/** The laid-out graph as React Flow draws it, with the placeholder under the trigger. */
+function withPlaceholder(layout: GraphLayout<RiskLevel>, placeholder: boolean): Drawing {
+  const nodes: Node[] = layout.nodes.map((node) => ({
+    id: node.id,
+    type: node.kind,
+    position: { x: node.x, y: node.y },
+    width: node.width,
+    height: node.height,
+    data: node,
+    draggable: false,
+    connectable: false,
+    selectable: false,
+  }));
+  const edges = layout.edges.map(toEdge);
+  const trigger = layout.nodes.find((node) => node.kind === "trigger");
+  if (!placeholder || trigger === undefined) {
+    return { nodes, edges, width: layout.width, height: layout.height };
+  }
+  const y = trigger.y + trigger.height + PLACEHOLDER_GAP;
+  nodes.push({
+    id: "placeholder",
+    type: "placeholder",
+    position: { x: trigger.x, y },
+    width: trigger.width,
+    height: PLACEHOLDER_HEIGHT,
+    data: {},
+    draggable: false,
+    connectable: false,
+    selectable: false,
+  });
+  edges.push({
+    id: "trigger->placeholder",
+    source: trigger.id,
+    target: "placeholder",
+    type: "smoothstep",
+    focusable: false,
+    style: { stroke: "rgb(163 163 163)", strokeWidth: 1.5, strokeDasharray: "4 4" },
+  });
+  return { nodes, edges, width: layout.width, height: y + PLACEHOLDER_HEIGHT };
+}
+
+function Canvas({
+  layout,
+  fill,
+  children,
+}: {
+  layout: Drawing;
+  fill: boolean;
+  children: ReactNode;
+}) {
   const wrapper = useRef<HTMLDivElement>(null);
-  const nodes = useMemo(
-    () =>
-      layout.nodes.map((node) => ({
-        id: node.id,
-        type: node.kind,
-        position: { x: node.x, y: node.y },
-        width: node.width,
-        height: node.height,
-        data: node,
-        draggable: false,
-        connectable: false,
-        selectable: false,
-      })),
-    [layout],
-  );
-  const edges = useMemo(() => layout.edges.map(toEdge), [layout]);
   const height = Math.min(Math.max(layout.height + 2 * MARGIN, MIN_HEIGHT), MAX_HEIGHT);
   return (
     <div
       ref={wrapper}
       role="region"
       aria-label="Workflow graph"
-      className="relative w-full overflow-hidden rounded-lg border bg-muted/20"
-      style={{ height }}
+      className={cn(
+        "relative w-full overflow-hidden bg-muted/20",
+        fill ? "min-h-0 flex-1" : "rounded-lg border",
+      )}
+      style={fill ? undefined : { height }}
     >
       <ReactFlow
-        nodes={nodes}
-        edges={edges}
+        nodes={layout.nodes}
+        edges={layout.edges}
         nodeTypes={nodeTypes}
         nodesDraggable={false}
         nodesConnectable={false}
@@ -125,8 +196,9 @@ function Canvas({ layout }: { layout: GraphLayout<RiskLevel> }) {
       >
         <Background gap={16} size={1} />
         <Controls showInteractive={false} position="bottom-left" />
-        <OpenReadable layout={layout} wrapper={wrapper} />
+        <OpenReadable layout={layout} wrapper={wrapper} top={fill ? FILL_TOP : MARGIN} />
       </ReactFlow>
+      {children}
     </div>
   );
 }
@@ -150,27 +222,56 @@ function toEdge(edge: LayoutEdge): Edge {
 
 /**
  * Opens the drawing at full size when it fits, or shrunk no further than a readable size;
- * past that, it starts at the top, centred on the trigger, and the admin scrolls.
+ * past that, it starts at the top, centred on the trigger, and the admin scrolls. A graph
+ * hidden when it was drawn (a tab not shown) opens once it has a width.
  */
 function OpenReadable({
   layout,
   wrapper,
+  top,
 }: {
-  layout: GraphLayout<RiskLevel>;
+  layout: Drawing;
   wrapper: RefObject<HTMLDivElement | null>;
+  /** Where the drawing's top starts in the frame. */
+  top: number;
 }) {
   const { setViewport } = useReactFlow();
-  const shape = layout.nodes.map((node) => `${node.id}@${String(node.x)},${String(node.y)}`).join();
+  const width = useWidth(wrapper);
+  const shape = layout.nodes
+    .map((node) => `${node.id}@${String(node.position.x)},${String(node.position.y)}`)
+    .join();
+  const shown = width > 0;
   useEffect(() => {
-    const width = wrapper.current?.clientWidth ?? 0;
+    if (!shown) return;
     const room = width - 2 * MARGIN;
     const zoom = Math.min(1, Math.max(READABLE_ZOOM, room / layout.width));
-    const trigger = layout.nodes.find((node) => node.kind === "trigger");
+    const trigger = layout.nodes.find((node) => node.type === "trigger");
     const fits = layout.width * zoom <= room;
-    const center = fits || trigger === undefined ? layout.width / 2 : trigger.x + trigger.width / 2;
-    void setViewport({ x: width / 2 - center * zoom, y: MARGIN, zoom });
-    // Re-open only when the drawing's shape changes, not on every Try it or redraw.
+    const center =
+      fits || trigger === undefined
+        ? layout.width / 2
+        : trigger.position.x + (trigger.width ?? 0) / 2;
+    void setViewport({ x: width / 2 - center * zoom, y: top, zoom });
+    // Re-open only when the drawing's shape changes or it's first shown, not on every Try it,
+    // redraw or resize.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shape, setViewport]);
+  }, [shape, shown, top, setViewport]);
   return null;
+}
+
+/** The element's width, kept up to date; 0 while it isn't shown. */
+function useWidth(ref: RefObject<HTMLElement | null>): number {
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    const element = ref.current;
+    if (element === null) return;
+    const observer = new ResizeObserver(() => {
+      setWidth(element.clientWidth);
+    });
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+    };
+  }, [ref]);
+  return width;
 }

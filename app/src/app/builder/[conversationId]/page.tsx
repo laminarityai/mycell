@@ -16,19 +16,28 @@ import { NotFoundError } from "@/lib/errors";
 // A Server Action here may try the working spec on a message, model steps and all.
 export const maxDuration = 300;
 
+// The whole window: the conversations, then the chat beside the workflow's graph.
 export default function ConversationPage({
   params,
   searchParams,
 }: PageProps<"/builder/[conversationId]">) {
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">
-      <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">Builder chat</h1>
-        <Link href="/" className="text-sm text-muted-foreground hover:text-foreground">
-          Back to your org
-        </Link>
+    <main className="flex h-dvh flex-col">
+      <header className="flex items-center justify-between gap-4 border-b px-4 py-3">
+        <h1 className="text-lg font-semibold tracking-tight">Builder chat</h1>
+        <nav className="flex items-center gap-4 text-sm text-muted-foreground">
+          {/* Narrower than the conversation list's column, the list is a page of its own. */}
+          <Link href="/builder" className="hover:text-foreground lg:hidden">
+            All conversations
+          </Link>
+          <Link href="/" className="hover:text-foreground">
+            Back to your org
+          </Link>
+        </nav>
       </header>
-      <Suspense fallback={<p className="text-sm text-muted-foreground">Loading conversation…</p>}>
+      <Suspense
+        fallback={<p className="p-4 text-sm text-muted-foreground">Loading conversation…</p>}
+      >
         <ConversationView params={params} searchParams={searchParams} />
       </Suspense>
     </main>
@@ -58,12 +67,12 @@ async function ConversationView({ params, searchParams }: PageProps<"/builder/[c
         ? { open: false }
         : { open: true, sources: await recentMessages(ctx, workflow.workingSpec.credentials) };
   return (
-    <div className="grid gap-6 md:grid-cols-[14rem_1fr]">
-      <aside className="flex flex-col gap-3">
+    <div className="flex min-h-0 flex-1">
+      <aside className="hidden w-56 shrink-0 flex-col gap-3 overflow-y-auto border-r p-3 lg:flex">
         <NewConversationButton />
         <ConversationList conversations={conversations} activeId={conversation.id} />
       </aside>
-      <section aria-label="Conversation">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <Conversation
           conversation={conversation}
           proposals={proposals}
@@ -74,11 +83,13 @@ async function ConversationView({ params, searchParams }: PageProps<"/builder/[c
                   id: workflow.id,
                   name: workflow.name,
                   unpublishedChanges: workflow.unpublishedChanges,
+                  workingSpec: workflow.workingSpec,
+                  revision: workflow.revision,
                 }
           }
           tryIt={tryIt}
         />
-      </section>
+      </div>
     </div>
   );
 }

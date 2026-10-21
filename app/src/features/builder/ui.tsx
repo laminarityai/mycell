@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BuilderChat } from "./lib/builder-chat";
+import { BuilderWorkspace, type WorkspaceWorkflow } from "./lib/builder-workspace";
 import { toUIMessages } from "./lib/history";
 import { NewConversationButton } from "./lib/new-conversation-button";
 import type { ConversationWorkflow } from "./lib/proposal-part";
@@ -36,9 +37,13 @@ export function ConversationList({
   );
 }
 
+/** The conversation's workflow: its name and Publish state, and its working spec to draw. */
+export type ConversationPageWorkflow = ConversationWorkflow & WorkspaceWorkflow;
+
 /**
- * One conversation: its stored messages, new turns as they stream in, its proposals as cards,
- * and Publish once the conversation's workflow has unpublished changes.
+ * One conversation beside its workflow's graph: its stored messages, new turns as they stream
+ * in, its proposals as cards (the waiting one drawn on the graph), and Publish once the
+ * conversation's workflow has unpublished changes. Under 768px, Chat and Workflow tabs.
  */
 export function Conversation({
   conversation,
@@ -48,19 +53,25 @@ export function Conversation({
 }: {
   conversation: BuilderConversation;
   proposals: Proposal[];
-  workflow: ConversationWorkflow | null;
+  workflow: ConversationPageWorkflow | null;
   /** Null until the conversation has a working spec to try. */
   tryIt: ConversationTryIt | null;
 }) {
   return (
-    <BuilderChat
-      // A new conversation gets a fresh chat rather than the last one's state.
+    <BuilderWorkspace
+      // A new conversation gets a fresh chat and graph rather than the last one's state.
       key={conversation.id}
-      conversationId={conversation.id}
-      initialMessages={toUIMessages(conversation.messages)}
       proposals={proposals}
       workflow={workflow}
-      tryIt={tryIt}
+      chat={
+        <BuilderChat
+          conversationId={conversation.id}
+          initialMessages={toUIMessages(conversation.messages)}
+          proposals={proposals}
+          workflow={workflow}
+          tryIt={tryIt}
+        />
+      }
     />
   );
 }

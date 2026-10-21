@@ -2,7 +2,8 @@
 
 // A proposal in the conversation: what it changes, grouped by path, in plain words: each path's
 // condition, each step's catalog risk level, the steps that wait for a review (those the policy
-// engine added can't be removed), and Accept and Reject while it waits for a decision.
+// engine added can't be removed), and, while it waits for a decision, Accept and Reject and
+// showing or hiding it on the page's graph.
 import Link from "next/link";
 import { useActionState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +13,7 @@ import type { Change } from "@/features/spec/diff";
 import type { ActionResult } from "@/lib/errors";
 import { acceptProposalAction, rejectProposalAction } from "../actions";
 import type { Proposal, ProposalGroup, ProposalPath, ProposalStatus, ProposalStep } from "../types";
+import { useProposalOnGraph } from "./proposal-on-graph";
 
 const STATUS_LABELS: Record<ProposalStatus, string> = {
   proposed: "Waiting for your decision",
@@ -66,6 +68,7 @@ export function ProposalCard({ proposal }: { proposal: Proposal }) {
           Open the workflow
         </Link>
       ) : null}
+      {proposal.status !== "proposed" ? null : <ShowOnGraph proposalId={proposal.id} />}
       {proposal.status !== "proposed" ? null : (
         <div className="flex gap-2">
           <form action={accept}>
@@ -85,6 +88,24 @@ export function ProposalCard({ proposal }: { proposal: Proposal }) {
       <Problem result={accepted} />
       <Problem result={rejected} />
     </article>
+  );
+}
+
+/** Draws the waiting proposal on the page's graph, or puts it away; nothing on a page without. */
+function ShowOnGraph({ proposalId }: { proposalId: string }) {
+  const graph = useProposalOnGraph();
+  if (graph === null) return null;
+  const shown = graph.drawn?.id === proposalId;
+  return (
+    <button
+      type="button"
+      className="self-start text-sm underline underline-offset-4"
+      onClick={() => {
+        graph.show(proposalId, !shown);
+      }}
+    >
+      {shown ? "Hide it on the graph" : "Show it on the graph"}
+    </button>
   );
 }
 

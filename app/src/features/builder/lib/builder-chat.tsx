@@ -5,7 +5,7 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { BuilderUIMessage, Proposal, ProposeSpecResult } from "../types";
@@ -53,47 +53,56 @@ export function BuilderChat({
     },
   });
   const busy = status === "submitted" || status === "streaming";
+  // Like a chat: keep the newest message, where a proposal card waits, in view.
+  const scroller = useRef<HTMLDivElement>(null);
+  const last = messages.at(-1);
+  const lastLength = last?.parts.length ?? 0;
+  useEffect(() => {
+    scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
+  }, [messages.length, lastLength, proposals]);
 
   return (
-    <div className="flex flex-col gap-4">
-      <ol className="flex flex-col gap-3" aria-label="Messages">
-        {messages.length === 0 ? (
-          <li className="text-sm text-muted-foreground">
-            Describe the work you want a workflow to do, in your own words.
-          </li>
-        ) : null}
-        {messages.map((message) => (
-          <li
-            key={message.id}
-            className={
-              message.role === "user"
-                ? "self-end rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground"
-                : "flex flex-col gap-1 text-sm"
-            }
-          >
-            {message.parts.map((part, index) => (
-              <MessagePart key={index} part={part} proposals={byId} />
-            ))}
-          </li>
-        ))}
-      </ol>
-      {workflow === null ? null : <PublishBar workflow={workflow} />}
-      {tryIt === null ? null : (
-        <ConversationTryItPanel
-          conversationId={conversationId}
-          tryIt={tryIt}
-          onSummary={(message) => {
-            setMessages((current) => [...current, message]);
-          }}
-        />
-      )}
-      {error === undefined ? null : (
-        <p role="alert" className="text-sm text-destructive">
-          {error.message || "The builder couldn't answer. Try again."}
-        </p>
-      )}
+    <div className="flex h-full min-h-0 flex-col">
+      <div ref={scroller} className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+        <ol className="flex flex-col gap-3" aria-label="Messages">
+          {messages.length === 0 ? (
+            <li className="text-sm text-muted-foreground">
+              Describe the work you want a workflow to do, in your own words.
+            </li>
+          ) : null}
+          {messages.map((message) => (
+            <li
+              key={message.id}
+              className={
+                message.role === "user"
+                  ? "self-end rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground"
+                  : "flex flex-col gap-1 text-sm"
+              }
+            >
+              {message.parts.map((part, index) => (
+                <MessagePart key={index} part={part} proposals={byId} />
+              ))}
+            </li>
+          ))}
+        </ol>
+        {workflow === null ? null : <PublishBar workflow={workflow} />}
+        {tryIt === null ? null : (
+          <ConversationTryItPanel
+            conversationId={conversationId}
+            tryIt={tryIt}
+            onSummary={(message) => {
+              setMessages((current) => [...current, message]);
+            }}
+          />
+        )}
+        {error === undefined ? null : (
+          <p role="alert" className="text-sm text-destructive">
+            {error.message || "The builder couldn't answer. Try again."}
+          </p>
+        )}
+      </div>
       <form
-        className="flex flex-col gap-2"
+        className="flex flex-col gap-2 border-t p-4"
         onSubmit={(event) => {
           event.preventDefault();
           const text = input.trim();

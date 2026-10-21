@@ -9,7 +9,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { blankSpec } from "./lib/blank-spec";
-import { GraphTraceProvider, useShowOnGraph } from "./lib/graph-trace";
+import { GraphTraceProvider, useGraphTrace, useShowOnGraph } from "./lib/graph-trace";
 import { RiskBadge } from "./lib/risk-badge";
 import { SpecEditor } from "./lib/spec-editor";
 import { SwitchForm, type SwitchConnectionOption } from "./lib/switch-form";
@@ -17,7 +17,14 @@ import { PublishButton } from "./lib/workflow-editor";
 import { WorkflowGraph, type WorkflowGraphProps } from "./lib/workflow-graph";
 import type { WorkflowDetails, WorkflowSummary, WorkflowSwitch } from "./types";
 
-export { GraphTraceProvider, RiskBadge, useShowOnGraph, WorkflowGraph, type WorkflowGraphProps };
+export {
+  GraphTraceProvider,
+  RiskBadge,
+  useGraphTrace,
+  useShowOnGraph,
+  WorkflowGraph,
+  type WorkflowGraphProps,
+};
 
 /** A new workflow's editor, starting from a spec with no steps. */
 export function NewWorkflowEditor() {

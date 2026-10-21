@@ -158,9 +158,23 @@ export function EndNode({ data }: Of<"end">) {
   );
 }
 
+/** Where the steps go before a workflow has any, so the graph keeps its shape. */
+export function PlaceholderNode() {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-1 rounded-lg border border-dashed bg-background/80 px-4 text-center">
+      <p className="text-sm font-medium">Your workflow will appear here</p>
+      <p className="text-xs text-muted-foreground">
+        Describe the work in the chat; its proposals are drawn here.
+      </p>
+      <Handles />
+    </div>
+  );
+}
+
 export const nodeTypes = {
   trigger: TriggerNode,
   step: StepNode,
   path: PathNode,
   end: EndNode,
+  placeholder: PlaceholderNode,
 };

@@ -3,7 +3,6 @@
 // returned. Messages name the action and the fields, never their values.
 import { findAction, type ActionName } from "@/features/policy/catalog";
 import type { Json } from "../types";
-import { actionExecutors } from "./actions";
 import { RunStepError } from "./failures";
 import type { Compose, StepContext } from "./step-context";
 
@@ -20,7 +19,7 @@ export async function runAction(
 ): Promise<Json> {
   const action = findAction(name);
   // findAction found it, so it's a catalog action's name.
-  const executor = action === undefined ? undefined : actionExecutors[action.name as ActionName];
+  const executor = action === undefined ? undefined : context.actions[action.name as ActionName];
   if (action === undefined || executor === undefined || executor.status === "pending") {
     throw new RunStepError("not_available", `The action ${name} isn't available yet.`);
   }

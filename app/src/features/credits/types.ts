@@ -11,6 +11,8 @@ export type Usage = {
   generationId?: string;
   workflowId?: string;
   runId?: string;
+  /** Made by a dry run ("Try it"), which has no run record. */
+  dryRun?: boolean;
 };
 
 /** A row of the ledger: a grant or a usage. `amount` is in credits. */
@@ -25,5 +27,6 @@ export type LedgerEntry = {
   generationId: string | null;
   workflowId: string | null;
   runId: string | null;
+  dryRun: boolean;
   createdAt: Date;
 };

@@ -2,12 +2,24 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { getConversation, listConversations, listProposals } from "@/features/builder/server";
-import { Conversation, ConversationList, NewConversationButton } from "@/features/builder/ui";
+import {
+  Conversation,
+  ConversationList,
+  NewConversationButton,
+  type ConversationTryIt,
+} from "@/features/builder/ui";
 import { getCtx } from "@/features/orgs/server";
+import { recentMessages } from "@/features/runtime/server";
 import { getWorkflow } from "@/features/workflows/server";
 import { NotFoundError } from "@/lib/errors";
 
-export default function ConversationPage({ params }: PageProps<"/builder/[conversationId]">) {
+// A Server Action here may try the working spec on a message, model steps and all.
+export const maxDuration = 300;
+
+export default function ConversationPage({
+  params,
+  searchParams,
+}: PageProps<"/builder/[conversationId]">) {
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">
       <header className="flex items-center justify-between">
@@ -17,15 +29,13 @@ export default function ConversationPage({ params }: PageProps<"/builder/[conver
         </Link>
       </header>
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading conversation…</p>}>
-        <ConversationView params={params} />
+        <ConversationView params={params} searchParams={searchParams} />
       </Suspense>
     </main>
   );
 }
 
-async function ConversationView({
-  params,
-}: Pick<PageProps<"/builder/[conversationId]">, "params">) {
+async function ConversationView({ params, searchParams }: PageProps<"/builder/[conversationId]">) {
   const ctx = await getCtx();
   if (ctx.role !== "admin") redirect("/");
   const { conversationId } = await params;
@@ -40,6 +50,13 @@ async function ConversationView({
     listProposals(ctx, conversation.id),
     conversation.workflowId === null ? null : getWorkflow(ctx, conversation.workflowId),
   ]);
+  // The picker reads the inboxes only once the admin asks for it (`?try`).
+  const tryIt: ConversationTryIt | null =
+    workflow === null
+      ? null
+      : (await searchParams).try === undefined
+        ? { open: false }
+        : { open: true, sources: await recentMessages(ctx, workflow.workingSpec.credentials) };
   return (
     <div className="grid gap-6 md:grid-cols-[14rem_1fr]">
       <aside className="flex flex-col gap-3">
@@ -59,6 +76,7 @@ async function ConversationView({
                   unpublishedChanges: workflow.unpublishedChanges,
                 }
           }
+          tryIt={tryIt}
         />
       </section>
     </div>

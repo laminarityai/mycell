@@ -8,9 +8,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { RunOnMessageForm, type RunConnectionOption } from "./lib/run-on-message-form";
+import { TryItPanel } from "./lib/try-it-panel";
 import type { RunRecord, RunStatus, RunStepStatus } from "./types";
 
-export { RunOnMessageForm, type RunConnectionOption };
+export { RunOnMessageForm, type RunConnectionOption, TryItPanel };
 
 const STATUS_LABELS: Record<RunStatus | RunStepStatus, string> = {
   running: "Running",

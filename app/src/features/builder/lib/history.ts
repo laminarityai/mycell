@@ -1,13 +1,22 @@
 // Stored messages, read back two ways: as the model's context for the next turn, and as the
-// chat page's UI messages. Notices are for the admins only and never reach the model.
+// chat page's UI messages. Notices are for the admins only and never reach the model; an
+// admin's try-it summary reaches it as their words.
 import type { AssistantModelMessage, JSONValue, ModelMessage, ToolModelMessage } from "ai";
 import type { BuilderMessage, BuilderUIMessage, StoredPart } from "../types";
+import { tryItText } from "./try-it-summary";
 
-/** The conversation so far, as the model sees it: each agent step's text and tool calls. */
+/**
+ * The conversation so far, as the model sees it: the admins' words and try-it summaries, and
+ * each agent step's text and tool calls.
+ */
 export function toModelMessages(messages: BuilderMessage[]): ModelMessage[] {
   return messages.flatMap((message) => {
     if (message.role === "user") {
-      const text = textOf(message.parts);
+      const text = message.parts
+        .flatMap((part) =>
+          part.type === "text" ? [part.text] : part.type === "try_it" ? [tryItText(part)] : [],
+        )
+        .join("\n");
       return text === "" ? [] : [{ role: "user", content: text }];
     }
     return agentMessages(message.parts);
@@ -27,7 +36,7 @@ function agentMessages(parts: StoredPart[]): ModelMessage[] {
     results = undefined;
   };
   for (const part of parts) {
-    if (part.type === "notice") continue;
+    if (part.type === "notice" || part.type === "try_it") continue;
     // Text after a step's tool results starts the next step.
     if (part.type === "text" && results !== undefined) flush();
     assistant ??= { role: "assistant", content: [] };
@@ -70,6 +79,9 @@ function toUIPart(part: StoredPart): BuilderUIMessage["parts"][number] {
   if (part.type === "notice") {
     return { type: "data-notice", data: { kind: part.kind, text: part.text } };
   }
+  if (part.type === "try_it") {
+    return { type: "data-tryIt", data: { lines: part.lines, costUsd: part.costUsd } };
+  }
   return part.isError
     ? {
         type: "dynamic-tool",
@@ -87,8 +99,4 @@ function toUIPart(part: StoredPart): BuilderUIMessage["parts"][number] {
         input: part.input,
         output: part.output,
       };
-}
-
-export function textOf(parts: StoredPart[]): string {
-  return parts.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n");
 }

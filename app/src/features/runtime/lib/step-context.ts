@@ -1,17 +1,21 @@
 // What executors take and give back.
+import type { ActionName } from "@/features/policy/catalog";
 import type { ModelRole, Spec, Step } from "@/features/spec/types";
 import type { Ctx } from "@/lib/ctx";
-import type { Json } from "../types";
+import type { CallAttribution, Json } from "../types";
 
 /**
  * What a step sees: the run it's in, the version's spec (so a draft can re-read a range an
- * earlier step read) and the outputs of the steps before it.
+ * earlier step read), the outputs of the steps before it, what its model calls are recorded
+ * against, and the action executors it runs: the live ones, or a dry run's stubs.
  */
 export type StepContext = {
   ctx: Ctx;
-  run: { id: string; workflowId: string; connectionId: string; sourceRef: string };
+  run: { id: string; connectionId: string; sourceRef: string };
+  attribution: CallAttribution;
   spec: Spec;
   outputs: Readonly<Record<string, Json>>;
+  actions: ActionExecutors;
 };
 
 /** What a step did. */
@@ -48,3 +52,6 @@ export type StepRun<S extends Step> = (step: S, context: StepContext) => Promise
 
 /** A registry entry: built, or pending with the ticket that builds it. */
 export type Executor<Run> = { status: "ready"; run: Run } | { status: "pending"; ticket: string };
+
+/** One executor per catalog action. */
+export type ActionExecutors = Record<ActionName, Executor<ActionRun>>;

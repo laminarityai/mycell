@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { BuilderUIMessage, Proposal, ProposeSpecResult } from "../types";
 import { ProposeSpecPart, PublishBar, type ConversationWorkflow } from "./proposal-part";
+import { ConversationTryItPanel, TryItSummaryPart, type ConversationTryIt } from "./try-it-part";
 
 const TOOL_LABELS: Record<string, string> = {
   get_workflow: "Read a workflow",
@@ -24,17 +25,20 @@ export function BuilderChat({
   initialMessages,
   proposals,
   workflow,
+  tryIt,
 }: {
   conversationId: string;
   initialMessages: BuilderUIMessage[];
   /** The conversation's proposals, as the server last read them. */
   proposals: Proposal[];
   workflow: ConversationWorkflow | null;
+  /** Null until the conversation has a working spec to try. */
+  tryIt: ConversationTryIt | null;
 }) {
   const router = useRouter();
   const byId = useMemo(() => new Map(proposals.map((p) => [p.id, p])), [proposals]);
   const [input, setInput] = useState("");
-  const { messages, sendMessage, status, error } = useChat<BuilderUIMessage>({
+  const { messages, setMessages, sendMessage, status, error } = useChat<BuilderUIMessage>({
     id: conversationId,
     messages: initialMessages,
     transport: new DefaultChatTransport({
@@ -74,6 +78,15 @@ export function BuilderChat({
         ))}
       </ol>
       {workflow === null ? null : <PublishBar workflow={workflow} />}
+      {tryIt === null ? null : (
+        <ConversationTryItPanel
+          conversationId={conversationId}
+          tryIt={tryIt}
+          onSummary={(message) => {
+            setMessages((current) => [...current, message]);
+          }}
+        />
+      )}
       {error === undefined ? null : (
         <p role="alert" className="text-sm text-destructive">
           {error.message || "The builder couldn't answer. Try again."}
@@ -120,6 +133,7 @@ function MessagePart({
       </p>
     );
   }
+  if (part.type === "data-tryIt") return <TryItSummaryPart summary={part.data} />;
   const toolName =
     part.type === "dynamic-tool"
       ? part.toolName

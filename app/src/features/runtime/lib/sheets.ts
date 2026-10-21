@@ -39,8 +39,18 @@ export async function rangeText(
   connectionId: string,
   input: RangeInput,
 ): Promise<string> {
+  const rows = await rangeRows(ctx, connectionId, input);
+  return rows.map((row) => row.join("\t")).join("\n");
+}
+
+/** The range's values as text, row by row: in memory only, like rangeText. */
+export async function rangeRows(
+  ctx: Ctx,
+  connectionId: string,
+  input: RangeInput,
+): Promise<string[][]> {
   const { values } = await getValues(ctx, connectionId, input.spreadsheetId, input.range);
-  return values.map((row) => row.map((cell) => text(cell)).join("\t")).join("\n");
+  return values.map((row) => row.map((cell) => text(cell)));
 }
 
 /**

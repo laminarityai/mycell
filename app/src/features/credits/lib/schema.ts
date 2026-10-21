@@ -1,6 +1,6 @@
 // The credit ledger (ADR-0010): one row per grant or model call. The balance is the sum of
 // `amount`. Usage rows stay when a workflow, run or connection goes: they are the org's bill.
-import { index, numeric, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, index, numeric, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { modelRoleSchema, type ModelRole } from "@/features/spec/types";
 
 export const creditLedger = pgTable(
@@ -22,6 +22,8 @@ export const creditLedger = pgTable(
     // What the call was for, when a workflow run made it. No foreign keys: usage outlives both.
     workflowId: text("workflow_id"),
     runId: text("run_id"),
+    // Made by a dry run ("Try it"), which has no run record.
+    dryRun: boolean("dry_run").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [index("credit_ledger_org_id_idx").on(table.orgId)],

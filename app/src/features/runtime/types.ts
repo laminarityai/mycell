@@ -5,7 +5,7 @@ import type { ActionName } from "@/features/policy/catalog";
 import type { ModelRole, StepType } from "@/features/spec/types";
 
 /** What a model call is for; recorded on its ledger entry. */
-export type CallAttribution = { workflowId?: string; runId?: string };
+export type CallAttribution = { workflowId?: string; runId?: string; dryRun?: boolean };
 
 /** A streamed call's model and its metering (`openMeteredStream`). */
 export type MeteredStream = {
@@ -166,6 +166,60 @@ export type RunRecord = {
   startedAt: Date;
   finishedAt: Date | null;
   steps: RunStepRecord[];
+};
+
+/**
+ * What one step of a dry run read or would have written, shown to the admin who tried it and
+ * never stored (invariant 8): the rows a read-range read, the draft it would have made, the
+ * label or row it would have added, the review it would have waited for.
+ */
+export type DryRunEffect =
+  | { kind: "rows_read"; range: string; rows: string[][] }
+  | { kind: "draft"; to: string; subject: string; text: string }
+  | { kind: "label"; label: string }
+  | { kind: "row"; range: string; values: (string | number | boolean | null)[] }
+  | { kind: "review"; channel: string };
+
+/** One step of a dry run. */
+export type DryRunStep = {
+  stepId: string;
+  type: StepType;
+  status: "succeeded" | "failed" | "check_failed";
+  /** An approval the policy engine added, not one the spec names. */
+  insertedByPolicy: boolean;
+  /** What it handed on to later steps, as a run would. */
+  output: Json;
+  effect: DryRunEffect | null;
+  /** Why it failed, content-free. */
+  error: { code: string; message: string } | null;
+  modelId: string | null;
+  costUsd: number;
+};
+
+/** How a dry run ended, and each step it reached. Returned to the page, never stored. */
+export type DryRunResult = {
+  ended: "succeeded" | "skipped" | "escalated" | "failed";
+  steps: DryRunStep[];
+  costUsd: number;
+};
+
+/** What a "Try it" Server Action hands the panel: the result, or why it was refused. */
+export type TryItState = {
+  result?: DryRunResult;
+  error?: string;
+  issues?: { path: (string | number)[]; message: string }[];
+};
+
+/**
+ * One connection's newest messages, for the "Try it" picker: fetched for display, never stored.
+ * `unavailable` when Gmail couldn't be read just now.
+ */
+export type RecentMessages = {
+  connectionId: string;
+  accountEmail: string;
+  kind: "member" | "org";
+  messages: { sourceRef: string; subject: string; from: string; date: string }[];
+  unavailable: boolean;
 };
 
 /** Whether runtime can execute each catalog action and step type yet. */

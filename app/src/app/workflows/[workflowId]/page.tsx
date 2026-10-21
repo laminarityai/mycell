@@ -7,8 +7,15 @@ import { RecentRuns, RunOnMessageForm } from "@/features/runtime/ui";
 import { editorConnections, getWorkflow, runnableConnections } from "@/features/workflows/server";
 import { WorkflowEditor, WorkflowSwitchSection } from "@/features/workflows/ui";
 import { NotFoundError } from "@/lib/errors";
+import { TryIt } from "./try-it";
 
-export default function WorkflowPage({ params }: PageProps<"/workflows/[workflowId]">) {
+// A Server Action here may try the working spec on a message, model steps and all.
+export const maxDuration = 300;
+
+export default function WorkflowPage({
+  params,
+  searchParams,
+}: PageProps<"/workflows/[workflowId]">) {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
       <header className="flex items-center justify-between">
@@ -19,6 +26,9 @@ export default function WorkflowPage({ params }: PageProps<"/workflows/[workflow
       </header>
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading workflow…</p>}>
         <Workflow params={params} />
+      </Suspense>
+      <Suspense fallback={<p className="text-sm text-muted-foreground">Loading recent mail…</p>}>
+        <TryIt params={params} searchParams={searchParams} />
       </Suspense>
     </main>
   );

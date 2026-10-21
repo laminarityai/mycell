@@ -1,0 +1,88 @@
+import { beforeEach, describe, expect, it } from "vitest";
+import { resetDatabase } from "@/db/testing/reset";
+import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
+import { listRuns } from "@/features/runtime/server";
+import { saveWorkflow } from "@/features/workflows/server";
+import { ValidationError } from "@/lib/errors";
+import { connectGoogle } from "@/testing/connect-helpers";
+import { fakeAiGateway } from "@/testing/fake-ai-gateway";
+import { getConversation, startConversation, streamTurn, tryInConversation } from "../server";
+import { draftSpec } from "./specs";
+import { fundOrg, readTurn } from "./turn-helpers";
+
+beforeEach(resetDatabase);
+
+const REPLY = "Thanks Ada, 30 oak chairs come to 2,400 GBP.";
+
+const labelStep = {
+  id: "label",
+  type: "tool",
+  action: "google-mail.add-label",
+  input: { messageId: { from: "trigger.messageId" }, label: "Pricing" },
+};
+
+/** A workflow that classifies, branches, labels and drafts, and a conversation about it. */
+async function setUp() {
+  const { orgA } = await seedTwoOrgs();
+  await fundOrg(orgA.id);
+  const admin = orgA.admin.ctx;
+  const google = await connectGoogle(admin, orgA.admin.email);
+  const message = google.mailbox.add({
+    from: "ada@customer.test",
+    subject: "Quote for 30 oak chairs",
+    text: "Hello, what would 30 oak chairs cost?",
+    at: new Date(Date.now() - 60_000),
+  });
+  const spec = draftSpec();
+  (spec.steps as unknown[]).splice(2, 0, labelStep);
+  const { id: workflowId } = await saveWorkflow(admin, { name: "Pricing replies", spec });
+  const { id: conversationId } = await startConversation(admin, { workflowId });
+  return { admin, google, message, workflowId, conversationId };
+}
+
+describe("tryInConversation", () => {
+  it("returns the draft's text, and posts only a content-free summary the agent reads next", async () => {
+    const { admin, google, message, workflowId, conversationId } = await setUp();
+    fakeAiGateway.decision({ choice: "yes", probabilities: { yes: 0.93, no: 0.07 } });
+    fakeAiGateway.text(REPLY, { costUsd: 0.01 });
+
+    const { result } = await tryInConversation(admin, conversationId, {
+      connectionId: google.id,
+      sourceRef: message.id,
+    });
+
+    expect(result.steps.find((step) => step.stepId === "reply")?.effect).toMatchObject({
+      kind: "draft",
+      text: REPLY,
+    });
+    const { messages } = await getConversation(admin, conversationId);
+    expect(messages).toHaveLength(1);
+    const stored = JSON.stringify(messages);
+    for (const content of [REPLY, "Quote for 30 oak chairs", "ada@customer.test", "oak chairs"]) {
+      expect(stored).not.toContain(content);
+    }
+    const lines = messages
+      .flatMap((m) => m.parts.flatMap((part) => (part.type === "try_it" ? part.lines : [])))
+      .join("\n");
+    for (const said of ['"yes"', "went on", 'the label "Pricing"', "drafted a reply", "review"]) {
+      expect(lines).toContain(said);
+    }
+    expect(await listRuns(admin, workflowId)).toEqual([]);
+    expect(google.mailbox.writes.log).toEqual([]);
+
+    fakeAiGateway.reply({ text: "I'll make the draft less formal." });
+    await readTurn(await streamTurn(admin, conversationId, "The draft was too formal"));
+    const turn = JSON.stringify(fakeAiGateway.requests("language").at(-1)?.body);
+    expect(turn).toContain("drafted a reply");
+    expect(turn).not.toContain(REPLY);
+  });
+
+  it("needs the conversation to be about a workflow", async () => {
+    const { admin, google, message } = await setUp();
+    const { id: conversationId } = await startConversation(admin, {});
+
+    await expect(
+      tryInConversation(admin, conversationId, { connectionId: google.id, sourceRef: message.id }),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+});

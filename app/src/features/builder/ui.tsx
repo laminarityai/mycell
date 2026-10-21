@@ -3,9 +3,10 @@ import { BuilderChat } from "./lib/builder-chat";
 import { toUIMessages } from "./lib/history";
 import { NewConversationButton } from "./lib/new-conversation-button";
 import type { ConversationWorkflow } from "./lib/proposal-part";
+import type { ConversationTryIt } from "./lib/try-it-part";
 import type { BuilderConversation, ConversationSummary, Proposal } from "./types";
 
-export { NewConversationButton };
+export { NewConversationButton, type ConversationTryIt };
 
 /** The org's builder conversations, the open one marked. */
 export function ConversationList({
@@ -43,10 +44,13 @@ export function Conversation({
   conversation,
   proposals,
   workflow,
+  tryIt,
 }: {
   conversation: BuilderConversation;
   proposals: Proposal[];
   workflow: ConversationWorkflow | null;
+  /** Null until the conversation has a working spec to try. */
+  tryIt: ConversationTryIt | null;
 }) {
   return (
     <BuilderChat
@@ -56,6 +60,7 @@ export function Conversation({
       initialMessages={toUIMessages(conversation.messages)}
       proposals={proposals}
       workflow={workflow}
+      tryIt={tryIt}
     />
   );
 }

@@ -8,6 +8,7 @@
   "scripts": {
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm boundaries && pnpm test && pnpm build && pnpm e2e",
     "dev": "pnpm --filter app dev",
+    "prototype:graph": "pnpm --filter app exec next dev --port 3200",
     "db:up": "docker compose up --detach --wait",
     "db:down": "docker compose down",
     "db:generate": "pnpm --filter app db:generate",

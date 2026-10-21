@@ -7,7 +7,8 @@ import type { BranchPath, CallAttribution, Json } from "../types";
 /**
  * What a step sees: the run it's in, the version's spec (so a draft can re-read a range an
  * earlier step read), the outputs of the steps before it, what its model calls are recorded
- * against, and the action executors it runs: the live ones, or a dry run's stubs.
+ * against, the action executors it runs (the live ones, or a dry run's stubs), and where it
+ * records a review.
  */
 export type StepContext = {
   ctx: Ctx;
@@ -16,7 +17,15 @@ export type StepContext = {
   spec: Spec;
   outputs: Readonly<Record<string, Json>>;
   actions: ActionExecutors;
+  /**
+   * Records that an item the run left in its app's pending form waits for a person's review,
+   * once however often the step is retried. A dry run records nothing.
+   */
+  awaitReview: (item: AwaitedItem) => Promise<void>;
 };
+
+/** An item waiting for a review: a Gmail draft, by its ID and its thread's. */
+export type AwaitedItem = { kind: "approval"; itemRef: string; threadRef: string };
 
 /** What a step did. */
 export type StepExecution = {

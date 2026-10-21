@@ -14,3 +14,5 @@ export { checkWorkflowSpec } from "./lib/validation";
 // fan-out).
 export { listSwitchedOn } from "./lib/switches";
 export { listStartable } from "./lib/startable";
+// For any role: workflows' names, to show beside what another feature lets the caller see.
+export { workflowNames } from "./lib/names";

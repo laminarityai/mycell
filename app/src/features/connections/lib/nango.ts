@@ -5,8 +5,6 @@ import { z } from "zod";
 import { env } from "@/env";
 import { SourceRequestError } from "../types";
 
-export const NANGO_API_URL = "https://api.nango.dev";
-
 /** The Nango connection no longer exists (deleted at Nango, or never created). */
 export class NangoConnectionGoneError extends Error {
   constructor() {
@@ -211,6 +209,27 @@ export async function nangoProxyPost<T>(
   return nangoProxy(connection, target, schema, { method: "POST", body: JSON.stringify(body) });
 }
 
+/** A PUT through the Nango proxy with a JSON body, answered and not retried like a POST. */
+export async function nangoProxyPut<T>(
+  connection: ProxiedConnection,
+  target: ProxyTarget,
+  body: unknown,
+  schema: z.ZodType<T>,
+): Promise<T | null> {
+  return nangoProxy(connection, target, schema, { method: "PUT", body: JSON.stringify(body) });
+}
+
+/**
+ * A DELETE through the Nango proxy, not retried. True when the source deleted the item, false
+ * when it had no such item (404 or 410); refusals throw as for the other verbs.
+ */
+export async function nangoProxyDelete(
+  connection: ProxiedConnection,
+  target: ProxyTarget,
+): Promise<boolean> {
+  return (await nangoProxy(connection, target, z.unknown(), { method: "DELETE" })) !== null;
+}
+
 async function nangoProxy<T>(
   connection: ProxiedConnection,
   { baseUrl, path }: ProxyTarget,
@@ -227,7 +246,11 @@ async function nangoProxy<T>(
       "Base-Url-Override": baseUrl,
     },
   });
-  if (response.ok) return schema.parse(await response.json());
+  if (response.ok) {
+    // A DELETE's answer has no body.
+    const text = await response.text();
+    return schema.parse(text === "" ? undefined : JSON.parse(text));
+  }
   const raw: unknown = await response.json().catch(() => undefined);
   if (
     nangoError.safeParse(raw).success &&
@@ -255,5 +278,5 @@ async function nangoFetch(path: string, init: RequestInit): Promise<Response> {
   const headers = new Headers(init.headers);
   headers.set("Authorization", `Bearer ${env.NANGO_API_KEY}`);
   if (init.body !== undefined) headers.set("Content-Type", "application/json");
-  return fetch(`${NANGO_API_URL}${path}`, { ...init, headers });
+  return fetch(`${env.NANGO_API_URL}${path}`, { ...init, headers });
 }

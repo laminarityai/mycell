@@ -14,7 +14,7 @@ test("an admin sees the org's users and can promote and remove them", async ({
   signInAs,
 }) => {
   await signInAs(orgA.admin);
-  await page.goto("/");
+  await page.goto("/org");
 
   await expect(userRow(page, orgA.admin)).toContainText("Admin");
   await expect(userRow(page, orgA.member)).toContainText("Member");
@@ -41,7 +41,8 @@ test("a member sees no admin controls and is sent away from the tags screen", as
   await signInAs(orgA.member);
   await page.goto("/tags");
 
-  await expect(page).toHaveURL("/");
+  await expect(page).toHaveURL("/reviews");
+  await page.getByRole("link", { name: "Your org" }).click();
   await expect(page.getByRole("heading", { name: "Your org" })).toBeVisible();
   await expect(userRow(page, orgA.admin)).toBeVisible();
   await expect(page.getByRole("link", { name: "Manage tags" })).toBeHidden();

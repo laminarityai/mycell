@@ -98,7 +98,7 @@ test("an admin writes a branching workflow in the JSON view and sees its paths o
 }) => {
   await withGmail(orgA.admin, orgA.id);
   await signInAs(orgA.admin);
-  await page.goto("/");
+  await page.goto("/org");
   await page.getByRole("link", { name: "Workflows" }).click();
   await page.getByRole("link", { name: "New workflow" }).click();
   await expect(page).toHaveURL("/workflows/new");
@@ -285,9 +285,9 @@ test("saving over a newer working spec is refused, and members can't reach the e
   await context.clearCookies();
   await signInAs(orgA.member);
   await page.goto(workflowUrl);
-  await expect(page).toHaveURL("/");
+  await expect(page).toHaveURL("/reviews");
   await page.goto("/workflows/new");
-  await expect(page).toHaveURL("/");
+  await expect(page).toHaveURL("/reviews");
 });
 
 /** Makes the tag `name` on the tags screen, and gives it to `user` when there is one. */

@@ -147,20 +147,38 @@ class FakeNango {
   ): FakeWebhook & { connectionId: string } {
     const session = this.sessions.connects.find((s) => s.token === token);
     if (session === undefined) throw new Error(`Unknown connect session token ${token}`);
+    const connectionId = this.addConnection(session.integration, account, session.tags, scopes);
+    return { connectionId, ...this.authWebhook(connectionId, "creation", true) };
+  }
+
+  /**
+   * A connection that already exists at Nango, made without a connect session or webhook: for
+   * the e2e tests, which write Mycel's connection row themselves. Returns its connection ID.
+   */
+  seedConnection(integration: string, account: FakeAccount): string {
+    return this.addConnection(integration, account, {}, undefined);
+  }
+
+  private addConnection(
+    integration: string,
+    account: FakeAccount,
+    tags: Record<string, string>,
+    scopes: readonly string[] | undefined,
+  ): string {
     const connectionId = randomUUID();
     this.connections.set(connectionId, {
       id: this.nextId++,
       created: new Date().toISOString(),
       connectionId,
-      integration: session.integration,
-      tags: session.tags,
+      integration,
+      tags,
       account,
-      scopes: scopes ?? DEFAULT_SCOPES[session.integration] ?? [],
+      scopes: scopes ?? DEFAULT_SCOPES[integration] ?? [],
       mailbox: new FakeMailbox(account.emailAddress),
       drive: new FakeDrive(account.emailAddress),
       sheets: new FakeSheets(),
     });
-    return { connectionId, ...this.authWebhook(connectionId, "creation", true) };
+    return connectionId;
   }
 
   /** The reconnect sessions Mycel has created since the last reset, oldest first. */

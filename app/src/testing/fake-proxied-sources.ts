@@ -11,11 +11,17 @@ import type { FakeConnection } from "./fake-nango";
 import { sheetsError } from "./fake-sheets";
 
 type Respond = (connection: FakeConnection, path: string, params: URLSearchParams) => Response;
+
+/** The verbs the proxy forwards: a GET reads, and the rest write. */
+export type ProxyMethod = "GET" | "POST" | "PUT" | "DELETE";
+export type WriteMethod = Exclude<ProxyMethod, "GET">;
+
 type RespondToWrite = (
   connection: FakeConnection,
   path: string,
   params: URLSearchParams,
   body: unknown,
+  method: WriteMethod,
 ) => Response;
 
 export type ProxiedSource = {
@@ -24,7 +30,8 @@ export type ProxiedSource = {
   // Any one of these lets a token call the API.
   scopes: readonly string[];
   respond: Respond;
-  // How the API answers a POST, and the scopes that let a token write; none for a read-only API.
+  // How the API answers a write (POST, PUT or DELETE), and the scopes that let a token write;
+  // none for a read-only API.
   write?: { scopes: readonly string[]; respond: RespondToWrite };
   rateLimited: () => Response;
 };
@@ -45,7 +52,8 @@ export const PROXIED_SOURCES: ProxiedSource[] = [
     write: {
       // Labels, messages.modify and drafts all take gmail.modify; drafts take compose too.
       scopes: [GOOGLE_APP_SCOPES.gmail, GMAIL_COMPOSE, "https://mail.google.com/"],
-      respond: (connection, path, _params, body) => gmailWrite(connection.mailbox, path, body),
+      respond: (connection, path, _params, body, method) =>
+        gmailWrite(connection.mailbox, path, body, method),
     },
     rateLimited: () => gmailError(429, "RESOURCE_EXHAUSTED"),
   },
@@ -64,7 +72,10 @@ export const PROXIED_SOURCES: ProxiedSource[] = [
     respond: (connection, path) => connection.sheets.respond(path),
     write: {
       scopes: [GOOGLE_APP_SCOPES.sheets, DRIVE, DRIVE_FILE],
-      respond: (connection, path, params, body) => connection.sheets.write(path, params, body),
+      respond: (connection, path, params, body, method) => {
+        if (method !== "POST") throw new Error(`The fake Sheets takes no ${method}s`);
+        return connection.sheets.write(path, params, body);
+      },
     },
     rateLimited: () => sheetsError(429, "RESOURCE_EXHAUSTED"),
   },
@@ -102,7 +113,7 @@ export function proxiedSource(host: string, path: string): ProxiedSource | undef
 export function refusal(
   source: ProxiedSource | undefined,
   connection: FakeConnection,
-  method: "GET" | "POST" = "GET",
+  method: ProxyMethod = "GET",
 ) {
   if (source === undefined) {
     return HttpResponse.json({ error: { code: 404, message: "Not Found" } }, { status: 404 });

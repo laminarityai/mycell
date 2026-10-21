@@ -30,7 +30,7 @@ export default function ConversationPage({
           <Link href="/builder" className="hover:text-foreground lg:hidden">
             All conversations
           </Link>
-          <Link href="/" className="hover:text-foreground">
+          <Link href="/org" className="hover:text-foreground">
             Back to your org
           </Link>
         </nav>

@@ -37,7 +37,8 @@ app/                         The one Next.js app (deploys to Vercel)
   src/features/<name>/       One directory per feature, e.g.:
     spec/                    Workflow spec schema (zod), validator
     policy/                  Action risk catalog + policy engine (deterministic)
-    runtime/                 Spec interpreter (steps as Inngest steps); model-role routing; Nango tool adapters
+    runtime/                 Spec interpreter (steps as Inngest steps); model-role routing; Nango tool adapters; pending-form adapters
+    reviews/                 Reviews of what runs left waiting in pending forms; the Reviews page
     connections/             Connections, the Nango client and proxy, Nango's webhook, disconnecting
     discovery/               Ingest (connectors, backfill, polling), events, object refs, mining, ranking, shadow eval
     credits/                 Credit ledger, estimates, budget enforcement
@@ -206,6 +207,17 @@ Every app plugs in through the same four parts, so a new app is mostly catalog w
 | Tasks    | None needed: tasks on the person's own list are reversible |                                         |
 
 A review ends as approved, edited and approved, declined (which deletes the waiting item, where the app allows), done in the app, or gone. An app with no natural pending form, such as Slack, waits until we design one.
+
+### Pending-form adapters and reviews (`features/runtime`, `features/reviews`)
+
+- **The adapter seam** (`runtime/adapters.ts`, `PendingFormAdapter`): each pending form has one adapter with five operations, each taking the caller's `ctx` and the waiting item's pointers (`PendingItem`: connection, `item_ref`, `thread_ref`, `source_ref`, when its review began): `prepare(ctx, input)` creates the waiting item and returns its pointers; `approve(ctx, item, edits?)` carries it out, with any edits held in memory only; `decline(ctx, item)` removes it; `check(ctx, item)` says `waiting`, `done_in_app` or `gone`; and `view(ctx, item)` fetches it live for the Reviews page. `approve`, `decline` and `view` throw `ItemGoneError` when the item is no longer there. The entry file doesn't import `reviews`, which the interpreter imports to create reviews, so the two features' files never form a cycle.
+- **The Gmail drafts adapter** (`runtime/lib/gmail-draft-adapter.ts`): `prepare` is the create-draft action (the catalog action's executor calls it); `approve` is `drafts.update` with the edited text (only when edited, keeping the draft's recipients, subject, place in the thread and marker header) then `drafts.send`; `decline` is `drafts.delete`; `check` finds the draft, or failing that a message sent in its thread since the review began (`done_in_app`) or nothing (`gone`); `view` fetches the draft and the message that started the run. All through the connections proxy (`proxyGet`, `proxyPost`, `proxyPut`, `proxyDelete`).
+- **Creating:** an `approval` step records a `waiting` review for each draft above it on its path, through `StepContext.awaitReview` (the interpreter's calls `reviews`' `createReview` as the system ctx; Try it's records nothing). It's unique on `(org_id, run_id, item_ref)`, so a retried step or run makes no second review. The run still ends `succeeded`.
+- **The `reviews` table** holds pointers only (invariant 8): the connection (`(org_id, connection_id)` cascade, invariant 3), run, workflow and version, `kind` (`approval`; it chooses the adapter), `owner_scope` and `owner_user_id` (the member connection's owner, cascading with their membership; null for an org connection), `item_ref`, `thread_ref`, `source_ref`, `status`, `ended_by_user_id`, `ended_at`, `created_at`.
+- **Who sees a review:** a member's review only its owner, so admins never read members' mail (ADR-0001); an org review only admins, until shared reviews arrive. Anything else is `NotFoundError`, another org's included.
+- **Opening** (`openReview`) asks the adapter's `check` first and ends the review as `done_in_app` or `gone` when it says so; otherwise it returns the adapter's live `view`, which is never stored.
+- **Acting** (`approveReview`, `approveEditedReview`, `declineReview`) first claims the review with an update conditional on `status = 'waiting'`, recording who and when. If nothing changed, it throws `AlreadyHandledError` without calling the adapter, so the first to act wins and nothing is sent twice. If the adapter then fails, the claim is undone: the review waits again, or ends `gone` with its item (`ConflictError`). Acting goes through the review's own connection with the caller's ctx. `reviews` reaches an app only through the adapter of the review's kind; the functions take the adapters as a last argument, so a test can pass fakes.
+- **The Reviews page** (`/reviews`) is the landing page: `/` and sign-in go there. It lists the caller's waiting reviews oldest first, with workflow and age; `/reviews/[reviewId]` opens one, showing the live message and draft with approve, edit and decline.
 
 ## Risk policy (`features/policy`)
 

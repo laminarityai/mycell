@@ -4,10 +4,22 @@ import type { ItemView, PendingFormAdapter } from "@/features/runtime/adapters";
 
 /**
  * What a review waits on, which chooses its pending-form adapter: `approval` is a Gmail draft an
- * `approval` step left waiting. #64 adds `escalation`; M11 adds Calendar and Docs.
+ * `approval` step left waiting; `escalation` is a message an `escalate` step (or a gate's
+ * `else: "escalate"`) handed to a person. M11 adds Calendar and Docs.
  */
-export const reviewKinds = ["approval"] as const;
+export const reviewKinds = ["approval", "escalation"] as const;
 export type ReviewKind = (typeof reviewKinds)[number];
+
+/**
+ * What a person may do with a waiting review of each kind: a draft is approved (as it is, or
+ * edited) or declined; an escalated message is only marked done, as Mycel changes nothing in
+ * Gmail for it.
+ */
+export const reviewActions = {
+  approval: ["approve", "edit", "decline"],
+  escalation: ["done"],
+} as const satisfies Record<ReviewKind, readonly string[]>;
+export type ReviewAction = (typeof reviewActions)[ReviewKind][number];
 
 /**
  * The pending-form adapter for each review kind: the only way `reviews` reaches an app. Acting
@@ -17,8 +29,8 @@ export type PendingForms = Record<ReviewKind, PendingFormAdapter>;
 
 /**
  * Where a review stands: waiting, or how it ended. `done_in_app` is the person finishing it in
- * the app itself (a draft sent from Gmail); `gone` is the item gone with no one finishing it.
- * Reviews never time out.
+ * the app itself (a draft sent, or an escalated message replied to, from Gmail), or marking an
+ * escalation done; `gone` is the item gone with no one finishing it. Reviews never time out.
  */
 export const reviewStatuses = [
   "waiting",
@@ -37,12 +49,14 @@ export type NewReview = {
   workflowId: string;
   workflowVersionId: string;
   kind: ReviewKind;
-  /** The item in its app: a Gmail draft's ID. */
+  /** The item in its app: a Gmail draft's ID, or the escalated message's. */
   itemRef: string;
   /** Its thread: a Gmail thread's ID. */
   threadRef: string;
   /** The message that started the run. */
   sourceRef: string;
+  /** Why an escalate step handed the message over: the spec's words, never the message's. */
+  reason?: string;
 };
 
 /** A waiting review as the Reviews page lists it. */
@@ -54,8 +68,12 @@ export type ReviewSummary = {
   createdAt: Date;
 };
 
-/** A review and how it stands: who ended it and when, once it has ended. */
+/**
+ * A review and how it stands: who ended it and when, once it has ended. An escalation has the
+ * escalate step's reason for handing the message over; an approval has none.
+ */
 export type Review = ReviewSummary & {
+  reason: string | null;
   status: ReviewStatus;
   endedByUserId: string | null;
   endedAt: Date | null;

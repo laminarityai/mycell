@@ -30,7 +30,7 @@ describe("creating a review", () => {
     ]);
     const opened = await openReview(admin, reviews.at(0)?.id ?? "");
     expect(opened.review.status).toBe("waiting");
-    expect(opened.view?.draft).toMatchObject({ text: REPLY });
+    expect(opened.view).toMatchObject({ kind: "draft", draft: { text: REPLY } });
     expect(google.mailbox.drafts()).toHaveLength(1);
   });
 

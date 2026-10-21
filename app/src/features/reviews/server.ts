@@ -4,4 +4,10 @@
 // Called by a run's approval step, as the org's system ctx.
 export { createReview } from "./lib/reviews";
 export { listReviews } from "./lib/reviews";
-export { approveEditedReview, approveReview, declineReview, openReview } from "./lib/acting";
+export {
+  approveEditedReview,
+  approveReview,
+  declineReview,
+  markDone,
+  openReview,
+} from "./lib/acting";

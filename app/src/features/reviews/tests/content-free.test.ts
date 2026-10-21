@@ -3,7 +3,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { tablesHolding } from "@/db/testing/content-scan";
 import { resetDatabase } from "@/db/testing/reset";
-import { approveEditedReview, listReviews, openReview } from "../server";
+import { approveEditedReview, listReviews, markDone, openReview } from "../server";
+import { escalationRun, refundQuestion } from "./escalation-helpers";
 import { exampleRun, pricingQuestion } from "./review-helpers";
 
 beforeEach(resetDatabase);
@@ -23,7 +24,10 @@ describe("a review's content", () => {
 
     const opened = await openReview(admin, id);
     expect(opened.view?.message?.text).toContain(IN_MESSAGE);
-    expect(opened.view?.draft.text).toContain(IN_DRAFT);
+    expect(opened.view).toMatchObject({
+      kind: "draft",
+      draft: { text: expect.stringContaining(IN_DRAFT) as string },
+    });
     await approveEditedReview(admin, id, { text: `Edited reply. Ref ${IN_EDIT}` });
 
     for (const marker of [IN_MESSAGE, IN_DRAFT, IN_EDIT]) {
@@ -31,5 +35,24 @@ describe("a review's content", () => {
     }
     // The scan does find what the tables hold.
     expect(await tablesHolding(orgs.orgA.admin.email)).toContain("user");
+  });
+
+  it("appears in no column of any table for an escalation: its subject or its message", async () => {
+    const IN_SUBJECT = "marker-in-subject-e41a";
+    const { admin } = await escalationRun({
+      message: refundQuestion({
+        subject: `Scratched chairs ${IN_SUBJECT}`,
+        text: `Two chairs arrived scratched. Ref ${IN_MESSAGE}`,
+      }),
+    });
+    const id = (await listReviews(admin)).at(0)?.id ?? "";
+
+    const opened = await openReview(admin, id);
+    expect(opened.view?.message?.text).toContain(IN_MESSAGE);
+    await markDone(admin, id);
+
+    for (const marker of [IN_SUBJECT, IN_MESSAGE]) {
+      expect(await tablesHolding(marker), marker).toEqual([]);
+    }
   });
 });

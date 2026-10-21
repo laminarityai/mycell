@@ -17,7 +17,7 @@ import {
   type ReviewEdits,
 } from "@/features/runtime/adapters";
 import type { Ctx } from "@/lib/ctx";
-import { AlreadyHandledError, ConflictError, ValidationError } from "@/lib/errors";
+import { AlreadyHandledError, ConflictError, ForbiddenError, ValidationError } from "@/lib/errors";
 import { reviewActions, type OpenedReview, type PendingForms, type ReviewAction } from "../types";
 import { handOffTo } from "./hand-off";
 import { endReview, handledBy, itemOf, reviewOf, visibleReview, type ReviewRow } from "./reviews";
@@ -53,7 +53,8 @@ export async function openReview(
  * Asks a waiting review's adapter where its item stands, on the review's connection, and ends
  * the review there, by nobody, when the item was finished in its app (`done_in_app`) or is
  * `gone`. Returns what the adapter said. Opening a review calls it, and so do the jobs that end
- * reviews their people finished outside Mycel, as the org's system ctx.
+ * reviews their people finished outside Mycel (the sent-message job and the daily digest), as
+ * the org's system ctx.
  */
 export async function checkWaiting(
   ctx: Ctx,
@@ -63,6 +64,26 @@ export async function checkWaiting(
   const state = await adapters[row.kind].check(delegatedCtx(ctx, row.connectionId), itemOf(row));
   if (state !== "waiting") await endReview(ctx, row.id, state, null);
   return state;
+}
+
+/**
+ * Runs checkWaiting on every waiting review in the org. For the daily digest, as the org's
+ * system ctx, before it counts. A review whose app can't be asked now (a connection needing
+ * reauthorization) waits on.
+ */
+export async function checkWaitingReviews(
+  ctx: Ctx,
+  adapters: PendingForms = pendingForms,
+): Promise<void> {
+  if (ctx.role !== "system") throw new ForbiddenError();
+  const waiting = await forOrg(ctx).select(reviews, { where: eq(reviews.status, "waiting") });
+  for (const row of waiting) {
+    try {
+      await checkWaiting(ctx, row, adapters);
+    } catch (error) {
+      console.warn(`Couldn't check review ${row.id}; it waits on.`, error);
+    }
+  }
 }
 
 /** Sends the item as it was prepared. Ends the review `approved`. */

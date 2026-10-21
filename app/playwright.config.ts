@@ -23,6 +23,8 @@ const e2eEnv = {
   NANGO_API_KEY: "e2e-nango-api-key",
   NANGO_WEBHOOK_SIGNING_KEY: "e2e-nango-webhook-signing-key",
   NANGO_API_URL: `http://localhost:${String(fakeNangoPort)}`,
+  RESEND_API_KEY: "e2e-resend-api-key",
+  EMAIL_FROM: "Mycel <reviews@mycel.test>",
   INNGEST_DEV: "0",
   INNGEST_EVENT_KEY: "e2e-inngest-event-key",
   INNGEST_SIGNING_KEY: "signkey-e2e-00000000000000000000000000000000",

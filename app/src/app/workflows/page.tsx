@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { getCtx } from "@/features/orgs/server";
-import { reviewStats } from "@/features/reviews/server";
+import { countWaitingReviews, reviewStats } from "@/features/reviews/server";
 import { reviewPeriodOf, sinceOf, type ReviewPeriod } from "@/features/reviews/types";
-import { ReviewCountsSection, type ReviewCountsRow } from "@/features/reviews/ui";
+import { ReviewCountsSection, ReviewsNavLink, type ReviewCountsRow } from "@/features/reviews/ui";
 import { listEnablements, listVisibleWorkflows, listWorkflows } from "@/features/workflows/server";
 import { VisibleWorkflowsList, WorkflowsList } from "@/features/workflows/ui";
 import type { Ctx } from "@/lib/ctx";
@@ -13,9 +13,14 @@ export default function WorkflowsPage({ searchParams }: PageProps<"/workflows">)
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">
       <header className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">Workflows</h1>
-        <Link href="/org" className="text-sm text-muted-foreground hover:text-foreground">
-          Back to your org
-        </Link>
+        <nav className="flex gap-4 text-sm text-muted-foreground">
+          <Suspense fallback={<span>Reviews</span>}>
+            <WaitingReviews />
+          </Suspense>
+          <Link href="/org" className="hover:text-foreground">
+            Back to your org
+          </Link>
+        </nav>
       </header>
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading workflows…</p>}>
         <Workflows searchParams={searchParams} />
@@ -98,4 +103,11 @@ async function countRows(
     }),
   );
   return counted.flat();
+}
+
+async function WaitingReviews() {
+  const ctx = await getCtx();
+  return (
+    <ReviewsNavLink count={await countWaitingReviews(ctx)} className="hover:text-foreground" />
+  );
 }

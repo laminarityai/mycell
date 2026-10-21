@@ -9,6 +9,8 @@ export { listReviews } from "./lib/reviews";
 export { endReviewsInThread } from "./lib/ended-in-app";
 // The ship bar's measurement: how reviews ended, per workflow and per member.
 export { reviewStats } from "./lib/stats";
+// The count in the app's navigation, read on each page load.
+export { countWaitingReviews } from "./lib/reviews";
 // Handing a review to a colleague, when its workflow allows it.
 export { handOff } from "./lib/hand-off";
 export {
@@ -18,3 +20,6 @@ export {
   markDone,
   openReview,
 } from "./lib/acting";
+// The daily digest job, as each org's system ctx: ends the reviews done or gone in their app,
+// then emails everyone with a review waiting.
+export { sendReviewDigest } from "./lib/digest";

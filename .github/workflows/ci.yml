@@ -16,6 +16,8 @@ jobs:
       GOOGLE_CLIENT_SECRET: ci-placeholder
       NANGO_API_KEY: ci-placeholder
       NANGO_WEBHOOK_SIGNING_KEY: ci-placeholder
+      RESEND_API_KEY: ci-placeholder
+      EMAIL_FROM: Mycel <reviews@mycel.test>
       INNGEST_EVENT_KEY: ci-placeholder
       INNGEST_SIGNING_KEY: signkey-ci-00000000000000000000000000000000
       AI_GATEWAY_API_KEY: ci-placeholder

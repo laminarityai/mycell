@@ -4,7 +4,7 @@
 // first that the run may go on, tries its work up to the retry policy's attempts, and records
 // itself; when the walk ends, the run's status is written once. A step hands on derived data
 // only; content stays inside the step that fetched it.
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { getConnection } from "@/features/connections/server";
 import type { Spec, Step } from "@/features/spec/types";
@@ -53,8 +53,8 @@ export async function executeRun(
   const status = await walkSteps(spec, (step, place) =>
     runStep(step.id, () => executeStep(ctx, run, step, { ...place, spec, retry })),
   );
-  // The one place a run's status is written, once the walk has ended. It's outside any step:
-  // should Inngest retry the function after the walk, it's written again, to the same status.
+  // The one place a run's status is written, once the walk has ended. It's outside any step,
+  // so it writes only a run still running: a retry that replays the walk changes nothing.
   await finishRun(ctx, run.id, status);
   return { status };
 }
@@ -162,8 +162,13 @@ async function recordStep(
   await forOrg(ctx).insert(runSteps, values, { onConflictDoNothing: true });
 }
 
+/** Ends a run still running; one an earlier invocation already ended is left as it was. */
 async function finishRun(ctx: Ctx, runId: string, status: Ended): Promise<void> {
   const steps = await stepsOf(ctx, [runId]);
   const costUsd = steps.reduce((sum, step) => sum + step.costUsd, 0);
-  await forOrg(ctx).update(runs, { status, costUsd, finishedAt: new Date() }, eq(runs.id, runId));
+  await forOrg(ctx).update(
+    runs,
+    { status, costUsd, finishedAt: new Date() },
+    and(eq(runs.id, runId), eq(runs.status, "running")),
+  );
 }

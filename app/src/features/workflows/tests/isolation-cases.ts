@@ -104,6 +104,16 @@ export const isolationCases = defineIsolationCases(server, {
     ).toEqual([ownA.id]);
   },
 
+  editorConnections: async (orgs) => {
+    await connectMailbox(orgs.orgB.admin.ctx, orgs.orgB.admin.email);
+    await connectMailbox(orgs.orgB.admin.ctx, "support@org-b.test", [], "org");
+    const ownA = await connectMailbox(orgs.orgA.admin.ctx, orgs.orgA.admin.email);
+
+    expect((await server.editorConnections(orgs.orgA.admin.ctx)).map((c) => c.id)).toEqual([
+      ownA.id,
+    ]);
+  },
+
   listSwitchedOn: async (orgs) => {
     const b = await switchedOnInOrgB(orgs);
 

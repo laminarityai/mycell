@@ -78,6 +78,10 @@ test("an admin accepts the builder's proposal and gets an unpublished workflow w
   await proposal.getByRole("link", { name: "Open the workflow" }).click();
   await expect(page).toHaveURL(/\/workflows\/[\w-]+$/);
   await expect(page.getByText("Not published yet.")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Step reply-approval" })).toContainText(
+    "Waits for review (required by policy)",
+  );
+  await page.getByRole("tab", { name: "JSON" }).click();
   await expect(page.getByRole("textbox", { name: "Spec (JSON)" })).toHaveValue(/"id": "reply"/);
 });
 

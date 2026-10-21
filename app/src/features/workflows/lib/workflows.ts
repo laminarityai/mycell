@@ -53,7 +53,7 @@ export async function saveWorkflow(ctx: Ctx, input: WorkflowInput): Promise<Save
     );
     if (updated.length === 0) {
       throw new ConflictError(
-        "The working spec changed since this was made from it. Start again from the current one.",
+        "The working spec was saved again since you opened it, by another admin or an accepted proposal, so your changes weren't saved. Reload to see the current one.",
       );
     }
     return {

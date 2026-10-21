@@ -8,13 +8,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { RiskLevel } from "@/features/policy/types";
-import { formatSpec } from "@/features/spec/format";
+import { blankSpec } from "./lib/blank-spec";
+import { RiskBadge } from "./lib/risk-badge";
+import { SpecEditor } from "./lib/spec-editor";
 import { SwitchForm, type SwitchConnectionOption } from "./lib/switch-form";
-import { PublishButton, WorkflowForm } from "./lib/workflow-editor";
-import type { WorkflowDetails, WorkflowSummary, WorkflowSwitch } from "./types";
+import { PublishButton } from "./lib/workflow-editor";
+import type { EditorConnection, WorkflowDetails, WorkflowSummary, WorkflowSwitch } from "./types";
 
-export { WorkflowForm };
+export { RiskBadge };
+
+/** A new workflow's editor, starting from a spec with no steps. */
+export function NewWorkflowEditor({ connections }: { connections: EditorConnection[] }) {
+  return <SpecEditor spec={blankSpec()} maxRisk={null} inserted={[]} connections={connections} />;
+}
 
 /**
  * The workflow's switch. A member workflow is switched on for the admin's own connection, an
@@ -38,18 +44,6 @@ export function WorkflowSwitchSection({
       />
     </section>
   );
-}
-
-const RISK_LABELS: Record<RiskLevel, string> = {
-  read: "Read",
-  internal_reversible: "Internal, reversible",
-  external_send: "External send",
-  financial: "Financial",
-  destructive: "Destructive",
-};
-
-export function RiskBadge({ risk }: { risk: RiskLevel }) {
-  return <Badge variant={risk === "read" ? "secondary" : "outline"}>{RISK_LABELS[risk]}</Badge>;
 }
 
 /** The admin's workflows: name, latest version, its max risk level, and whether it's on. */
@@ -110,33 +104,29 @@ function SwitchBadge({ current }: { current: WorkflowSwitch | null }) {
   );
 }
 
-/** One workflow: its working spec to edit, what the policy makes of it, Publish, and versions. */
-export function WorkflowEditor({ workflow }: { workflow: WorkflowDetails }) {
+/**
+ * One workflow: its working spec in the editor (form or JSON, validated live), then Publish and
+ * its versions. The editor starts again from each save's revision.
+ */
+export function WorkflowEditor({
+  workflow,
+  connections,
+}: {
+  workflow: WorkflowDetails;
+  connections: EditorConnection[];
+}) {
   const latest = workflow.versions.at(0);
   return (
     <div className="flex flex-col gap-6">
-      <section className="flex flex-col gap-2 text-sm" aria-label="Policy">
-        <p className="flex items-center gap-2">
-          Max risk of the working spec:{" "}
-          {workflow.maxRisk === null ? "unknown" : <RiskBadge risk={workflow.maxRisk} />}
-        </p>
-        {workflow.inserted.length === 0 ? null : (
-          <ul className="list-disc pl-5">
-            {workflow.inserted.map((approval) => (
-              <li key={approval.stepId}>
-                Inserted approval <code className="font-mono">{approval.stepId}</code> after{" "}
-                <code className="font-mono">{approval.after}</code>, because{" "}
-                <code className="font-mono">{approval.action}</code> sends outside the company.
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-      <WorkflowForm
-        key={workflow.updatedAt.toISOString()}
+      <SpecEditor
+        key={workflow.revision}
         workflowId={workflow.id}
         name={workflow.name}
-        spec={formatSpec(workflow.workingSpec)}
+        spec={workflow.workingSpec}
+        revision={workflow.revision}
+        maxRisk={workflow.maxRisk}
+        inserted={workflow.inserted}
+        connections={connections}
       />
       <section className="flex flex-col gap-2" aria-label="Versions">
         <h2 className="text-lg font-semibold">Versions</h2>

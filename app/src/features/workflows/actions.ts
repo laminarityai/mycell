@@ -6,17 +6,29 @@ import { z } from "zod";
 import { getCtx } from "@/features/orgs/server";
 import { actionError, type ActionResult } from "@/lib/errors";
 import { parseForm } from "@/lib/forms";
-import { publishWorkflow, saveWorkflow, switchWorkflowOff, switchWorkflowOn } from "./server";
+import {
+  checkWorkflowSpec,
+  publishWorkflow,
+  saveWorkflow,
+  switchWorkflowOff,
+  switchWorkflowOn,
+} from "./server";
+import type { SpecCheckResult } from "./types";
 
 const saveInput = z.object({
   workflowId: z.string().min(1).optional(),
   name: z.string(),
   spec: z.string(),
+  // The working spec's revision the editor opened; left out for a new workflow.
+  baseRevision: z.coerce.number().int().positive().optional(),
 });
 const publishInput = z.object({ workflowId: z.string().min(1) });
 const switchOnInput = z.object({ workflowId: z.string().min(1), connectionId: z.string().min(1) });
 
-/** Saves the pasted spec. A new workflow goes to its own page; an edit refreshes this one. */
+/**
+ * Saves the editor's spec. A new workflow goes to its own page; an edit refreshes this one. An
+ * edit saves only over the revision it was opened at: a newer working spec is never overwritten.
+ */
 export async function saveWorkflowAction(
   _previous: ActionResult,
   form: FormData,
@@ -39,13 +51,34 @@ export async function saveWorkflowAction(
   }
   let id: string;
   try {
-    ({ id } = await saveWorkflow(ctx, { workflowId: input.workflowId, name: input.name, spec }));
+    ({ id } = await saveWorkflow(ctx, {
+      workflowId: input.workflowId,
+      name: input.name,
+      spec,
+      baseRevision: input.baseRevision,
+    }));
   } catch (error) {
     return actionError(error);
   }
   if (input.workflowId === undefined) redirect(`/workflows/${id}`);
   refresh();
   return {};
+}
+
+/**
+ * The editor's live validation: every issue with the spec as it stands, as saving would find
+ * them, or what the policy engine makes of it. Saves nothing.
+ */
+export async function checkWorkflowSpecAction(spec: unknown): Promise<SpecCheckResult> {
+  const ctx = await getCtx();
+  try {
+    const checked = await checkWorkflowSpec(ctx, spec);
+    return checked.ok
+      ? { issues: [], maxRisk: checked.maxRisk, inserted: checked.inserted }
+      : { issues: checked.issues, maxRisk: null, inserted: [] };
+  } catch (error) {
+    return { ...actionError(error), issues: [], maxRisk: null, inserted: [] };
+  }
 }
 
 export async function switchWorkflowOnAction(

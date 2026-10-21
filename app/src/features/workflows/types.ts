@@ -1,3 +1,4 @@
+import type { ConnectionSummary } from "@/features/connections/types";
 import type { InsertedApproval, RiskLevel } from "@/features/policy/types";
 import type { Spec, SpecIssue } from "@/features/spec/types";
 
@@ -107,3 +108,16 @@ export type ValidatedSpec = {
 
 /** Save-time validation's verdict, for callers that show issues rather than throw them. */
 export type SpecCheck = ({ ok: true } & ValidatedSpec) | { ok: false; issues: SpecIssue[] };
+
+/** The editor's live validation: the spec's issues, or what the policy engine made of it. */
+export type SpecCheckResult = {
+  /** Set when the check itself was refused (a member, say). */
+  error?: string;
+  issues: SpecIssue[];
+  /** Null while the spec has issues. */
+  maxRisk: RiskLevel | null;
+  inserted: InsertedApproval[];
+};
+
+/** A connection as the editor sees it: whose it is and what it was granted. */
+export type EditorConnection = Pick<ConnectionSummary, "id" | "kind" | "grantedScopes" | "apps">;

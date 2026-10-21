@@ -2,7 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { getCtx } from "@/features/orgs/server";
-import { WorkflowForm } from "@/features/workflows/ui";
+import { editorConnections } from "@/features/workflows/server";
+import { NewWorkflowEditor } from "@/features/workflows/ui";
 
 export default function NewWorkflowPage() {
   return (
@@ -23,5 +24,5 @@ export default function NewWorkflowPage() {
 async function NewWorkflow() {
   const ctx = await getCtx();
   if (ctx.role !== "admin") redirect("/");
-  return <WorkflowForm />;
+  return <NewWorkflowEditor connections={await editorConnections(ctx)} />;
 }

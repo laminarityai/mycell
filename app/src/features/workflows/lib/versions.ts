@@ -1,14 +1,17 @@
 // Publishing: a workflow's working spec, validated again, becomes its next immutable version.
 // There is no update path for a version.
 import { randomUUID } from "node:crypto";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { isUniqueViolation } from "@/db/errors";
 import { forOrg } from "@/db/for-org";
+import { sameValue } from "@/features/spec/diff";
 import { readStoredSpec } from "@/features/spec/stored";
+import type { Spec } from "@/features/spec/types";
+import { findTagsByName } from "@/features/tags/server";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { ConflictError, ForbiddenError, NotFoundError } from "@/lib/errors";
-import type { WorkflowVersion } from "../types";
-import { workflowVersions } from "./schema";
+import type { PublishSettings, WorkflowVersion } from "../types";
+import { workflows, workflowVersions, workflowVersionTags } from "./schema";
 import { validateWorkflowSpec } from "./validation";
 import { findWorkflow } from "./access";
 
@@ -16,12 +19,22 @@ type Version = typeof workflowVersions.$inferSelect;
 
 /**
  * Re-validates the working spec (connections may have changed since it was saved) and records
- * it, after the policy engine, as the workflow's next version.
+ * it, after the policy engine, as the workflow's next version, published to the tags its
+ * `visibility.tags` names. A name no tag in the org has is refused with ValidationError.
+ * `settings` are what the publish dialog chose: they're saved into the working spec first, in
+ * the same transaction, so the working spec and the version agree.
  */
-export async function publishWorkflow(ctx: Ctx, workflowId: string): Promise<WorkflowVersion> {
+export async function publishWorkflow(
+  ctx: Ctx,
+  workflowId: string,
+  settings: PublishSettings = {},
+): Promise<WorkflowVersion> {
   requireAdmin(ctx);
   const workflow = await findWorkflow(ctx, workflowId);
-  const validated = await validateWorkflowSpec(ctx, workflow.workingSpec);
+  const working = withSettings(workflow.workingSpec, settings);
+  const validated = await validateWorkflowSpec(ctx, working);
+  // Names no tag in the org has are refused here, before anything is written.
+  const tags = await findTagsByName(ctx, validated.applied.visibility?.tags ?? []);
   const db = forOrg(ctx);
   const latest = (
     await db.select(workflowVersions, {
@@ -31,20 +44,45 @@ export async function publishWorkflow(ctx: Ctx, workflowId: string): Promise<Wor
     })
   ).at(0);
   try {
-    const row = (
-      await db.insert(workflowVersions, {
-        id: randomUUID(),
-        workflowId,
-        number: (latest?.number ?? 0) + 1,
-        spec: validated.applied,
-        maxRisk: validated.maxRisk,
-        requiredActions: validated.requiredActions,
-        publishedBy: ctx.userId,
-      })
-    ).at(0);
-    // An insert returns its row, so this is a bug, not something a user can act on: it's left
-    // a plain Error for the action boundary to rethrow (src/lib/errors.ts, actionError).
-    if (row === undefined) throw new Error("insert returned no version");
+    // The version and its tags together: a version is never seen without who it's for.
+    const row = await db.transaction(async (tx) => {
+      if (!sameValue(working, workflow.workingSpec)) {
+        // Only over the working spec this read: a save in between is never overwritten.
+        const saved = await tx.update(
+          workflows,
+          {
+            workingSpec: validated.working,
+            revision: workflow.revision + 1,
+            updatedAt: new Date(),
+          },
+          and(eq(workflows.id, workflowId), eq(workflows.revision, workflow.revision)),
+        );
+        if (saved.length === 0) {
+          throw new ConflictError(
+            "The working spec was saved again since you opened it, so nothing was published. Reload to see the current one.",
+          );
+        }
+      }
+      const inserted = (
+        await tx.insert(workflowVersions, {
+          id: randomUUID(),
+          workflowId,
+          number: (latest?.number ?? 0) + 1,
+          spec: validated.applied,
+          maxRisk: validated.maxRisk,
+          requiredActions: validated.requiredActions,
+          publishedBy: ctx.userId,
+        })
+      ).at(0);
+      // An insert returns its row, so this is a bug, not something a user can act on: it's
+      // left a plain Error for the action boundary to rethrow (src/lib/errors.ts, actionError).
+      if (inserted === undefined) throw new Error("insert returned no version");
+      await tx.insert(
+        workflowVersionTags,
+        tags.map((tag) => ({ workflowVersionId: inserted.id, tagId: tag.id })),
+      );
+      return inserted;
+    });
     return version(row);
   } catch (error) {
     if (isUniqueViolation(error, "workflow_versions_workflow_id_number_unique")) {
@@ -52,6 +90,12 @@ export async function publishWorkflow(ctx: Ctx, workflowId: string): Promise<Wor
     }
     throw error;
   }
+}
+
+// The working spec with the publish dialog's choices in it.
+function withSettings(spec: Spec, settings: PublishSettings): Spec {
+  if (settings.tags === undefined) return spec;
+  return { ...spec, visibility: { tags: [...settings.tags] } };
 }
 
 /** One published version, for an admin or for a run acting as the system ctx (ADR-0009). */

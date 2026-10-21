@@ -1,5 +1,6 @@
 import type { InsertedApproval, RiskLevel } from "@/features/policy/types";
 import type { Spec, SpecIssue } from "@/features/spec/types";
+import type { Tag } from "@/features/tags/types";
 
 /** What an admin saves: a name and the spec as parsed JSON, not yet validated. */
 export type WorkflowInput = {
@@ -21,6 +22,15 @@ export type SavedWorkflow = {
   revision: number;
   maxRisk: RiskLevel;
   inserted: InsertedApproval[];
+};
+
+/**
+ * What the publish dialog chose, saved into the working spec as it's published. A setting left
+ * out keeps what the working spec says.
+ */
+export type PublishSettings = {
+  /** The tag names to publish to: the spec's `visibility.tags`. */
+  tags?: readonly string[];
 };
 
 /** An immutable snapshot of a workflow's spec, after the policy engine ran on it. */
@@ -49,8 +59,34 @@ export type WorkflowSummary = {
   latestVersion: WorkflowVersionSummary | null;
   /** The caller's enablement, or the org switch; null while off. */
   switch: WorkflowSwitch | null;
+  /** Who the latest version is published to; null while not published. */
+  audience: Audience | null;
   updatedAt: Date;
 };
+
+/**
+ * A published workflow as the Workflows page shows it to someone who can see it: what its latest
+ * version does and needs, and the caller's switch.
+ */
+export type VisibleWorkflow = {
+  id: string;
+  name: string;
+  /** What the latest version does, a sentence per step. */
+  description: string[];
+  /** The apps the latest version uses, as the catalog names them ("Gmail", "Sheets"). */
+  requiredApps: string[];
+  maxRisk: RiskLevel;
+  /** `org` runs on a shared inbox that only admins switch on. */
+  credentials: Spec["credentials"];
+  versionNumber: number;
+  /** The caller's enablement, or the org switch; null while off. */
+  switch: WorkflowSwitch | null;
+  /** Who the latest version is published to: admins only, null for members. */
+  audience: Audience | null;
+};
+
+/** The tags a workflow version is published to, and how many users have any of them. */
+export type Audience = { tags: Tag[]; reach: number };
 
 /** A workflow's page: its working spec, what the policy makes of it, and its versions. */
 export type WorkflowDetails = {

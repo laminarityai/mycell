@@ -3,7 +3,7 @@ import { asc, eq, inArray } from "drizzle-orm";
 import { isUniqueViolation } from "@/db/errors";
 import { forOrg } from "@/db/for-org";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
-import { ConflictError, NotFoundError } from "@/lib/errors";
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import type { Tag, TagSummary } from "../types";
 
 import { tagAssignments, tags } from "./schema";
@@ -61,6 +61,28 @@ export async function listMyTags(ctx: Ctx): Promise<Tag[]> {
     orderBy: [asc(tags.name)],
   });
   return rows.map((tag) => ({ id: tag.id, name: tag.name }));
+}
+
+/**
+ * The caller's org's tags with these names, each once, in the order given: what publishing a
+ * spec stores for its `visibility.tags`. A name no tag has is refused with ValidationError
+ * naming it, so a typo can't hide a workflow from everyone. Admins (who publish) and the system
+ * ctx may ask.
+ */
+export async function findTagsByName(ctx: Ctx, names: readonly string[]): Promise<Tag[]> {
+  if (ctx.role !== "admin" && ctx.role !== "system") throw new ForbiddenError();
+  const wanted = [...new Set(names)];
+  if (wanted.length === 0) return [];
+  const rows = await forOrg(ctx).select(tags, { where: inArray(tags.name, wanted) });
+  const byName = new Map(rows.map((tag) => [tag.name, { id: tag.id, name: tag.name }]));
+  const unknown = wanted.filter((name) => !byName.has(name));
+  if (unknown.length > 0) {
+    const list = unknown.map((name) => `"${name}"`).join(", ");
+    throw new ValidationError(
+      `There's no tag called ${list} in your org. Create it on the tags screen, or publish to another tag.`,
+    );
+  }
+  return wanted.flatMap((name) => byName.get(name) ?? []);
 }
 
 function rethrowDuplicate(name: string) {

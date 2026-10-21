@@ -1,11 +1,22 @@
 // Workflows, their published versions, and what switches them on. All are tenant-owned. A
 // version is immutable: the feature has no update path for it, only inserts.
-import { foreignKey, integer, jsonb, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
+import {
+  foreignKey,
+  integer,
+  jsonb,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  unique,
+} from "drizzle-orm/pg-core";
 import { member } from "@/db/auth-schema";
 // A switch names the connection it runs on, and goes when the connection does (invariant 3).
 import { connections } from "@/features/connections/lib/schema";
 import type { RiskLevel } from "@/features/policy/types";
 import type { StoredSpec } from "@/features/spec/stored";
+// A version's tags reference the tag itself, so renaming a tag keeps who sees the workflow.
+import { tags } from "@/features/tags/lib/schema";
 
 export const workflows = pgTable(
   "workflows",
@@ -107,6 +118,34 @@ export const workflowVersions = pgTable(
       name: "workflow_versions_workflow_fk",
       columns: [table.orgId, table.workflowId],
       foreignColumns: [workflows.orgId, workflows.id],
+    }).onDelete("cascade"),
+  ],
+);
+
+/**
+ * The tags a version was published to: its spec's `visibility.tags`, resolved from names to
+ * the org's tags when it was published. A member sees a workflow whose latest version has one
+ * of their tags. Deleting a tag removes it from every version (the cascade); renaming one
+ * changes nothing here.
+ */
+export const workflowVersionTags = pgTable(
+  "workflow_version_tags",
+  {
+    orgId: text("org_id").notNull(),
+    workflowVersionId: text("workflow_version_id").notNull(),
+    tagId: text("tag_id").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.workflowVersionId, table.tagId] }),
+    foreignKey({
+      name: "workflow_version_tags_version_fk",
+      columns: [table.orgId, table.workflowVersionId],
+      foreignColumns: [workflowVersions.orgId, workflowVersions.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "workflow_version_tags_tag_fk",
+      columns: [table.orgId, table.tagId],
+      foreignColumns: [tags.orgId, tags.id],
     }).onDelete("cascade"),
   ],
 );

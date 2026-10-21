@@ -1,6 +1,6 @@
 // Save-time validation: the spec schema, the policy engine, then checks against the org's
 // setup. Every failing stage's issues come back together in one SpecInvalidError.
-import { listConnections } from "@/features/connections/server";
+import { gmailConnections, listConnections } from "@/features/connections/server";
 import type { ConnectionSummary } from "@/features/connections/types";
 import { applyPolicy } from "@/features/policy/engine";
 import type { Spec, SpecIssue } from "@/features/spec/types";
@@ -69,8 +69,10 @@ export async function checkWorkflowSpec(ctx: Ctx, input: unknown): Promise<SpecC
  * trigger's source). Later checks (scopes) look only at these.
  */
 export function candidateConnections(spec: Spec, setup: OrgSetup): ConnectionSummary[] {
-  const pool = spec.credentials === "member" ? setup.ownConnections : setup.orgConnections;
-  return pool.filter(reachesGmail);
+  return gmailConnections(
+    { own: setup.ownConnections, org: setup.orgConnections },
+    spec.credentials,
+  );
 }
 
 /** A spec needs at least one connection of the kind its credentials name. */

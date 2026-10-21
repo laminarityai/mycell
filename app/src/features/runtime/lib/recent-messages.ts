@@ -2,7 +2,7 @@
 // try a spec on, their own and the org's, granted Gmail. Subjects and senders are fetched
 // through the proxy for display only, every time, and never stored (invariant 8).
 import { z } from "zod";
-import { listConnections, proxyGet } from "@/features/connections/server";
+import { buildableConnections, proxyGet } from "@/features/connections/server";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import type { RecentMessages } from "../types";
 import { GMAIL } from "./gmail";
@@ -38,14 +38,7 @@ export async function recentMessages(
   credentials?: "member" | "org",
 ): Promise<RecentMessages[]> {
   requireAdmin(ctx);
-  const listing = await listConnections(ctx);
-  const pool =
-    credentials === undefined
-      ? [...listing.connections, ...listing.orgConnections]
-      : credentials === "member"
-        ? listing.connections
-        : listing.orgConnections;
-  const tryable = pool.filter((connection) => connection.apps.includes("gmail"));
+  const tryable = await buildableConnections(ctx, credentials);
   // Each connection's newest RECENT_LIMIT holds every one of its messages that can be among
   // the newest RECENT_LIMIT of all.
   const fetched = await Promise.all(

@@ -4,7 +4,7 @@
 // entry in `contextProviders`, and the turn loop doesn't change. Each reads through another
 // feature's entry functions with the admin's ctx, so it sees only what the admin may.
 import { z } from "zod";
-import { listConnections } from "@/features/connections/server";
+import { gmailConnections, listConnections } from "@/features/connections/server";
 import type { ConnectionSummary } from "@/features/connections/types";
 import { getOrgSettings } from "@/features/orgs/server";
 import { catalog } from "@/features/policy/catalog";
@@ -81,9 +81,10 @@ const connections: ContextProvider = async (ctx) => {
       : `; not granted ${connection.missingApps.join(", ")}`);
   const members = listing.memberConnections.length;
   // Exactly the connections read_examples accepts.
-  const searchable = [...listing.connections, ...listing.orgConnections]
-    .filter((connection) => connection.apps.includes("gmail"))
-    .map((connection) => connection.id);
+  const searchable = gmailConnections({
+    own: listing.connections,
+    org: listing.orgConnections,
+  }).map((connection) => connection.id);
   const lines = [
     ...listing.connections.map((connection) => line(connection, "your own connection")),
     ...listing.orgConnections.map((connection) => line(connection, "an org connection")),

@@ -5,13 +5,12 @@
 // back to the admin who asked and is never stored (invariant 8). Model calls pass the credit
 // check and are recorded, marked as a dry run's (invariant 7).
 import { randomUUID } from "node:crypto";
-import { listConnections } from "@/features/connections/server";
-import type { ConnectionSummary } from "@/features/connections/types";
+import { requireBuildableConnection } from "@/features/connections/server";
 import type { Spec, Step } from "@/features/spec/types";
 import { checkWorkflowSpec } from "@/features/workflows/server";
 import { checkCredits } from "@/features/credits/server";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
-import { NotFoundError, OutOfCreditsError, SpecInvalidError, ValidationError } from "@/lib/errors";
+import { OutOfCreditsError, SpecInvalidError } from "@/lib/errors";
 import type { DryRunEffect, DryRunResult, DryRunStep, Json } from "../types";
 import { CREDIT_ESTIMATES } from "./call-model";
 import { checked } from "./checks";
@@ -37,7 +36,9 @@ export async function dryRun(ctx: Ctx, spec: unknown, options: DryRunOptions) {
   requireAdmin(ctx);
   const validated = await checkWorkflowSpec(ctx, spec);
   if (!validated.ok) throw new SpecInvalidError(validated.issues);
-  await requireTryable(ctx, validated.working, options.connectionId);
+  // One a run of the spec could use: the admin's own for member credentials, an org
+  // connection for org credentials, granted Gmail.
+  await requireBuildableConnection(ctx, options.connectionId, validated.working.credentials);
   await preflight(ctx, validated.applied);
 
   const inserted = new Set(validated.inserted.map((approval) => approval.stepId));
@@ -105,30 +106,6 @@ function attempt(step: Step, context: StepContext): Promise<StepExecution> {
     throw new RunStepError("not_available", `The ${step.type} step isn't available yet.`);
   }
   return checked(step, () => (executor.run as StepRun<Step>)(step, context));
-}
-
-/**
- * The connection must be one a run of the spec could use: the admin's own for member
- * credentials, an org connection for org credentials, granted Gmail. Any other member's is
- * NotFoundError (ADR-0001), as is another org's.
- */
-async function requireTryable(ctx: Ctx, spec: Spec, connectionId: string): Promise<void> {
-  const listing = await listConnections(ctx);
-  const find = (pool: ConnectionSummary[]) => pool.find(({ id }) => id === connectionId);
-  const own = find(listing.connections);
-  const org = find(listing.orgConnections);
-  const connection = own ?? org;
-  if (connection === undefined) throw new NotFoundError("connection");
-  if ((spec.credentials === "member") !== (own !== undefined)) {
-    throw new ValidationError(
-      spec.credentials === "member"
-        ? "This workflow uses member credentials: try it on your own connection."
-        : "This workflow uses org credentials: try it on an org connection.",
-    );
-  }
-  if (!connection.apps.includes("gmail")) {
-    throw new ValidationError(`${connection.accountEmail} wasn't granted Gmail.`);
-  }
 }
 
 /** Refuses up front when the balance can't cover the dearest of the spec's model steps. */

@@ -3,11 +3,10 @@
 // conversation keeps their source refs, never a subject or body (invariant 8), and reopening it
 // doesn't fetch them again unless the agent calls the tool again.
 import { z } from "zod";
-import { listConnections } from "@/features/connections/server";
+import { requireBuildableConnection } from "@/features/connections/server";
 import { SourceRequestError } from "@/features/connections/types";
 import { readMessage, searchMessages } from "@/features/runtime/server";
-import type { Ctx } from "@/lib/ctx";
-import { NotFoundError, ValidationError } from "@/lib/errors";
+import { ValidationError } from "@/lib/errors";
 import type { ToolDefinition } from "./tools";
 
 /** How much of each body the model reads. */
@@ -38,7 +37,8 @@ export const readExamples: ToolDefinition<z.infer<typeof inputSchema>, Examples>
     "messages; you won't see them again later in the conversation unless you search again.",
   inputSchema,
   async execute(ctx, { connectionId, query, limit }) {
-    await requireBuildable(ctx, connectionId);
+    // NotFoundError for any other member's connection or another org's (ADR-0001).
+    await requireBuildableConnection(ctx, connectionId);
     try {
       const refs = await searchMessages(ctx, connectionId, query, limit);
       const examples: Example[] = [];
@@ -68,18 +68,3 @@ export const readExamples: ToolDefinition<z.infer<typeof inputSchema>, Examples>
     examples: examples.map(({ sourceRef, threadId }) => ({ sourceRef, threadId })),
   }),
 };
-
-/**
- * The admin's own connections and the org's, granted Gmail. Anyone else's member connection,
- * another admin's own included, is NotFoundError (ADR-0001), as is another org's.
- */
-async function requireBuildable(ctx: Ctx, connectionId: string): Promise<void> {
-  const listing = await listConnections(ctx);
-  const connection = [...listing.connections, ...listing.orgConnections].find(
-    (candidate) => candidate.id === connectionId,
-  );
-  if (connection === undefined) throw new NotFoundError("connection");
-  if (!connection.apps.includes("gmail")) {
-    throw new ValidationError(`${connection.accountEmail} wasn't granted Gmail.`);
-  }
-}

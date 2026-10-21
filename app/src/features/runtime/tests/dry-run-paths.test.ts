@@ -95,7 +95,7 @@ describe("Try it on a branch with several paths", () => {
         status: "not_taken",
         checks: [
           {
-            check: 'kind is "complaint", at least 80% sure',
+            check: '"kind" says "complaint" with at least 80% confidence',
             passed: false,
             reason: 'said "pricing", 93% sure',
           },
@@ -107,7 +107,7 @@ describe("Try it on a branch with several paths", () => {
         status: "taken",
         checks: [
           {
-            check: 'kind is "pricing", at least 80% sure',
+            check: '"kind" says "pricing" with at least 80% confidence',
             passed: true,
             reason: 'said "pricing", 93% sure',
           },

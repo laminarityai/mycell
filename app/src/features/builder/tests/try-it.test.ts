@@ -130,7 +130,7 @@ describe("tryInConversation", () => {
     expect(lines).toEqual(
       expect.arrayContaining([
         'route (branch): went on along "Big order".',
-        'route, path "Complaint": didn\'t apply. kind is "complaint", at least 80% sure: failed.',
+        'route, path "Complaint": didn\'t apply. "kind" says "complaint" with at least 80% confidence: failed.',
         'route, path "Big order": ran. details.product contains "walnut": passed; ' +
           "details.total is more than 1000: passed.",
       ]),

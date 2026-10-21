@@ -2,8 +2,9 @@
 // of the action it uses, and whether it waits for a person's review. Pure, so client code may
 // import it. `spec` doesn't know the catalog (policy imports spec), so callers pass what it
 // says about each action, and which approvals the policy engine inserted.
+import { describeCheck } from "./conditions";
 import { eachStep } from "./tree";
-import type { BranchStep, Check, Condition, Spec, Step } from "./types";
+import type { BranchStep, Condition, Spec, Step } from "./types";
 
 /** What the caller knows about one catalog action. */
 export type ActionInfo<Risk extends string = string> = { risk: Risk; description: string };
@@ -93,31 +94,3 @@ function describeBranch(step: BranchStep): string {
 function describeCondition(condition: Condition): string {
   return condition.checks.map(describeCheck).join(condition.combine === "all" ? " and " : " or ");
 }
-
-function describeCheck(check: Check): string {
-  if ("classify" in check) {
-    const percent = String(Math.round(check.minP * 100));
-    return `"${check.classify}" says "${check.is}" with at least ${percent}% confidence`;
-  }
-  const words = `${check.subject.from} ${OPERATOR_WORDS[check.op]}`;
-  return "value" in check ? `${words} ${JSON.stringify(check.value)}` : words;
-}
-
-const OPERATOR_WORDS: Record<Exclude<Check, { classify: string }>["op"], string> = {
-  is: "is",
-  is_not: "is not",
-  contains: "contains",
-  does_not_contain: "doesn't contain",
-  starts_with: "starts with",
-  ends_with: "ends with",
-  equals: "equals",
-  does_not_equal: "doesn't equal",
-  more_than: "is more than",
-  less_than: "is less than",
-  at_least: "is at least",
-  at_most: "is at most",
-  is_yes: "is yes",
-  is_no: "is no",
-  is_empty: "is empty",
-  is_not_empty: "isn't empty",
-};

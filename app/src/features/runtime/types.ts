@@ -211,8 +211,8 @@ export type TryItState = {
 };
 
 /**
- * One connection's newest messages, for the "Try it" picker: fetched for display, never stored.
- * `unavailable` when Gmail couldn't be read just now.
+ * One connection's share of the newest messages across the "Try it" picker's connections:
+ * fetched for display, never stored. `unavailable` when Gmail couldn't be read just now.
  */
 export type RecentMessages = {
   connectionId: string;

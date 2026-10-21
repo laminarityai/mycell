@@ -88,14 +88,17 @@ function noWrites(google: Awaited<ReturnType<typeof connectGoogle>>) {
 }
 
 describe("recentMessages", () => {
-  it("lists the newest 20 messages of the admin's own and org connections, never a member's", async () => {
+  it("lists the newest 20 messages across the admin's own and org connections, never a member's", async () => {
     const { orgA, admin, google } = await tryItSetup();
     for (let i = 1; i <= 21; i++) {
       google.mailbox.add(pricingQuestion({ subject: `Order ${String(i)}`, at: daysAgo(i) }));
     }
     const support = await connectGoogle(admin, "support@org-a.test", {
       kind: "org",
-      messages: [pricingQuestion({ subject: "Shared inbox question" })],
+      messages: [
+        pricingQuestion({ subject: "Shared inbox question", at: daysAgo(5.5) }),
+        pricingQuestion({ subject: "Old shared question", at: daysAgo(30) }),
+      ],
     });
     await connectGoogle(orgA.member.ctx, orgA.member.email, {
       messages: [pricingQuestion({ subject: "A member's own mail" })],
@@ -105,9 +108,10 @@ describe("recentMessages", () => {
 
     expect(listing.map((connection) => connection.connectionId)).toEqual([google.id, support.id]);
     const own = listing[0]?.messages ?? [];
-    expect(own).toHaveLength(20);
+    // 19 of the admin's own and 1 of the org's are the newest 20 of both.
+    expect(own).toHaveLength(19);
     expect(own[0]).toMatchObject({ subject: "Quote for 30 oak chairs", from: "ada@customer.test" });
-    expect(own.at(-1)).toMatchObject({ subject: "Order 19" });
+    expect(own.at(-1)).toMatchObject({ subject: "Order 18" });
     expect(listing[1]?.messages.map((m) => m.subject)).toEqual(["Shared inbox question"]);
     expect(JSON.stringify(listing)).not.toContain("A member's own mail");
   });

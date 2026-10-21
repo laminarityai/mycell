@@ -15,6 +15,7 @@ import { listTags } from "@/features/tags/server";
 import { getWorkflow, listWorkflows } from "@/features/workflows/server";
 import type { Ctx } from "@/lib/ctx";
 import type { ProposalStatus } from "../types";
+import { conditionFieldsSection } from "./condition-fields-context";
 import { listProposals } from "./proposals";
 import type { TurnInfo } from "./tools";
 
@@ -140,9 +141,12 @@ const proposals: ContextProvider = async (ctx, turn) => {
   };
 };
 
+const conditionFields: ContextProvider = () => Promise.resolve(conditionFieldsSection());
+
 export const contextProviders: ContextProvider[] = [
   orgSettings,
   actionCatalog,
+  conditionFields,
   workflows,
   connections,
   tags,

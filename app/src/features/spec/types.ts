@@ -202,7 +202,10 @@ export type Check = z.infer<typeof checkSchema>;
 /** Holds when all of its checks hold, or any of them. */
 export const conditionSchema = specObject({
   combine: z.enum(["all", "any"]),
-  checks: z.array(checkSchema),
+  // A path that always runs is what the otherwise path is for.
+  checks: z
+    .array(checkSchema)
+    .min(1, "Give the condition at least one check; the otherwise path takes the rest."),
 });
 export type Condition = z.infer<typeof conditionSchema>;
 
@@ -228,6 +231,10 @@ const otherwiseSchema = z.strictObject({
 });
 export type OtherwisePath = z.infer<typeof otherwiseSchema>;
 
+/** A branch's paths, at most, not counting its otherwise path; and how deep branches nest. */
+export const MAX_PATHS = 10;
+export const MAX_BRANCH_DEPTH = 3;
+
 /**
  * Splits the workflow into paths (ADR-0015). First match runs the first path, left to right,
  * whose condition holds; every match runs each that holds, one after another. The otherwise
@@ -238,7 +245,10 @@ const branchStep = z.strictObject({
   type: z.literal("branch"),
   mode: z.enum(["first", "every"]).default("first"),
   get paths(): z.ZodArray<typeof pathSchema> {
-    return z.array(pathSchema).min(1, "Give the branch at least one path.");
+    return z
+      .array(pathSchema)
+      .min(1, "Give the branch at least one path.")
+      .max(MAX_PATHS, `A branch has at most ${String(MAX_PATHS)} paths, besides otherwise.`);
   },
   get otherwise(): typeof otherwiseSchema {
     return otherwiseSchema;

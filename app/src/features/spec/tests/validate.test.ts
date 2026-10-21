@@ -224,21 +224,14 @@ describe("validateSpec on a v2 spec", () => {
     ]);
   });
 
-  it("runs only first match on one path checking classify answers, until the rest lands", () => {
+  it("runs only first match, until every match lands", () => {
     const classify = { classify: "classify", is: "yes", minP: 0.5 };
     const spec = branchWith({
       mode: "every",
       paths: [path([classify]), { ...path([classify]), id: "other" }],
     });
-    const subject = branchWith({
-      paths: [path([{ subject: { from: "trigger.subject" }, op: "is_empty" }])],
-    });
 
-    expect(issuePaths(spec)).toEqual([
-      ["steps", 1, "mode"],
-      ["steps", 1, "paths", 1],
-    ]);
-    expect(issuePaths(subject)).toEqual([["steps", 1, "paths", 0, "condition", "checks", 0]]);
+    expect(issuePaths(spec)).toEqual([["steps", 1, "mode"]]);
   });
 });
 

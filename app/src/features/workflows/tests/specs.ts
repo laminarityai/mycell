@@ -81,3 +81,53 @@ export function sheetSpec(overrides: Record<string, unknown> = {}): Record<strin
     ...overrides,
   };
 }
+
+/**
+ * Sorts each message: complaints go to a person, pricing questions get a drafted reply (whose
+ * approval the policy engine inserts on that path), and anything else stops.
+ */
+export function triageSpec(): Record<string, unknown> {
+  const path = (id: string, name: string, is: string, steps: unknown[]) => ({
+    id,
+    name,
+    condition: { combine: "all", checks: [{ classify: "kind", is, minP: 0.8 }] },
+    steps,
+  });
+  return {
+    specVersion: 2,
+    id: "triage",
+    credentials: "member",
+    trigger: { type: "gmail.message_received" },
+    steps: [
+      {
+        id: "kind",
+        type: "classify",
+        role: "classify",
+        question: "What kind of message is this?",
+        labels: ["complaint", "pricing", "other"],
+      },
+      {
+        id: "route",
+        type: "branch",
+        mode: "first",
+        paths: [
+          path("complaint", "Complaint", "complaint", [
+            { id: "to-person", type: "escalate", reason: "A person handles complaints." },
+          ]),
+          path("pricing", "Pricing", "pricing", [
+            {
+              id: "reply",
+              type: "draft",
+              role: "smart",
+              instructions: "Reply with our current prices.",
+              context: ["trigger.message"],
+              output: "google-mail.create-draft",
+            },
+          ]),
+        ],
+        otherwise: { id: "rest", steps: [] },
+      },
+    ],
+    autonomy: { rung: 3 },
+  };
+}

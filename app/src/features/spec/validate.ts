@@ -1,8 +1,9 @@
 import type { z } from "zod";
+import { branchIssues } from "./branch-issues";
 import { eachStep } from "./tree";
 import {
+  MAX_BRANCH_DEPTH,
   specSchema,
-  type BranchStep,
   type Spec,
   type SpecIssue,
   type SpecValidation,
@@ -36,7 +37,11 @@ function schemaIssues(error: z.ZodError): SpecIssue[] {
   }));
 }
 
-/** Rules that span steps: unique IDs, references only to steps above or the trigger. */
+/**
+ * Rules that span steps: unique IDs; references only to the trigger or to steps above on the
+ * step's own path, never a sibling path's; a branch last in its list; branches nested at most
+ * three deep.
+ */
 function structuralIssues(spec: Spec): SpecIssue[] {
   const issues: SpecIssue[] = [];
   const seen = new Set<string>();
@@ -45,7 +50,7 @@ function structuralIssues(spec: Spec): SpecIssue[] {
     const refersBack = (stepId: string, path: (string | number)[]) => {
       const target = above.findLast((candidate) => candidate.id === stepId);
       if (target === undefined) {
-        issues.push({ path, message: `"${stepId}" isn't a step before this one.` });
+        issues.push({ path, message: `"${stepId}" isn't above this step on its path.` });
       }
       return target;
     };
@@ -56,7 +61,19 @@ function structuralIssues(spec: Spec): SpecIssue[] {
     seen.add(step.id);
 
     if (step.type === "branch") {
-      issues.push(...branchIssues(step, at, refersBack, seen));
+      issues.push(...branchIssues(step, at, above, refersBack, seen));
+      const depth = above.filter((candidate) => candidate.type === "branch").length + 1;
+      if (depth > MAX_BRANCH_DEPTH) {
+        const message = `Branches nest at most ${String(MAX_BRANCH_DEPTH)} deep, and this one is ${String(depth)} deep.`;
+        issues.push({ path: location, message });
+      }
+    }
+    // The step just above one that isn't first in its list is the one before it in that list.
+    if (location.at(-1) !== 0 && above.at(-1)?.type === "branch") {
+      issues.push({
+        path: location,
+        message: "Nothing can follow a branch, since its paths never join: move this onto them.",
+      });
     }
     if (step.type === "draft") {
       step.context.forEach((entry, i) => {
@@ -86,56 +103,6 @@ function structuralIssues(spec: Spec): SpecIssue[] {
 
     issues.push(...checkIssues(step, at));
   }
-  return issues;
-}
-
-/**
- * A branch's paths: IDs unique with the steps', and each classify check on a classify step
- * above the branch that has the label. A branch runs only first match on one path, testing
- * classify answers, until the tickets that add the rest of ADR-0015 land.
- */
-function branchIssues(
-  step: BranchStep,
-  at: At,
-  refersBack: (stepId: string, path: SpecIssue["path"]) => Step | undefined,
-  seen: Set<string>,
-): SpecIssue[] {
-  const issues: SpecIssue[] = [];
-  const pathIds: [string, SpecIssue["path"]][] = [
-    ...step.paths.map((path, p): [string, SpecIssue["path"]] => [path.id, at("paths", p, "id")]),
-    [step.otherwise.id, at("otherwise", "id")],
-  ];
-  for (const [id, path] of pathIds) {
-    if (seen.has(id)) issues.push({ path, message: `The ID "${id}" is used twice.` });
-    seen.add(id);
-  }
-  if (step.mode === "every") {
-    issues.push({ path: at("mode"), message: "Every match isn't available yet; use first." });
-  }
-  if (step.paths.length > 1) {
-    issues.push({ path: at("paths", 1), message: "A branch can have only one path for now." });
-  }
-  step.paths.forEach((path, p) => {
-    path.condition.checks.forEach((check, c) => {
-      const checkAt = (...field: string[]) => at("paths", p, "condition", "checks", c, ...field);
-      if (!("classify" in check)) {
-        issues.push({ path: checkAt(), message: "Only a classify answer can be checked for now." });
-        return;
-      }
-      const target = refersBack(check.classify, checkAt("classify"));
-      if (target !== undefined && target.type !== "classify") {
-        issues.push({
-          path: checkAt("classify"),
-          message: `A branch needs a classify step, and "${target.id}" is a ${target.type} step.`,
-        });
-      } else if (target?.type === "classify" && !target.labels.includes(check.is)) {
-        issues.push({
-          path: checkAt("is"),
-          message: `"${target.id}" has no label "${check.is}".`,
-        });
-      }
-    });
-  });
   return issues;
 }
 

@@ -5,6 +5,16 @@ import { z } from "zod";
 /** A gateway model ID: `provider/model`, such as `typesafe-ai/jev-1.14.0`. */
 export const modelIdSchema = z.string().regex(/^[\w.-]+\/[\w.:-]+$/, "Expected provider/model");
 
+/**
+ * An email sender: an address alone, or with a display name before it in angle brackets, such as
+ * `Mycel <reviews@mail.example.com>`.
+ */
+export const emailSenderSchema = z.string().refine((value) => {
+  const named = /^[^<>]*<([^<>]*)>$/.exec(value.trim());
+  const address = (named === null ? value : named[1]).trim();
+  return z.email().safeParse(address).success;
+}, "Expected an email address, or a name and <address>");
+
 function positiveNumber(fallback: string) {
   return z.string().default(fallback).transform(Number).pipe(z.number().positive());
 }
@@ -28,7 +38,7 @@ const envSchema = z.object({
   // sent from EMAIL_FROM, an address on a domain verified in Resend, such as
   // `Mycel <reviews@mail.example.com>`.
   RESEND_API_KEY: z.string().min(1),
-  EMAIL_FROM: z.string().min(1),
+  EMAIL_FROM: emailSenderSchema,
   // Inngest (background jobs). INNGEST_DEV=1 points the client at the local Inngest dev server
   // (`npx inngest-cli@latest dev`), which needs no keys. Otherwise Inngest Cloud sends with the
   // event key and signs its requests to /api/inngest with the signing key.

@@ -239,6 +239,7 @@ export function WorkflowEditor({
           nextNumber={(latest?.number ?? 0) + 1}
           tags={tags}
           chosen={workflow.workingSpec.visibility?.tags ?? []}
+          handoff={workflow.workingSpec.review?.handoff === true}
           preview={preview}
         />
         {workflow.versions.length === 0 ? null : (

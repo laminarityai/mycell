@@ -4,6 +4,8 @@
 // Called by a run's approval step, as the org's system ctx.
 export { createReview } from "./lib/reviews";
 export { listReviews } from "./lib/reviews";
+// Handing a review to a colleague, when its workflow allows it.
+export { handOff } from "./lib/hand-off";
 export {
   approveEditedReview,
   approveReview,

@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -19,9 +20,9 @@ import type { PublishPreview } from "../types";
 import { pausedChangeText } from "./paused-text";
 
 /**
- * Publish, in a dialog that picks the tags the version is published to. It starts from the
- * working spec's `visibility.tags`; a name no tag has any more (renamed or deleted) is shown
- * and left out. When the version needs more than the latest one did, it says what, and how many
+ * Publish, in a dialog that picks the tags the version is published to and whether its reviews
+ * may be handed on. It starts from the working spec's `visibility.tags` and `review.handoff`; a
+ * name no tag has any more (renamed or deleted) is shown and left out. When the version needs more than the latest one did, it says what, and how many
  * enablements publishing pauses.
  */
 export function PublishDialog({
@@ -29,6 +30,7 @@ export function PublishDialog({
   nextNumber,
   tags,
   chosen,
+  handoff,
   preview,
 }: {
   workflowId: string;
@@ -37,6 +39,8 @@ export function PublishDialog({
   tags: Tag[];
   /** The tag names the working spec is published to. */
   chosen: string[];
+  /** Whether the working spec lets its reviews be handed on. */
+  handoff: boolean;
   /** What publishing the working spec would pause; null when there's nothing to publish. */
   preview: PublishPreview | null;
 }) {
@@ -94,6 +98,16 @@ export function PublishDialog({
               </p>
             )}
           </fieldset>
+          <label className="flex items-start gap-2 text-sm">
+            <Switch name="handoff" defaultChecked={handoff} className="mt-0.5" />
+            <span>
+              Reviews can be handed on
+              <span className="block text-muted-foreground">
+                Whoever may act on a review can hand it to a colleague. A member&apos;s own review
+                is handed on only by that member.
+              </span>
+            </span>
+          </label>
           <PauseWarning preview={preview} />
           <Problems result={result} />
           <DialogFooter>

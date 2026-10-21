@@ -31,7 +31,16 @@ export type SavedWorkflow = {
 export type PublishSettings = {
   /** The tag names to publish to: the spec's `visibility.tags`. */
   tags?: readonly string[];
+  /** Whether its reviews may be handed to a colleague: the spec's `review.handoff`. */
+  handoff?: boolean;
 };
+
+/**
+ * What a workflow's reviews need to know of it: whether the caller sees it through its tags
+ * (an admin sees every one), so may see its org reviews, and whether its latest version lets a
+ * review be handed on (`review.handoff`).
+ */
+export type ReviewSharing = { seen: boolean; handOff: boolean };
 
 /** An immutable snapshot of a workflow's spec, after the policy engine ran on it. */
 export type WorkflowVersion = {

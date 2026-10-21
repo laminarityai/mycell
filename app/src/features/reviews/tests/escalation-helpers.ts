@@ -127,10 +127,18 @@ export async function waitingEscalation(options: Parameters<typeof escalationRun
  * An escalation waiting on a member's own mailbox (org A's, unless `org` says otherwise): a
  * refund question, recorded as a run of the member's enablement would leave it.
  */
-export async function memberEscalation(orgs: TwoOrgs, org: keyof TwoOrgs = "orgA") {
+export async function memberEscalation(
+  orgs: TwoOrgs,
+  org: keyof TwoOrgs = "orgA",
+  options: { handoff?: boolean } = {},
+) {
   const { id, admin, member } = orgs[org];
   await connectMailbox(admin.ctx, admin.email);
-  const { workflowId, versionId } = await publish(admin.ctx, escalateSpec(), "Refund requests");
+  const spec =
+    options.handoff === undefined
+      ? escalateSpec()
+      : { ...escalateSpec(), review: { handoff: options.handoff } };
+  const { workflowId, versionId } = await publish(admin.ctx, spec, "Refund requests");
   const google = await connectMailbox(member.ctx, member.email, [refundQuestion()]);
   const message = google.mailbox.list(new URLSearchParams()).messages?.at(0);
   if (message === undefined) throw new Error("no message");

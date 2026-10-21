@@ -105,8 +105,12 @@ export async function publishWorkflow(
 
 // The working spec with the publish dialog's choices in it.
 function withSettings(spec: Spec, settings: PublishSettings): Spec {
-  if (settings.tags === undefined) return spec;
-  return { ...spec, visibility: { tags: [...settings.tags] } };
+  const { tags, handoff } = settings;
+  return {
+    ...spec,
+    ...(tags === undefined ? {} : { visibility: { tags: [...tags] } }),
+    ...(handoff === undefined ? {} : { review: { handoff } }),
+  };
 }
 
 /** One published version, for an admin or for a run acting as the system ctx (ADR-0009). */

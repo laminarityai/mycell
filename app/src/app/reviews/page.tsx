@@ -32,5 +32,5 @@ export default function ReviewsPage() {
 async function Reviews() {
   const ctx = await getCtx();
   const reviews = await listReviews(ctx);
-  return <ReviewsList reviews={reviews} now={new Date()} />;
+  return <ReviewsList reviews={reviews} viewerId={ctx.userId} now={new Date()} />;
 }

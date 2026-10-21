@@ -30,5 +30,5 @@ async function Review({ params }: Pick<PageProps<"/reviews/[reviewId]">, "params
     if (error instanceof NotFoundError) notFound();
     throw error;
   });
-  return <ReviewDetail opened={opened} now={new Date()} />;
+  return <ReviewDetail opened={opened} viewerId={ctx.userId} now={new Date()} />;
 }

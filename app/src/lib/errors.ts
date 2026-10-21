@@ -63,17 +63,6 @@ export class ItemGoneError extends Error {
   }
 }
 
-/**
- * The email provider didn't take an email. Thrown inside a job's step, so the job retries it;
- * not a message for a user (it quotes the provider), so the boundaries rethrow it as a bug.
- */
-export class EmailSendError extends Error {
-  constructor(status: number, message = "no message") {
-    super(`Email provider refused the email (${String(status)}): ${message}`);
-    this.name = "EmailSendError";
-  }
-}
-
 /** The input breaks a rule the user can fix; the message says which. */
 export class ValidationError extends Error {
   constructor(message: string) {

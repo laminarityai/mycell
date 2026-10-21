@@ -1,12 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { seedGoogleConnection } from "@/db/testing/seed-connection";
-import { reviewDigestOn, unsubscribeLink } from "@/features/notifications/server";
 import { createReview } from "@/features/reviews/server";
 import { systemCtx } from "@/lib/ctx";
 import { googleScope } from "@/lib/google";
 import { expect, test } from "./fixtures";
 
-test("every page's navigation counts the member's waiting reviews, and they can turn the daily email off", async ({
+test("every page's navigation counts the member's waiting reviews", async ({
   page,
   orgs: { orgA },
   signInAs,
@@ -50,34 +49,4 @@ test("every page's navigation counts the member's waiting reviews, and they can 
   await nav.getByRole("link", { name: "Reviews 2 waiting" }).click();
   await expect(page.getByRole("heading", { name: "Reviews", level: 1 })).toBeVisible();
   await expect(nav.getByRole("link", { name: "Reviews 2 waiting" })).toBeVisible();
-  const digest = page.getByRole("switch", { name: "Email me each day when reviews are waiting" });
-  await expect(digest).toBeChecked();
-  await digest.click();
-  await expect(digest).not.toBeChecked();
-  await page.reload();
-  await expect(digest).not.toBeChecked();
-  expect(await reviewDigestOn(orgA.member.ctx)).toBe(false);
-});
-
-test("the digest's unsubscribe link turns the daily email off without signing in", async ({
-  page,
-  orgs: { orgA },
-}) => {
-  await page.goto(unsubscribeLink(systemCtx(orgA.id), orgA.member.id));
-  await page.getByRole("button", { name: "Turn off the daily email" }).click();
-
-  await expect(page.getByText("The daily review email is off.")).toBeVisible();
-  expect(await reviewDigestOn(orgA.member.ctx)).toBe(false);
-  expect(await reviewDigestOn(orgA.admin.ctx)).toBe(true);
-});
-
-test("an unsubscribe link Mycel didn't sign turns nothing off", async ({
-  page,
-  orgs: { orgA },
-}) => {
-  await page.goto("/unsubscribe?token=forged.token");
-  await page.getByRole("button", { name: "Turn off the daily email" }).click();
-
-  await expect(page.getByText("This unsubscribe link isn't valid.")).toBeVisible();
-  expect(await reviewDigestOn(orgA.member.ctx)).toBe(true);
 });

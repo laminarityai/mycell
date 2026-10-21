@@ -1,6 +1,4 @@
 import { Suspense } from "react";
-import { reviewDigestOn } from "@/features/notifications/server";
-import { ReviewDigestSwitch } from "@/features/notifications/ui";
 import { getCtx } from "@/features/orgs/server";
 import { listReviews } from "@/features/reviews/server";
 import { ReviewsList } from "@/features/reviews/ui";
@@ -23,11 +21,6 @@ export default function ReviewsPage() {
 
 async function Reviews() {
   const ctx = await getCtx();
-  const [reviews, digestOn] = await Promise.all([listReviews(ctx), reviewDigestOn(ctx)]);
-  return (
-    <>
-      <ReviewsList reviews={reviews} viewerId={ctx.userId} now={new Date()} />
-      <ReviewDigestSwitch on={digestOn} />
-    </>
-  );
+  const reviews = await listReviews(ctx);
+  return <ReviewsList reviews={reviews} viewerId={ctx.userId} now={new Date()} />;
 }

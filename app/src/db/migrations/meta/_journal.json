@@ -176,13 +176,6 @@
       "when": 1792604110315,
       "tag": "0024_review-hand-off",
       "breakpoints": true
-    },
-    {
-      "idx": 25,
-      "version": "7",
-      "when": 1792606125639,
-      "tag": "0025_user-settings",
-      "breakpoints": true
     }
   ]
 }

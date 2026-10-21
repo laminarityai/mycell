@@ -1,5 +1,6 @@
 // The reviews feature's public types: what a review is, how it ends, and what the Reviews page
 // shows of it. A review holds pointers only (invariant 8); its item is fetched live.
+import { z } from "zod";
 import type { ItemView, PendingFormAdapter } from "@/features/runtime/adapters";
 
 /**
@@ -145,16 +146,8 @@ export const reviewPeriods = ["2d", "7d", "30d", "current_version"] as const;
 export type ReviewPeriod = (typeof reviewPeriods)[number];
 export const DEFAULT_REVIEW_PERIOD: ReviewPeriod = "7d";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-const PERIOD_DAYS = { "2d": 2, "7d": 7, "30d": 30 } as const;
+/** A page's `period` search parameter: one of the periods, or the default for anything else. */
+export const reviewPeriodSchema = z.enum(reviewPeriods).catch(DEFAULT_REVIEW_PERIOD);
 
-/** The period a page's `period` search parameter names, or the default for anything else. */
-export function reviewPeriodOf(value: unknown): ReviewPeriod {
-  return reviewPeriods.find((period) => period === value) ?? DEFAULT_REVIEW_PERIOD;
-}
-
-/** Where `period` starts, as `reviewStats` takes it, counting back from `now`. */
-export function sinceOf(period: ReviewPeriod, now: Date): ReviewStatsQuery["since"] {
-  if (period === "current_version") return period;
-  return new Date(now.getTime() - PERIOD_DAYS[period] * DAY_MS);
-}
+/** One row of review counts: a workflow's, or (`person`) one person's under it. */
+export type ReviewCountsRow = { key: string; label: string; person?: boolean; tally: ReviewTally };

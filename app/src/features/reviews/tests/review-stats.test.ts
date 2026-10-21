@@ -8,7 +8,13 @@ import { getWorkflow, publishWorkflow, saveWorkflow } from "@/features/workflows
 import { systemCtx } from "@/lib/ctx";
 import { ForbiddenError } from "@/lib/errors";
 import { connectMailbox } from "@/testing/connect-helpers";
-import { approveReview, listReviews, markDone, reviewStats } from "../server";
+import {
+  approveReview,
+  listReviews,
+  markDone,
+  reviewCountsByWorkflow,
+  reviewStats,
+} from "../server";
 import { memberEscalation } from "./escalation-helpers";
 import { orgReview, publish, replySpec } from "./review-helpers";
 import { counts, reviewEnded } from "./stats-helpers";
@@ -258,5 +264,54 @@ describe("reviewStats", () => {
       },
     ]);
     expect(member.approvals).toEqual(counts());
+  });
+});
+
+describe("reviewCountsByWorkflow", () => {
+  it("lists each workflow's counts with each person's under it for an admin", async () => {
+    const { orgs, pricing, other } = await seeded();
+    const workflows = [
+      { id: pricing.workflowId, name: "Pricing replies" },
+      { id: other.workflowId, name: "Other replies" },
+    ];
+
+    const rows = await reviewCountsByWorkflow(orgs.orgA.admin.ctx, workflows, "7d");
+
+    expect(rows.map(({ label, person }) => [label, person ?? false])).toEqual([
+      ["Pricing replies", false],
+      [orgs.orgA.admin.email, true],
+      [orgs.orgA.member.email, true],
+      ["Other replies", false],
+      [orgs.orgA.member.email, true],
+    ]);
+    expect(rows[0]?.tally.approvals.approved).toBe(4);
+  });
+
+  it("lists only a member's own counts, with no one under them", async () => {
+    const { orgs, pricing } = await seeded();
+
+    const rows = await reviewCountsByWorkflow(
+      orgs.orgA.member.ctx,
+      [{ id: pricing.workflowId, name: "Pricing replies" }],
+      "current_version",
+    );
+
+    expect(rows.map(({ label }) => label)).toEqual(["Pricing replies"]);
+    expect(rows[0]?.tally.approvals.approved).toBe(3);
+  });
+
+  it("counts nothing made before the period", async () => {
+    const { orgs, pricing } = await seeded();
+    const inAWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    const rows = await reviewCountsByWorkflow(
+      orgs.orgA.admin.ctx,
+      [{ id: pricing.workflowId, name: "Pricing replies" }],
+      "2d",
+      inAWeek,
+    );
+
+    expect(rows.map(({ label }) => label)).toEqual(["Pricing replies"]);
+    expect(rows[0]?.tally).toMatchObject({ approvals: counts(), approvedWithoutEdits: null });
   });
 });

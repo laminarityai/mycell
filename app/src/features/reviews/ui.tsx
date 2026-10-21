@@ -21,7 +21,7 @@ import type {
   ReviewSummary,
 } from "./types";
 
-export { ReviewCountsSection, type ReviewCountsRow } from "./lib/review-counts";
+export { ReviewCountsSection } from "./lib/review-counts";
 
 const KIND_LABELS: Record<ReviewKind, string> = {
   approval: "Draft reply",

@@ -11,7 +11,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { reviewPeriods, type ReviewCounts, type ReviewPeriod, type ReviewTally } from "../types";
+import {
+  reviewPeriods,
+  type ReviewCounts,
+  type ReviewCountsRow,
+  type ReviewPeriod,
+  type ReviewTally,
+} from "../types";
 
 const PERIOD_LABELS: Record<ReviewPeriod, string> = {
   "2d": "Last 2 days",
@@ -19,9 +25,6 @@ const PERIOD_LABELS: Record<ReviewPeriod, string> = {
   "30d": "Last 30 days",
   current_version: "Since current version",
 };
-
-/** One row of review counts: a workflow's, or (`person`) one person's under it. */
-export type ReviewCountsRow = { key: string; label: string; person?: boolean; tally: ReviewTally };
 
 /**
  * The period picker (links to `basePath` with each period chosen), then the counts table.

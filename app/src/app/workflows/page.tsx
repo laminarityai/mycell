@@ -1,12 +1,11 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { getCtx } from "@/features/orgs/server";
-import { countWaitingReviews, reviewStats } from "@/features/reviews/server";
-import { reviewPeriodOf, sinceOf, type ReviewPeriod } from "@/features/reviews/types";
-import { ReviewCountsSection, ReviewsNavLink, type ReviewCountsRow } from "@/features/reviews/ui";
+import { countWaitingReviews, reviewCountsByWorkflow } from "@/features/reviews/server";
+import { reviewPeriodSchema } from "@/features/reviews/types";
+import { ReviewCountsSection, ReviewsNavLink } from "@/features/reviews/ui";
 import { listEnablements, listVisibleWorkflows, listWorkflows } from "@/features/workflows/server";
 import { VisibleWorkflowsList, WorkflowsList } from "@/features/workflows/ui";
-import type { Ctx } from "@/lib/ctx";
 
 export default function WorkflowsPage({ searchParams }: PageProps<"/workflows">) {
   return (
@@ -33,7 +32,7 @@ export default function WorkflowsPage({ searchParams }: PageProps<"/workflows">)
 // members see those published to their tags, with their own counts.
 async function Workflows({ searchParams }: Pick<PageProps<"/workflows">, "searchParams">) {
   const ctx = await getCtx();
-  const period = reviewPeriodOf((await searchParams).period);
+  const period = reviewPeriodSchema.parse((await searchParams).period);
   if (ctx.role !== "admin") {
     const workflows = await listVisibleWorkflows(ctx);
     return (
@@ -44,7 +43,7 @@ async function Workflows({ searchParams }: Pick<PageProps<"/workflows">, "search
           description="How the reviews in your own mailbox ended, per workflow."
           period={period}
           basePath="/workflows"
-          rows={await countRows(ctx, workflows, period, false)}
+          rows={await reviewCountsByWorkflow(ctx, workflows, period)}
         />
       </>
     );
@@ -70,39 +69,10 @@ async function Workflows({ searchParams }: Pick<PageProps<"/workflows">, "search
         description="How each workflow's reviews ended, and each member's under it. Counts only."
         period={period}
         basePath="/workflows"
-        rows={await countRows(ctx, published, period, true)}
+        rows={await reviewCountsByWorkflow(ctx, published, period)}
       />
     </>
   );
-}
-
-// Each workflow's review counts over the period, and with `perMember` each person's under it.
-async function countRows(
-  ctx: Ctx,
-  workflows: { id: string; name: string }[],
-  period: ReviewPeriod,
-  perMember: boolean,
-): Promise<ReviewCountsRow[]> {
-  const since = sinceOf(period, new Date());
-  const counted = await Promise.all(
-    workflows.map(async (workflow) => {
-      const stats = await reviewStats(ctx, {
-        workflowId: workflow.id,
-        since,
-        ...(perMember ? { groupBy: "user" as const } : {}),
-      });
-      return [
-        { key: workflow.id, label: workflow.name, tally: stats },
-        ...stats.byUser.map((row) => ({
-          key: `${workflow.id}-${row.user?.id ?? "shared"}`,
-          label: row.user?.name ?? "Shared inbox",
-          person: true,
-          tally: row,
-        })),
-      ];
-    }),
-  );
-  return counted.flat();
 }
 
 async function WaitingReviews() {

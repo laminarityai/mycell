@@ -9,6 +9,8 @@ export { listReviews } from "./lib/reviews";
 export { endReviewsInThread } from "./lib/ended-in-app";
 // The ship bar's measurement: how reviews ended, per workflow and per member.
 export { reviewStats } from "./lib/stats";
+// The same counts as the Workflows page lists them, per workflow (and per person, for admins).
+export { reviewCountsByWorkflow } from "./lib/count-rows";
 // The count in the app's navigation, read on each page load.
 export { countWaitingReviews } from "./lib/reviews";
 // Handing a review to a colleague, when its workflow allows it.

@@ -166,6 +166,18 @@ export const isolationCases = defineIsolationCases(server, {
     expect((await server.reviewStats(orgs.orgB.member.ctx, { since })).approvals.waiting).toBe(1);
   },
 
+  reviewCountsByWorkflow: async (orgs) => {
+    const b = await orgBReview(orgs);
+    const workflows = [{ id: b.review.workflowId, name: "B" }];
+
+    for (const ctx of [orgs.orgA.admin.ctx, orgs.orgA.member.ctx]) {
+      const rows = await server.reviewCountsByWorkflow(ctx, workflows, "7d");
+      expect(rows.map((row) => row.tally.approvals.waiting)).toEqual([0]);
+    }
+    const own = await server.reviewCountsByWorkflow(orgs.orgB.member.ctx, workflows, "7d");
+    expect(own.map((row) => row.tally.approvals.waiting)).toEqual([1]);
+  },
+
   markDone: async (orgs) => {
     await memberEscalation(orgs, "orgB");
     const escalation = (await server.listReviews(orgs.orgB.member.ctx)).at(0);

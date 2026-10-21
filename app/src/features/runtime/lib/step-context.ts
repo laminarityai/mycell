@@ -2,7 +2,7 @@
 import type { ActionName } from "@/features/policy/catalog";
 import type { ModelRole, Spec, Step } from "@/features/spec/types";
 import type { Ctx } from "@/lib/ctx";
-import type { CallAttribution, Json } from "../types";
+import type { BranchPath, CallAttribution, Json } from "../types";
 
 /**
  * What a step sees: the run it's in, the version's spec (so a draft can re-read a range an
@@ -27,6 +27,11 @@ export type StepExecution = {
   /** What run_steps keeps: no content, and an extract's field names but not their values. */
   record: Json;
   model?: { role: ModelRole; modelId: string; costUsd: number };
+  /**
+   * A branch's paths and why each check passed or failed, which may quote values from the
+   * email: for Try it's page only. A run neither records nor hands it on.
+   */
+  paths?: BranchPath[];
 };
 
 /**

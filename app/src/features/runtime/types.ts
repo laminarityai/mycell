@@ -180,6 +180,24 @@ export type DryRunEffect =
   | { kind: "row"; range: string; values: (string | number | boolean | null)[] }
   | { kind: "review"; channel: string };
 
+/**
+ * How one check of a path's condition went. `reason` may quote the value it tested, which can
+ * come from the email: shown on the admin's page only, never stored or summarized.
+ */
+export type CheckResult = { passed: boolean; reason: string };
+
+/**
+ * One path out of a branch, as the branch saw it: `taken`; `not_taken`, its condition failed;
+ * `not_checked`, an earlier path was taken first; or, for the otherwise path, `not_needed`,
+ * another path applied. `checks` follow the path's condition, and are empty when it wasn't
+ * checked and for the otherwise path.
+ */
+export type BranchPath = {
+  id: string;
+  status: "taken" | "not_taken" | "not_checked" | "not_needed";
+  checks: CheckResult[];
+};
+
 /** One step of a dry run. */
 export type DryRunStep = {
   stepId: string;
@@ -190,6 +208,8 @@ export type DryRunStep = {
   /** What it handed on to later steps, as a run would. */
   output: Json;
   effect: DryRunEffect | null;
+  /** A branch's paths, each otherwise path last, in the order the spec lists them. */
+  paths?: BranchPath[];
   /** Why it failed, content-free. */
   error: { code: string; message: string } | null;
   modelId: string | null;

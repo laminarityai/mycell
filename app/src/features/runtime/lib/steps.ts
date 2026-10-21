@@ -1,11 +1,11 @@
 // The model and control steps: classify, extract, branch and escalate. A model step fetches
 // the triggering message inside itself and holds its text in memory only (invariant 8).
 import { z } from "zod";
-import type { Check, Step } from "@/features/spec/types";
+import type { Step } from "@/features/spec/types";
 import type { Json } from "../types";
 import { callModel } from "./call-model";
 import { classify } from "./classify";
-import { RunStepError } from "./failures";
+import { chooseFirstMatch } from "./conditions";
 import { messageText } from "./gmail";
 import type { StepContext, StepExecution } from "./step-context";
 
@@ -85,37 +85,24 @@ export async function extractStep(
  * or failed, never the values they tested.
  */
 export function branchStep(step: StepOf<"branch">, context: StepContext): Promise<StepExecution> {
-  const paths = step.paths.map((path) => {
-    const checks = path.condition.checks.map((check) => checkHolds(check, context.outputs));
-    const holds = path.condition.combine === "all" ? checks.every(Boolean) : checks.some(Boolean);
-    return { id: path.id, holds, checks };
-  });
-  const matched = paths.find((path) => path.holds);
-  const taken = [matched?.id ?? step.otherwise.id];
-  const stops = matched === undefined && step.otherwise.steps.length === 0;
+  const { taken, paths } = chooseFirstMatch(step, context.outputs);
+  const stops = taken.includes(step.otherwise.id) && step.otherwise.steps.length === 0;
+  // The paths checked, with each check's pass or fail; never a reason, which may quote a value.
+  const checked = paths
+    .filter((path) => path.id !== step.otherwise.id && path.status !== "not_checked")
+    .map((path) => ({
+      id: path.id,
+      holds: path.status === "taken",
+      checks: path.checks.map((check) => check.passed),
+    }));
   return Promise.resolve({
     next: stops ? "skipped" : "continue",
     output: { taken },
-    record: { taken, paths },
+    record: { taken, paths: checked },
+    paths,
   });
-}
-
-function checkHolds(check: Check, outputs: StepContext["outputs"]): boolean {
-  if (!("classify" in check)) {
-    throw new RunStepError("bad_reference", "Only a classify answer can be checked for now.");
-  }
-  const classified = classification(outputs[check.classify]);
-  if (classified === undefined) {
-    throw new RunStepError("bad_reference", `The step ${check.classify} has no classification.`);
-  }
-  return classified.label === check.is && classified.p >= check.minP;
 }
 
 export function escalateStep(): Promise<StepExecution> {
   return Promise.resolve({ next: "escalated", output: null, record: null });
-}
-
-function classification(output: Json | undefined): { label: string; p: number } | undefined {
-  const parsed = z.object({ label: z.string(), p: z.number() }).safeParse(output);
-  return parsed.success ? parsed.data : undefined;
 }

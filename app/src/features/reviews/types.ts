@@ -134,3 +134,25 @@ export type ReviewStatsQuery = {
 export type ReviewStats = ReviewTally & {
   byUser: (ReviewTally & { user: ReviewPerson | null })[];
 };
+
+/**
+ * The periods review counts are shown over: the last 2, 7 or 30 days, or since each workflow's
+ * current version. The Workflows page shows the last 7 days until another is chosen.
+ */
+export const reviewPeriods = ["2d", "7d", "30d", "current_version"] as const;
+export type ReviewPeriod = (typeof reviewPeriods)[number];
+export const DEFAULT_REVIEW_PERIOD: ReviewPeriod = "7d";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const PERIOD_DAYS = { "2d": 2, "7d": 7, "30d": 30 } as const;
+
+/** The period a page's `period` search parameter names, or the default for anything else. */
+export function reviewPeriodOf(value: unknown): ReviewPeriod {
+  return reviewPeriods.find((period) => period === value) ?? DEFAULT_REVIEW_PERIOD;
+}
+
+/** Where `period` starts, as `reviewStats` takes it, counting back from `now`. */
+export function sinceOf(period: ReviewPeriod, now: Date): ReviewStatsQuery["since"] {
+  if (period === "current_version") return period;
+  return new Date(now.getTime() - PERIOD_DAYS[period] * DAY_MS);
+}

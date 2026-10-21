@@ -96,7 +96,7 @@ export function WorkflowsList({
     return <p className="text-sm text-muted-foreground">No workflows yet.</p>;
   }
   return (
-    <Table>
+    <Table aria-label="Workflows">
       <TableHeader>
         <TableRow>
           <TableHead>Workflow</TableHead>

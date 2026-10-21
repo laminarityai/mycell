@@ -325,7 +325,10 @@ test("an admin publishes a workflow to a tag, and a member with that tag sees it
   await expect(page.getByText("Version 1 is the latest.")).toBeVisible();
 
   await page.goto("/workflows");
-  const row = page.getByRole("row").filter({ hasText: "Triage" });
+  const row = page
+    .getByRole("table", { name: "Workflows" })
+    .getByRole("row")
+    .filter({ hasText: "Triage" });
   await expect(row).toContainText("sales");
   await expect(row).toContainText("1 user");
 

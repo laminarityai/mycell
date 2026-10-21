@@ -211,6 +211,25 @@ describe("graphView", () => {
     ]);
   });
 
+  it("draws a step moved off a removed path only where it went", () => {
+    const current = triageWithApproval();
+    const proposed = structuredClone(current);
+    const route = proposed.steps[2];
+    if (route.type !== "branch") throw new Error("triage shape");
+    const [complaint, pricing] = route.paths;
+    route.paths = [pricing];
+    route.otherwise.steps = complaint.steps;
+
+    const view = graphView(current, { proposal: { spec: proposed } });
+
+    const paths = branchOf(view.steps[2]);
+    expect(paths.map((path) => [path.id, path.change, path.steps.map((step) => step.id)])).toEqual([
+      ["complaint", "removed", []],
+      ["pricing", null, ["reply", "reply-approval"]],
+      ["rest", null, ["to-person"]],
+    ]);
+  });
+
   it("draws a new workflow's proposal as all new, and no workflow as no steps", () => {
     const view = graphView(null, { proposal: { spec: triageWithApproval() } });
 

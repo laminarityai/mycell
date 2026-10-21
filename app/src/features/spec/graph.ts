@@ -3,8 +3,9 @@
 // route. Pure, so client code may import it; `layout.ts` places it, and the page draws it.
 // `spec` doesn't know the catalog (policy imports spec), so callers pass what it says about each
 // action and which approvals the policy engine inserted, as `describeSpec` takes them.
-import { describeCondition, describeStep, type ActionInfo } from "./describe";
+import { describeCondition, type ActionInfo } from "./describe";
 import { changeMarks, type ChangeMarks } from "./graph-changes";
+import { stepWords } from "./graph-words";
 import type { BranchStep, Condition, Spec, Step, StepType } from "./types";
 
 /** What the caller knows about one catalog action, and the app it acts in. */
@@ -115,7 +116,9 @@ export function graphView<Risk extends string = string>(
   const removedWords = stepWords(options.action, new Set(options.insertedApprovals));
   const route = routeOf(options.trace);
 
-  // A step the proposal removes, and everything on its paths, struck through.
+  // A step the proposal removes, and what's gone with it on its paths, struck through. What
+  // moved elsewhere is drawn where it went.
+  const gone = (step: Step) => marks?.stepGone(step.id) ?? false;
   const removedStep = (step: Step): GraphStep<Risk> => ({
     ...removedWords(step),
     change: "removed",
@@ -123,7 +126,12 @@ export function graphView<Risk extends string = string>(
     run: null,
     branch:
       step.type === "branch"
-        ? { mode: step.mode, paths: pathsOf(step).map((path) => removedPath(path)) }
+        ? {
+            mode: step.mode,
+            paths: pathsOf(step)
+              .filter((path) => path.name === null || (marks?.pathGone(path.id) ?? false))
+              .map(removedPath),
+          }
         : null,
   });
   const removedPath = (path: AnyPath): GraphPath<Risk> => ({
@@ -131,7 +139,7 @@ export function graphView<Risk extends string = string>(
     change: "removed",
     before: null,
     run: null,
-    steps: path.steps.map(removedStep),
+    steps: path.steps.filter(gone).map(removedStep),
   });
 
   const list = (steps: Step[], listId: string): GraphStep<Risk>[] => {
@@ -232,54 +240,4 @@ function routeOf(trace: GraphTrace | undefined) {
     },
     path: (id: string): GraphPath["run"] => paths.get(id) ?? null,
   };
-}
-
-type StepWords<Risk extends string> = Pick<
-  GraphStep<Risk>,
-  "id" | "type" | "title" | "app" | "text" | "risk" | "review"
->;
-
-const TITLES: Record<StepType, string> = {
-  classify: "Classify",
-  extract: "Extract",
-  tool: "Action",
-  draft: "Draft a reply",
-  approval: "Waits for review",
-  escalate: "Hand to a person",
-  branch: "Branch",
-};
-
-function stepWords<Risk extends string>(
-  action: GraphOptions<Risk>["action"],
-  inserted: ReadonlySet<string>,
-): (step: Step) => StepWords<Risk> {
-  return (step) => {
-    const name = step.type === "tool" ? step.action : step.type === "draft" ? step.output : null;
-    const info = name === null ? undefined : action?.(name);
-    return {
-      id: step.id,
-      type: step.type,
-      title: titleOf(step, info),
-      app: info?.app ?? null,
-      text: step.type === "branch" ? branchLine(step) : describeStep(step, info?.description),
-      risk: info?.risk ?? null,
-      review: step.type !== "approval" ? null : inserted.has(step.id) ? "policy" : "spec",
-    };
-  };
-}
-
-function titleOf(step: Step, info: GraphActionInfo | undefined): string {
-  if (step.type === "branch") {
-    return `Branch · ${step.mode === "first" ? "first match" : "every match"}`;
-  }
-  if (step.type !== "tool") return TITLES[step.type];
-  const verb = step.action.split(".").at(-1)?.replaceAll("-", " ") ?? step.action;
-  return info?.app === undefined ? verb : `${info.app} · ${verb}`;
-}
-
-/** A branch's one line; each path's condition is written on the path. */
-function branchLine(step: BranchStep): string {
-  return step.mode === "first"
-    ? "Runs the first path that applies, checked left to right."
-    : "Runs every path that applies, one after another, left to right.";
 }

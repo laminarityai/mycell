@@ -22,6 +22,6 @@ export {
   markDone,
   openReview,
 } from "./lib/acting";
-// The daily digest job, as each org's system ctx: ends the reviews done or gone in their app,
-// then emails everyone with a review waiting.
-export { sendReviewDigest } from "./lib/digest";
+// The daily check job, as each org's system ctx: ends the waiting reviews whose item was
+// finished in its app or is gone.
+export { checkWaitingReviews } from "./lib/acting";

@@ -4,7 +4,6 @@ import { defineIsolationCases } from "@/db/testing/isolation";
 import type { TwoOrgs } from "@/db/testing/two-org-fixture";
 import { systemCtx, type Ctx } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
-import { fakeEmail } from "@/testing/fake-email";
 import * as server from "../server";
 import { memberEscalation } from "./escalation-helpers";
 import { memberReview } from "./review-helpers";
@@ -66,14 +65,13 @@ export const isolationCases = defineIsolationCases(server, {
     await untouched(orgs, b);
   },
 
-  // Org A's digest neither emails org B's people nor checks (and so ends) org B's reviews.
-  sendReviewDigest: async (orgs) => {
+  // Org A's daily check never checks (and so never ends) org B's reviews.
+  checkWaitingReviews: async (orgs) => {
     const b = await orgBReview(orgs);
     b.mailbox.deleteDraft(b.draft.id);
 
-    expect(await server.sendReviewDigest(systemCtx(orgs.orgA.id))).toEqual({ sent: 0 });
+    await server.checkWaitingReviews(systemCtx(orgs.orgA.id));
 
-    expect(fakeEmail.sent()).toEqual([]);
     expect(await server.listReviews(orgs.orgB.member.ctx)).toEqual([b.review]);
   },
 

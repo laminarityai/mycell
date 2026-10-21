@@ -58,7 +58,7 @@ export async function openReview(
  * Asks a waiting review's adapter where its item stands, on the review's connection, and ends
  * the review there, by nobody, when the item was finished in its app (`done_in_app`) or is
  * `gone`. Returns what the adapter said. Opening a review calls it, and so do the jobs that end
- * reviews their people finished outside Mycel (the sent-message job and the daily digest), as
+ * reviews their people finished outside Mycel (the sent-message job and the daily check), as
  * the org's system ctx.
  */
 export async function checkWaiting(
@@ -72,8 +72,8 @@ export async function checkWaiting(
 }
 
 /**
- * Runs checkWaiting on every waiting review in the org. For the daily digest, as the org's
- * system ctx, before it counts. A review whose app can't be asked now (a connection needing
+ * Runs checkWaiting on every waiting review in the org. For the daily check job, as the org's
+ * system ctx. A review whose app can't be asked now (a connection needing
  * reauthorization) waits on.
  */
 export async function checkWaitingReviews(

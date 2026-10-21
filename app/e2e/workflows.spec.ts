@@ -98,7 +98,7 @@ test("an admin writes a workflow in the JSON view, then edits it in the form", a
   await page.getByRole("tab", { name: "JSON" }).click();
   await expect(jsonView(page)).toHaveValue(/"question": "Is this about prices\?"/);
   await expect(jsonView(page)).toHaveValue(/"checks": \{\s*"minP": 0.9/);
-  await expect(jsonView(page)).toHaveValue(/"label": "yes",\s*"minP": 0.7/);
+  await expect(jsonView(page)).toHaveValue(/"when": \{[^}]*"minP": 0.7/);
   await page.getByRole("tab", { name: "Form" }).click();
 
   // An issue shows on the step it's about.

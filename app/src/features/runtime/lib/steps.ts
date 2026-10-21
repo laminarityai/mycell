@@ -8,6 +8,7 @@ import { classify } from "./classify";
 import { chooseFirstMatch } from "./conditions";
 import { messageText } from "./gmail";
 import type { StepContext, StepExecution } from "./step-context";
+import { withTriggerFacts } from "./trigger-facts";
 
 type StepOf<T extends Step["type"]> = Extract<Step, { type: T }>;
 
@@ -84,8 +85,11 @@ export async function extractStep(
  * output names the path taken, for the walker. The record keeps each path's checks as passed
  * or failed, never the values they tested.
  */
-export function branchStep(step: StepOf<"branch">, context: StepContext): Promise<StepExecution> {
-  const { taken, paths } = chooseFirstMatch(step, context.outputs);
+export async function branchStep(
+  step: StepOf<"branch">,
+  context: StepContext,
+): Promise<StepExecution> {
+  const { taken, paths } = chooseFirstMatch(step, await withTriggerFacts(step, context));
   const stops = taken.includes(step.otherwise.id) && step.otherwise.steps.length === 0;
   // The paths checked, with each check's pass or fail; never a reason, which may quote a value.
   const checked = paths
@@ -95,12 +99,12 @@ export function branchStep(step: StepOf<"branch">, context: StepContext): Promis
       holds: path.status === "taken",
       checks: path.checks.map((check) => check.passed),
     }));
-  return Promise.resolve({
+  return {
     next: stops ? "skipped" : "continue",
     output: { taken },
     record: { taken, paths: checked },
     paths,
-  });
+  };
 }
 
 export function escalateStep(): Promise<StepExecution> {

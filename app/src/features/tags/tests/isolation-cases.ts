@@ -64,6 +64,18 @@ export const isolationCases = defineIsolationCases(server, {
     expect((await server.listTags(orgs.orgA.admin.ctx))[0]?.userIds).toEqual([]);
   },
 
+  tagNamesById: async (orgs) => {
+    const { tag } = await seedOrgBTag(orgs);
+    const own = await server.createTag(orgs.orgA.admin.ctx, "support");
+
+    expect(await server.tagNamesById(orgs.orgA.admin.ctx, [tag.id, own.id])).toEqual(
+      new Map([[own.id, "support"]]),
+    );
+    expect(await server.tagNamesById(systemCtx(orgs.orgB.id), [tag.id, own.id])).toEqual(
+      new Map([[tag.id, "sales"]]),
+    );
+  },
+
   findTagsByName: async (orgs) => {
     const { tag } = await seedOrgBTag(orgs);
     const own = await server.createTag(orgs.orgA.admin.ctx, "support");

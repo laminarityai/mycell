@@ -13,6 +13,9 @@ export { disable, enable, listEnablements } from "./lib/enablements";
 // Deleting the enablements of users who can no longer see a workflow: a job calls it as the
 // system ctx when someone loses a tag.
 export { removeInvisibleEnablements } from "./lib/lost-visibility";
+// Following a renamed tag in working specs, so the next publish finds it: a job calls it as the
+// system ctx when a tag is renamed.
+export { followTagRename } from "./lib/tag-rename";
 export { runnableConnections } from "./lib/runnable-connections";
 // Save-time validation without saving: every issue, or what the policy engine made of the spec.
 export { checkWorkflowSpec } from "./lib/validation";

@@ -2,10 +2,13 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { assignTag, deleteTag, renameTag } from "@/features/tags/server";
+import { systemCtx } from "@/lib/ctx";
 import { NotFoundError, ValidationError } from "@/lib/errors";
+import { fakeInngest } from "@/testing/fake-inngest";
 import { connectGmail, connectOrgInbox } from "@/testing/connect-helpers";
 import { publishTo, tagUsers } from "@/testing/visibility-helpers";
 import {
+  followTagRename,
   getVisibleWorkflow,
   getWorkflow,
   listVisibleWorkflows,
@@ -103,6 +106,50 @@ describe("a member's workflows", () => {
     expect((await listVisibleWorkflows(member.ctx)).map((workflow) => workflow.id)).toEqual([
       pricing.workflowId,
     ]);
+  });
+
+  it("publish again from the working spec once a renamed tag is followed", async () => {
+    const { orgA, admin, member, sales, pricing } = await salesAndSupport();
+
+    await renameTag(admin.ctx, sales, "sales-team");
+    const renamed = fakeInngest.sent("tags/tag.renamed").map((event) => event.data);
+    expect(renamed).toEqual([{ orgId: orgA.id, tagId: sales, from: "sales", to: "sales-team" }]);
+    // What the job does with the event, as the org's system ctx.
+    await followTagRename(systemCtx(orgA.id), { tagId: sales, from: "sales" });
+
+    const workflow = await getWorkflow(admin.ctx, pricing.workflowId);
+    expect(workflow.workingSpec.visibility).toEqual({ tags: ["sales-team"] });
+    await publishWorkflow(admin.ctx, pricing.workflowId);
+    expect((await listVisibleWorkflows(member.ctx)).map((visible) => visible.id)).toEqual([
+      pricing.workflowId,
+    ]);
+  });
+
+  it("follow a tag renamed twice to its current name, whichever rename is followed first", async () => {
+    const { orgA, admin, sales, pricing } = await salesAndSupport();
+    await renameTag(admin.ctx, sales, "sellers");
+    await renameTag(admin.ctx, sales, "sales-team");
+
+    await followTagRename(systemCtx(orgA.id), { tagId: sales, from: "sellers" });
+    await followTagRename(systemCtx(orgA.id), { tagId: sales, from: "sales" });
+
+    const workflow = await getWorkflow(admin.ctx, pricing.workflowId);
+    expect(workflow.workingSpec.visibility).toEqual({ tags: ["sales-team"] });
+    await expect(publishWorkflow(admin.ctx, pricing.workflowId)).resolves.toMatchObject({
+      number: 2,
+    });
+  });
+
+  it("are left alone by a rename that touches none of their tags", async () => {
+    const { orgA, admin, support, pricing } = await salesAndSupport();
+    const before = await getWorkflow(admin.ctx, pricing.workflowId);
+    await renameTag(admin.ctx, support, "helpdesk");
+
+    await followTagRename(systemCtx(orgA.id), { tagId: support, from: "support" });
+
+    const after = await getWorkflow(admin.ctx, pricing.workflowId);
+    expect(after.revision).toBe(before.revision);
+    expect(after.workingSpec.visibility).toEqual({ tags: ["sales"] });
   });
 
   it("are hidden when their tag is deleted", async () => {

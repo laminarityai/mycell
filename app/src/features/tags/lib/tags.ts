@@ -5,7 +5,7 @@ import { forOrg } from "@/db/for-org";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import type { Tag, TagSummary } from "../types";
-import { sendTagDeleted } from "./events";
+import { sendTagDeleted, sendTagRenamed } from "./events";
 import { tagAssignments, tags } from "./schema";
 import { normalizeTagName } from "./tag-name";
 
@@ -20,13 +20,21 @@ export async function createTag(ctx: Ctx, name: string): Promise<TagSummary> {
   return { id: tag.id, name: tag.name, userIds: [] };
 }
 
+/**
+ * Renames the tag. Who it reaches stays the same (versions hold its ID); announced
+ * (`tags/tag.renamed`) when the name changed, so working specs naming it follow it.
+ */
 export async function renameTag(ctx: Ctx, tagId: string, name: string): Promise<void> {
   requireAdmin(ctx);
   const normalized = normalizeTagName(name);
-  const updated = await forOrg(ctx)
+  const db = forOrg(ctx);
+  const before = (await db.select(tags, { where: eq(tags.id, tagId), limit: 1 })).at(0);
+  if (before === undefined) throw new NotFoundError("tag");
+  const updated = await db
     .update(tags, { name: normalized }, eq(tags.id, tagId))
     .catch(rethrowDuplicate(normalized));
   if (updated.length === 0) throw new NotFoundError("tag");
+  if (before.name !== normalized) await sendTagRenamed(ctx, tagId, before.name, normalized);
 }
 
 export async function listTags(ctx: Ctx): Promise<TagSummary[]> {
@@ -66,6 +74,20 @@ export async function listMyTags(ctx: Ctx): Promise<Tag[]> {
     orderBy: [asc(tags.name)],
   });
   return rows.map((tag) => ({ id: tag.id, name: tag.name }));
+}
+
+/**
+ * The current names of the tags with these IDs in the caller's org, by ID; a tag that's gone (or
+ * another org's) has none. Admins and the system ctx may ask.
+ */
+export async function tagNamesById(
+  ctx: Ctx,
+  tagIds: readonly string[],
+): Promise<Map<string, string>> {
+  if (ctx.role !== "admin" && ctx.role !== "system") throw new ForbiddenError();
+  if (tagIds.length === 0) return new Map();
+  const rows = await forOrg(ctx).select(tags, { where: inArray(tags.id, [...new Set(tagIds)]) });
+  return new Map(rows.map((tag) => [tag.id, tag.name]));
 }
 
 /**

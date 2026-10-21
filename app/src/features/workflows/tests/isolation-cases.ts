@@ -4,7 +4,7 @@ import type { TwoOrgs } from "@/db/testing/two-org-fixture";
 import { systemCtx } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
 import { connectGmail, connectMailbox } from "@/testing/connect-helpers";
-import { listTags, unassignTag } from "@/features/tags/server";
+import { listTags, renameTag, unassignTag } from "@/features/tags/server";
 import { publishTo, tagUsers } from "@/testing/visibility-helpers";
 import * as server from "../server";
 import { draftSpec, labelSpec } from "./specs";
@@ -287,6 +287,20 @@ export const isolationCases = defineIsolationCases(server, {
       await server.removeInvisibleEnablements(ctx, { workflowId: b.workflowId });
     }
     expect(await server.listEnablements(orgB.admin.ctx, b.workflowId)).toHaveLength(1);
+  },
+
+  followTagRename: async (orgs) => {
+    const { orgA, orgB } = orgs;
+    const b = await publishedToSalesInOrgB(orgs);
+    const [tagId = ""] = await orgBTags(orgs);
+    await renameTag(orgB.admin.ctx, tagId, "sales-team");
+    const before = await server.getWorkflow(orgB.admin.ctx, b.workflowId);
+
+    // Org A's admin and system ctx can't follow org B's tag, so org B's working spec stays.
+    for (const ctx of [systemCtx(orgA.id), orgA.admin.ctx]) {
+      expect(await server.followTagRename(ctx, { tagId, from: "sales" })).toBe(0);
+    }
+    expect(await server.getWorkflow(orgB.admin.ctx, b.workflowId)).toEqual(before);
   },
 
   getWorkflowVersion: async (orgs) => {

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
-import { ConflictError } from "@/lib/errors";
+import { ConflictError, ForbiddenError, SpecInvalidError } from "@/lib/errors";
 import { connectGmail } from "@/testing/connect-helpers";
 import { checkWorkflowSpec, getWorkflow, publishWorkflow, saveWorkflow } from "../server";
 import { draftSpec, labelSpec } from "./specs";
@@ -96,5 +96,59 @@ describe("checkWorkflowSpec", () => {
       maxRisk: "external_send",
       inserted: [{ stepId: "reply-approval", after: "reply" }],
     });
+  });
+});
+
+describe("editing a working spec by hand", () => {
+  it("saves a classify step's new question and threshold over the revision it was opened at", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const admin = orgA.admin.ctx;
+    await connectGmail(admin, orgA.admin.email);
+    const { id } = await saveWorkflow(admin, { name: "Pricing", spec: draftSpec() });
+    const opened = await getWorkflow(admin, id);
+    const [classify, ...rest] = opened.workingSpec.steps;
+    const edited = {
+      ...opened.workingSpec,
+      steps: [{ ...classify, question: "Is this about prices?", checks: { minP: 0.9 } }, ...rest],
+    };
+
+    await saveWorkflow(admin, {
+      workflowId: id,
+      name: opened.name,
+      spec: edited,
+      baseRevision: opened.revision,
+    });
+
+    expect((await getWorkflow(admin, id)).workingSpec.steps[0]).toMatchObject({
+      question: "Is this about prices?",
+      checks: { minP: 0.9 },
+    });
+  });
+
+  it("gets an invalid spec's issues at the step and field they're about, and saves nothing", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const admin = orgA.admin.ctx;
+    await connectGmail(admin, orgA.admin.email);
+    const { id } = await saveWorkflow(admin, { name: "Pricing", spec: draftSpec() });
+    const before = await getWorkflow(admin, id);
+    const spec = draftSpec();
+    const steps = spec.steps as Record<string, unknown>[];
+    steps[1] = { ...steps[1], when: { step: "classify", label: "maybe", minP: 0.85 } };
+
+    const checked = await checkWorkflowSpec(admin, spec);
+
+    expect(checked.ok ? [] : checked.issues.map((issue) => issue.path)).toEqual([
+      ["steps", 1, "when", "label"],
+    ]);
+    await expect(
+      saveWorkflow(admin, { workflowId: id, name: "Pricing", spec, baseRevision: 1 }),
+    ).rejects.toThrow(SpecInvalidError);
+    expect(await getWorkflow(admin, id)).toEqual(before);
+  });
+
+  it("refuses members a check", async () => {
+    const { orgA } = await seedTwoOrgs();
+
+    await expect(checkWorkflowSpec(orgA.member.ctx, draftSpec())).rejects.toThrow(ForbiddenError);
   });
 });

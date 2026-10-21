@@ -52,6 +52,36 @@ describe("builder conversations", () => {
     ]);
   });
 
+  it("reads a workflow's hand-edited working spec on the next turn", async () => {
+    const { orgA } = await seedTwoOrgs();
+    await fundOrg(orgA.id);
+    const admin = orgA.admin.ctx;
+    await connectGmail(admin, orgA.admin.email);
+    const workflow = await saveWorkflow(admin, { name: "Label", spec: labelSpec() });
+    const { id } = await startConversation(admin, { workflowId: workflow.id });
+    fakeAiGateway.reply({ text: "It labels pricing questions." });
+    await readTurn(await streamTurn(admin, id, "What does it do?"));
+
+    const spec = labelSpec();
+    const steps = spec.steps as Record<string, unknown>[];
+    steps[0] = { ...steps[0], question: "Is this about invoices?" };
+    await saveWorkflow(admin, {
+      workflowId: workflow.id,
+      name: "Label",
+      spec,
+      baseRevision: workflow.revision,
+    });
+    fakeAiGateway.reply({
+      toolCalls: [{ name: "get_workflow", input: { workflowId: workflow.id } }],
+    });
+    fakeAiGateway.reply({ text: "It now labels invoices." });
+    await readTurn(await streamTurn(admin, id, "And now?"));
+
+    const toolResult = JSON.stringify(fakeAiGateway.requests("language").at(-1)?.body);
+    expect(toolResult).toContain("Is this about invoices?");
+    expect(toolResult).not.toContain("Is this a pricing inquiry?");
+  });
+
   it("can be about one of the org's workflows", async () => {
     const { orgA } = await seedTwoOrgs();
     const admin = orgA.admin.ctx;

@@ -111,6 +111,14 @@ function byName() {
 
 export const actionNames = actions.map((action) => action.name);
 
+/**
+ * The catalog actions a connection granted `grantedScopes` may run, in catalog order: those
+ * with any one of their scopes granted, the same rule as save-time validation's scope check.
+ */
+export function actionsAllowedBy(grantedScopes: readonly string[]): CatalogAction[] {
+  return actions.filter((action) => action.scopes.some((s) => grantedScopes.includes(s)));
+}
+
 /** The catalog action with this name, or undefined when there is none. */
 export function findAction(name: string): CatalogAction | undefined {
   return (catalog as Readonly<Record<string, CatalogAction>>)[name];

@@ -6,11 +6,12 @@ import { tool, type Tool } from "ai";
 import { z } from "zod";
 import { getWorkflow } from "@/features/workflows/server";
 import type { Ctx } from "@/lib/ctx";
+import { readExamples } from "./read-examples";
 
 /** What a tool knows about the turn calling it. */
 export type TurnInfo = { conversationId: string; workflowId: string | null };
 
-type ToolDefinition<I, O> = {
+export type ToolDefinition<I, O> = {
   description: string;
   inputSchema: z.ZodType<I>;
   execute(ctx: Ctx, input: I, turn: TurnInfo): Promise<O>;
@@ -57,4 +58,5 @@ const getWorkflowTool = builderTool({
 /** Every tool the agent may call, by the name the model calls it. */
 export const builderTools: Record<string, BuilderTool> = {
   get_workflow: getWorkflowTool,
+  read_examples: builderTool(readExamples),
 };

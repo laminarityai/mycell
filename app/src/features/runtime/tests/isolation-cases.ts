@@ -114,6 +114,26 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await listLedger(orgs.orgB.admin.ctx)).toEqual(ledgerBefore);
   },
 
+  searchMessages: async (orgs) => {
+    const orgB = await seedOrgBRun(orgs);
+
+    await expect(
+      server.searchMessages(orgs.orgA.admin.ctx, orgB.connectionId, "pricing", 5),
+    ).rejects.toThrow(NotFoundError);
+    expect(
+      await server.searchMessages(orgs.orgB.admin.ctx, orgB.connectionId, "pricing", 5),
+    ).toHaveLength(1);
+  },
+
+  readMessage: async (orgs) => {
+    const orgB = await seedOrgBRun(orgs);
+    const refs = await server.searchMessages(orgs.orgB.admin.ctx, orgB.connectionId, "", 1);
+
+    await expect(
+      server.readMessage(orgs.orgA.admin.ctx, orgB.connectionId, refs.at(0)?.id ?? "missing"),
+    ).rejects.toThrow(NotFoundError);
+  },
+
   setModelRole: async (orgs) => {
     await seedOrgB(orgs);
 

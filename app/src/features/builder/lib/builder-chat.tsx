@@ -11,6 +11,7 @@ import type { BuilderUIMessage } from "../types";
 
 const TOOL_LABELS: Record<string, string> = {
   get_workflow: "Read a workflow",
+  read_examples: "Read example messages",
 };
 
 export function BuilderChat({

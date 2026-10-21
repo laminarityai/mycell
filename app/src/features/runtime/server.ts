@@ -9,6 +9,9 @@ export { resolveModel, setModelRole } from "./lib/model-roles";
 // credit check, and its one usage entry when the stream ends.
 export { openMeteredStream } from "./lib/metered-stream";
 export { getRun, listRuns, startRun } from "./lib/runs";
+// For the builder's read_examples: a Gmail search and each message's fields, held in memory by
+// the caller (invariant 8).
+export { readMessage, searchMessages } from "./lib/gmail";
 // Called by the trigger's fan-out job and tests, as the org's system ctx: the runs one new
 // inbound message starts.
 export { startTriggeredRuns } from "./lib/trigger";

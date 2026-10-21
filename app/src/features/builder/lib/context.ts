@@ -78,11 +78,18 @@ const connections: ContextProvider = async (ctx) => {
       ? ""
       : `; not granted ${connection.missingApps.join(", ")}`);
   const members = listing.memberConnections.length;
+  // Exactly the connections read_examples accepts.
+  const searchable = [...listing.connections, ...listing.orgConnections]
+    .filter((connection) => connection.apps.includes("gmail"))
+    .map((connection) => connection.id);
   const lines = [
     ...listing.connections.map((connection) => line(connection, "your own connection")),
     ...listing.orgConnections.map((connection) => line(connection, "an org connection")),
     `Other members have ${String(members)} member connection${members === 1 ? "" : "s"}, ` +
       "which you can't read.",
+    searchable.length === 0
+      ? "read_examples can search none of them: none was granted Gmail."
+      : `read_examples can search the mail of: ${searchable.join(", ")}.`,
   ];
   return { title: "Connections", content: lines.join("\n") };
 };

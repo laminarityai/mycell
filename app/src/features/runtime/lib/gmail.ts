@@ -85,13 +85,55 @@ export async function threadText(ctx: Ctx, connectionId: string, threadId: strin
     .join("\n\n---\n\n");
 }
 
+const searchSchema = z.object({
+  messages: z.array(z.object({ id: z.string(), threadId: z.string() })).default([]),
+});
+
+/** The IDs of the newest messages matching a Gmail search, at most `limit` of them. */
+export async function searchMessages(
+  ctx: Ctx,
+  connectionId: string,
+  query: string,
+  limit: number,
+): Promise<{ id: string; threadId: string }[]> {
+  const params = new URLSearchParams({ q: query, maxResults: String(limit) });
+  const found = await proxyGet(ctx, connectionId, `${GMAIL}/messages?${params}`, searchSchema);
+  return found?.messages ?? [];
+}
+
+/** A message's sender, date, subject and plain-text body. */
+type MessageFields = { from: string; date: string; subject: string; body: string };
+
+/**
+ * The message's fields, or null when Gmail has no such message. In memory only, like
+ * messageText: never store them.
+ */
+export async function readMessage(
+  ctx: Ctx,
+  connectionId: string,
+  messageId: string,
+): Promise<MessageFields | null> {
+  const message = await proxyGet(
+    ctx,
+    connectionId,
+    `${GMAIL}/messages/${encodeURIComponent(messageId)}?format=full`,
+    fullMessageSchema,
+  );
+  return message === null ? null : fieldsOf(message);
+}
+
 function asText(message: z.infer<typeof fullMessageSchema>): string {
+  const { from, subject, body } = fieldsOf(message);
+  return `From: ${from}\nSubject: ${subject}\n\n${body}`;
+}
+
+function fieldsOf(message: z.infer<typeof fullMessageSchema>): MessageFields {
   const headers = message.payload?.headers ?? [];
   const header = (name: string) =>
     headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ?? "";
   const body =
     textOf(message.payload, "text/plain") ?? stripTags(textOf(message.payload, "text/html") ?? "");
-  return `From: ${header("From")}\nSubject: ${header("Subject")}\n\n${body}`;
+  return { from: header("From"), date: header("Date"), subject: header("Subject"), body };
 }
 
 function textOf(part: Part | undefined, mimeType: string): string | undefined {

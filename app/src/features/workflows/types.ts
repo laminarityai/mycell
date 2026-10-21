@@ -111,9 +111,54 @@ export type WorkflowDetails = {
 
 /**
  * Where a workflow is switched on: by the caller's own enablement (`member`) or the org switch
- * (`org`), the connection it runs on, and since when.
+ * (`org`), the connection it runs on, since when, and whether it's paused (an enablement only).
+ * `needsReconnect` when Google refused the connection's token: nothing runs on it until its
+ * owner reconnects, though the switch stays as it is (a connection state, not a pause).
  */
-export type WorkflowSwitch = { kind: "member" | "org"; connectionId: string; since: Date };
+export type WorkflowSwitch = {
+  kind: "member" | "org";
+  connectionId: string;
+  since: Date;
+  status: EnablementStatus;
+  /** Why it's paused; null while on. */
+  pausedReason: PausedReason | null;
+  needsReconnect: boolean;
+};
+
+/** An enablement is `on`, or `paused` (always with its reason) until its user enables it again. */
+export type EnablementStatus = "on" | "paused";
+
+/**
+ * Why an enablement is paused. `needs_reenable`: a new version is riskier or needs more of the
+ * connection than the one its user switched on. M7 and M8 add budget and credit reasons.
+ */
+export type PausedReason = "needs_reenable";
+
+/** What a `needs_reenable` pause is about: what the new version needs that the old didn't. */
+export type PausedChange = {
+  maxRiskRaised?: { from: RiskLevel; to: RiskLevel };
+  newApps?: string[];
+};
+
+/**
+ * What enabling did: switched the enablement on, or what the caller's Google connection must
+ * first be given. `connect` when they have none; `reconnect` (naming it) when it wasn't granted
+ * an app or scope the latest version needs. Apps as the catalog names them ("Gmail"), scopes by
+ * their short name ("gmail.modify").
+ */
+export type EnableResult =
+  | { enabled: true }
+  | { needs: "connect"; apps: string[]; scopes: string[] }
+  | { needs: "reconnect"; connectionId: string; apps: string[]; scopes: string[] };
+
+/** One user's enablement of a workflow, as admins see who has it on or paused. */
+export type EnablementSummary = {
+  userId: string;
+  name: string;
+  status: EnablementStatus;
+  pausedReason: PausedReason | null;
+  since: Date;
+};
 
 /** What switched a workflow on: one admin's enablement, or an org workflow's org switch. */
 export type Switch = { kind: "member"; enablementId: string } | { kind: "org"; workflowId: string };

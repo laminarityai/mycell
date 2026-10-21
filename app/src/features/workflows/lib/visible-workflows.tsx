@@ -1,8 +1,10 @@
 // The Workflows page as a member sees it: each workflow published to one of their tags, what it
-// does and needs, and whether it's on. Read-only until members switch workflows on (#53).
+// does and needs, whether it's on, and the switch for one that runs on their own account.
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import type { VisibleWorkflow, WorkflowSwitch } from "../types";
+import { ReconnectButton } from "@/features/connections/ui";
+import type { PausedReason, VisibleWorkflow, WorkflowSwitch } from "../types";
+import { EnableSwitch } from "./enable-switch";
 import { RiskBadge } from "./risk-badge";
 
 export function VisibleWorkflowsList({ workflows }: { workflows: VisibleWorkflow[] }) {
@@ -48,6 +50,10 @@ function VisibleWorkflowCard({ workflow }: { workflow: VisibleWorkflow }) {
             <StateBadge current={workflow.switch} />
           </dd>
         </dl>
+        {workflow.credentials === "member" ? (
+          <EnableSwitch workflowId={workflow.id} name={workflow.name} current={workflow.switch} />
+        ) : null}
+        <ReconnectNotice current={workflow.switch} />
         <ol className="flex list-decimal flex-col gap-1 pl-5">
           {workflow.description.map((sentence, index) => (
             // Sentences may repeat (two similar steps), so the position keys them.
@@ -59,12 +65,44 @@ function VisibleWorkflowCard({ workflow }: { workflow: VisibleWorkflow }) {
   );
 }
 
-/** Whether the workflow is on for the member: their own enablement, the org switch, or off. */
+/**
+ * Whether the workflow is on for the member: their own enablement (on, or paused and why), the
+ * org switch, or off.
+ */
 function StateBadge({ current }: { current: WorkflowSwitch | null }) {
   if (current === null) return <Badge variant="secondary">Off</Badge>;
+  if (current.status === "paused") {
+    return <Badge variant="secondary">Paused: {pausedReasonText(current.pausedReason)}</Badge>;
+  }
   return (
     <Badge variant="outline">
-      {current.kind === "member" ? "On for your connection" : "On for the shared inbox"}
+      {current.kind === "member" ? "On for your Google account" : "On for the shared inbox"}
     </Badge>
+  );
+}
+
+/** Why an enablement is paused, as the member reads it. */
+export function pausedReasonText(reason: PausedReason | null): string {
+  switch (reason) {
+    case "needs_reenable":
+      return "needs your OK for a riskier version";
+    case null:
+      return "no reason given";
+  }
+}
+
+// Google stopped accepting the member's connection: their switch is kept, but nothing runs on
+// it until they reconnect.
+function ReconnectNotice({ current }: { current: WorkflowSwitch | null }) {
+  if (current?.kind !== "member" || !current.needsReconnect) return null;
+  return (
+    <div className="flex flex-col items-start gap-2">
+      <p>Google stopped accepting your connection. Reconnect Google to keep this running.</p>
+      <ReconnectButton
+        connectionId={current.connectionId}
+        accountEmail="your Google account"
+        label="Reconnect Google"
+      />
+    </div>
   );
 }

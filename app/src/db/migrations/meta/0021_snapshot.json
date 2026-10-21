@@ -1,5 +1,5 @@
 {
-  "id": "77ee2db1-181a-42b2-b76f-b0763b20195d",
+  "id": "815e369e-c10a-48be-8dd5-aef621b98113",
   "prevId": "3e58d519-ba74-4251-bf9d-6765d564a53c",
   "version": "7",
   "dialect": "postgresql",
@@ -1601,12 +1601,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "reason": {
-          "name": "reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "status": {
           "name": "status",
           "type": "text",
@@ -2198,6 +2192,18 @@
           "notNull": true,
           "default": "'on'"
         },
+        "paused_reason": {
+          "name": "paused_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "paused_change": {
+          "name": "paused_change",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
         "enabled_at": {
           "name": "enabled_at",
           "type": "timestamp with time zone",
@@ -2249,7 +2255,12 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "enablements_paused_with_reason": {
+          "name": "enablements_paused_with_reason",
+          "value": "(\"enablements\".\"status\" = 'paused') = (\"enablements\".\"paused_reason\" is not null)"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.workflow_version_tags": {

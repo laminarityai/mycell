@@ -5,12 +5,15 @@ import { forOrg } from "@/db/for-org";
 import { findAction } from "@/features/policy/catalog";
 import type { RiskLevel } from "@/features/policy/types";
 import { describeSpec, type ActionInfo } from "@/features/spec/describe";
-import { listMyTags, listTags } from "@/features/tags/server";
+import { listUsers } from "@/features/orgs/server";
+import { listMyTags, listTagIdsByUser, listTags } from "@/features/tags/server";
 import type { Ctx } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
 import type { Audience, VisibleWorkflow, WorkflowVersion } from "../types";
+import { requiredApps } from "./requirements";
 import { workflows, workflowVersionTags } from "./schema";
-import { latestVersions, switchesOf } from "./switches";
+import { switchesOf } from "./switches";
+import { latestVersions } from "./versions";
 
 type Workflow = typeof workflows.$inferSelect;
 
@@ -50,6 +53,31 @@ export async function audiencesOf(ctx: Ctx, versionIds: string[]): Promise<Map<s
       ];
     }),
   );
+}
+
+/**
+ * Whether a user can see a workflow version, for each of `pairs` asked: an admin sees every
+ * one; anyone else one published to a tag they have; someone no longer in the org, none. It's
+ * how the system ctx checks what someone else may see (the trigger's fan-out, say), so it
+ * reads their tags rather than the caller's. Asking about a pair not given answers false.
+ */
+export async function seenByUsers(
+  ctx: Ctx,
+  pairs: readonly { userId: string; versionId: string }[],
+): Promise<(userId: string, versionId: string) => boolean> {
+  if (pairs.length === 0) return () => false;
+  const asked = new Set(pairs.map(({ userId, versionId }) => `${userId}\n${versionId}`));
+  const roles = new Map((await listUsers(ctx)).map((user) => [user.id, user.role]));
+  const userTags = await listTagIdsByUser(ctx, [...new Set(pairs.map(({ userId }) => userId))]);
+  const versionTags = await tagIdsOf(ctx, [...new Set(pairs.map(({ versionId }) => versionId))]);
+  return (userId, versionId) => {
+    if (!asked.has(`${userId}\n${versionId}`)) return false;
+    const role = roles.get(userId);
+    if (role === undefined) return false;
+    if (role === "admin") return true;
+    const theirs = new Set(userTags.get(userId) ?? []);
+    return (versionTags.get(versionId) ?? []).some((tagId) => theirs.has(tagId));
+  };
 }
 
 async function visible(ctx: Ctx, rows: Workflow[]): Promise<VisibleWorkflow[]> {
@@ -123,11 +151,4 @@ function actionInfo(name: string): ActionInfo<RiskLevel> | undefined {
   if (action === undefined) return undefined;
   const { risk, description, conditionFields } = action;
   return { risk, description, conditionFields };
-}
-
-// The apps the version uses, as the catalog names them: Gmail for the trigger, then each app a
-// catalog action it calls belongs to, each once.
-function requiredApps(version: WorkflowVersion): string[] {
-  const apps = version.requiredActions.flatMap((name) => findAction(name)?.app ?? []);
-  return [...new Set(["Gmail", ...apps])];
 }

@@ -118,6 +118,48 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await server.listSwitchedOn(systemCtx(orgs.orgA.id), b.connectionId)).toEqual([]);
   },
 
+  listStartable: async (orgs) => {
+    const b = await switchedOnInOrgB(orgs);
+
+    expect(await server.listStartable(systemCtx(orgs.orgA.id), b.connectionId)).toEqual([]);
+    expect(await server.listStartable(systemCtx(orgs.orgB.id), b.connectionId)).toHaveLength(1);
+  },
+
+  enable: async (orgs) => {
+    const { orgA, orgB } = orgs;
+    const b = await publishedToSalesInOrgB(orgs);
+    await connectMailbox(orgA.member.ctx, orgA.member.email);
+    await tagUsers(orgA.admin.ctx, "sales", [orgA.member]);
+
+    for (const user of [orgA.admin, orgA.member]) {
+      await expect(server.enable(user.ctx, b.workflowId)).rejects.toThrow(NotFoundError);
+    }
+    expect(await server.listEnablements(orgB.admin.ctx, b.workflowId)).toEqual([]);
+  },
+
+  disable: async (orgs) => {
+    const { orgA, orgB } = orgs;
+    const b = await publishedToSalesInOrgB(orgs);
+    await connectMailbox(orgB.member.ctx, orgB.member.email);
+    await server.enable(orgB.member.ctx, b.workflowId);
+    const before = await server.listEnablements(orgB.admin.ctx, b.workflowId);
+
+    await expect(server.disable(orgA.member.ctx, b.workflowId)).rejects.toThrow(NotFoundError);
+    expect(await server.listEnablements(orgB.admin.ctx, b.workflowId)).toEqual(before);
+  },
+
+  listEnablements: async (orgs) => {
+    const { orgA, orgB } = orgs;
+    const b = await publishedToSalesInOrgB(orgs);
+    await connectMailbox(orgB.member.ctx, orgB.member.email);
+    await server.enable(orgB.member.ctx, b.workflowId);
+
+    await expect(server.listEnablements(orgA.admin.ctx, b.workflowId)).rejects.toThrow(
+      NotFoundError,
+    );
+    expect(await server.listEnablements(orgB.admin.ctx, b.workflowId)).toHaveLength(1);
+  },
+
   workflowNames: async (orgs) => {
     const b = await seedOrgBWorkflow(orgs);
     const own = await server.saveWorkflow(orgs.orgA.admin.ctx, { name: "A", spec: draftSpec() });

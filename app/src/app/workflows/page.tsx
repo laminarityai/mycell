@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { getCtx } from "@/features/orgs/server";
-import { listVisibleWorkflows, listWorkflows } from "@/features/workflows/server";
+import { listEnablements, listVisibleWorkflows, listWorkflows } from "@/features/workflows/server";
 import { VisibleWorkflowsList, WorkflowsList } from "@/features/workflows/ui";
 
 export default function WorkflowsPage() {
@@ -26,6 +26,12 @@ async function Workflows() {
   if (ctx.role !== "admin") {
     return <VisibleWorkflowsList workflows={await listVisibleWorkflows(ctx)} />;
   }
+  const workflows = await listWorkflows(ctx);
+  const enablements = await Promise.all(
+    workflows.map(
+      async (workflow) => [workflow.id, await listEnablements(ctx, workflow.id)] as const,
+    ),
+  );
   return (
     <>
       <Link
@@ -34,7 +40,7 @@ async function Workflows() {
       >
         New workflow
       </Link>
-      <WorkflowsList workflows={await listWorkflows(ctx)} />
+      <WorkflowsList workflows={workflows} enablements={new Map(enablements)} />
     </>
   );
 }

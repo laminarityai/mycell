@@ -309,7 +309,7 @@ describe("a branch with several paths, every match", () => {
 });
 
 describe("an approval on a path", () => {
-  it("collects only the drafts on its own path, not those an approval above already has", async () => {
+  it("collects every draft above it on its own path, those an approval above has too", async () => {
     const reply = (id: string) => ({
       id,
       type: "draft",
@@ -336,7 +336,7 @@ describe("an approval on a path", () => {
     const approvals = (await getRun(admin, runId)).steps.filter((step) => step.type === "approval");
     expect(approvals.map((step) => [step.stepId, step.output])).toEqual([
       ["ack-approval", { awaiting: "human", channel: "gmail_drafts", draftIds: [ack] }],
-      ["approve", { awaiting: "human", channel: "gmail_drafts", draftIds: [priced] }],
+      ["approve", { awaiting: "human", channel: "gmail_drafts", draftIds: [ack, priced] }],
     ]);
   });
 });

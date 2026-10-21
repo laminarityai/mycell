@@ -92,17 +92,16 @@ async function sheetText(name: string, context: StepContext): Promise<string | u
 const draftOutput = z.object({ draftId: z.string() });
 
 /**
- * Records that the drafts it reviews await a person, who approves by sending one: the drafts
- * above it on its own path, since the approval above it, if any. It holds nothing back: a Gmail
- * draft is never sent by a run, so the steps after it still run.
+ * Records that the drafts above it on its own path await a person, who approves by sending
+ * one: every one, those an approval above it recorded too, as a v1 approval recorded every
+ * draft before it. It holds nothing back: a Gmail draft is never sent by a run, so the steps
+ * after it still run.
  */
 export function approvalStep(
   step: StepOf<"approval">,
   context: StepContext,
 ): Promise<StepExecution> {
-  const above = stepsAbove(context.spec, step.id);
-  const since = above.slice(above.findLastIndex((earlier) => earlier.type === "approval") + 1);
-  const draftIds = since.flatMap((earlier) => {
+  const draftIds = stepsAbove(context.spec, step.id).flatMap((earlier) => {
     const parsed = draftOutput.safeParse(context.outputs[earlier.id]);
     return parsed.success ? [parsed.data.draftId] : [];
   });

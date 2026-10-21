@@ -71,12 +71,18 @@ describe("applyPolicy on a branch with several paths", () => {
     expect(stepIdsOn(result.spec, "complaint")).toEqual(["approve"]);
   });
 
-  it("counts an approval after the draft in its list, or above it on its path", () => {
+  it("counts only an approval after the draft in its own list", () => {
     const after = applyPolicy(branching([reply("reply"), label, approval("approve")], []));
-    const above = applyPolicy(branching([reply("reply")], [], [approval("approve")]));
 
     expect(after).toMatchObject({ ok: true, inserted: [] });
-    expect(above).toMatchObject({ ok: true, inserted: [] });
+  });
+
+  it("doesn't count an approval above the draft, which ran before the draft was made", () => {
+    const above = applyPolicy(branching([reply("reply")], [], [approval("approve")]));
+    const earlierInList = applyPolicy(branching([approval("approve"), reply("reply")], []));
+
+    expect(above).toMatchObject({ ok: true, inserted: [{ stepId: "reply-approval" }] });
+    expect(earlierInList).toMatchObject({ ok: true, inserted: [{ stepId: "reply-approval" }] });
   });
 
   it("doesn't count an approval nested deeper than the draft, which a run may not reach", () => {

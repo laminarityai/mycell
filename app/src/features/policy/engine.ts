@@ -65,25 +65,23 @@ export function applyPolicy(spec: Spec): PolicyResult {
 }
 
 /**
- * The drafts no approval reviews. An approval reviews a draft on its own path: above the draft
- * (in its list, or above its branch), or after it in its list. One on a sibling path, or on a
- * path below the draft, which a run may not take, doesn't count: a branch chooses a path but
- * never removes a review (ADR-0015).
+ * The drafts no approval reviews. Only an approval after the draft in its own list reviews it:
+ * every run that makes the draft reaches it. One above the draft ran before the draft was
+ * made; one on a sibling path, or on a path below the draft, which a run may not take, doesn't
+ * count either: a branch chooses a path but never removes a review (ADR-0015).
  */
 function unreviewedDrafts(placed: PlacedStep[]): string[] {
   // Each step's list, as the location of the list, and its index in it.
   const listOf = (location: SpecIssue["path"]) => JSON.stringify(location.slice(0, -1));
   const indexOf = (location: SpecIssue["path"]) => Number(location.at(-1));
-  return placed.flatMap(({ step, location, above }) => {
+  return placed.flatMap(({ step, location }) => {
     if (step.type !== "draft") return [];
-    const reviewed =
-      above.some((candidate) => candidate.type === "approval") ||
-      placed.some(
-        (other) =>
-          other.step.type === "approval" &&
-          listOf(other.location) === listOf(location) &&
-          indexOf(other.location) > indexOf(location),
-      );
+    const reviewed = placed.some(
+      (other) =>
+        other.step.type === "approval" &&
+        listOf(other.location) === listOf(location) &&
+        indexOf(other.location) > indexOf(location),
+    );
     return reviewed ? [] : [step.id];
   });
 }

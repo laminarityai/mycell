@@ -21,8 +21,7 @@ export async function classifyStep(
     question: step.question,
     labels: step.labels,
     state,
-    workflowId: run.workflowId,
-    runId: run.id,
+    ...context.attribution,
   });
   const output = { label: result.label, p: result.p };
   return {
@@ -61,8 +60,7 @@ export async function extractStep(
     system: "Extract the fields from the message. Use null for a field the message doesn't give.",
     prompt: text,
     schema,
-    workflowId: run.workflowId,
-    runId: run.id,
+    ...context.attribution,
   });
   const answer = result.output as Partial<Record<string, string | number | boolean | null>>;
   const values: Record<string, Json> = {};

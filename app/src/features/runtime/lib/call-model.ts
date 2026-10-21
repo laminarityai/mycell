@@ -78,7 +78,13 @@ export async function meteredCall<R>(
   await checkCredits(ctx, CREDIT_ESTIMATES[role]);
 
   const gateway = meteredGateway();
-  const usage = { role, modelId, workflowId: attribution.workflowId, runId: attribution.runId };
+  const usage = {
+    role,
+    modelId,
+    workflowId: attribution.workflowId,
+    runId: attribution.runId,
+    dryRun: attribution.dryRun,
+  };
   let output: R;
   try {
     output = await call(gateway, modelId);

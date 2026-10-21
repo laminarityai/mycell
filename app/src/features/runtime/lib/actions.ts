@@ -1,14 +1,13 @@
 // Every catalog action's executor, typed so that a catalog action without one fails the
 // typecheck. The tool step checks each one's input and output against the catalog's schemas.
 // Actions not built yet are pending, with the ticket that builds them.
-import type { ActionName } from "@/features/policy/catalog";
 import { messageRef, threadRef } from "./gmail";
 import { createReplyDraft } from "./gmail-drafts";
 import { addLabel } from "./gmail-labels";
 import { appendRow, readRange } from "./sheets";
-import type { ActionRun, Executor } from "./step-context";
+import type { ActionExecutors } from "./step-context";
 
-export const actionExecutors: Record<ActionName, Executor<ActionRun>> = {
+export const actionExecutors: ActionExecutors = {
   "google-mail.read-message": {
     status: "ready",
     run: async (ctx, connectionId, input: { messageId: string }) => {

@@ -34,8 +34,7 @@ export async function draftStep(
     const result = await callModel(ctx, step.role, {
       system: `${SYSTEM}\n\n${step.instructions}`,
       prompt: await contextText(step, context),
-      workflowId: run.workflowId,
-      runId: run.id,
+      ...context.attribution,
     });
     model = { role: step.role, modelId: result.modelId, costUsd: result.costUsd };
     return result.output;

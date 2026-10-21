@@ -11,6 +11,7 @@ import { getWorkflowVersion, listSwitchedOn } from "@/features/workflows/server"
 import type { Ctx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import type { Json, RetryPolicy, RunOutcome, RunStep } from "../types";
+import { actionExecutors } from "./actions";
 import { checked } from "./checks";
 import { stepExecutors } from "./executors";
 import { isConnectionGone, RunStepError, type Failure } from "./failures";
@@ -66,14 +67,11 @@ async function executeStep(ctx: Ctx, run: Run, step: Step, place: StepPlace): Pr
   if (!(await mayGoOn(ctx, run))) return cancel(ctx, run);
   const context: StepContext = {
     ctx,
-    run: {
-      id: run.id,
-      workflowId: run.workflowId,
-      connectionId: run.connectionId,
-      sourceRef: run.sourceRef,
-    },
+    run: { id: run.id, connectionId: run.connectionId, sourceRef: run.sourceRef },
+    attribution: { workflowId: run.workflowId, runId: run.id },
     spec: place.spec,
     outputs: { ...place.outputs },
+    actions: actionExecutors,
   };
   const attempted = await withRetries(place.retry, () => attempt(step, context));
   try {

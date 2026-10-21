@@ -134,6 +134,28 @@ export const isolationCases = defineIsolationCases(server, {
     ).rejects.toThrow(NotFoundError);
   },
 
+  dryRun: async (orgs) => {
+    const orgB = await seedOrgBRun(orgs);
+    const admin = orgs.orgA.admin.ctx;
+    await connectInbox(admin, orgs.orgA.admin.email, []);
+    const refs = await server.searchMessages(orgs.orgB.admin.ctx, orgB.connectionId, "", 1);
+    const sourceRef = refs.at(0)?.id ?? "missing";
+
+    await expect(
+      server.dryRun(admin, threadSpec(), { connectionId: orgB.connectionId, sourceRef }),
+    ).rejects.toThrow(NotFoundError);
+  },
+
+  recentMessages: async (orgs) => {
+    const orgB = await seedOrgBRun(orgs);
+    await connectInbox(orgs.orgA.admin.ctx, orgs.orgA.admin.email, []);
+
+    const listing = await server.recentMessages(orgs.orgA.admin.ctx);
+
+    expect(listing.map((connection) => connection.connectionId)).not.toContain(orgB.connectionId);
+    expect(listing).toHaveLength(1);
+  },
+
   setModelRole: async (orgs) => {
     await seedOrgB(orgs);
 

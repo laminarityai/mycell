@@ -71,7 +71,7 @@ export function describeStep(step: Step, actionDescription?: string): string {
 
 /**
  * A branch as a sentence: "Goes on only if …" for one first-match path, as a v1 gate read;
- * otherwise each path by name with its condition.
+ * otherwise each path by name with its condition, an every-match branch saying so first.
  */
 function describeBranch(step: BranchStep): string {
   const steps = step.otherwise.steps;
@@ -85,9 +85,11 @@ function describeBranch(step: BranchStep): string {
   if (step.mode === "first" && step.paths.length === 1 && only !== undefined) {
     return `Goes on only if ${describeCondition(only.condition)}; otherwise ${otherwise}.`;
   }
-  const which = step.mode === "first" ? "the first path" : "every path";
   const paths = step.paths.map((path) => `"${path.name}" if ${describeCondition(path.condition)}`);
-  return `Takes ${which} that applies, checked left to right: ${paths.join("; ")}; otherwise ${otherwise}.`;
+  if (step.mode === "every") {
+    return `Every match: runs each path that applies, one after another, left to right: ${paths.join("; ")}; if none applies, ${otherwise}.`;
+  }
+  return `Takes the first path that applies, checked left to right: ${paths.join("; ")}; otherwise ${otherwise}.`;
 }
 
 /** A condition in plain words: its checks joined by "and" (all of them) or "or" (any). */

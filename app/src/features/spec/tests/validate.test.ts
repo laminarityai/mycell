@@ -224,14 +224,14 @@ describe("validateSpec on a v2 spec", () => {
     ]);
   });
 
-  it("runs only first match, until every match lands", () => {
+  it("accepts every match", () => {
     const classify = { classify: "classify", is: "yes", minP: 0.5 };
     const spec = branchWith({
       mode: "every",
       paths: [path([classify]), { ...path([classify]), id: "other" }],
     });
 
-    expect(issuePaths(spec)).toEqual([["steps", 1, "mode"]]);
+    expect(validateSpec(spec)).toMatchObject({ ok: true });
   });
 });
 

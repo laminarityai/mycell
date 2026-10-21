@@ -127,6 +127,101 @@ describe("validateSpec on a branch with several paths", () => {
   });
 });
 
+describe("validateSpec on an every-match branch", () => {
+  const draft = (id: string) => ({
+    id,
+    type: "draft",
+    role: "smart",
+    instructions: "Reply with our current prices.",
+    context: ["trigger.message"],
+    output: "google-mail.create-draft",
+  });
+  const everyMatch = (paths: unknown[], otherwise: unknown[] = []) => {
+    const spec = triageWithPaths(paths);
+    spec.steps[2] = {
+      ...spec.steps[2],
+      mode: "every",
+      otherwise: { id: "rest", steps: otherwise },
+    };
+    return spec;
+  };
+
+  it("accepts a draft and an escalation side by side, two drafts on one path, and one on otherwise", () => {
+    const spec = everyMatch(
+      [
+        pathOf("pricing", [pricing], [draft("reply"), draft("follow-up")]),
+        pathOf("complaint", [pricing], [escalate("hand-over")]),
+      ],
+      [draft("fallback"), escalate("fallback-hand-over")],
+    );
+
+    expect(validateSpec(spec)).toMatchObject({ ok: true });
+  });
+
+  it("accepts two drafts on two paths of a first-match branch, since only one runs", () => {
+    const spec = triageWithPaths([
+      pathOf("pricing", [pricing], [draft("reply")]),
+      pathOf("quote", [pricing], [draft("quote-reply")]),
+    ]);
+
+    expect(validateSpec(spec)).toMatchObject({ ok: true });
+  });
+
+  it("refuses two drafts that can run together, at the later one, nested or not", () => {
+    const spec = everyMatch([
+      pathOf("pricing", [pricing], [draft("reply")]),
+      pathOf("label", [pricing], [escalate("hand-over")]),
+      pathOf("quote", [pricing], [branchOf("size", [draft("quote-reply")])]),
+    ]);
+
+    const result = validateSpec(spec);
+    expect(result).toMatchObject({
+      ok: false,
+      issues: [
+        {
+          path: ["steps", 2, "paths", 2, "steps", 0, "paths", 0, "steps", 0],
+          message:
+            '"quote-reply" and "reply" can both run, since the branch runs every path that applies, and each drafts a reply. Put them on one path, or make the branch run the first path that applies.',
+        },
+      ],
+    });
+  });
+
+  it("refuses two escalations that can run together", () => {
+    const spec = everyMatch([
+      pathOf("complaint", [pricing], [escalate("hand-over")]),
+      pathOf("urgent", [pricing], [escalate("urgent-hand-over")]),
+    ]);
+
+    expect(validateSpec(spec)).toMatchObject({
+      ok: false,
+      issues: [
+        {
+          path: ["steps", 2, "paths", 1, "steps", 0],
+          message:
+            '"urgent-hand-over" and "hand-over" can both run, since the branch runs every path that applies, and each hands the message to a person. Put them on one path, or make the branch run the first path that applies.',
+        },
+      ],
+    });
+  });
+
+  it("refuses two drafts under a nested every-match branch, whose nearest shared branch it is", () => {
+    const inner = {
+      ...branchOf("inner"),
+      mode: "every",
+      paths: [
+        pathOf("a", [pricing], [draft("a-reply")]),
+        pathOf("b", [pricing], [draft("b-reply")]),
+      ],
+    };
+    const spec = triageWithPaths([pathOf("pricing", [pricing], [inner])]);
+
+    expect(issuePaths(spec)).toEqual([
+      ["steps", 2, "paths", 0, "steps", 0, "paths", 1, "steps", 0],
+    ]);
+  });
+});
+
 function issuePaths(spec: unknown) {
   const result = validateSpec(spec);
   if (result.ok) throw new Error("expected the spec to be refused");

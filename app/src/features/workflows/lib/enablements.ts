@@ -13,7 +13,7 @@ import { findWorkflow } from "./access";
 import { deleteEnablement, switchOnEnablement } from "./enablement-rows";
 import { enablements } from "./schema";
 import { missingAccess } from "./requirements";
-import { latestVersions } from "./versions";
+import { latestVersions } from "./latest-versions";
 import { getVisibleWorkflow } from "./visibility";
 
 /**

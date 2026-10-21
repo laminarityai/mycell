@@ -1,11 +1,10 @@
 // Publishing: a workflow's working spec, validated again, becomes its next immutable version.
 // There is no update path for a version.
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { isUniqueViolation } from "@/db/errors";
 import { forOrg } from "@/db/for-org";
 import { sameValue } from "@/features/spec/diff";
-import { readStoredSpec } from "@/features/spec/stored";
 import type { Spec } from "@/features/spec/types";
 import { findTagsByName } from "@/features/tags/server";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
@@ -15,8 +14,8 @@ import { workflows, workflowVersions, workflowVersionTags } from "./schema";
 import { validateWorkflowSpec } from "./validation";
 import { findWorkflow } from "./access";
 import { gainedForEnablements, pauseEnablements } from "./version-pauses";
-
-type Version = typeof workflowVersions.$inferSelect;
+import { version } from "./latest-versions";
+import { removeInvisibleIn } from "./lost-visibility";
 
 /**
  * Re-validates the working spec (connections may have changed since it was saved) and records
@@ -25,7 +24,8 @@ type Version = typeof workflowVersions.$inferSelect;
  * `settings` are what the publish dialog chose: they're saved into the working spec first, in
  * the same transaction, so the working spec and the version agree. Enablements follow the new
  * version, unless it needs more than the latest one did: then, in the same transaction, each
- * one that's on pauses until its member enables it again (version-pauses.ts).
+ * one that's on pauses until its member enables it again (version-pauses.ts). Members its tags
+ * no longer reach lose their enablements in that transaction too (lost-visibility.ts).
  */
 export async function publishWorkflow(
   ctx: Ctx,
@@ -51,8 +51,8 @@ export async function publishWorkflow(
     credentials: validated.applied.credentials,
   });
   try {
-    // The version, its tags and the pauses together: a version is never seen without who it's
-    // for, nor runs for anyone who hasn't agreed to what it needs.
+    // The version, its tags, the removals and the pauses together: a version is never seen
+    // without who it's for, nor runs for anyone who can't see it or hasn't agreed to it.
     const row = await db.transaction(async (tx) => {
       if (!sameValue(working, workflow.workingSpec)) {
         // Only over the working spec this read: a save in between is never overwritten.
@@ -89,6 +89,8 @@ export async function publishWorkflow(
         workflowVersionTags,
         tags.map((tag) => ({ workflowVersionId: inserted.id, tagId: tag.id })),
       );
+      // Members the new tags leave out lose their enablements, before anything is paused.
+      await removeInvisibleIn(ctx, tx, { workflowId });
       if (gained !== null) await pauseEnablements(tx, workflowId, gained);
       return inserted;
     });
@@ -117,35 +119,4 @@ export async function getWorkflowVersion(ctx: Ctx, versionId: string): Promise<W
   const row = rows.at(0);
   if (row === undefined) throw new NotFoundError("workflow version");
   return version(row);
-}
-
-/** A version's row as a WorkflowVersion, its spec read in the current version's shape. */
-export function version(row: Version): WorkflowVersion {
-  return {
-    id: row.id,
-    workflowId: row.workflowId,
-    number: row.number,
-    spec: readStoredSpec(row.spec),
-    maxRisk: row.maxRisk,
-    requiredActions: row.requiredActions,
-    publishedBy: row.publishedBy,
-    publishedAt: row.publishedAt,
-  };
-}
-
-/** Each workflow's latest version, by workflow ID; none for a workflow never published. */
-export async function latestVersions(
-  ctx: Ctx,
-  workflowIds: string[],
-): Promise<Map<string, WorkflowVersion>> {
-  const latest = new Map<string, WorkflowVersion>();
-  if (workflowIds.length === 0) return latest;
-  const rows = await forOrg(ctx).select(workflowVersions, {
-    where: inArray(workflowVersions.workflowId, workflowIds),
-    orderBy: [desc(workflowVersions.number)],
-  });
-  for (const row of rows) {
-    if (!latest.has(row.workflowId)) latest.set(row.workflowId, version(row));
-  }
-  return latest;
 }

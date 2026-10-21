@@ -96,6 +96,7 @@ export async function listWorkflows(ctx: Ctx): Promise<WorkflowSummary[]> {
       latestVersion: version === undefined ? null : versionSummary(version),
       switch: switches.get(row.id) ?? null,
       audience: version === undefined ? null : (audiences.get(version.id) ?? null),
+      archivedAt: row.archivedAt,
       updatedAt: row.updatedAt,
     };
   });
@@ -124,6 +125,7 @@ export async function getWorkflow(ctx: Ctx, workflowId: string): Promise<Workflo
     inserted: policy.ok ? policy.inserted : [],
     versions: versions.map(versionSummary),
     switch: await switchOf(ctx, row),
+    archivedAt: row.archivedAt,
     createdBy: row.createdBy,
     updatedAt: row.updatedAt,
   };

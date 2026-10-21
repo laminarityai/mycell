@@ -8,7 +8,7 @@ import { findWorkflow } from "./access";
 import { enablements } from "./schema";
 import { checkedByPolicy } from "./validation";
 import { gainedForEnablements, onEnablements } from "./version-pauses";
-import { latestVersions } from "./versions";
+import { latestVersions } from "./latest-versions";
 
 /**
  * What publishing `spec` as the workflow's next version would do: what it needs that the latest

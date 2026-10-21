@@ -6,7 +6,7 @@ import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { findWorkflow } from "./access";
 import { scopeIssues } from "./scope-check";
 import { switchOf } from "./switches";
-import { latestVersions } from "./versions";
+import { latestVersions } from "./latest-versions";
 import { candidateConnections, readSetup } from "./validation";
 
 /**

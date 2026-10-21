@@ -61,6 +61,8 @@ export type WorkflowSummary = {
   switch: WorkflowSwitch | null;
   /** Who the latest version is published to; null while not published. */
   audience: Audience | null;
+  /** When an admin archived it, which stops it everywhere; null while not archived. */
+  archivedAt: Date | null;
   updatedAt: Date;
 };
 
@@ -105,6 +107,8 @@ export type WorkflowDetails = {
   versions: WorkflowVersionSummary[];
   /** The caller's enablement, or the org switch; null while off. */
   switch: WorkflowSwitch | null;
+  /** When an admin archived it, which stops it everywhere; null while not archived. */
+  archivedAt: Date | null;
   createdBy: string;
   updatedAt: Date;
 };

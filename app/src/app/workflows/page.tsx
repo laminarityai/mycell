@@ -10,7 +10,7 @@ export default function WorkflowsPage() {
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
       <header className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">Workflows</h1>
-        <Link href="/" className="text-sm text-muted-foreground hover:text-foreground">
+        <Link href="/org" className="text-sm text-muted-foreground hover:text-foreground">
           Back to your org
         </Link>
       </header>

@@ -5,6 +5,7 @@ import { closeDb } from "@/db/client";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs, type FixtureUser, type TwoOrgs } from "@/db/testing/two-org-fixture";
 import { fakeAiGateway, type E2eAiGateway } from "./fake-ai-gateway";
+import { fakeNango, type E2eNango } from "./fake-nango";
 import { signInAs } from "./sign-in-as";
 
 type TestFixtures = {
@@ -12,6 +13,8 @@ type TestFixtures = {
   signInAs: (user: FixtureUser) => Promise<void>;
   /** The fake AI Gateway, emptied for the test; a test that leaves a request unscripted fails. */
   aiGateway: E2eAiGateway;
+  /** The fake Nango, emptied for the test; a request it can't answer fails the test. */
+  nango: E2eNango;
 };
 type WorkerFixtures = { database: undefined };
 
@@ -35,6 +38,11 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
     const gateway = await fakeAiGateway(request);
     await provide(gateway);
     expect(await gateway.unscripted(), "model calls the test didn't script").toEqual([]);
+  },
+  nango: async ({ request }, provide) => {
+    const nango = await fakeNango(request);
+    await provide(nango);
+    expect(await nango.unhandled(), "Nango requests the fake couldn't answer").toEqual([]);
   },
 });
 

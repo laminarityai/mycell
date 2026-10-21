@@ -222,7 +222,7 @@ test("an admin starts a conversation and sees why the builder can't answer, and 
   signInAs,
 }) => {
   await signInAs(orgA.admin);
-  await page.goto("/");
+  await page.goto("/org");
   await page.getByRole("link", { name: "Builder chat" }).click();
   await expect(page).toHaveURL("/builder");
   await expect(page.getByText("No conversations yet.")).toBeVisible();
@@ -247,9 +247,9 @@ test("an admin starts a conversation and sees why the builder can't answer, and 
   await page.context().clearCookies();
   await signInAs(orgA.member);
   await page.goto("/builder");
-  await expect(page).toHaveURL("/");
+  await expect(page).toHaveURL("/reviews");
   await page.goto(`/builder/${conversationId}`);
-  await expect(page).toHaveURL("/");
+  await expect(page).toHaveURL("/reviews");
   const turn = await page.request.post("/api/builder/turn", {
     data: { conversationId, message: "Hello" },
   });

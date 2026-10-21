@@ -5,12 +5,13 @@
 // engine added can't be removed), and, while it waits for a decision, Accept and Reject and
 // showing or hiding it on the page's graph.
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RiskBadge } from "@/features/workflows/ui";
 import type { Change } from "@/features/spec/diff";
 import type { ActionResult } from "@/lib/errors";
+import { cn } from "@/lib/utils";
 import { acceptProposalAction, rejectProposalAction } from "../actions";
 import type { Proposal, ProposalGroup, ProposalPath, ProposalStatus, ProposalStep } from "../types";
 import { useProposalOnGraph } from "./proposal-on-graph";
@@ -134,42 +135,24 @@ function GroupSection({ group }: { group: ProposalGroup }) {
 }
 
 function PathHeader({ path, title }: { path: ProposalPath; title: string }) {
-  const change = CHANGE_LABELS[path.change];
   return (
-    <div
-      className={
-        path.change === "removed"
-          ? "flex flex-col gap-1 text-sm text-muted-foreground line-through"
-          : "flex flex-col gap-1 text-sm"
-      }
-    >
-      <div className="flex flex-wrap items-center gap-2">
-        {change === null ? null : <Badge variant="outline">{change}</Badge>}
-        <span className="font-medium">{path.otherwise ? title : `Path “${title}”`}</span>
-      </div>
+    <ChangeRow change={path.change}>
+      <span className="font-medium">{path.otherwise ? title : `Path “${title}”`}</span>
       <p>{path.text}</p>
       {path.before === null ? null : (
         <p className="text-xs text-muted-foreground">
           Before: “{path.before.name}”. {path.before.text}
         </p>
       )}
-    </div>
+    </ChangeRow>
   );
 }
 
 function StepRow({ step }: { step: ProposalStep }) {
-  const change = CHANGE_LABELS[step.change];
   return (
-    <li
-      className={
-        step.change === "removed"
-          ? "flex flex-col gap-1 text-sm text-muted-foreground line-through"
-          : "flex flex-col gap-1 text-sm"
-      }
-    >
-      <div className="flex flex-wrap items-center gap-2">
-        {change === null ? null : <Badge variant="outline">{change}</Badge>}
-        <span>{step.text}</span>
+    <ChangeRow as="li" change={step.change}>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="min-w-0">{step.text}</span>
         {step.risk === null ? null : <RiskBadge risk={step.risk} />}
         {step.waitsForReview ? (
           <Badge variant="secondary">
@@ -180,7 +163,35 @@ function StepRow({ step }: { step: ProposalStep }) {
       {step.before === null ? null : (
         <p className="text-xs text-muted-foreground">Before: {step.before}</p>
       )}
-    </li>
+    </ChangeRow>
+  );
+}
+
+/**
+ * A changed step or path: its change's badge beside its first line, and its words in a column
+ * of their own, so a long line wraps under itself rather than under the badge.
+ */
+function ChangeRow({
+  as: Row = "div",
+  change,
+  children,
+}: {
+  as?: "div" | "li";
+  change: Change;
+  children: ReactNode;
+}) {
+  const label = CHANGE_LABELS[change];
+  return (
+    <Row
+      className={cn(
+        "grid items-start gap-x-2 text-sm",
+        label === null ? "grid-cols-1" : "grid-cols-[auto_minmax(0,1fr)]",
+        change === "removed" && "text-muted-foreground line-through",
+      )}
+    >
+      {label === null ? null : <Badge variant="outline">{label}</Badge>}
+      <div className="flex min-w-0 flex-col gap-1">{children}</div>
+    </Row>
   );
 }
 

@@ -11,6 +11,8 @@ Rules, which Mycel also enforces when a spec is saved:
 - Anything that reaches other people (an external send) waits in its app's pending form, such
   as a Gmail draft, for a person to review before it goes anywhere.
 - A workflow never publishes itself. Admins review and publish.
+- Suggest every change by calling propose_spec with the whole spec. The admin accepts or
+  rejects it; nothing is saved until they accept.
 
 A spec (specVersion 1) has an id, credentials ("member" runs on each enabling member's own
 connection, "org" on an org connection), a trigger, and steps that run in order. Step types:

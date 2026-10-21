@@ -6,6 +6,7 @@ import { tool, type Tool } from "ai";
 import { z } from "zod";
 import { getWorkflow } from "@/features/workflows/server";
 import type { Ctx } from "@/lib/ctx";
+import { proposeSpec } from "./proposals";
 
 /** What a tool knows about the turn calling it. */
 export type TurnInfo = { conversationId: string; workflowId: string | null };
@@ -54,7 +55,23 @@ const getWorkflowTool = builderTool({
   },
 });
 
+const proposeSpecTool = builderTool({
+  description:
+    "Propose a whole workflow spec for the admin to accept or reject: for a new workflow, or a " +
+    "change to an existing one (the conversation's workflow unless you pass another's " +
+    "workflowId). Send the complete spec, not a patch. It is validated as saving would; when " +
+    "it fails you get every issue to fix and call again. Nothing is saved until an admin " +
+    "accepts it, and nothing is ever published by you.",
+  inputSchema: z.object({
+    workflowId: z.string().min(1).optional(),
+    spec: z.record(z.string(), z.unknown()),
+    summary: z.string().min(1).describe("One or two plain sentences on what it does or changes."),
+  }),
+  execute: (ctx, input, turn) => proposeSpec(ctx, input, turn),
+});
+
 /** Every tool the agent may call, by the name the model calls it. */
 export const builderTools: Record<string, BuilderTool> = {
   get_workflow: getWorkflowTool,
+  propose_spec: proposeSpecTool,
 };

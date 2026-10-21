@@ -1,12 +1,13 @@
 import { expect } from "vitest";
 import { defineIsolationCases } from "@/db/testing/isolation";
 import type { TwoOrgs } from "@/db/testing/two-org-fixture";
-import { saveWorkflow } from "@/features/workflows/server";
+import { getWorkflow, saveWorkflow } from "@/features/workflows/server";
 import { NotFoundError } from "@/lib/errors";
 import { connectGmail } from "@/testing/connect-helpers";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import * as server from "../server";
-import { labelSpec } from "./specs";
+import { proposeInTurn } from "./proposal-helpers";
+import { draftSpec, labelSpec } from "./specs";
 import { fundOrg, readTurn } from "./turn-helpers";
 
 // Org B has a workflow and a conversation about it with one turn, so every case can check
@@ -27,7 +28,46 @@ async function seedOrgB({ orgB }: TwoOrgs) {
   };
 }
 
+// Org B's conversation about its workflow holds a proposal waiting for a decision.
+async function seedOrgBProposal(orgs: TwoOrgs) {
+  const orgB = await seedOrgB(orgs);
+  const admin = orgs.orgB.admin.ctx;
+  await proposeInTurn(admin, orgB.conversationId, [draftSpec({ id: "label-pricing" })]);
+  const proposal = (await server.listProposals(admin, orgB.conversationId)).at(0);
+  if (proposal === undefined) throw new Error("org B's proposal wasn't stored");
+  return { ...orgB, proposal, workflowBefore: await getWorkflow(admin, orgB.workflowId) };
+}
+
 export const isolationCases = defineIsolationCases(server, {
+  listProposals: async (orgs) => {
+    const orgB = await seedOrgBProposal(orgs);
+
+    await expect(server.listProposals(orgs.orgA.admin.ctx, orgB.conversationId)).rejects.toThrow(
+      NotFoundError,
+    );
+  },
+
+  acceptProposal: async (orgs) => {
+    const orgB = await seedOrgBProposal(orgs);
+
+    await expect(server.acceptProposal(orgs.orgA.admin.ctx, orgB.proposal.id)).rejects.toThrow(
+      NotFoundError,
+    );
+    const admin = orgs.orgB.admin.ctx;
+    expect(await getWorkflow(admin, orgB.workflowId)).toEqual(orgB.workflowBefore);
+    expect(await server.listProposals(admin, orgB.conversationId)).toEqual([orgB.proposal]);
+  },
+
+  rejectProposal: async (orgs) => {
+    const orgB = await seedOrgBProposal(orgs);
+
+    await expect(server.rejectProposal(orgs.orgA.admin.ctx, orgB.proposal.id)).rejects.toThrow(
+      NotFoundError,
+    );
+    const admin = orgs.orgB.admin.ctx;
+    expect(await server.listProposals(admin, orgB.conversationId)).toEqual([orgB.proposal]);
+  },
+
   startConversation: async (orgs) => {
     const orgB = await seedOrgB(orgs);
     const admin = orgs.orgA.admin.ctx;

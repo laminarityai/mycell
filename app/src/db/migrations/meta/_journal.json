@@ -120,6 +120,13 @@
       "when": 1792539626470,
       "tag": "0016_builder-conversations",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792541089527,
+      "tag": "0017_builder-proposals",
+      "breakpoints": true
     }
   ]
 }

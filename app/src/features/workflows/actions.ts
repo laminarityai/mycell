@@ -8,12 +8,14 @@ import { actionError, ValidationError, type ActionResult } from "@/lib/errors";
 import { parseForm } from "@/lib/forms";
 import {
   checkWorkflowSpec,
+  disable,
+  enable,
   publishWorkflow,
   saveWorkflow,
   switchWorkflowOff,
   switchWorkflowOn,
 } from "./server";
-import type { SpecCheckResult } from "./types";
+import type { EnableResult, SpecCheckResult } from "./types";
 
 const saveInput = z.object({
   workflowId: z.string().min(1).optional(),
@@ -119,6 +121,47 @@ export async function switchWorkflowOffAction(
   }
   refresh();
   return {};
+}
+
+const workflowIdInput = z.string().min(1);
+
+/**
+ * Switches a workflow on for the caller's own Google connection. When the connection is missing
+ * or short of an app, it says so instead, and the page sends the member through connecting or
+ * reconnecting, then calls this again.
+ */
+export async function enableWorkflowAction(
+  workflowId: unknown,
+): Promise<EnableResult | { error: string }> {
+  const ctx = await getCtx();
+  let result: EnableResult;
+  try {
+    result = await enable(ctx, parseWorkflowId(workflowId));
+  } catch (error) {
+    return { error: actionError(error).error ?? "Couldn't switch it on. Try again." };
+  }
+  if ("enabled" in result) refresh();
+  return result;
+}
+
+/** Switches the caller's enablement of a workflow off. */
+export async function disableWorkflowAction(workflowId: unknown): Promise<ActionResult> {
+  const ctx = await getCtx();
+  try {
+    await disable(ctx, parseWorkflowId(workflowId));
+  } catch (error) {
+    return actionError(error);
+  }
+  refresh();
+  return {};
+}
+
+function parseWorkflowId(workflowId: unknown): string {
+  const parsed = workflowIdInput.safeParse(workflowId);
+  if (!parsed.success) {
+    throw new ValidationError("Something was missing. Reload the page and try again.");
+  }
+  return parsed.data;
 }
 
 /**

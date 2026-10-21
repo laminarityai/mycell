@@ -1,7 +1,7 @@
 "use client";
 
 // The workflow as a graph, top to bottom: the spec as the policy engine leaves it (reviews and
-// risk levels from the catalog), a proposal drawn as its changes, or a Try it's route lit up.
+// risk levels from the catalog), a proposal drawn as its changes, or a Try it's steps and paths lit up.
 // The layout is automatic; the admin pans and zooms. It opens at full size and scrolls rather
 // than shrinking a big workflow to fit. Being edited, its boxes open a side panel and
 // "+" on its lines adds a step; the caller draws the panel and the menu over it.
@@ -34,7 +34,7 @@ export type WorkflowGraphProps = {
   spec: Spec | null;
   /** A proposed spec, drawn as its changes to `spec`. */
   proposal?: Spec;
-  /** A Try it of `spec`, whose route the graph lights up. */
+  /** A Try it of `spec`, whose steps and paths the graph lights up. */
   trace?: GraphTrace | null;
   /** With no steps to draw, a box under the trigger says where the workflow will appear. */
   placeholder?: boolean;

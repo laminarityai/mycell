@@ -1,11 +1,13 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, expectTypeOf, it } from "vitest";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { grantCredits } from "@/features/credits/server";
+import type { GraphTrace } from "@/features/spec/graph";
 import { systemCtx } from "@/lib/ctx";
 import { connectGoogle } from "@/testing/connect-helpers";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import { dryRun } from "../server";
+import type { DryRunResult, DryRunStep } from "../types";
 import { pricingQuestion } from "./run-helpers";
 
 beforeEach(resetDatabase);
@@ -178,5 +180,13 @@ describe("Try it on an every-match branch", () => {
     expect(result.steps[2]?.paths?.at(2)?.checks.map((each) => each.check)).toEqual([
       "the order total is more than 1000",
     ]);
+  });
+});
+
+describe("a Try it's result on the workflow graph", () => {
+  it("has the shape the graph reads, which names it rather than importing runtime's types", () => {
+    // Checked when the tests compile: the graph's trace type can't drift from a dry run's.
+    expectTypeOf<DryRunStep>().toExtend<GraphTrace["steps"][number]>();
+    expectTypeOf<DryRunResult>().toExtend<GraphTrace>();
   });
 });

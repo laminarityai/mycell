@@ -26,7 +26,7 @@ export default function WorkflowPage({
           Back to workflows
         </Link>
       </header>
-      {/* Try it lights up its route on the workflow's graph. */}
+      {/* Try it lights up the steps it ran and the paths it took on the workflow's graph. */}
       <GraphTraceProvider>
         <Suspense fallback={<p className="text-sm text-muted-foreground">Loading workflow…</p>}>
           <Workflow params={params} />

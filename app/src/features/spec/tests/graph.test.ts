@@ -97,7 +97,7 @@ describe("graphView", () => {
     ]);
   });
 
-  it("lights up a Try it's route: the steps it ran, and why each path did or didn't run", () => {
+  it("lights up what a Try it ran: the steps it ran, and why each path did or didn't run", () => {
     const complaint = { check: "complaint check", passed: false, reason: 'said "pricing"' };
     const pricing = { check: "pricing check", passed: true, reason: 'said "pricing", 93% sure' };
     const trace: GraphTrace = {

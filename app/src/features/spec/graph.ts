@@ -1,6 +1,6 @@
 // The workflow graph's view model: the spec as a tree of view steps and view paths, each in
-// plain words with its risk level and reviews, marked with a proposal's changes or a Try it's
-// route. Pure, so client code may import it; `layout.ts` places it, and the page draws it.
+// plain words with its risk level and reviews, marked with a proposal's changes or what a Try it
+// ran. Pure, so client code may import it; `layout.ts` places it, and the page draws it.
 // `spec` doesn't know the catalog (policy imports spec), so callers pass what it says about each
 // action and which approvals the policy engine inserted, as `describeSpec` takes them.
 import type { SubjectWords } from "./conditions";
@@ -15,7 +15,7 @@ export type GraphActionInfo<Risk extends string = string> = ActionInfo<Risk> & {
 export type GraphChange = "added" | "removed" | "changed";
 
 /** How a Try it treated a step: it ran, it ran and failed, or the message never reached it. */
-export type StepRun = "taken" | "failed" | "skipped";
+export type GraphStepStatus = "taken" | "failed" | "skipped";
 
 export type PathStatus = "taken" | "not_taken" | "not_checked" | "not_needed";
 
@@ -58,7 +58,7 @@ export type GraphStep<Risk extends string = string> = {
   /** For a changed step, what it did before. */
   before: string | null;
   /** How a Try it treated it; null when nothing was tried. */
-  run: StepRun | null;
+  run: GraphStepStatus | null;
   /** A branch's mode and its paths, left to right in the order they're checked, otherwise last. */
   branch: { mode: BranchStep["mode"]; paths: GraphPath<Risk>[] } | null;
 };
@@ -80,7 +80,7 @@ export type GraphPath<Risk extends string = string> = {
 export type GraphView<Risk extends string = string> = {
   /** The steps under the trigger. None before a workflow has any. */
   steps: GraphStep<Risk>[];
-  /** A Try it's route is drawn. */
+  /** A Try it is drawn: the steps it ran, and the paths it took. */
   tried: boolean;
 };
 
@@ -92,7 +92,7 @@ export type GraphOptions<Risk extends string = string> = {
   action?: (name: string) => GraphActionInfo<Risk> | undefined;
   /** The IDs of the approval steps the policy engine inserted into `spec`. */
   insertedApprovals?: readonly string[];
-  /** A Try it of the spec, whose route the graph lights up. */
+  /** A Try it of the spec, whose steps and paths the graph lights up. */
   trace?: GraphTrace;
   /** A proposed spec, drawn as its changes to `spec`. */
   proposal?: GraphSide;
@@ -118,7 +118,7 @@ export function graphView<Risk extends string = string>(
     new Set(proposal?.insertedApprovals ?? options.insertedApprovals),
   );
   const removedWords = stepWords(options.action, new Set(options.insertedApprovals));
-  const route = routeOf(options.trace);
+  const ran = whatRan(options.trace);
 
   // A step the proposal removes, and what's gone with it on its paths, struck through. What
   // moved elsewhere is drawn where it went.
@@ -154,7 +154,7 @@ export function graphView<Risk extends string = string>(
         change: mark?.change ?? null,
         before:
           mark?.change === "changed" && mark.before !== undefined ? words(mark.before).text : null,
-        run: route.step(step.id),
+        run: ran.step(step.id),
         branch: step.type === "branch" ? { mode: step.mode, paths: paths(step) } : null,
       };
     });
@@ -173,7 +173,7 @@ export function graphView<Risk extends string = string>(
         ...pathHeading(path, drawnWords),
         change: mark?.change ?? null,
         before: mark?.before ?? null,
-        run: route.path(path.id),
+        run: ran.path(path.id),
         steps: list(path.steps, path.id),
       };
     });
@@ -228,8 +228,11 @@ function withRemoved<Base extends { id: string }, Drawn extends { id: string }>(
   return [...drawn.flatMap((item) => [...(before.get(item.id) ?? []), item]), ...pending];
 }
 
-/** A Try it's route by step and path ID; every lookup is null when nothing was tried. */
-function routeOf(trace: GraphTrace | undefined) {
+/**
+ * What a Try it ran, by step and path ID: each step's status, and each path's with its checks.
+ * Every lookup is null when nothing was tried.
+ */
+function whatRan(trace: GraphTrace | undefined) {
   const steps = new Map(trace?.steps.map((step) => [step.stepId, step.status]));
   const paths = new Map(
     trace?.steps.flatMap((step) =>
@@ -240,7 +243,7 @@ function routeOf(trace: GraphTrace | undefined) {
     ),
   );
   return {
-    step: (id: string): StepRun | null => {
+    step: (id: string): GraphStepStatus | null => {
       if (trace === undefined) return null;
       const status = steps.get(id);
       return status === undefined ? "skipped" : status === "succeeded" ? "taken" : "failed";

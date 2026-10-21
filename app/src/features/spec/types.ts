@@ -218,7 +218,7 @@ export const conditionSchema = specObject({
 });
 export type Condition = z.infer<typeof conditionSchema>;
 
-/** One route out of a branch: its condition, and the steps a message follows when it holds. */
+/** One way out of a branch: its condition, and the steps a message follows when it holds. */
 const pathSchema = z.strictObject({
   id: stepId,
   name: z.string().trim().min(1, "Name the path."),

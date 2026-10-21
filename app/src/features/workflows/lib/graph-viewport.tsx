@@ -1,7 +1,8 @@
 "use client";
 
 // Where the workflow graph opens: at full size, shrunk a little when that makes it fit, and
-// otherwise at full size with the admin scrolling. Zooming out is on the graph's controls.
+// otherwise at full size from its left edge, so the first path checked is whole, with the admin
+// scrolling right for the rest. Zooming out is on the graph's controls.
 import { useReactFlow, type Node } from "@xyflow/react";
 import { useEffect, useState, type RefObject } from "react";
 
@@ -11,8 +12,8 @@ const SMALLEST_FIT = 0.9;
 
 /**
  * Opens the drawing at full size when it fits, or shrunk to fit when that keeps it at least
- * 90%; past that, it opens at full size at the top, centred on the trigger, and the admin
- * scrolls. A graph hidden when it was drawn (a tab not shown) opens once it has a width.
+ * 90%; past that, it opens at full size at the top from its left edge, where first match checks
+ * first, and the admin scrolls right. A graph hidden when it was drawn (a tab not shown) opens once it has a width.
  */
 export function OpenReadable({
   layout,
@@ -41,12 +42,8 @@ export function OpenReadable({
     const fitting = room / layout.width;
     const fits = fitting >= SMALLEST_FIT;
     const zoom = fits ? Math.min(1, fitting) : 1;
-    const trigger = layout.nodes.find((node) => node.type === "trigger");
-    const center =
-      fits || trigger === undefined
-        ? layout.width / 2
-        : trigger.position.x + (trigger.width ?? 0) / 2;
-    void setViewport({ x: width / 2 - center * zoom, y: top, zoom });
+    const x = fits ? width / 2 - (layout.width / 2) * zoom : MARGIN;
+    void setViewport({ x, y: top, zoom });
     // Re-open only when the drawing's shape changes or it's first shown, not on every Try it,
     // redraw or resize.
     // eslint-disable-next-line react-hooks/exhaustive-deps

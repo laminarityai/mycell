@@ -177,10 +177,6 @@ _Avoid_: Team review, group review
 Giving one review to a colleague, who then sees it and acts on it from the review's own connection. A workflow allows it or not; a member's own review is handed on only by that member.
 _Avoid_: Delegation (that's connection access, ADR-0016), forwarding (that's sending the email on), reassign
 
-**Review digest**:
-The daily email telling a person how many reviews wait for them, per workflow and oldest first, with no message or draft text. On by default; each person can turn it off.
-_Avoid_: Notification (too broad), reminder
-
 **Capability request**:
 A structured ask, raised when no catalog action fits, for our team to build a new one.
 _Avoid_: Feature request

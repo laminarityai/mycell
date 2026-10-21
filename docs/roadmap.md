@@ -75,7 +75,7 @@ Planned in this order, each its own milestone or part of one, after M12:
 
 - Admin publishes to tags; members enable/disable; member vs. org credentials.
 - Versioning with auto-upgrade and the re-enable exception.
-- The Reviews page: a member's main screen, holding every step that needs a person (ADR-0013). Accept, decline, edit, and hand-off where the workflow allows it; a review count and a daily digest email.
+- The Reviews page: a member's main screen, holding every step that needs a person (ADR-0013). Accept, decline, edit, and hand-off where the workflow allows it; a count of waiting reviews in the navigation. No email: Mycel sends none in v1.
 - Record how each review ends; this measures the builder ship bar.
 - **Done when:** a teammate enables a workflow on their own inbox without our help.
 
@@ -105,7 +105,7 @@ Planned in this order, each its own milestone or part of one, after M12:
 
 ## M8: Observability and failure handling
 
-- Admin runs/traces view, retries, auto-pause after 3 consecutive failures, admin email, member "paused" badge.
+- Admin runs/traces view, retries, auto-pause after 3 consecutive failures, admin alerts in the app (Mycel sends no email in v1 unless decided otherwise), member "paused" badge.
 
 ## M9: Continuous discovery and memory
 

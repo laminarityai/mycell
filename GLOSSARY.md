@@ -147,6 +147,10 @@ _Avoid_: Model, model tier
 The state of a workflow or enablement that will not run, always shown together with its reason.
 _Avoid_: Disabled, suspended, stopped
 
+**Archived**:
+A workflow an admin has stopped everywhere and hidden from members. Its enablements and org switch are kept, so restoring it brings them back as they were. It isn't paused: nothing about it waits on anyone else.
+_Avoid_: Deleted, retired
+
 **Catalog action**:
 One operation on an external source that a workflow is allowed to call, with a fixed risk level.
 _Avoid_: Tool, integration, capability

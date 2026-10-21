@@ -3,7 +3,7 @@
 // workflow's latest version allows it.
 import type { Ctx } from "@/lib/ctx";
 import type { ReviewSharing } from "../types";
-import { latestVersions } from "./versions";
+import { latestVersions } from "./latest-versions";
 import { sharingATag } from "./visibility";
 
 /**

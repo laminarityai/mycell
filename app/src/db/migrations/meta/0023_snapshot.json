@@ -1,5 +1,5 @@
 {
-  "id": "311e362b-1d2e-400e-b18a-9a0a77ca41b4",
+  "id": "2920043f-2478-47e9-a2b9-b6138d2456c7",
   "prevId": "f9e91353-4a84-460a-918f-ead5f9475ecd",
   "version": "7",
   "dialect": "postgresql",
@@ -1607,18 +1607,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "handed_to_user_id": {
-          "name": "handed_to_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "handed_by_user_id": {
-          "name": "handed_by_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "status": {
           "name": "status",
           "type": "text",
@@ -2480,6 +2468,12 @@
         },
         "org_switched_on_at": {
           "name": "org_switched_on_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "archived_at": {
+          "name": "archived_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false

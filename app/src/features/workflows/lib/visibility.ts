@@ -1,7 +1,7 @@
 // Who sees a workflow (M5): a member sees one whose latest published version shares a tag with
-// them; an admin sees every one. What the Workflows page shows is read here.
+// them, unless it's archived; an admin sees every one. What the Workflows page shows is read here.
 import { eq, inArray } from "drizzle-orm";
-import { forOrg } from "@/db/for-org";
+import { forOrg, type OrgScopedDb } from "@/db/for-org";
 import { findAction } from "@/features/policy/catalog";
 import type { RiskLevel } from "@/features/policy/types";
 import { describeSpec, type ActionInfo } from "@/features/spec/describe";
@@ -13,7 +13,7 @@ import type { Audience, VisibleWorkflow, WorkflowVersion } from "../types";
 import { requiredApps } from "./requirements";
 import { workflows, workflowVersionTags } from "./schema";
 import { switchesOf } from "./switches";
-import { latestVersions } from "./versions";
+import { latestVersions } from "./latest-versions";
 
 type Workflow = typeof workflows.$inferSelect;
 
@@ -60,16 +60,22 @@ export async function audiencesOf(ctx: Ctx, versionIds: string[]): Promise<Map<s
  * one; anyone else one published to a tag they have; someone no longer in the org, none. It's
  * how the system ctx checks what someone else may see (the trigger's fan-out, say), so it
  * reads their tags rather than the caller's. Asking about a pair not given answers false.
+ * Versions' tags are read through `db`, which a publish passes to see the version it's writing.
  */
 export async function seenByUsers(
   ctx: Ctx,
   pairs: readonly { userId: string; versionId: string }[],
+  db: OrgScopedDb = forOrg(ctx),
 ): Promise<(userId: string, versionId: string) => boolean> {
   if (pairs.length === 0) return () => false;
   const asked = new Set(pairs.map(({ userId, versionId }) => `${userId}\n${versionId}`));
   const roles = new Map((await listUsers(ctx)).map((user) => [user.id, user.role]));
   const userTags = await listTagIdsByUser(ctx, [...new Set(pairs.map(({ userId }) => userId))]);
-  const versionTags = await tagIdsOf(ctx, [...new Set(pairs.map(({ versionId }) => versionId))]);
+  const versionTags = await tagIdsOf(
+    ctx,
+    [...new Set(pairs.map(({ versionId }) => versionId))],
+    db,
+  );
   return (userId, versionId) => {
     if (!asked.has(`${userId}\n${versionId}`)) return false;
     const role = roles.get(userId);
@@ -85,12 +91,14 @@ async function visible(ctx: Ctx, rows: Workflow[]): Promise<VisibleWorkflow[]> {
     ctx,
     rows.map((row) => row.id),
   );
+  const admin = ctx.role === "admin";
   const published = rows.flatMap((row) => {
     const version = latest.get(row.id);
-    return version === undefined ? [] : [{ row, version }];
+    // An archived workflow is hidden from everyone but admins.
+    if (version === undefined || (row.archivedAt !== null && !admin)) return [];
+    return [{ row, version }];
   });
   const versionIds = published.map(({ version }) => version.id);
-  const admin = ctx.role === "admin";
   const seen = admin ? published : await sharingATag(ctx, published, versionIds);
   const switches = await switchesOf(
     ctx,
@@ -126,10 +134,14 @@ export async function sharingATag<T extends { version: WorkflowVersion }>(
 }
 
 // Each version's tag IDs, by version ID.
-async function tagIdsOf(ctx: Ctx, versionIds: string[]): Promise<Map<string, string[]>> {
+async function tagIdsOf(
+  ctx: Ctx,
+  versionIds: string[],
+  db: OrgScopedDb = forOrg(ctx),
+): Promise<Map<string, string[]>> {
   const byVersion = new Map<string, string[]>();
   if (versionIds.length === 0) return byVersion;
-  const rows = await forOrg(ctx).select(workflowVersionTags, {
+  const rows = await db.select(workflowVersionTags, {
     where: inArray(workflowVersionTags.workflowVersionId, versionIds),
   });
   for (const row of rows) {

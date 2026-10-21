@@ -4,6 +4,7 @@ import type { TwoOrgs } from "@/db/testing/two-org-fixture";
 import { systemCtx } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
 import { connectGmail, connectMailbox } from "@/testing/connect-helpers";
+import { listTags, unassignTag } from "@/features/tags/server";
 import { publishTo, tagUsers } from "@/testing/visibility-helpers";
 import * as server from "../server";
 import { draftSpec, labelSpec } from "./specs";
@@ -32,6 +33,11 @@ async function publishedToSalesInOrgB({ orgB }: TwoOrgs) {
   await connectGmail(orgB.admin.ctx, orgB.admin.email);
   await tagUsers(orgB.admin.ctx, "sales", [orgB.member]);
   return publishTo(orgB.admin.ctx, "B", labelSpec(), ["sales"]);
+}
+
+// Org B's tag IDs.
+async function orgBTags({ orgB }: TwoOrgs): Promise<string[]> {
+  return (await listTags(orgB.admin.ctx)).map((tag) => tag.id);
 }
 
 export const isolationCases = defineIsolationCases(server, {
@@ -229,6 +235,47 @@ export const isolationCases = defineIsolationCases(server, {
         NotFoundError,
       );
     }
+  },
+
+  archiveWorkflow: async (orgs) => {
+    const { orgA, orgB } = orgs;
+    const b = await publishedToSalesInOrgB(orgs);
+
+    await expect(server.archiveWorkflow(orgA.admin.ctx, b.workflowId)).rejects.toThrow(
+      NotFoundError,
+    );
+    expect((await server.listVisibleWorkflows(orgB.member.ctx)).map((w) => w.id)).toEqual([
+      b.workflowId,
+    ]);
+  },
+
+  restoreWorkflow: async (orgs) => {
+    const { orgA, orgB } = orgs;
+    const b = await publishedToSalesInOrgB(orgs);
+    await server.archiveWorkflow(orgB.admin.ctx, b.workflowId);
+
+    await expect(server.restoreWorkflow(orgA.admin.ctx, b.workflowId)).rejects.toThrow(
+      NotFoundError,
+    );
+    expect(await server.listVisibleWorkflows(orgB.member.ctx)).toEqual([]);
+  },
+
+  removeInvisibleEnablements: async (orgs) => {
+    const { orgA, orgB } = orgs;
+    const b = await publishedToSalesInOrgB(orgs);
+    await connectMailbox(orgB.member.ctx, orgB.member.email);
+    await server.enable(orgB.member.ctx, b.workflowId);
+    // Org B's member loses `sales`, and no cleanup has run in org B yet.
+    for (const tagId of await orgBTags(orgs)) {
+      await unassignTag(orgB.admin.ctx, tagId, orgB.member.id);
+    }
+
+    for (const ctx of [systemCtx(orgA.id), orgA.admin.ctx]) {
+      await server.removeInvisibleEnablements(ctx, {});
+      await server.removeInvisibleEnablements(ctx, { userId: orgB.member.id });
+      await server.removeInvisibleEnablements(ctx, { workflowId: b.workflowId });
+    }
+    expect(await server.listEnablements(orgB.admin.ctx, b.workflowId)).toHaveLength(1);
   },
 
   getWorkflowVersion: async (orgs) => {

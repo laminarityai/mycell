@@ -8,6 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ArchiveForm } from "./lib/archive-form";
 import { blankSpec } from "./lib/blank-spec";
 import { GraphTraceProvider, useGraphTrace, useShowOnGraph } from "./lib/graph-trace";
 import { RiskBadge } from "./lib/risk-badge";
@@ -69,6 +70,16 @@ export function WorkflowSwitchSection({
   );
 }
 
+/** Archiving the workflow, or restoring it while archived. */
+export function WorkflowArchiveSection({ workflow }: { workflow: WorkflowDetails }) {
+  return (
+    <section className="flex flex-col gap-2" aria-label="Archive">
+      <h2 className="text-lg font-semibold">Archive</h2>
+      <ArchiveForm workflowId={workflow.id} archivedAt={workflow.archivedAt} />
+    </section>
+  );
+}
+
 /**
  * The admin's workflows: name, latest version, its max risk level, the tags it's published to
  * and how many users they reach, whether it's on for them or the org, and who has it on or
@@ -107,6 +118,11 @@ export function WorkflowsList({
               >
                 {workflow.name}
               </Link>
+              {workflow.archivedAt === null ? null : (
+                <Badge variant="outline" className="ml-2">
+                  Archived
+                </Badge>
+              )}
             </TableCell>
             <TableCell>
               {workflow.latestVersion === null

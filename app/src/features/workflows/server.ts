@@ -6,8 +6,13 @@ export { previewPublish } from "./lib/publish-preview";
 export { getVisibleWorkflow, listVisibleWorkflows } from "./lib/visibility";
 export { getWorkflow, listWorkflows, saveWorkflow } from "./lib/workflows";
 export { switchWorkflowOff, switchWorkflowOn } from "./lib/switches";
+// Admins stop a workflow everywhere, and bring it back as it was.
+export { archiveWorkflow, restoreWorkflow } from "./lib/archiving";
 // Members switching a workflow they can see on and off for their own Google connection.
 export { disable, enable, listEnablements } from "./lib/enablements";
+// Deleting the enablements of users who can no longer see a workflow: a job calls it as the
+// system ctx when someone loses a tag.
+export { removeInvisibleEnablements } from "./lib/lost-visibility";
 export { runnableConnections } from "./lib/runnable-connections";
 // Save-time validation without saving: every issue, or what the policy engine made of the spec.
 export { checkWorkflowSpec } from "./lib/validation";

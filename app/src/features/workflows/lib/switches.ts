@@ -14,7 +14,7 @@ import type { Switch, SwitchedOn, WorkflowSwitch } from "../types";
 import { enablements, workflows } from "./schema";
 import { scopeIssues } from "./scope-check";
 import { reachesGmail } from "./validation";
-import { latestVersions } from "./versions";
+import { latestVersions } from "./latest-versions";
 import { findWorkflow } from "./access";
 import { deleteEnablement, switchOnEnablement } from "./enablement-rows";
 

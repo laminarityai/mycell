@@ -5,7 +5,7 @@ import { forOrg } from "@/db/for-org";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import type { Tag, TagSummary } from "../types";
-
+import { sendTagDeleted } from "./events";
 import { tagAssignments, tags } from "./schema";
 import { normalizeTagName } from "./tag-name";
 
@@ -41,11 +41,16 @@ export async function listTags(ctx: Ctx): Promise<TagSummary[]> {
   }));
 }
 
-/** Deletes the tag; its assignments go with it (foreign key cascade). */
+/**
+ * Deletes the tag; its assignments, and the workflow versions' publishing to it, go with it
+ * (foreign key cascades). Announced (`tags/tag.deleted`), so workflows its users no longer see
+ * stop being switched on for them.
+ */
 export async function deleteTag(ctx: Ctx, tagId: string): Promise<void> {
   requireAdmin(ctx);
   const deleted = await forOrg(ctx).delete(tags, eq(tags.id, tagId));
   if (deleted.length === 0) throw new NotFoundError("tag");
+  await sendTagDeleted(ctx, tagId);
 }
 
 /** The caller's own tags. Any role may ask: it's how a member sees which tags they have. */

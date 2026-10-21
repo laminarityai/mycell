@@ -5,6 +5,7 @@ import { z } from "zod";
 import type { RiskLevel } from "@/features/policy/types";
 import type { StepDescription } from "@/features/spec/describe";
 import type { Change } from "@/features/spec/diff";
+import type { Spec } from "@/features/spec/types";
 
 /** Why the agent's turn shows a notice instead of (or after) a reply. */
 export const noticeKindSchema = z.enum(["out_of_credits", "failed"]);
@@ -122,6 +123,10 @@ export type Proposal = {
   groups: ProposalGroup[];
   /** Top-level settings it changes, such as `credentials`. */
   settings: string[];
+  /** The working spec it proposes, as written (the graph applies the policy engine itself). */
+  spec: Spec;
+  /** The working spec it was made against; null for a new workflow. */
+  baseSpec: Spec | null;
   createdAt: Date;
   decidedAt: Date | null;
 };

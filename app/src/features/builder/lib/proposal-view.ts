@@ -20,8 +20,10 @@ type ProposalRow = typeof builderProposals.$inferSelect;
 
 export function toProposal(row: ProposalRow): Proposal {
   // Both sides as a version would hold them: with the approvals the policy engine inserts.
-  const before = row.baseSpec === null ? null : withPolicy(readStoredSpec(row.baseSpec));
-  const after = withPolicy(readStoredSpec(row.spec));
+  const baseSpec = row.baseSpec === null ? null : readStoredSpec(row.baseSpec);
+  const spec = readStoredSpec(row.spec);
+  const before = baseSpec === null ? null : withPolicy(baseSpec);
+  const after = withPolicy(spec);
   const diff = diffSpecs(before?.spec ?? null, after.spec);
   const beforeSteps = described(before);
   const afterSteps = described(after);
@@ -48,6 +50,8 @@ export function toProposal(row: ProposalRow): Proposal {
     maxRisk: row.maxRisk,
     groups: groupsOf(diff.steps, step),
     settings: diff.settings,
+    spec,
+    baseSpec,
     createdAt: row.createdAt,
     decidedAt: row.decidedAt,
   };

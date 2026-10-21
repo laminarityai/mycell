@@ -5,7 +5,7 @@ import { connectGmail } from "@/testing/connect-helpers";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import { getConversation, listProposals, startConversation } from "../server";
 import { proposeInTurn, SUMMARY } from "./proposal-helpers";
-import { saveWorkflow } from "@/features/workflows/server";
+import { getWorkflow, saveWorkflow } from "@/features/workflows/server";
 import type { Proposal } from "../types";
 import { draftSpec, labelSpec, triageSpec } from "./specs";
 import { fundOrg } from "./turn-helpers";
@@ -183,5 +183,25 @@ describe("propose_spec", () => {
       },
     });
     expect(proposal?.groups.at(1)?.path).toMatchObject({ change: "unchanged", before: null });
+  });
+
+  it("carries the spec it was made against and the spec it proposes, in the v2 shape, for the graph", async () => {
+    const { admin, conversationId } = await setUp();
+    const { id: workflowId } = await saveWorkflow(admin, { name: "Triage", spec: triageSpec() });
+    const proposed = triageSpec() as { steps: Record<string, unknown>[] };
+    proposed.steps = proposed.steps.slice(0, 1);
+
+    await proposeInTurn(admin, conversationId, [proposed], { workflowId });
+    await proposeInTurn(admin, conversationId, [draftSpec()]);
+
+    const proposals = await listProposals(admin, conversationId);
+    const change = proposals.at(0);
+    const created = proposals.at(1);
+    expect(change?.baseSpec).toEqual((await getWorkflow(admin, workflowId)).workingSpec);
+    expect(change?.spec).toMatchObject({ specVersion: 2, steps: [{ id: "kind" }] });
+    expect(created?.baseSpec).toBeNull();
+    // The v1 draft spec is stored, and shown, upgraded.
+    expect(created?.spec.specVersion).toBe(2);
+    expect(created?.spec.steps.map((step) => step.id)).toEqual(["classify", "gate"]);
   });
 });

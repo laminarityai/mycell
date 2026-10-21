@@ -12,11 +12,24 @@ export type StreamedTurn = {
   toolCalls: string[];
   notices: { kind: string; text: string }[];
   errors: string[];
+  /** Each failed tool call's error, as the page shows it. */
+  toolErrors: string[];
+  /** Everything the page was sent. */
+  raw: string;
 };
 
 export async function readTurn(response: Response): Promise<StreamedTurn> {
-  const turn: StreamedTurn = { text: "", deltas: 0, toolCalls: [], notices: [], errors: [] };
-  for (const line of (await response.text()).split("\n")) {
+  const raw = await response.text();
+  const turn: StreamedTurn = {
+    text: "",
+    deltas: 0,
+    toolCalls: [],
+    notices: [],
+    errors: [],
+    toolErrors: [],
+    raw,
+  };
+  for (const line of raw.split("\n")) {
     if (!line.startsWith("data: ") || line === "data: [DONE]") continue;
     const chunk = JSON.parse(line.slice("data: ".length)) as Record<string, unknown>;
     if (chunk.type === "text-delta") {
@@ -28,6 +41,7 @@ export async function readTurn(response: Response): Promise<StreamedTurn> {
       turn.notices.push(chunk.data as { kind: string; text: string });
     }
     if (chunk.type === "error") turn.errors.push(String(chunk.errorText));
+    if (chunk.type === "tool-output-error") turn.toolErrors.push(String(chunk.errorText));
   }
   return turn;
 }

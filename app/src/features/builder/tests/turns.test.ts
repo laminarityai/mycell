@@ -55,6 +55,36 @@ describe("streamTurn", () => {
   });
 });
 
+describe("a failed tool call", () => {
+  it("keeps and shows our errors' own messages, and only a generic one for any other", async () => {
+    const { orgA } = await seedTwoOrgs();
+    await fundOrg(orgA.id);
+    const admin = orgA.admin.ctx;
+    const { id } = await startConversation(admin, {});
+    fakeAiGateway.reply({
+      toolCalls: [
+        { name: "get_workflow", input: { workflowId: "missing" } },
+        // Invalid input: the SDK's error quotes it.
+        { name: "read_examples", input: { connectionId: "c", query: "quoted-words", limit: 99 } },
+      ],
+    });
+    fakeAiGateway.reply({ text: "Let me try again." });
+
+    const turn = await readTurn(await streamTurn(admin, id, "Look around"));
+
+    // The model is told what was wrong within the turn.
+    const next = JSON.stringify(fakeAiGateway.requests("language").at(-1)?.body);
+    expect(next).toContain("quoted-words");
+    const errors = ["That workflow doesn't exist.", "That tool call failed."];
+    expect(turn.toolErrors.toSorted()).toEqual(errors.toSorted());
+    const reply = (await getConversation(admin, id)).messages.at(-1);
+    const outputs = reply?.parts.flatMap((part) =>
+      part.type === "tool" && part.isError ? [String(part.output)] : [],
+    );
+    expect(outputs?.toSorted()).toEqual(errors.toSorted());
+  });
+});
+
 describe("a turn's credits", () => {
   it("debits the ledger by the cost of every model step in the turn", async () => {
     const { orgA } = await seedTwoOrgs();

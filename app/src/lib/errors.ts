@@ -81,17 +81,25 @@ export type ActionResult = { error?: string; issues?: SpecInvalidIssue[] };
  * and anything else is a bug, so it's rethrown for Next.js's error handling.
  */
 export function actionError(error: unknown): ActionResult {
-  if (
-    error instanceof ForbiddenError ||
+  if (error instanceof SpecInvalidError) return { error: error.message, issues: error.issues };
+  const message = typedErrorMessage(error);
+  if (message !== undefined) return { error: message };
+  throw error;
+}
+
+/**
+ * A typed error's user-facing message, which we write and which quotes no content; undefined
+ * for anything else, whose message may quote whatever caused it.
+ */
+export function typedErrorMessage(error: unknown): string | undefined {
+  return error instanceof ForbiddenError ||
     error instanceof NotFoundError ||
     error instanceof ConflictError ||
     error instanceof ValidationError ||
-    error instanceof OutOfCreditsError
-  ) {
-    return { error: error.message };
-  }
-  if (error instanceof SpecInvalidError) return { error: error.message, issues: error.issues };
-  throw error;
+    error instanceof OutOfCreditsError ||
+    error instanceof SpecInvalidError
+    ? error.message
+    : undefined;
 }
 
 /**

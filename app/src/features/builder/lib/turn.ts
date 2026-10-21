@@ -10,12 +10,13 @@ import {
   streamText,
   toUIMessageStream,
   type StepResult,
+  type TextStreamPart,
   type ToolSet,
 } from "ai";
 import { openMeteredStream } from "@/features/runtime/server";
 import type { MeteredStream } from "@/features/runtime/types";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
-import { OutOfCreditsError, ValidationError } from "@/lib/errors";
+import { OutOfCreditsError, typedErrorMessage, ValidationError } from "@/lib/errors";
 import type { BuilderUIMessage, Notice, StoredPart } from "../types";
 import { gatherContext } from "./context";
 import { appendMessage, findConversation, messagesOf } from "./conversations";
@@ -30,6 +31,9 @@ const FAILED: Notice = {
   kind: "failed",
   text: "The builder stopped before it finished. Try sending your message again.",
 };
+
+/** What a failed tool call says, kept and shown, unless it's one of our typed errors. */
+const TOOL_FAILED = "That tool call failed.";
 
 /**
  * Takes the admin's message and streams the agent's reply. Out of credits, no model is called:
@@ -91,9 +95,9 @@ export async function streamTurn(
     execute: async ({ writer }) => {
       writer.merge(
         toUIMessageStream<ToolSet, BuilderUIMessage>({
-          stream: result.stream,
+          stream: result.stream.pipeThrough(asStored()),
           generateMessageId: () => assistantId,
-          onError: () => FAILED.text,
+          onError: (error) => (error instanceof ShownToolError ? error.message : FAILED.text),
         }),
       );
       await result.consumeStream({
@@ -110,20 +114,51 @@ export async function streamTurn(
   return createUIMessageStreamResponse({ stream });
 }
 
+// A tool error already made safe to show, carried through the UI stream's `onError`.
+class ShownToolError extends Error {}
+
+/**
+ * The model's stream as the page may see it: each tool result as that tool stores it, and each
+ * tool error as the conversation keeps it. The model got the full result and error within the
+ * turn, server-side; the page gets no more than reopening the conversation shows (invariant 8).
+ */
+function asStored(): TransformStream<TextStreamPart<ToolSet>, TextStreamPart<ToolSet>> {
+  return new TransformStream({
+    transform(part, controller) {
+      if (part.type === "tool-result") {
+        controller.enqueue({ ...part, output: storedOutput(part.toolName, part.output) });
+      } else if (part.type === "tool-error") {
+        controller.enqueue({ ...part, error: new ShownToolError(toolErrorText(part.error)) });
+      } else {
+        controller.enqueue(part);
+      }
+    },
+  });
+}
+
+function storedOutput(toolName: string, output: unknown): unknown {
+  const builderTool = builderTools[toolName] as BuilderTool | undefined;
+  return builderTool === undefined ? output : builderTool.stored(output);
+}
+
+// A typed error's message is ours; any other (the SDK's input validation, say) may quote the
+// model's input, so it's kept and shown only as a generic line, as `onError` drops a failed
+// step's error.
+function toolErrorText(error: unknown): string {
+  return typedErrorMessage(error) ?? TOOL_FAILED;
+}
+
 // What the conversation keeps of one model step: its text, and each tool call with its result
 // as that tool stores it.
 function storedParts(step: StepResult<ToolSet>): StoredPart[] {
   return step.content.flatMap((part): StoredPart[] => {
     if (part.type === "text") return part.text === "" ? [] : [{ type: "text", text: part.text }];
     if (part.type === "tool-result") {
-      const result: unknown = part.output;
-      const builderTool = builderTools[part.toolName] as BuilderTool | undefined;
-      const output = builderTool === undefined ? result : builderTool.stored(result);
+      const output = storedOutput(part.toolName, part.output);
       return [{ ...toolCall(part), output, isError: false }];
     }
     if (part.type === "tool-error") {
-      const output = part.error instanceof Error ? part.error.message : String(part.error);
-      return [{ ...toolCall(part), output, isError: true }];
+      return [{ ...toolCall(part), output: toolErrorText(part.error), isError: true }];
     }
     return [];
   });

@@ -34,9 +34,9 @@ async function readExamplesTurn(org: FixtureOrg, connectionId: string, ctx = org
     toolCalls: [{ name: "read_examples", input: { connectionId, query: "pricing", limit: 5 } }],
   });
   fakeAiGateway.reply({ text: "I see." });
-  await readTurn(await streamTurn(ctx, id, "Look at a few pricing questions"));
+  const streamed = await readTurn(await streamTurn(ctx, id, "Look at a few pricing questions"));
   const next = JSON.stringify(fakeAiGateway.requests("language").at(-1)?.body);
-  return { conversationId: id, next };
+  return { conversationId: id, next, streamed };
 }
 
 describe("read_examples", () => {
@@ -144,6 +144,24 @@ describe("read_examples", () => {
     const json = JSON.stringify(stored);
     for (const content of ["dana@", "Pricing for 40", "40 seats cost", "Invoice copy", "resend"]) {
       expect(json).not.toContain(content);
+    }
+  });
+
+  it("streams only the messages' source refs to the page, as the conversation keeps them", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const inbox = await connectGoogle(orgA.admin.ctx, "support@org-a.test", {
+      kind: "org",
+      messages: [pricingQuestion, invoiceQuestion],
+    });
+    const ids = inbox.mailbox.list(new URLSearchParams()).messages?.map((m) => m.id) ?? [];
+
+    const { next, streamed } = await readExamplesTurn(orgA, inbox.id);
+
+    expect(next).toContain("Pricing for 40 seats");
+    expect(ids).toHaveLength(2);
+    for (const id of ids) expect(streamed.raw).toContain(id);
+    for (const content of ["dana@", "Pricing for 40", "40 seats cost", "Invoice copy", "resend"]) {
+      expect(streamed.raw).not.toContain(content);
     }
   });
 

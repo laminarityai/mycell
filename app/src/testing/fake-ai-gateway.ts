@@ -1,9 +1,15 @@
 // The fake AI Gateway: Vercel's AI Gateway behind msw's fetch interception, so model calls run
 // the real AI SDK without network or keys. Each test scripts the answers it expects, in order:
-// a Jev decision, a structured output, a text, or a failure, each with the cost the gateway
-// reports. A request with no script left (or the wrong key) fails the test after it ends.
+// a Jev decision, a structured output, a text, a streamed reply (text and tool calls, for the
+// builder chat), or a failure, each with the cost the gateway reports. A request with no script
+// left (or the wrong key) fails the test after it ends.
 import { http, HttpResponse } from "msw";
 import { env } from "@/env";
+import {
+  costMetadata,
+  streamedReplyEvents,
+  type FakeStreamedReply,
+} from "./fake-ai-gateway-stream";
 
 const BASE_URL = "https://ai-gateway.vercel.sh/v4/ai";
 
@@ -13,8 +19,12 @@ export type FakeGatewayEndpoint = "decision" | "language";
 export type FakeGatewayRequest = {
   endpoint: FakeGatewayEndpoint;
   modelId: string;
+  /** Whether the AI SDK asked for a stream (`streamText`) rather than one answer. */
+  streaming: boolean;
   body: Record<string, unknown>;
 };
+
+export type { FakeStreamedReply };
 
 type ScriptOptions = {
   /** The cost the gateway reports, in US dollars (sent as a string, like the real one). */
@@ -33,6 +43,8 @@ type FailureOptions = {
 type Script = {
   endpoint: FakeGatewayEndpoint;
   model?: string;
+  /** A streamed script answers only a streaming request, and the others only the others. */
+  streaming: boolean;
   respond: () => Response;
 };
 
@@ -85,17 +97,33 @@ class FakeAiGateway {
     );
   }
 
+  /**
+   * A streamed answer to one model step of a `streamText` call, as the gateway's server-sent
+   * events: the text in a few deltas, then each tool call, then the finish with the cost. A
+   * reply with tool calls makes the AI SDK run them and ask again, so script that next step too.
+   */
+  reply(reply: FakeStreamedReply, options: ScriptOptions = {}): void {
+    this.script("language", options.model, () => streamedResponse(reply, options.costUsd), true);
+  }
+
   /** The next request to the endpoint fails, as the gateway reports errors. */
-  fail(endpoint: FakeGatewayEndpoint, options: FailureOptions = {}): void {
+  fail(
+    endpoint: FakeGatewayEndpoint,
+    options: FailureOptions & { streaming?: boolean } = {},
+  ): void {
     const status = options.status ?? 500;
-    this.script(endpoint, options.model, () =>
-      HttpResponse.json(
-        {
-          error: { message: "Upstream provider failed", type: "internal_server_error" },
-          ...(options.generationId === undefined ? {} : { generationId: options.generationId }),
-        },
-        { status },
-      ),
+    this.script(
+      endpoint,
+      options.model,
+      () =>
+        HttpResponse.json(
+          {
+            error: { message: "Upstream provider failed", type: "internal_server_error" },
+            ...(options.generationId === undefined ? {} : { generationId: options.generationId }),
+          },
+          { status },
+        ),
+      options.streaming ?? false,
     );
   }
 
@@ -120,8 +148,9 @@ class FakeAiGateway {
     endpoint: FakeGatewayEndpoint,
     model: string | undefined,
     respond: () => Response,
+    streaming = false,
   ) {
-    this.scripts.push({ endpoint, model, respond });
+    this.scripts.push({ endpoint, model, respond, streaming });
   }
 
   private lastQuestionId(): string {
@@ -138,18 +167,22 @@ class FakeAiGateway {
     }
     const modelId =
       request.headers.get(endpoint === "decision" ? "ai-model-id" : "ai-language-model-id") ?? "";
+    const streaming = request.headers.get("ai-language-model-streaming") === "true";
     this.received.push({
       endpoint,
       modelId,
+      streaming,
       body: (await request.json()) as Record<string, unknown>,
     });
     const index = this.scripts.findIndex(
       (script) =>
-        script.endpoint === endpoint && (script.model === undefined || script.model === modelId),
+        script.endpoint === endpoint &&
+        script.streaming === streaming &&
+        (script.model === undefined || script.model === modelId),
     );
     const script = index === -1 ? undefined : this.scripts.splice(index, 1).at(0);
     if (script === undefined) {
-      this.unexpected.push(`${endpoint} request for ${modelId}`);
+      this.unexpected.push(`${streaming ? "streamed " : ""}${endpoint} request for ${modelId}`);
       return HttpResponse.json(
         { error: { message: "Nothing scripted", type: "internal_server_error" } },
         { status: 500 },
@@ -159,8 +192,10 @@ class FakeAiGateway {
   }
 }
 
-function costMetadata(costUsd: number | undefined) {
-  return costUsd === undefined ? undefined : { gateway: { cost: String(costUsd) } };
+function streamedResponse(reply: FakeStreamedReply, costUsd: number | undefined): Response {
+  return new HttpResponse(streamedReplyEvents(reply, costUsd), {
+    headers: { "content-type": "text/event-stream" },
+  });
 }
 
 export const fakeAiGateway = new FakeAiGateway();

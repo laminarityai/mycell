@@ -1,6 +1,6 @@
 import { expect } from "vitest";
 import { z } from "zod";
-import { defineIsolationCases } from "@/db/testing/isolation";
+import { defineIsolationCases, notTenantScoped } from "@/db/testing/isolation";
 import type { TwoOrgs } from "@/db/testing/two-org-fixture";
 import { systemCtx } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
@@ -111,6 +111,30 @@ export const isolationCases = defineIsolationCases(server, {
       ownerUserId: orgs.orgA.member.id,
     });
   },
+
+  buildableConnections: async (orgs) => {
+    await seedOrgBConnection(orgs);
+    await connectGmail(orgs.orgA.member.ctx, orgs.orgA.member.email);
+    const inbox = `support@${orgs.orgA.workspaceDomain}`;
+    await connectOrgInbox(orgs.orgA.admin.ctx, inbox);
+
+    const buildable = await server.buildableConnections(orgs.orgA.admin.ctx);
+
+    // Org A's admin builds on org A's inbox: not org B's, nor org A's member's own.
+    expect(buildable.map((c) => c.accountEmail)).toEqual([inbox]);
+  },
+
+  requireBuildableConnection: async (orgs) => {
+    const { before, memberBefore } = await seedOrgBConnection(orgs);
+
+    for (const id of orgBIds(before, memberBefore)) {
+      await expect(server.requireBuildableConnection(orgs.orgA.admin.ctx, id)).rejects.toThrow(
+        NotFoundError,
+      );
+    }
+  },
+
+  gmailConnections: notTenantScoped("It narrows connection lists it is given, reading nothing."),
 
   getGrantedScopes: async (orgs) => {
     const { before, memberBefore } = await seedOrgBConnection(orgs);

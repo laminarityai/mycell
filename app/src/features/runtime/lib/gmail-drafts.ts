@@ -43,16 +43,7 @@ export async function createReplyDraft(
   if (compose === undefined) {
     throw new RunStepError("not_available", "Only a draft step can make a draft.");
   }
-  const query = new URLSearchParams({ format: "metadata" });
-  for (const name of REPLY_HEADERS) query.append("metadataHeaders", name);
-  const original = await found(
-    proxyGet(
-      ctx,
-      connectionId,
-      `${GMAIL}/messages/${encodeURIComponent(input.messageId)}?${query.toString()}`,
-      metadataSchema,
-    ),
-  );
+  const original = await originalOf(ctx, connectionId, input.messageId);
   const earlier = await findMarkedDraft(ctx, connectionId, original.threadId, marker);
   if (earlier !== undefined) return { draftId: earlier, threadId: original.threadId };
 
@@ -67,6 +58,42 @@ export async function createReplyDraft(
     ),
   );
   return { draftId: draft.id, threadId: draft.message.threadId };
+}
+
+/**
+ * Who a reply to `messageId` would go to, under which subject, in which thread: what a dry run
+ * shows instead of making the draft. Reads only.
+ */
+export async function replyTarget(
+  ctx: Ctx,
+  connectionId: string,
+  messageId: string,
+): Promise<{ threadId: string; to: string; subject: string }> {
+  const original = await originalOf(ctx, connectionId, messageId);
+  return { threadId: original.threadId, ...addressOf(original.payload.headers) };
+}
+
+async function originalOf(ctx: Ctx, connectionId: string, messageId: string) {
+  const query = new URLSearchParams({ format: "metadata" });
+  for (const name of REPLY_HEADERS) query.append("metadataHeaders", name);
+  return found(
+    proxyGet(
+      ctx,
+      connectionId,
+      `${GMAIL}/messages/${encodeURIComponent(messageId)}?${query.toString()}`,
+      metadataSchema,
+    ),
+  );
+}
+
+/** A reply's recipient and subject, from the original's headers. */
+function addressOf(original: Header[]): { to: string; subject: string } {
+  const header = (name: string) => oneLine(headerOf(original, name) ?? "");
+  const subject = header("Subject");
+  return {
+    to: header("Reply-To") || header("From"),
+    subject: /^re:/i.test(subject) ? subject : `Re: ${subject}`,
+  };
 }
 
 // The draft in the thread carrying the marker, by its draft ID. The thread names its drafts'
@@ -107,11 +134,11 @@ type Header = { name: string; value: string };
 function replyMessage(original: Header[], text: string, marker: string): string {
   const header = (name: string) => oneLine(headerOf(original, name) ?? "");
   const messageId = header("Message-ID");
-  const subject = header("Subject");
+  const { to, subject } = addressOf(original);
   const references = [header("References"), messageId].filter((part) => part !== "").join(" ");
   const lines = [
-    `To: ${header("Reply-To") || header("From")}`,
-    `Subject: ${encodeWord(/^re:/i.test(subject) ? subject : `Re: ${subject}`)}`,
+    `To: ${to}`,
+    `Subject: ${encodeWord(subject)}`,
     ...(messageId === "" ? [] : [`In-Reply-To: ${messageId}`, `References: ${references}`]),
     `${DRAFT_MARKER_HEADER}: ${marker}`,
     "MIME-Version: 1.0",

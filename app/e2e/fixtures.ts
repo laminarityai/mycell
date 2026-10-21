@@ -1,14 +1,17 @@
 // The e2e `test`: each test that asks for `orgs` starts from an empty database seeded with the
 // shared two-org fixture, and `signInAs` signs the test's browser in as one of its users.
-import { test as base, type Page } from "@playwright/test";
+import { test as base, expect, type Page } from "@playwright/test";
 import { closeDb } from "@/db/client";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs, type FixtureUser, type TwoOrgs } from "@/db/testing/two-org-fixture";
+import { fakeAiGateway, type E2eAiGateway } from "./fake-ai-gateway";
 import { signInAs } from "./sign-in-as";
 
 type TestFixtures = {
   orgs: TwoOrgs;
   signInAs: (user: FixtureUser) => Promise<void>;
+  /** The fake AI Gateway, emptied for the test; a test that leaves a request unscripted fails. */
+  aiGateway: E2eAiGateway;
 };
 type WorkerFixtures = { database: undefined };
 
@@ -27,6 +30,11 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
   },
   signInAs: async ({ context }, provide) => {
     await provide((user) => signInAs(context, user.id));
+  },
+  aiGateway: async ({ request }, provide) => {
+    const gateway = await fakeAiGateway(request);
+    await provide(gateway);
+    expect(await gateway.unscripted(), "model calls the test didn't script").toEqual([]);
   },
 });
 

@@ -33,6 +33,9 @@ const envSchema = z.object({
   INNGEST_SIGNING_KEY: z.string().min(1).optional(),
   // The Vercel AI Gateway: every model call goes through it, and it reports each call's cost.
   AI_GATEWAY_API_KEY: z.string().min(1),
+  // Where the gateway is, when not Vercel's own (https://ai-gateway.vercel.sh/v4/ai). Only the
+  // e2e tests set it, to the fake gateway Playwright starts.
+  AI_GATEWAY_BASE_URL: z.url().optional(),
   // The global default model for each model role (invariant 6), as a gateway `provider/model` ID.
   // An org's own row in model_roles wins over these. Pin Jev's version for classify, since
   // experimental_decide may change in patch releases.

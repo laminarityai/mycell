@@ -1,25 +1,16 @@
 // Save-time validation: the spec schema, the policy engine, then checks against the org's
 // setup. Every failing stage's issues come back together in one SpecInvalidError.
-import { listConnections } from "@/features/connections/server";
+import { gmailConnections, listConnections } from "@/features/connections/server";
 import type { ConnectionSummary } from "@/features/connections/types";
 import { applyPolicy } from "@/features/policy/engine";
-import type { InsertedApproval, RiskLevel } from "@/features/policy/types";
 import type { Spec, SpecIssue } from "@/features/spec/types";
 import { validateSpec } from "@/features/spec/validate";
-import type { Ctx } from "@/lib/ctx";
+import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { SpecInvalidError } from "@/lib/errors";
+import type { SpecCheck, ValidatedSpec } from "../types";
 import { scopeIssues } from "./scope-check";
 
-/** A spec that passed every stage, with what the policy engine made of it. */
-export type ValidatedSpec = {
-  /** The working spec, as parsed: before the policy engine inserted anything. */
-  working: Spec;
-  /** The spec a version would hold: after `applyPolicy`. */
-  applied: Spec;
-  maxRisk: RiskLevel;
-  inserted: InsertedApproval[];
-  requiredActions: string[];
-};
+export type { ValidatedSpec };
 
 /** What the org-setup checks look at, read once per validation. */
 export type OrgSetup = {
@@ -59,13 +50,29 @@ export async function validateWorkflowSpec(ctx: Ctx, input: unknown): Promise<Va
 }
 
 /**
+ * Validates `input` for the caller as saving would, returning every issue instead of throwing
+ * them: for the builder's proposals and the editor's live validation.
+ */
+export async function checkWorkflowSpec(ctx: Ctx, input: unknown): Promise<SpecCheck> {
+  requireAdmin(ctx);
+  try {
+    return { ok: true, ...(await validateWorkflowSpec(ctx, input)) };
+  } catch (error) {
+    if (error instanceof SpecInvalidError) return { ok: false, issues: error.issues };
+    throw error;
+  }
+}
+
+/**
  * The connections a spec could run on: the caller's own member connections for `member`
  * credentials, the org's connections for `org`, narrowed to those that reach Gmail (the
  * trigger's source). Later checks (scopes) look only at these.
  */
 export function candidateConnections(spec: Spec, setup: OrgSetup): ConnectionSummary[] {
-  const pool = spec.credentials === "member" ? setup.ownConnections : setup.orgConnections;
-  return pool.filter(reachesGmail);
+  return gmailConnections(
+    { own: setup.ownConnections, org: setup.orgConnections },
+    spec.credentials,
+  );
 }
 
 /** A spec needs at least one connection of the kind its credentials name. */

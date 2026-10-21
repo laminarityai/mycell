@@ -10,7 +10,7 @@ import { findCtx } from "./lib/find-ctx";
 export { listUsers } from "./lib/list-users";
 // Called only by scheduled jobs, which take no ctx until they pick an org.
 export { listOrgIds } from "./lib/list-org-ids";
-export { getWorkspaceDomain } from "./lib/workspace-domain";
+export { getOrgSettings, getWorkspaceDomain } from "./lib/workspace-domain";
 export { removeUser, setRole } from "./lib/manage-users";
 // Called only by Better Auth's session hook (lib/auth.ts) and tests: it trusts its profile.
 export { signIn } from "./lib/sign-in";
@@ -23,10 +23,18 @@ export { findCtx } from "./lib/find-ctx";
  * Actions get ctx from here only. With no session or no org, it redirects to sign-in.
  */
 export async function getCtx(): Promise<Ctx> {
-  const session = await getAuth().api.getSession({ headers: await headers() });
-  const ctx = session === null ? undefined : await findCtx(session.user.id);
+  const ctx = await findSessionCtx();
   if (ctx === undefined) redirect("/sign-in");
   return ctx;
+}
+
+/**
+ * The signed-in user's ctx, or undefined with no session or no org. For route handlers, which
+ * answer a fetch with a status instead of redirecting it.
+ */
+export async function findSessionCtx(): Promise<Ctx | undefined> {
+  const session = await getAuth().api.getSession({ headers: await headers() });
+  return session === null ? undefined : findCtx(session.user.id);
 }
 
 /** Better Auth's HTTP endpoints, served from /api/auth. */

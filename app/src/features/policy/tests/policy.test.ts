@@ -1,9 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { catalog } from "../catalog";
+import { actionsAllowedBy, catalog } from "../catalog";
+import { googleScope } from "@/lib/google";
 import { applyPolicy, maxRisk } from "../engine";
 import { exampleSteps, labelOnlySpec, specWithSteps } from "./specs";
 
 describe("the catalog", () => {
+  it("lists the actions a connection's granted scopes allow", () => {
+    const names = (scopes: string[]) => actionsAllowedBy(scopes).map((action) => action.name);
+
+    expect(names([googleScope("gmail.readonly")])).toEqual([
+      "google-mail.read-message",
+      "google-mail.read-thread",
+    ]);
+    expect(names([googleScope("gmail.modify"), googleScope("spreadsheets.readonly")])).toEqual([
+      "google-mail.read-message",
+      "google-mail.read-thread",
+      "google-mail.add-label",
+      "google-mail.create-draft",
+      "google-sheet.read-range",
+    ]);
+    expect(names([])).toEqual([]);
+  });
+
   it("holds v1's six actions at their fixed risk levels", () => {
     const levels = Object.fromEntries(
       Object.values(catalog).map((action) => [action.name, action.risk]),
@@ -17,6 +35,15 @@ describe("the catalog", () => {
       "google-sheet.read-range": "read",
       "google-sheet.append-row": "internal_reversible",
     });
+  });
+
+  it("names the pending form of every external send, and of nothing else (ADR-0013)", () => {
+    const forms = Object.values(catalog).map((action) => [action.risk, action.pendingForm]);
+
+    for (const [risk, form] of forms) {
+      expect(form === undefined).toBe(risk !== "external_send");
+    }
+    expect(catalog["google-mail.create-draft"].pendingForm).toBe("a Gmail draft");
   });
 });
 

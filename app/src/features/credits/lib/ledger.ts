@@ -35,6 +35,7 @@ export async function recordUsage(ctx: Ctx, usage: Usage): Promise<LedgerEntry> 
     generationId: usage.generationId ?? null,
     workflowId: usage.workflowId ?? null,
     runId: usage.runId ?? null,
+    dryRun: usage.dryRun ?? false,
   });
   const row = inserted.at(0);
   // An insert returns its row, so this is a bug, not something a user can act on: it's left a
@@ -82,6 +83,7 @@ function toEntry(row: typeof creditLedger.$inferSelect): LedgerEntry {
     generationId: row.generationId,
     workflowId: row.workflowId,
     runId: row.runId,
+    dryRun: row.dryRun,
     createdAt: row.createdAt,
   };
 }

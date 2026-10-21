@@ -1,14 +1,23 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
+import { listConversations } from "@/features/builder/server";
+import { ConversationList, NewConversationButton } from "@/features/builder/ui";
 import { getCtx } from "@/features/orgs/server";
 import { listRuns } from "@/features/runtime/server";
 import { RecentRuns, RunOnMessageForm } from "@/features/runtime/ui";
-import { getWorkflow, runnableConnections } from "@/features/workflows/server";
+import { editorConnections, getWorkflow, runnableConnections } from "@/features/workflows/server";
 import { WorkflowEditor, WorkflowSwitchSection } from "@/features/workflows/ui";
 import { NotFoundError } from "@/lib/errors";
+import { TryIt } from "./try-it";
 
-export default function WorkflowPage({ params }: PageProps<"/workflows/[workflowId]">) {
+// A Server Action here may try the working spec on a message, model steps and all.
+export const maxDuration = 300;
+
+export default function WorkflowPage({
+  params,
+  searchParams,
+}: PageProps<"/workflows/[workflowId]">) {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
       <header className="flex items-center justify-between">
@@ -19,6 +28,9 @@ export default function WorkflowPage({ params }: PageProps<"/workflows/[workflow
       </header>
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading workflow…</p>}>
         <Workflow params={params} />
+      </Suspense>
+      <Suspense fallback={<p className="text-sm text-muted-foreground">Loading recent mail…</p>}>
+        <TryIt params={params} searchParams={searchParams} />
       </Suspense>
     </main>
   );
@@ -32,9 +44,11 @@ async function Workflow({ params }: Pick<PageProps<"/workflows/[workflowId]">, "
     if (error instanceof NotFoundError) notFound();
     throw error;
   });
-  const [runs, runnable] = await Promise.all([
+  const [runs, runnable, editing, conversations] = await Promise.all([
     listRuns(ctx, workflowId),
     runnableConnections(ctx, workflowId),
+    editorConnections(ctx),
+    listConversations(ctx, { workflowId }),
   ]);
   // Only the connections a run could use, the one it's switched on for first.
   const connections = runnable.map((connection) => ({
@@ -43,8 +57,16 @@ async function Workflow({ params }: Pick<PageProps<"/workflows/[workflowId]">, "
   }));
   return (
     <div className="flex flex-col gap-8">
-      <WorkflowEditor workflow={workflow} />
+      <WorkflowEditor workflow={workflow} connections={editing} />
       <WorkflowSwitchSection workflow={workflow} connections={connections} />
+      <section className="flex flex-col gap-3" aria-label="Builder conversations">
+        <h2 className="text-lg font-semibold">Builder conversations</h2>
+        <p className="text-sm text-muted-foreground">
+          Ask the builder to change this workflow, or continue a conversation about it.
+        </p>
+        <ConversationList conversations={conversations} />
+        <NewConversationButton workflowId={workflow.id} />
+      </section>
       <section className="flex flex-col gap-3" aria-label="Runs">
         <h2 className="text-lg font-semibold">Runs</h2>
         <RunOnMessageForm workflowId={workflow.id} connections={connections} />

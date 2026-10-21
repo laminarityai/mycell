@@ -17,6 +17,8 @@ export const workflows = pgTable(
     specId: text("spec_id").notNull(),
     // The working spec, as `validateSpec` parsed it: before the policy engine runs.
     workingSpec: jsonb("working_spec").$type<Spec>().notNull(),
+    // Counts the working spec's saves, so a save made from an older one can be refused.
+    revision: integer("revision").notNull().default(1),
     // Plain user IDs: a workflow outlives the admin who made it.
     createdBy: text("created_by").notNull(),
     // An org-credential workflow's one switch: the org connection it runs on while it's on, and

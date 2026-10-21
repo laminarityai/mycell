@@ -100,6 +100,62 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await server.resolveModel(orgs.orgA.admin.ctx, "fast")).toBe("test/fast-default");
   },
 
+  openMeteredStream: async (orgs) => {
+    const { ledgerBefore } = await seedOrgB(orgs);
+    const admin = orgs.orgA.admin.ctx;
+
+    // Org B's balance doesn't cover org A.
+    await expect(server.openMeteredStream(admin, "smart")).rejects.toThrow(OutOfCreditsError);
+    await grantCredits(systemCtx(orgs.orgA.id), 100);
+    const stream = await server.openMeteredStream(admin, "smart");
+    await stream.finish("succeeded");
+
+    expect(stream.modelId).toBe("test/smart-default");
+    expect(await listLedger(orgs.orgB.admin.ctx)).toEqual(ledgerBefore);
+  },
+
+  searchMessages: async (orgs) => {
+    const orgB = await seedOrgBRun(orgs);
+
+    await expect(
+      server.searchMessages(orgs.orgA.admin.ctx, orgB.connectionId, "pricing", 5),
+    ).rejects.toThrow(NotFoundError);
+    expect(
+      await server.searchMessages(orgs.orgB.admin.ctx, orgB.connectionId, "pricing", 5),
+    ).toHaveLength(1);
+  },
+
+  readMessage: async (orgs) => {
+    const orgB = await seedOrgBRun(orgs);
+    const refs = await server.searchMessages(orgs.orgB.admin.ctx, orgB.connectionId, "", 1);
+
+    await expect(
+      server.readMessage(orgs.orgA.admin.ctx, orgB.connectionId, refs.at(0)?.id ?? "missing"),
+    ).rejects.toThrow(NotFoundError);
+  },
+
+  dryRun: async (orgs) => {
+    const orgB = await seedOrgBRun(orgs);
+    const admin = orgs.orgA.admin.ctx;
+    await connectInbox(admin, orgs.orgA.admin.email, []);
+    const refs = await server.searchMessages(orgs.orgB.admin.ctx, orgB.connectionId, "", 1);
+    const sourceRef = refs.at(0)?.id ?? "missing";
+
+    await expect(
+      server.dryRun(admin, threadSpec(), { connectionId: orgB.connectionId, sourceRef }),
+    ).rejects.toThrow(NotFoundError);
+  },
+
+  recentMessages: async (orgs) => {
+    const orgB = await seedOrgBRun(orgs);
+    await connectInbox(orgs.orgA.admin.ctx, orgs.orgA.admin.email, []);
+
+    const listing = await server.recentMessages(orgs.orgA.admin.ctx);
+
+    expect(listing.map((connection) => connection.connectionId)).not.toContain(orgB.connectionId);
+    expect(listing).toHaveLength(1);
+  },
+
   setModelRole: async (orgs) => {
     await seedOrgB(orgs);
 

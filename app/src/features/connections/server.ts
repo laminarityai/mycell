@@ -6,6 +6,13 @@ export { deleteMemberConnectionsOf, disconnect } from "./lib/disconnect";
 // it an ingested app it didn't have. Ingest jobs trigger on them.
 export { connectionAppsGranted, connectionRecorded } from "./lib/events";
 export { listConnections } from "./lib/list";
+// The one rule for which connections an admin may build on: their own and the org's, granted
+// Gmail. Used by the builder's read_examples and context, Try it, and spec validation.
+export {
+  buildableConnections,
+  gmailConnections,
+  requireBuildableConnection,
+} from "./lib/buildable";
 // Called only by the nightly reconciliation job and tests: it walks every org itself, acting
 // inside each as its system ctx (ADR-0009).
 export { reconcileConnections } from "./lib/reconcile";

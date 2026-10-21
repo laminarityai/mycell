@@ -43,6 +43,12 @@ async function OrgUsers() {
             >
               Workflows
             </Link>
+            <Link
+              href="/builder"
+              className="text-sm font-medium underline-offset-4 hover:underline"
+            >
+              Builder chat
+            </Link>
           </>
         ) : null}
       </nav>

@@ -23,7 +23,7 @@ import { meteredGateway, type MeteredGateway } from "./gateway";
 import { resolveModel } from "./model-roles";
 
 /** The credits a call on each role must find in the balance before it's made. */
-const CREDIT_ESTIMATES: Record<ModelRole, number> = {
+export const CREDIT_ESTIMATES: Record<ModelRole, number> = {
   classify: env.CREDIT_ESTIMATE_CLASSIFY,
   fast: env.CREDIT_ESTIMATE_FAST,
   smart: env.CREDIT_ESTIMATE_SMART,
@@ -78,7 +78,13 @@ export async function meteredCall<R>(
   await checkCredits(ctx, CREDIT_ESTIMATES[role]);
 
   const gateway = meteredGateway();
-  const usage = { role, modelId, workflowId: attribution.workflowId, runId: attribution.runId };
+  const usage = {
+    role,
+    modelId,
+    workflowId: attribution.workflowId,
+    runId: attribution.runId,
+    dryRun: attribution.dryRun,
+  };
   let output: R;
   try {
     output = await call(gateway, modelId);

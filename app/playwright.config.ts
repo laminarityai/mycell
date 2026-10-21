@@ -7,6 +7,9 @@ import { checkoutIsolation } from "./checkout-isolation";
 // them clear of a running `pnpm dev` and of another worktree's run. E2E_DATABASE_URL and E2E_PORT
 // override them.
 const { e2eDatabaseUrl, e2ePort: port } = checkoutIsolation(__dirname);
+// The fake AI Gateway (e2e/fake-ai-gateway-server.ts) listens 1000 above the app, so it is per
+// checkout too.
+const fakeAiGatewayPort = port + 1000;
 const e2eEnv = {
   DATABASE_URL: e2eDatabaseUrl,
   // The tests sign browsers in by signing a session cookie with this secret (e2e/sign-in-as.ts),
@@ -21,6 +24,7 @@ const e2eEnv = {
   INNGEST_EVENT_KEY: "e2e-inngest-event-key",
   INNGEST_SIGNING_KEY: "signkey-e2e-00000000000000000000000000000000",
   AI_GATEWAY_API_KEY: "e2e-ai-gateway-api-key",
+  AI_GATEWAY_BASE_URL: `http://localhost:${String(fakeAiGatewayPort)}/v4/ai`,
   MODEL_CLASSIFY: "typesafe-ai/jev-1.14.0",
   MODEL_FAST: "e2e/fast",
   MODEL_SMART: "e2e/smart",
@@ -42,12 +46,21 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
-  webServer: {
-    command: `next start --port ${String(port)}`,
-    url: e2eEnv.BETTER_AUTH_URL,
-    env: e2eEnv,
-    reuseExistingServer: false,
-    stdout: "ignore",
-    stderr: "pipe",
-  },
+  webServer: [
+    {
+      command: `next start --port ${String(port)}`,
+      url: e2eEnv.BETTER_AUTH_URL,
+      env: e2eEnv,
+      reuseExistingServer: false,
+      stdout: "ignore",
+      stderr: "pipe",
+    },
+    {
+      command: `node --disable-warning=DEP0205 --import tsx e2e/fake-ai-gateway-server.ts ${String(fakeAiGatewayPort)}`,
+      url: `http://localhost:${String(fakeAiGatewayPort)}/health`,
+      reuseExistingServer: false,
+      stdout: "ignore",
+      stderr: "pipe",
+    },
+  ],
 });

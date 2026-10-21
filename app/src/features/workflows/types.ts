@@ -1,5 +1,6 @@
+import type { ConnectionSummary } from "@/features/connections/types";
 import type { InsertedApproval, RiskLevel } from "@/features/policy/types";
-import type { Spec } from "@/features/spec/types";
+import type { Spec, SpecIssue } from "@/features/spec/types";
 
 /** What an admin saves: a name and the spec as parsed JSON, not yet validated. */
 export type WorkflowInput = {
@@ -7,11 +8,18 @@ export type WorkflowInput = {
   workflowId?: string;
   name: string;
   spec: unknown;
+  /**
+   * The revision of the working spec this was edited from. When set, the save is refused with
+   * ConflictError if the working spec has moved on since.
+   */
+  baseRevision?: number;
 };
 
 /** What saving showed: the working spec's max risk and the approvals the policy inserted. */
 export type SavedWorkflow = {
   id: string;
+  /** The working spec's revision after this save. */
+  revision: number;
   maxRisk: RiskLevel;
   inserted: InsertedApproval[];
 };
@@ -51,6 +59,10 @@ export type WorkflowDetails = {
   name: string;
   specId: string;
   workingSpec: Spec;
+  /** Counts the working spec's saves; a save with an older base revision is refused. */
+  revision: number;
+  /** The working spec differs from the latest version, or nothing is published yet. */
+  unpublishedChanges: boolean;
   /** Null when the working spec no longer passes the policy (the catalog changed). */
   maxRisk: RiskLevel | null;
   inserted: InsertedApproval[];
@@ -82,3 +94,30 @@ export type SwitchedOn = {
   /** The trigger's label filter: a message starts a run when it has one of them. */
   labelIds: string[];
 };
+
+/** A spec that passed every validation stage, with what the policy engine made of it. */
+export type ValidatedSpec = {
+  /** The working spec, as parsed: before the policy engine inserted anything. */
+  working: Spec;
+  /** The spec a version would hold: after `applyPolicy`. */
+  applied: Spec;
+  maxRisk: RiskLevel;
+  inserted: InsertedApproval[];
+  requiredActions: string[];
+};
+
+/** Save-time validation's verdict, for callers that show issues rather than throw them. */
+export type SpecCheck = ({ ok: true } & ValidatedSpec) | { ok: false; issues: SpecIssue[] };
+
+/** The editor's live validation: the spec's issues, or what the policy engine made of it. */
+export type SpecCheckResult = {
+  /** Set when the check itself was refused (a member, say). */
+  error?: string;
+  issues: SpecIssue[];
+  /** Null while the spec has issues. */
+  maxRisk: RiskLevel | null;
+  inserted: InsertedApproval[];
+};
+
+/** A connection as the editor sees it: whose it is and what it was granted. */
+export type EditorConnection = Pick<ConnectionSummary, "id" | "kind" | "grantedScopes" | "apps">;

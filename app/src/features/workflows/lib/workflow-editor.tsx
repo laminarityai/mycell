@@ -1,67 +1,9 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import type { ActionResult } from "@/lib/errors";
-import { publishWorkflowAction, saveWorkflowAction } from "../actions";
-
-/**
- * The spec's name and JSON, and Save. The fields are controlled, so a refused save keeps what
- * the admin typed (a form action would otherwise reset them).
- */
-export function WorkflowForm({
-  workflowId,
-  name: savedName = "",
-  spec: savedSpec = "",
-}: {
-  workflowId?: string;
-  name?: string;
-  spec?: string;
-}) {
-  const [result, save, saving] = useActionState(saveWorkflowAction, {});
-  const [name, setName] = useState(savedName);
-  const [spec, setSpec] = useState(savedSpec);
-  return (
-    <form action={save} className="flex flex-col gap-3">
-      {workflowId === undefined ? null : (
-        <input type="hidden" name="workflowId" value={workflowId} />
-      )}
-      <label className="flex flex-col gap-1 text-sm font-medium">
-        Name
-        <Input
-          name="name"
-          required
-          value={name}
-          onChange={(event) => {
-            setName(event.target.value);
-          }}
-        />
-      </label>
-      <label className="flex flex-col gap-1 text-sm font-medium">
-        Spec (JSON)
-        <Textarea
-          name="spec"
-          required
-          rows={24}
-          spellCheck={false}
-          className="font-mono text-xs"
-          value={spec}
-          onChange={(event) => {
-            setSpec(event.target.value);
-          }}
-        />
-      </label>
-      <div>
-        <Button type="submit" disabled={saving}>
-          Save
-        </Button>
-      </div>
-      <Problems result={result} />
-    </form>
-  );
-}
+import { publishWorkflowAction } from "../actions";
 
 export function PublishButton({ workflowId }: { workflowId: string }) {
   const [result, publish, publishing] = useActionState(publishWorkflowAction, {});

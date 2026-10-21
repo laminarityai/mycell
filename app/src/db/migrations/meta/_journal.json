@@ -113,6 +113,27 @@
       "when": 1792534045128,
       "tag": "0015_m3-timestamps-with-time-zone",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1792539626470,
+      "tag": "0016_builder-conversations",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792541089527,
+      "tag": "0017_builder-proposals",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792542231083,
+      "tag": "0018_dry-run-usage",
+      "breakpoints": true
     }
   ]
 }

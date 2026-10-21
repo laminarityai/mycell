@@ -135,6 +135,10 @@ _Avoid_: Org enablement, global toggle
 One execution of one workflow version on one trigger, such as one incoming email.
 _Avoid_: Execution, job, invocation
 
+**Try it**:
+Running a working spec on one recent message to see what it would do, with every action that would change an app stubbed out and nothing stored. It is not a run: it has no run record. In code, `dryRun`.
+_Avoid_: Test run, preview, simulation (a replay of past cases is a shadow eval)
+
 **Model role**:
 The kind of model a step asks for (`classify`, `fast`, `smart` or `judge`), which each org maps to a concrete model.
 _Avoid_: Model, model tier

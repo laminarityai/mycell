@@ -51,6 +51,29 @@ export function stepLocation(spec: Spec, stepId: string): SpecIssue["path"] | un
   return placeOf(spec, stepId)?.location;
 }
 
+/** A path a step is on: its ID, and its name, null for an otherwise path. */
+export type PathOn = { id: string; name: string | null };
+
+/**
+ * The paths a run takes to reach the step, outermost first: each one's ID and name, null for
+ * an otherwise path. None for a step in the root list, or an unknown ID.
+ */
+export function pathsTo(spec: Spec, stepId: string): PathOn[] {
+  const find = (steps: Step[], within: PathOn[]): PathOn[] | undefined => {
+    for (const step of steps) {
+      if (step.id === stepId) return within;
+      if (step.type !== "branch") continue;
+      const lists = [...step.paths, { ...step.otherwise, name: null }];
+      for (const path of lists) {
+        const found = find(path.steps, [...within, { id: path.id, name: path.name }]);
+        if (found !== undefined) return found;
+      }
+    }
+    return undefined;
+  };
+  return find(spec.steps, []) ?? [];
+}
+
 /**
  * The spec with `change` applied to every list of steps in it, innermost first; the rest of
  * the spec is as it was. For a rewrite that inserts or removes steps, such as the policy

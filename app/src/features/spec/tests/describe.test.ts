@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeSpec } from "../describe";
+import { describePathTo, describeSpec } from "../describe";
 import type { Spec } from "../types";
 import { validateSpec } from "../validate";
 import { exampleSpec } from "./example-spec";
@@ -110,5 +110,36 @@ describe("describeSpec", () => {
       waitsForReview: false,
       requiredByPolicy: false,
     });
+  });
+});
+
+describe("describePathTo", () => {
+  it("names a step's path after the paths it's nested in, an otherwise path as Otherwise", () => {
+    const spec = triageSpec();
+    spec.steps[2] = {
+      ...spec.steps[2],
+      paths: [
+        pathOf(
+          "pricing",
+          [{ classify: "kind", is: "pricing", minP: 0.8 }],
+          [
+            {
+              id: "size",
+              type: "branch",
+              paths: [pathOf("huge", [{ classify: "kind", is: "pricing", minP: 0.9 }])],
+              otherwise: {
+                id: "small",
+                steps: [{ id: "look", type: "escalate", reason: "Look." }],
+              },
+            },
+          ],
+        ),
+      ],
+    };
+    const parsedSpec = parsed(spec);
+
+    expect(describePathTo(parsedSpec, "look")).toBe("pricing › Otherwise");
+    expect(describePathTo(parsedSpec, "size")).toBe("pricing");
+    expect(describePathTo(parsedSpec, "kind")).toBeNull();
   });
 });

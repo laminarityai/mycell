@@ -141,6 +141,11 @@ export type RunOutcome = { status: Exclude<RunStatus, "running"> };
 export type RunStepRecord = {
   stepId: string;
   type: StepType;
+  /**
+   * The path the step is on, in words, after the paths it's nested in: "Pricing", "Pricing ›
+   * Otherwise". Null for a step above every branch.
+   */
+  path: string | null;
   status: RunStepStatus;
   attempts: number;
   /** When the last attempt began. */

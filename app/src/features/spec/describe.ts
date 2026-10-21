@@ -3,7 +3,7 @@
 // import it. `spec` doesn't know the catalog (policy imports spec), so callers pass what it
 // says about each action, and which approvals the policy engine inserted.
 import { describeCheck, subjectWords, type SubjectWords } from "./conditions";
-import { eachStep } from "./tree";
+import { eachStep, pathsTo } from "./tree";
 import type { BranchStep, Condition, ConditionField, Spec, Step } from "./types";
 
 /**
@@ -124,4 +124,14 @@ export function describeCondition(condition: Condition, words?: SubjectWords): s
   return condition.checks
     .map((check) => describeCheck(check, words))
     .join(condition.combine === "all" ? " and " : " or ");
+}
+
+/**
+ * The path a step is on, in words, after the paths it's nested in: "Pricing", "Pricing ›
+ * Otherwise". Null for a step above every branch, or one the spec doesn't have.
+ */
+export function describePathTo(spec: Spec, stepId: string): string | null {
+  const paths = pathsTo(spec, stepId);
+  if (paths.length === 0) return null;
+  return paths.map((path) => path.name ?? "Otherwise").join(" › ");
 }

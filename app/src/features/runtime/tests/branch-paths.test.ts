@@ -248,12 +248,12 @@ describe("a branch with several paths, every match", () => {
     expect(runner.ids).toEqual(["kind", "details", "route", "prices", "big-label"]);
     const run = await getRun(admin, runId);
     expect(run.status).toBe("partly_failed");
-    expect(run.steps.map((step) => [step.stepId, step.status])).toEqual([
-      ["kind", "succeeded"],
-      ["details", "succeeded"],
-      ["route", "succeeded"],
-      ["prices", "failed"],
-      ["big-label", "succeeded"],
+    expect(run.steps.map((step) => [step.stepId, step.status, step.path])).toEqual([
+      ["kind", "succeeded", null],
+      ["details", "succeeded", null],
+      ["route", "succeeded", null],
+      ["prices", "failed", "Pricing"],
+      ["big-label", "succeeded", "Big"],
     ]);
   });
 

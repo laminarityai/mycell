@@ -6,6 +6,8 @@ import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { getConnection, readableConnectionIds } from "@/features/connections/server";
+import { describePathTo } from "@/features/spec/describe";
+import type { Spec } from "@/features/spec/types";
 import { getWorkflow, getWorkflowVersion } from "@/features/workflows/server";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
@@ -105,6 +107,13 @@ async function withSteps(ctx: Ctx, rows: Run[]): Promise<RunRecord[]> {
     ctx,
     rows.map((row) => row.id),
   );
+  // Each version's spec, which names the path each step is on.
+  const versionIds = [...new Set(rows.map((row) => row.workflowVersionId))];
+  const specs = new Map(
+    await Promise.all(
+      versionIds.map(async (id) => [id, (await getWorkflowVersion(ctx, id)).spec] as const),
+    ),
+  );
   return rows.map((row) => ({
     id: row.id,
     workflowId: row.workflowId,
@@ -117,14 +126,17 @@ async function withSteps(ctx: Ctx, rows: Run[]): Promise<RunRecord[]> {
     costUsd: row.costUsd,
     startedAt: row.startedAt,
     finishedAt: row.finishedAt,
-    steps: steps.filter((step) => step.runId === row.id).map(stepRecord),
+    steps: steps
+      .filter((step) => step.runId === row.id)
+      .map((step) => stepRecord(step, specs.get(row.workflowVersionId))),
   }));
 }
 
-function stepRecord(row: RunStepRow): RunStepRecord {
+function stepRecord(row: RunStepRow, spec: Spec | undefined): RunStepRecord {
   return {
     stepId: row.stepId,
     type: row.type,
+    path: spec === undefined ? null : describePathTo(spec, row.stepId),
     status: row.status,
     attempts: row.attempts,
     lastAttemptAt: row.lastAttemptAt,

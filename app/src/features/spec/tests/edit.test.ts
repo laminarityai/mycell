@@ -204,7 +204,7 @@ describe("updateStep and removeStep", () => {
     expect(edited.steps[0]).toBe(spec.steps[0]);
   });
 
-  it("removes a step wherever it is, a branch with everything on its paths", () => {
+  it("removes a step wherever it is, a branch with everything on its named paths", () => {
     const spec = parsed(triageSpec());
 
     expect(lists(removeStep(spec, "to-person"))).toEqual({
@@ -214,6 +214,23 @@ describe("updateStep and removeStep", () => {
       rest: [],
     });
     expect(lists(removeStep(spec, "route"))).toEqual({ root: ["kind", "details"] });
+  });
+
+  it("keeps a removed branch's otherwise steps, moved back where the branch stood", () => {
+    const spec = parsed(triageSpec());
+    const withRest = insertStep(spec, { list: "rest", after: null }, escalate("anyone"));
+
+    expect(lists(removeStep(withRest, "route"))).toEqual({ root: ["kind", "details", "anyone"] });
+  });
+
+  it("gives back the same spec when a branch is inserted and then removed", () => {
+    const spec = parsed(triageSpec());
+    const at = { list: "root", after: "details" };
+    const branch = newStep(spec, at, { type: "branch" });
+
+    const edited = removeStep(insertStep(spec, at, branch), branch.id);
+
+    expect(edited).toEqual(spec);
   });
 });
 

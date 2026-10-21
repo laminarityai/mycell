@@ -33,9 +33,18 @@ export function updateStep(spec: Spec, stepId: string, change: (step: Step) => S
   );
 }
 
-/** The spec without the step with this ID; a branch goes with every step on its paths. */
+/**
+ * The spec without the step with this ID. A branch goes with every step on its named paths,
+ * but its otherwise path's steps move back into its list where it stood, as inserting a branch
+ * moved them there: inserting a branch and removing it gives back the same spec.
+ */
 export function removeStep(spec: Spec, stepId: string): Spec {
-  return mapStepLists(spec, (steps) => steps.filter((step) => step.id !== stepId));
+  return mapStepLists(spec, (steps) =>
+    steps.flatMap((step) => {
+      if (step.id !== stepId) return [step];
+      return step.type === "branch" ? step.otherwise.steps : [];
+    }),
+  );
 }
 
 /** The spec with `path` added to the branch, last before its otherwise path. */

@@ -30,6 +30,7 @@ export function PanelShell({
   onClose,
   onRemove,
   removeLabel = "Remove",
+  removeWarning,
   children,
 }: {
   title: string;
@@ -40,6 +41,8 @@ export function PanelShell({
   /** Left out when it can't be removed; disabled with a reason as a string. */
   onRemove?: (() => void) | string;
   removeLabel?: string;
+  /** What removing it takes with it, said under the button. */
+  removeWarning?: string;
   children: ReactNode;
 }) {
   const listed = issues ?? [];
@@ -87,7 +90,9 @@ export function PanelShell({
           </Button>
           {typeof onRemove === "string" ? (
             <p className="text-xs text-muted-foreground">{onRemove}</p>
-          ) : null}
+          ) : removeWarning === undefined ? null : (
+            <p className="text-xs text-muted-foreground">{removeWarning}</p>
+          )}
         </div>
       )}
     </>

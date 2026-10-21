@@ -65,7 +65,12 @@ export function StepForm({ stepId, ...props }: PanelProps & { stepId: string }) 
         edit((current) => removeStep(current, step.id));
         onClose();
       }}
-      removeLabel={step.type === "branch" ? "Remove the branch and its paths" : "Remove step"}
+      removeLabel={step.type === "branch" ? "Remove the branch" : "Remove step"}
+      removeWarning={
+        step.type === "branch"
+          ? "The steps on its named paths go with it. The otherwise path's steps stay, where the branch stood."
+          : undefined
+      }
     >
       <Fields step={step} update={update} invalid={invalid} {...props} />
     </PanelShell>

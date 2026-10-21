@@ -13,7 +13,7 @@ import {
   type ReviewEdits,
 } from "@/features/runtime/adapters";
 import type { Ctx } from "@/lib/ctx";
-import { AlreadyHandledError, ConflictError, ValidationError } from "@/lib/errors";
+import { AlreadyHandledError, ConflictError, ForbiddenError, ValidationError } from "@/lib/errors";
 import { reviewActions, type OpenedReview, type PendingForms, type ReviewAction } from "../types";
 import { endReview, itemOf, reviewOf, visibleReview, type ReviewRow } from "./reviews";
 import { reviews } from "./schema";
@@ -45,6 +45,29 @@ export async function openReview(
     row = (await endReview(ctx, row.id, ending, null)) ?? (await visibleReview(ctx, row.id));
   }
   return { review: await reviewOf(ctx, row), view: null };
+}
+
+/**
+ * Asks each waiting review's adapter where its item stands, and ends the ones finished in their
+ * app or gone, with no one named. For the daily digest, as the org's system ctx, before it
+ * counts. A review whose app can't be asked now (a connection needing reauthorization) waits on.
+ */
+export async function checkWaitingReviews(
+  ctx: Ctx,
+  adapters: PendingForms = pendingForms,
+): Promise<void> {
+  if (ctx.role !== "system") throw new ForbiddenError();
+  const waiting = await forOrg(ctx).select(reviews, { where: eq(reviews.status, "waiting") });
+  for (const row of waiting) {
+    let state: Awaited<ReturnType<PendingFormAdapter["check"]>>;
+    try {
+      state = await adapters[row.kind].check(ctx, itemOf(row));
+    } catch (error) {
+      console.warn(`Couldn't check review ${row.id}; it waits on.`, error);
+      continue;
+    }
+    if (state !== "waiting") await endReview(ctx, row.id, state, null);
+  }
 }
 
 /** Sends the item as it was prepared. Ends the review `approved`. */

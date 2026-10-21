@@ -37,17 +37,30 @@ export async function createReview(ctx: Ctx, review: NewReview): Promise<void> {
 
 /** The caller's waiting reviews, oldest first, with each one's workflow's name. */
 export async function listReviews(ctx: Ctx): Promise<ReviewSummary[]> {
-  const rows = (
-    await forOrg(ctx).select(reviews, {
-      where: eq(reviews.status, "waiting"),
-      orderBy: [asc(reviews.createdAt), asc(reviews.id)],
-    })
-  ).filter((row) => isVisibleTo(ctx, row));
+  const rows = await waitingFor(ctx);
   const names = await workflowNames(
     ctx,
     rows.map((row) => row.workflowId),
   );
   return rows.map((row) => summaryOf(row, names.get(row.workflowId)));
+}
+
+/**
+ * How many reviews wait for the caller: those `listReviews` lists, counted the same way, for the
+ * app's navigation.
+ */
+export async function countWaitingReviews(ctx: Ctx): Promise<number> {
+  return (await waitingFor(ctx)).length;
+}
+
+/** The waiting reviews the caller may see, oldest first. */
+async function waitingFor(ctx: Ctx): Promise<ReviewRow[]> {
+  return (
+    await forOrg(ctx).select(reviews, {
+      where: eq(reviews.status, "waiting"),
+      orderBy: [asc(reviews.createdAt), asc(reviews.id)],
+    })
+  ).filter((row) => isVisibleTo(ctx, row));
 }
 
 /** One review the caller may see; NotFoundError for any other, another org's included. */

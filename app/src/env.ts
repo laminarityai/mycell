@@ -24,6 +24,11 @@ const envSchema = z.object({
   NANGO_WEBHOOK_SIGNING_KEY: z.string().min(1),
   // Where Nango's API is. Only the e2e tests set it, to the fake Nango Playwright starts.
   NANGO_API_URL: z.url().default("https://api.nango.dev"),
+  // Resend (transactional email: the review digest, later M8's admin emails). Every email is
+  // sent from EMAIL_FROM, an address on a domain verified in Resend, such as
+  // `Mycel <reviews@mail.example.com>`.
+  RESEND_API_KEY: z.string().min(1),
+  EMAIL_FROM: z.string().min(1),
   // Inngest (background jobs). INNGEST_DEV=1 points the client at the local Inngest dev server
   // (`npx inngest-cli@latest dev`), which needs no keys. Otherwise Inngest Cloud sends with the
   // event key and signs its requests to /api/inngest with the signing key.

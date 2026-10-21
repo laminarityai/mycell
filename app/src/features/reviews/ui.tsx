@@ -1,3 +1,4 @@
+import { cn } from "cn";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,6 +37,24 @@ function ending(review: Review): string {
   if (review.status === "gone") return "The message is no longer in Gmail.";
   if (review.endedByUserId === null) return "It was replied to from Gmail.";
   return "It was marked done.";
+}
+
+/**
+ * The app navigation's link to the Reviews page, with how many reviews wait for the caller
+ * (`countWaitingReviews`, read on each page load).
+ */
+export function ReviewsNavLink({ count, className }: { count: number; className?: string }) {
+  return (
+    <Link href="/reviews" className={cn("inline-flex items-center gap-1.5", className)}>
+      Reviews
+      {count > 0 ? (
+        <Badge>
+          {count}
+          <span className="sr-only"> waiting</span>
+        </Badge>
+      ) : null}
+    </Link>
+  );
 }
 
 /** The caller's waiting reviews, oldest first: each one's workflow, kind and age. */

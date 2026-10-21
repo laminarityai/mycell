@@ -14,6 +14,9 @@ process.env.GOOGLE_CLIENT_SECRET = "test-google-client-secret";
 // its webhooks with the signing key.
 process.env.NANGO_API_KEY = "test-nango-api-key";
 process.env.NANGO_WEBHOOK_SIGNING_KEY = "test-nango-webhook-signing-key";
+// Email reaches the fake Resend (src/testing/fake-email.ts), which checks the key.
+process.env.RESEND_API_KEY = "test-resend-api-key";
+process.env.EMAIL_FROM = "Mycel <reviews@mycel.test>";
 // Tests never run Inngest: sending an event reaches the fake Inngest (src/testing/fake-inngest.ts)
 // at Inngest Cloud's event URL, which records it.
 process.env.INNGEST_DEV = "0";

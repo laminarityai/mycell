@@ -4,6 +4,8 @@
 // Called by a run's approval step, as the org's system ctx.
 export { createReview } from "./lib/reviews";
 export { listReviews } from "./lib/reviews";
+// The count in the app's navigation, read on each page load.
+export { countWaitingReviews } from "./lib/reviews";
 export {
   approveEditedReview,
   approveReview,
@@ -11,3 +13,6 @@ export {
   markDone,
   openReview,
 } from "./lib/acting";
+// The daily digest job, as each org's system ctx: ends the reviews done or gone in their app,
+// then emails everyone with a review waiting.
+export { sendReviewDigest } from "./lib/digest";

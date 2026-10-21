@@ -169,6 +169,10 @@ _Avoid_: Staged action, preview
 One action waiting for a person's decision, shown on their Reviews page, which points at the waiting item in its app.
 _Avoid_: Approval (the step that creates a review), task (a Google Tasks item), notification
 
+**Review digest**:
+The daily email telling a person how many reviews wait for them, per workflow and oldest first, with no message or draft text. On by default; each person can turn it off.
+_Avoid_: Notification (too broad), reminder
+
 **Capability request**:
 A structured ask, raised when no catalog action fits, for our team to build a new one.
 _Avoid_: Feature request

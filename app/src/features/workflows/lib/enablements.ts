@@ -7,7 +7,7 @@ import { forOrg } from "@/db/for-org";
 import { listConnections } from "@/features/connections/server";
 import { listUsers } from "@/features/orgs/server";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
-import { ForbiddenError, ValidationError } from "@/lib/errors";
+import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import type { EnablementSummary, EnableResult } from "../types";
 import { findWorkflow } from "./access";
 import { deleteEnablement, switchOnEnablement } from "./enablement-rows";
@@ -31,7 +31,8 @@ export async function enable(ctx: Ctx, workflowId: string): Promise<EnableResult
     );
   }
   const version = (await latestVersions(ctx, [workflowId])).get(workflowId);
-  if (version === undefined) throw new Error(`Visible workflow ${workflowId} has no version`);
+  // A visible workflow is published: none means it went since it was read, so it's not found.
+  if (version === undefined) throw new NotFoundError("workflow version");
   const connection = (await listConnections(ctx)).connections.find(
     (own) => own.source === "google",
   );

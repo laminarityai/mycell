@@ -8,7 +8,8 @@ import { proxyDelete, proxyGet, proxyPost, proxyPut } from "@/features/connectio
 import type { Ctx } from "@/lib/ctx";
 import { fullMessageSchema, GMAIL, mailOf } from "./gmail";
 import { createReplyDraft, editedMessage } from "./gmail-drafts";
-import { ItemGoneError, type PendingFormAdapter, type PendingItem } from "./pending-forms";
+import { ItemGoneError } from "@/lib/errors";
+import type { PendingFormAdapter, PendingItem } from "./pending-forms";
 import type { Compose } from "./step-context";
 
 /** What the create-draft action hands `prepare`: the message to reply to, and the step's text. */

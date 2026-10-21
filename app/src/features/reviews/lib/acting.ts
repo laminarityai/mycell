@@ -10,14 +10,19 @@ import { delegatedCtx } from "@/features/connections/delegation";
 import {
   escalationAdapter,
   gmailDraftAdapter,
-  ItemGoneError,
   type ItemState,
   type PendingFormAdapter,
   type PendingItem,
   type ReviewEdits,
 } from "@/features/runtime/adapters";
 import type { Ctx } from "@/lib/ctx";
-import { AlreadyHandledError, ConflictError, ForbiddenError, ValidationError } from "@/lib/errors";
+import {
+  AlreadyHandledError,
+  ConflictError,
+  ForbiddenError,
+  ItemGoneError,
+  ValidationError,
+} from "@/lib/errors";
 import { reviewActions, type OpenedReview, type PendingForms, type ReviewAction } from "../types";
 import { handOffTo } from "./hand-off";
 import { endReview, handledBy, itemOf, reviewOf, visibleReview, type ReviewRow } from "./reviews";

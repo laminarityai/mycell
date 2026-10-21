@@ -62,11 +62,3 @@ export type PendingFormAdapter<Input = never> = {
   /** The item as the review shows it, fetched live. ItemGoneError if it's gone. */
   view(ctx: Ctx, item: PendingItem): Promise<ItemView>;
 };
-
-/** The waiting item is no longer in its app: deleted there, or already carried out. */
-export class ItemGoneError extends Error {
-  constructor() {
-    super("The waiting item is no longer in its app.");
-    this.name = "ItemGoneError";
-  }
-}

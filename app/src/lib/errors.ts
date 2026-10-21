@@ -51,6 +51,29 @@ export class AlreadyHandledError extends Error {
   }
 }
 
+/**
+ * A review's waiting item is no longer in its app: deleted there, or already carried out. The
+ * pending-form adapters throw it; acting on a review turns it into a ConflictError that ends the
+ * review, and opening one ends the review `gone`.
+ */
+export class ItemGoneError extends Error {
+  constructor() {
+    super("The waiting item is no longer in its app.");
+    this.name = "ItemGoneError";
+  }
+}
+
+/**
+ * The email provider didn't take an email. Thrown inside a job's step, so the job retries it;
+ * not a message for a user (it quotes the provider), so the boundaries rethrow it as a bug.
+ */
+export class EmailSendError extends Error {
+  constructor(status: number, message = "no message") {
+    super(`Email provider refused the email (${String(status)}): ${message}`);
+    this.name = "EmailSendError";
+  }
+}
+
 /** The input breaks a rule the user can fix; the message says which. */
 export class ValidationError extends Error {
   constructor(message: string) {
@@ -111,6 +134,7 @@ export function typedErrorMessage(error: unknown): string | undefined {
     error instanceof NotFoundError ||
     error instanceof ConflictError ||
     error instanceof AlreadyHandledError ||
+    error instanceof ItemGoneError ||
     error instanceof ValidationError ||
     error instanceof OutOfCreditsError ||
     error instanceof SpecInvalidError
@@ -130,11 +154,13 @@ export function routeError(error: unknown): Response {
         ? 404
         : error instanceof ConflictError || error instanceof AlreadyHandledError
           ? 409
-          : error instanceof ValidationError
-            ? 400
-            : error instanceof OutOfCreditsError
-              ? 402
-              : undefined;
+          : error instanceof ItemGoneError
+            ? 410
+            : error instanceof ValidationError
+              ? 400
+              : error instanceof OutOfCreditsError
+                ? 402
+                : undefined;
   if (status === undefined || !(error instanceof Error)) throw error;
   return new Response(error.message, { status });
 }

@@ -3,13 +3,13 @@
 import { z } from "zod";
 import { checkWords } from "@/features/policy/condition-fields";
 import type { Step } from "@/features/spec/types";
+import { ItemGoneError } from "@/lib/errors";
 import type { Json } from "../types";
 import { callModel } from "./call-model";
 import { classify } from "./classify";
 import { chooseEveryMatch, chooseFirstMatch } from "./conditions";
 import { escalationAdapter } from "./escalation-adapter";
 import { messageText } from "./gmail";
-import { ItemGoneError } from "./pending-forms";
 import type { StepContext, StepExecution } from "./step-context";
 import { withTriggerFacts } from "./trigger-facts";
 

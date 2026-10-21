@@ -5,7 +5,6 @@
 export { escalationAdapter } from "./lib/escalation-adapter";
 export { gmailDraftAdapter } from "./lib/gmail-draft-adapter";
 export {
-  ItemGoneError,
   type ItemState,
   type ItemView,
   type MailView,

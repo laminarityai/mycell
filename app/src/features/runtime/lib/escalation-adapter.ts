@@ -5,7 +5,8 @@
 import { z } from "zod";
 import { getConnection, proxyGet } from "@/features/connections/server";
 import { fullMessageSchema, GMAIL, mailOf } from "./gmail";
-import { ItemGoneError, type PendingFormAdapter } from "./pending-forms";
+import { ItemGoneError } from "@/lib/errors";
+import type { PendingFormAdapter } from "./pending-forms";
 
 /** What the escalate step hands `prepare`: the message the run started from. */
 export type EscalatedMessage = { connectionId: string; messageId: string };

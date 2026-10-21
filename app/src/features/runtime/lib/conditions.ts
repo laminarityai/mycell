@@ -35,14 +35,9 @@ export function chooseFirstMatch(
       paths.push({ id: path.id, name: path.name, status: "not_checked", checks: [] });
       continue;
     }
-    const checks = path.condition.checks.map((check): CheckResult => ({
-      check: describeCheck(check, words),
-      ...outcome(check, outputs),
-    }));
-    const passed = checks.map((check) => check.passed);
-    const holds = path.condition.combine === "all" ? passed.every(Boolean) : passed.some(Boolean);
-    if (holds) taken = path.id;
-    paths.push({ id: path.id, name: path.name, status: holds ? "taken" : "not_taken", checks });
+    const checked = checkedPath(path, outputs, words);
+    if (checked.status === "taken") taken = path.id;
+    paths.push(checked);
   }
   const otherwise = branch.otherwise.id;
   const status = taken === undefined ? "taken" : "not_needed";
@@ -74,7 +69,7 @@ function checkedPath(
   words: SubjectWords | undefined,
 ): BranchPath {
   const checks = path.condition.checks.map((check): CheckResult => ({
-    check: describeCheck(check),
+    check: describeCheck(check, words),
     ...outcome(check, outputs),
   }));
   const passed = checks.map((check) => check.passed);
@@ -113,7 +108,7 @@ function holds(check: ValueCheck, value: Json): boolean {
     case "is_no":
       return value === (check.op === "is_yes");
     case "equals":
-      return value === check.value;
+      return typeof value === "number" && value === check.value;
     case "does_not_equal":
       return typeof value === "number" && value !== check.value;
     case "more_than":

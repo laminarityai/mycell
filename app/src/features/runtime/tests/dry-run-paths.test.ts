@@ -175,5 +175,8 @@ describe("Try it on an every-match branch", () => {
       ["big", "taken"],
       ["rest", "not_needed"],
     ]);
+    expect(result.steps[2]?.paths?.at(2)?.checks.map((each) => each.check)).toEqual([
+      "the order total is more than 1000",
+    ]);
   });
 });

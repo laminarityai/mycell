@@ -40,6 +40,13 @@ export const isolationCases = defineIsolationCases(server, {
     expect(users.map((u) => u.id).sort()).toEqual([orgA.admin.id, orgA.member.id].sort());
   },
 
+  userNames: async ({ orgA, orgB }) => {
+    const nameOf = await server.userNames(orgA.member.ctx);
+
+    expect(nameOf(orgA.admin.id)).toBe(orgA.admin.email);
+    expect(nameOf(orgB.admin.id)).toBe("someone no longer in the org");
+  },
+
   getWorkspaceDomain: async ({ orgA, orgB }) => {
     expect(await server.getWorkspaceDomain(orgA.member.ctx)).toBe(orgA.workspaceDomain);
     expect(await server.getWorkspaceDomain(orgB.admin.ctx)).toBe(orgB.workspaceDomain);

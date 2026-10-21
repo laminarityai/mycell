@@ -7,7 +7,8 @@ import { randomUUID } from "node:crypto";
 import { and, asc, eq } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { getConnection } from "@/features/connections/server";
-import { listUsers } from "@/features/orgs/server";
+import { userNames } from "@/features/orgs/server";
+import type { UserNames } from "@/features/orgs/types";
 import type { PendingItem } from "@/features/runtime/adapters";
 import type { ReviewSharing } from "@/features/workflows/types";
 import { reviewSharing, workflowNames } from "@/features/workflows/server";
@@ -49,11 +50,11 @@ export async function listReviews(ctx: Ctx): Promise<ReviewSummary[]> {
     ctx,
     rows.map((row) => row.workflowId),
   );
-  const users = rows.some((row) => row.handedToUserId !== null)
+  const nameOf: UserNames = rows.some((row) => row.handedToUserId !== null)
     ? await userNames(ctx)
-    : new Map<string, string>();
+    : () => "";
   const sharing = await sharingOf(ctx, rows);
-  return rows.map((row) => summaryOf(row, users, sharing, names.get(row.workflowId)));
+  return rows.map((row) => summaryOf(row, nameOf, sharing, names.get(row.workflowId)));
 }
 
 /**
@@ -113,14 +114,14 @@ async function sharingOf(ctx: Ctx, rows: ReviewRow[]): Promise<Map<string, Revie
 /** The review as its row now stands, with its workflow's name and the names of its people. */
 export async function reviewOf(ctx: Ctx, row: ReviewRow): Promise<Review> {
   const names = await workflowNames(ctx, [row.workflowId]);
-  const users = await userNames(ctx);
+  const nameOf = await userNames(ctx);
   const sharing = await sharingOf(ctx, [row]);
   return {
-    ...summaryOf(row, users, sharing, names.get(row.workflowId)),
+    ...summaryOf(row, nameOf, sharing, names.get(row.workflowId)),
     reason: row.reason,
     status: row.status,
     endedByUserId: row.endedByUserId,
-    endedBy: row.endedByUserId === null ? null : nameOf(users, row.endedByUserId),
+    endedBy: row.endedByUserId === null ? null : nameOf(row.endedByUserId),
     endedAt: row.endedAt,
   };
 }
@@ -132,12 +133,7 @@ export async function reviewOf(ctx: Ctx, row: ReviewRow): Promise<Review> {
 export async function handledBy(ctx: Ctx, reviewId: string): Promise<string | undefined> {
   const row = (await forOrg(ctx).select(reviews, { where: eq(reviews.id, reviewId) })).at(0);
   if (row?.endedByUserId == null) return undefined;
-  return nameOf(await userNames(ctx), row.endedByUserId);
-}
-
-/** The org's users' names, by user ID. */
-export async function userNames(ctx: Ctx): Promise<Map<string, string>> {
-  return new Map((await listUsers(ctx)).map((user) => [user.id, user.name]));
+  return (await userNames(ctx))(row.endedByUserId);
 }
 
 /** Where the review's item waits, as its adapter takes it. */
@@ -168,7 +164,7 @@ export async function endReview(
 
 function summaryOf(
   row: ReviewRow,
-  users: Map<string, string>,
+  nameOf: UserNames,
   sharing: Map<string, ReviewSharing>,
   workflowName = "A deleted workflow",
 ): ReviewSummary {
@@ -178,18 +174,13 @@ function summaryOf(
     workflowId: row.workflowId,
     workflowName,
     sharedWith: row.ownerScope === "org" ? (sharing.get(row.workflowId)?.tags ?? []) : null,
-    handOff: handOffOf(row, users),
+    handOff: handOffOf(row, nameOf),
     createdAt: row.createdAt,
   };
 }
 
-function handOffOf(row: ReviewRow, users: Map<string, string>): HandOff | null {
+function handOffOf(row: ReviewRow, nameOf: UserNames): HandOff | null {
   const { handedToUserId: to, handedByUserId: by } = row;
   if (to === null || by === null) return null;
-  return { to: { id: to, name: nameOf(users, to) }, by: { id: by, name: nameOf(users, by) } };
-}
-
-// A user who has left the org keeps no name here.
-function nameOf(users: Map<string, string>, userId: string): string {
-  return users.get(userId) ?? "someone no longer in the org";
+  return { to: { id: to, name: nameOf(to) }, by: { id: by, name: nameOf(by) } };
 }

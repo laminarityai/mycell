@@ -5,6 +5,7 @@
 // called, so nothing is debited.
 import { and, eq, gte, type SQL } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
+import { userNames } from "@/features/orgs/server";
 import { currentVersionIds } from "@/features/workflows/server";
 import type { Ctx } from "@/lib/ctx";
 import { ForbiddenError } from "@/lib/errors";
@@ -15,7 +16,7 @@ import {
   type ReviewStatsQuery,
   type ReviewTally,
 } from "../types";
-import { userNames, type ReviewRow } from "./reviews";
+import type { ReviewRow } from "./reviews";
 import { reviews } from "./schema";
 
 /**
@@ -27,11 +28,11 @@ export async function reviewStats(ctx: Ctx, query: ReviewStatsQuery): Promise<Re
   const userId = whose(ctx, query);
   const rows = await counted(ctx, query, userId);
   if (query.groupBy !== "user") return { ...tally(rows), byUser: [] };
-  const names = await userNames(ctx);
+  const nameOf = await userNames(ctx);
   const owners = [...new Set(rows.map((row) => row.ownerUserId))];
   const byUser = owners
     .map((owner) => ({
-      user: owner === null ? null : { id: owner, name: names.get(owner) ?? "someone who left" },
+      user: owner === null ? null : { id: owner, name: nameOf(owner) },
       ...tally(rows.filter((row) => row.ownerUserId === owner)),
     }))
     // People by name, then the shared inbox.

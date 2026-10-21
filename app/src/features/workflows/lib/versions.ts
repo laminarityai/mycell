@@ -1,7 +1,7 @@
 // Publishing: a workflow's working spec, validated again, becomes its next immutable version.
 // There is no update path for a version.
 import { randomUUID } from "node:crypto";
-import { and, desc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { isUniqueViolation } from "@/db/errors";
 import { forOrg } from "@/db/for-org";
 import { sameValue } from "@/features/spec/diff";
@@ -14,7 +14,7 @@ import { workflows, workflowVersions, workflowVersionTags } from "./schema";
 import { validateWorkflowSpec } from "./validation";
 import { findWorkflow } from "./access";
 import { gainedForEnablements, pauseEnablements } from "./version-pauses";
-import { version } from "./latest-versions";
+import { latestVersions, version } from "./latest-versions";
 import { removeInvisibleIn } from "./lost-visibility";
 
 /**
@@ -39,13 +39,7 @@ export async function publishWorkflow(
   // Names no tag in the org has are refused here, before anything is written.
   const tags = await findTagsByName(ctx, validated.applied.visibility?.tags ?? []);
   const db = forOrg(ctx);
-  const latest = (
-    await db.select(workflowVersions, {
-      where: eq(workflowVersions.workflowId, workflowId),
-      orderBy: [desc(workflowVersions.number)],
-      limit: 1,
-    })
-  ).at(0);
+  const latest = (await latestVersions(ctx, [workflowId], db)).get(workflowId);
   const gained = gainedForEnablements(latest, {
     ...validated,
     credentials: validated.applied.credentials,

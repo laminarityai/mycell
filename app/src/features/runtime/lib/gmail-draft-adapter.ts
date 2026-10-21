@@ -8,6 +8,7 @@ import { proxyDelete, proxyGet, proxyPost, proxyPut } from "@/features/connectio
 import type { Ctx } from "@/lib/ctx";
 import { fullMessageSchema, GMAIL, mailOf } from "./gmail";
 import { createReplyDraft, editedMessage } from "./gmail-drafts";
+import { sentSince, threadMessages } from "./gmail-sent";
 import { ItemGoneError } from "@/lib/errors";
 import type { PendingFormAdapter, PendingItem } from "./pending-forms";
 import type { Compose } from "./step-context";
@@ -24,16 +25,6 @@ export type ReplyDraftInput = {
 const draftSchema = z.object({ id: z.string(), message: fullMessageSchema });
 const draftRefSchema = z.object({ id: z.string() });
 const sentSchema = z.object({ id: z.string(), threadId: z.string() });
-const threadSchema = z.object({
-  messages: z
-    .array(
-      z.object({
-        labelIds: z.array(z.string()).default([]),
-        internalDate: z.string().optional(),
-      }),
-    )
-    .default([]),
-});
 
 export const gmailDraftAdapter: PendingFormAdapter<ReplyDraftInput> = {
   // M3's create-draft: a reply in the message's thread, made once per run step.
@@ -77,17 +68,8 @@ export const gmailDraftAdapter: PendingFormAdapter<ReplyDraftInput> = {
   // began means the person sent it from Gmail, and nothing means they deleted it.
   async check(ctx, item) {
     if ((await draftOf(ctx, item, "minimal")) !== null) return "waiting";
-    const thread = await proxyGet(
-      ctx,
-      item.connectionId,
-      `${GMAIL}/threads/${encodeURIComponent(item.threadRef)}?format=minimal`,
-      threadSchema,
-    );
-    const since = item.createdAt.getTime();
-    const sent = (thread?.messages ?? []).some(
-      (message) => message.labelIds.includes("SENT") && Number(message.internalDate ?? 0) >= since,
-    );
-    return sent ? "done_in_app" : "gone";
+    const messages = (await threadMessages(ctx, item.connectionId, item.threadRef)) ?? [];
+    return sentSince(messages, item.createdAt.getTime()) ? "done_in_app" : "gone";
   },
 
   // The draft, and the message that started the run, which it replies to.

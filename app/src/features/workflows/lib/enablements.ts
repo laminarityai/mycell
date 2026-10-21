@@ -5,7 +5,7 @@
 import { eq } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { listConnections } from "@/features/connections/server";
-import { listUsers } from "@/features/orgs/server";
+import { userNames } from "@/features/orgs/server";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import type { EnablementSummary, EnableResult } from "../types";
@@ -65,10 +65,10 @@ export async function listEnablements(ctx: Ctx, workflowId: string): Promise<Ena
     where: eq(enablements.workflowId, workflowId),
     orderBy: [enablements.enabledAt],
   });
-  const names = new Map((await listUsers(ctx)).map((user) => [user.id, user.name]));
+  const nameOf = await userNames(ctx);
   return rows.map((row) => ({
     userId: row.userId,
-    name: names.get(row.userId) ?? "",
+    name: nameOf(row.userId),
     status: row.status,
     pausedReason: row.pausedReason,
     pausedChange: row.pausedChange,

@@ -6,23 +6,13 @@ import { z } from "zod";
 import { getConnection, proxyGet } from "@/features/connections/server";
 import { fullMessageSchema, GMAIL, mailOf } from "./gmail";
 import { ItemGoneError } from "@/lib/errors";
+import { sentAt, sentSince, threadMessages } from "./gmail-sent";
 import type { PendingFormAdapter } from "./pending-forms";
 
 /** What the escalate step hands `prepare`: the message the run started from. */
 export type EscalatedMessage = { connectionId: string; messageId: string };
 
 const messageRefSchema = z.object({ id: z.string(), threadId: z.string() });
-const threadSchema = z.object({
-  messages: z
-    .array(
-      z.object({
-        id: z.string(),
-        labelIds: z.array(z.string()).default([]),
-        internalDate: z.string().optional(),
-      }),
-    )
-    .default([]),
-});
 
 export const escalationAdapter: PendingFormAdapter<EscalatedMessage> = {
   // Points at the message itself (its source_ref) and its thread. ItemGoneError if it's gone.
@@ -45,23 +35,11 @@ export const escalationAdapter: PendingFormAdapter<EscalatedMessage> = {
   // A reply sent in its thread after the message finishes it; the message deleted (with its
   // thread, or alone) leaves nothing to review.
   async check(ctx, item) {
-    const thread = await proxyGet(
-      ctx,
-      item.connectionId,
-      `${GMAIL}/threads/${encodeURIComponent(item.threadRef)}?format=minimal`,
-      threadSchema,
-    );
-    const messages = thread?.messages ?? [];
+    const messages = (await threadMessages(ctx, item.connectionId, item.threadRef)) ?? [];
     const escalated = messages.find((message) => message.id === item.itemRef);
     if (escalated === undefined) return "gone";
-    const after = Number(escalated.internalDate ?? item.createdAt.getTime());
-    const replied = messages.some(
-      (message) =>
-        message.id !== item.itemRef &&
-        message.labelIds.includes("SENT") &&
-        Number(message.internalDate ?? 0) > after,
-    );
-    return replied ? "done_in_app" : "waiting";
+    const after = sentAt(escalated, item.createdAt.getTime());
+    return sentSince(messages, after, item.itemRef) ? "done_in_app" : "waiting";
   },
 
   // The message, and where to open it in the connection's own Gmail.

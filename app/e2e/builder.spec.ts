@@ -66,8 +66,12 @@ test("an admin accepts the builder's proposal and gets an unpublished workflow w
   await page.getByRole("button", { name: "Send" }).click();
 
   const proposal = page.getByRole("article", { name: "Proposal: Pricing replies" });
-  const steps = proposal.getByRole("list", { name: "Steps" }).getByRole("listitem");
+  // Grouped by path: the classify step and the branch, then the path's draft and its review.
+  const steps = proposal.getByRole("listitem");
   await expect(steps).toHaveCount(4);
+  await expect(proposal.getByRole("region", { name: "Path yes" })).toContainText(
+    'Runs when "classify" says "yes" with at least 85% confidence.',
+  );
   await expect(steps.nth(0)).toContainText('Asks "Is this a pricing inquiry?"');
   await expect(steps.nth(3)).toContainText("Waits for review (required by policy)");
   await proposal.getByRole("button", { name: "Accept" }).click();

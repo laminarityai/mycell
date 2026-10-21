@@ -128,7 +128,7 @@ async function findMarkedDraft(ctx: Ctx, connectionId: string, threadId: string,
   return undefined;
 }
 
-type Header = { name: string; value: string };
+export type Header = { name: string; value: string };
 
 /** The reply as RFC 2822, base64url-encoded as drafts.create takes it. */
 function replyMessage(original: Header[], text: string, marker: string): string {
@@ -136,11 +136,41 @@ function replyMessage(original: Header[], text: string, marker: string): string 
   const messageId = header("Message-ID");
   const { to, subject } = addressOf(original);
   const references = [header("References"), messageId].filter((part) => part !== "").join(" ");
+  const headers: Header[] = [
+    { name: "To", value: to },
+    { name: "Subject", value: subject },
+    ...(messageId === ""
+      ? []
+      : [
+          { name: "In-Reply-To", value: messageId },
+          { name: "References", value: references },
+        ]),
+    { name: DRAFT_MARKER_HEADER, value: marker },
+  ];
+  return rawMessage(headers, text);
+}
+
+/** The headers a draft keeps when its text is replaced: who it goes to, and what it replies to. */
+const KEPT_HEADERS = ["To", "Cc", "Subject", "In-Reply-To", "References", DRAFT_MARKER_HEADER];
+
+/**
+ * The draft with `headers` (its own, as Gmail returns them) and new text, as RFC 2822 for
+ * drafts.update: it keeps its recipients, subject, place in the thread and marker.
+ */
+export function editedMessage(headers: Header[], text: string): string {
+  const kept = KEPT_HEADERS.flatMap((name) => {
+    const value = headerOf(headers, name);
+    return value === undefined ? [] : [{ name, value: oneLine(value) }];
+  });
+  return rawMessage(kept, text);
+}
+
+/** A plain-text message with `headers`, base64url-encoded as Gmail's drafts take it. */
+function rawMessage(headers: Header[], text: string): string {
   const lines = [
-    `To: ${to}`,
-    `Subject: ${encodeWord(subject)}`,
-    ...(messageId === "" ? [] : [`In-Reply-To: ${messageId}`, `References: ${references}`]),
-    `${DRAFT_MARKER_HEADER}: ${marker}`,
+    ...headers.map(
+      ({ name, value }) => `${name}: ${name === "Subject" ? encodeWord(value) : value}`,
+    ),
     "MIME-Version: 1.0",
     'Content-Type: text/plain; charset="UTF-8"',
     "Content-Transfer-Encoding: base64",

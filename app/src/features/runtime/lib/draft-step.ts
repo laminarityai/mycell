@@ -89,22 +89,29 @@ async function sheetText(name: string, context: StepContext): Promise<string | u
   return `What the sheet range ${range.range} holds, one row per line, cells separated by tabs:\n\n${values}`;
 }
 
-const draftOutput = z.object({ draftId: z.string() });
+const draftOutput = z.object({ draftId: z.string(), threadId: z.string() });
 
 /**
- * Records that the drafts above it on its own path await a person, who approves by sending
- * one: every one, those an approval above it recorded too, as a v1 approval recorded every
- * draft before it. It holds nothing back: a Gmail draft is never sent by a run, so the steps
- * after it still run.
+ * Records that the drafts above it on its own path await a person: every one, those an approval
+ * above it recorded too, as a v1 approval recorded every draft before it. Each gets a review on
+ * its owner's Reviews page (one per draft, however often the step or the run is retried). It
+ * holds nothing back: a Gmail draft is never sent by a run, so the steps after it still run.
  */
-export function approvalStep(
+export async function approvalStep(
   step: StepOf<"approval">,
   context: StepContext,
 ): Promise<StepExecution> {
-  const draftIds = stepsAbove(context.spec, step.id).flatMap((earlier) => {
+  const drafts = stepsAbove(context.spec, step.id).flatMap((earlier) => {
     const parsed = draftOutput.safeParse(context.outputs[earlier.id]);
-    return parsed.success ? [parsed.data.draftId] : [];
+    return parsed.success ? [parsed.data] : [];
   });
-  const record = { awaiting: "human", channel: step.channel, draftIds };
-  return Promise.resolve({ next: "continue", output: record, record });
+  for (const { draftId, threadId } of drafts) {
+    await context.awaitReview({ kind: "approval", itemRef: draftId, threadRef: threadId });
+  }
+  const record = {
+    awaiting: "human",
+    channel: step.channel,
+    draftIds: drafts.map((d) => d.draftId),
+  };
+  return { next: "continue", output: record, record };
 }

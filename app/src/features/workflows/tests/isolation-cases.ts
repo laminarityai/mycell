@@ -110,6 +110,16 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await server.listSwitchedOn(systemCtx(orgs.orgA.id), b.connectionId)).toEqual([]);
   },
 
+  workflowNames: async (orgs) => {
+    const b = await seedOrgBWorkflow(orgs);
+    const own = await server.saveWorkflow(orgs.orgA.admin.ctx, { name: "A", spec: draftSpec() });
+
+    for (const ctx of [orgs.orgA.admin.ctx, orgs.orgA.member.ctx]) {
+      const names = await server.workflowNames(ctx, [b.id, own.id]);
+      expect([...names]).toEqual([[own.id, "A"]]);
+    }
+  },
+
   checkWorkflowSpec: async (orgs) => {
     // Only org B has a Gmail connection: org A's check can't count it.
     await connectGmail(orgs.orgB.admin.ctx, orgs.orgB.admin.email);

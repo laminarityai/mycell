@@ -7,6 +7,7 @@
 import { and, eq } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { getConnection } from "@/features/connections/server";
+import { createReview } from "@/features/reviews/server";
 import type { Spec, Step } from "@/features/spec/types";
 import { getWorkflowVersion, listSwitchedOn } from "@/features/workflows/server";
 import type { Ctx } from "@/lib/ctx";
@@ -71,6 +72,15 @@ async function executeStep(ctx: Ctx, run: Run, step: Step, place: RunPlace): Pro
     spec: place.spec,
     outputs: place.outputs,
     actions: actionExecutors,
+    awaitReview: (item) =>
+      createReview(ctx, {
+        ...item,
+        runId: run.id,
+        connectionId: run.connectionId,
+        workflowId: run.workflowId,
+        workflowVersionId: run.workflowVersionId,
+        sourceRef: run.sourceRef,
+      }),
   };
   const attempted = await withRetries(place.retry, () => attemptStep(step, context));
   try {

@@ -22,6 +22,8 @@ const envSchema = z.object({
   // signed with the environment's separate webhook signing key.
   NANGO_API_KEY: z.string().min(1),
   NANGO_WEBHOOK_SIGNING_KEY: z.string().min(1),
+  // Where Nango's API is. Only the e2e tests set it, to the fake Nango Playwright starts.
+  NANGO_API_URL: z.url().default("https://api.nango.dev"),
   // Inngest (background jobs). INNGEST_DEV=1 points the client at the local Inngest dev server
   // (`npx inngest-cli@latest dev`), which needs no keys. Otherwise Inngest Cloud sends with the
   // event key and signs its requests to /api/inngest with the signing key.

@@ -29,7 +29,8 @@ const messageRefSchema = z.object({
   threadId: z.string(),
   labelIds: z.array(z.string()).default([]),
 });
-const fullMessageSchema = messageRefSchema.extend({ payload: partSchema.optional() });
+export const fullMessageSchema = messageRefSchema.extend({ payload: partSchema.optional() });
+type FullMessage = z.infer<typeof fullMessageSchema>;
 const threadSchema = z.object({ id: z.string(), messages: z.array(messageRefSchema).default([]) });
 const fullThreadSchema = z.object({ messages: z.array(fullMessageSchema).default([]) });
 
@@ -157,12 +158,22 @@ export async function readMessage(
   return message === null ? null : fieldsOf(message);
 }
 
-function asText(message: z.infer<typeof fullMessageSchema>): string {
+/**
+ * A message's sender, recipients, subject, date and plain-text body, as the Reviews page shows
+ * it. In memory only: never store it.
+ */
+export function mailOf(message: FullMessage) {
+  const { from, date, subject, body } = fieldsOf(message);
+  const to = (message.payload?.headers ?? []).find((h) => h.name.toLowerCase() === "to");
+  return { from, to: to?.value ?? "", subject, date, text: body };
+}
+
+function asText(message: FullMessage): string {
   const { from, subject, body } = fieldsOf(message);
   return `From: ${from}\nSubject: ${subject}\n\n${body}`;
 }
 
-function fieldsOf(message: z.infer<typeof fullMessageSchema>): MessageFields {
+function fieldsOf(message: FullMessage): MessageFields {
   const headers = message.payload?.headers ?? [];
   const header = (name: string) =>
     headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ?? "";

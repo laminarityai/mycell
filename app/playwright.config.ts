@@ -10,6 +10,8 @@ const { e2eDatabaseUrl, e2ePort: port } = checkoutIsolation(__dirname);
 // The fake AI Gateway (e2e/fake-ai-gateway-server.ts) listens 1000 above the app, so it is per
 // checkout too.
 const fakeAiGatewayPort = port + 1000;
+// The fake Nango (e2e/fake-nango-server.ts) listens 2000 above it.
+const fakeNangoPort = port + 2000;
 const e2eEnv = {
   DATABASE_URL: e2eDatabaseUrl,
   // The tests sign browsers in by signing a session cookie with this secret (e2e/sign-in-as.ts),
@@ -20,6 +22,7 @@ const e2eEnv = {
   GOOGLE_CLIENT_SECRET: "e2e-google-client-secret",
   NANGO_API_KEY: "e2e-nango-api-key",
   NANGO_WEBHOOK_SIGNING_KEY: "e2e-nango-webhook-signing-key",
+  NANGO_API_URL: `http://localhost:${String(fakeNangoPort)}`,
   INNGEST_DEV: "0",
   INNGEST_EVENT_KEY: "e2e-inngest-event-key",
   INNGEST_SIGNING_KEY: "signkey-e2e-00000000000000000000000000000000",
@@ -58,6 +61,15 @@ export default defineConfig({
     {
       command: `node --disable-warning=DEP0205 --import tsx e2e/fake-ai-gateway-server.ts ${String(fakeAiGatewayPort)}`,
       url: `http://localhost:${String(fakeAiGatewayPort)}/health`,
+      reuseExistingServer: false,
+      stdout: "ignore",
+      stderr: "pipe",
+    },
+    {
+      command: `node --disable-warning=DEP0205 --import tsx e2e/fake-nango-server.ts ${String(fakeNangoPort)}`,
+      url: `http://localhost:${String(fakeNangoPort)}/health`,
+      // It runs the Vitest fake, which reads the API key and signing key from src/env.
+      env: e2eEnv,
       reuseExistingServer: false,
       stdout: "ignore",
       stderr: "pipe",

@@ -1,6 +1,7 @@
 // What a fake Gmail mailbox holds beyond its messages, and the writes that change it:
-// users.labels.create, users.messages.modify and users.drafts.create, in the shapes Google
-// documents. A draft is kept as Gmail keeps it: a message labelled DRAFT in its thread, built
+// users.labels.create, users.messages.modify, and users.drafts.create, update, send and delete,
+// in the shapes Google documents. Sending a draft removes it and adds a sent message, with a new
+// ID, to its thread. A draft is kept as Gmail keeps it: a message labelled DRAFT in its thread, built
 // from the RFC 2822 `raw` the request sent, so a test can read its headers and text.
 import { randomUUID } from "node:crypto";
 import { HttpResponse } from "msw";
@@ -34,7 +35,12 @@ export type FakeDraft = {
 export class FakeGmailWrites {
   private userLabels: FakeLabel[] = [];
   readonly drafts: FakeDraft[] = [];
-  /** Every write asked for, in order: `labels.create`, `messages.modify`, `drafts.create`. */
+  /** Every draft sent (by drafts.send, or from Gmail), as sent: its new message ID and all. */
+  readonly sent: FakeDraft[] = [];
+  /**
+   * Every write asked for, in order: `labels.create`, `messages.modify`, `drafts.create`,
+   * `drafts.update`, `drafts.send`, `drafts.delete`.
+   */
   readonly log: string[] = [];
   private answersToLose = 0;
 
@@ -83,11 +89,14 @@ export class FakeGmailWrites {
 export type WritableMailbox = {
   writes: FakeGmailWrites;
   modify(messageId: string, add: string[], remove: string[]): Record<string, unknown> | undefined;
-  addDraft(
-    threadId: string,
-    draft: Omit<FakeDraft, "id" | "messageId" | "threadId">,
-  ): FakeDraft | undefined;
+  addDraft(threadId: string, draft: DraftContent): FakeDraft | undefined;
+  updateDraft(id: string, draft: DraftContent): FakeDraft | undefined;
+  sendDraft(id: string): FakeDraft | undefined;
+  deleteDraft(id: string): boolean;
 };
+
+/** What a draft says: its headers and text. */
+export type DraftContent = Omit<FakeDraft, "id" | "messageId" | "threadId">;
 
 const labelCreate = z.object({ name: z.string().min(1) });
 const modify = z.object({
@@ -97,20 +106,65 @@ const modify = z.object({
 const draftCreate = z.object({
   message: z.object({ raw: z.string().min(1), threadId: z.string() }),
 });
+const draftUpdate = z.object({
+  message: z.object({ raw: z.string().min(1), threadId: z.string().optional() }),
+});
+const draftSend = z.object({ id: z.string().min(1) });
 
 const GMAIL = "/gmail/v1/users/me";
 
-/** A POST to the Gmail API, answered from the mailbox (or 503 after it, if asked to lose it). */
-export function gmailWrite(mailbox: WritableMailbox, path: string, body: unknown): Response {
-  const answer = write(mailbox, path, body);
+/** A write to the Gmail API, answered from the mailbox (or 503 after it, if asked to lose it). */
+export function gmailWrite(
+  mailbox: WritableMailbox,
+  path: string,
+  body: unknown,
+  method: "POST" | "PUT" | "DELETE" = "POST",
+): Response {
+  const answer =
+    method === "POST" ? write(mailbox, path, body) : draftWrite(mailbox, path, body, method);
   if (answer.ok && mailbox.writes.takeLostAnswer()) {
     return HttpResponse.json({ error: { code: 503, status: "UNAVAILABLE" } }, { status: 503 });
   }
   return answer;
 }
 
+// drafts.update (PUT) and drafts.delete (DELETE) on one draft.
+function draftWrite(
+  mailbox: WritableMailbox,
+  path: string,
+  body: unknown,
+  method: "PUT" | "DELETE",
+): Response {
+  const id = new RegExp(`^${GMAIL}/drafts/([^/]+)$`).exec(path)?.[1];
+  if (id === undefined) throw new Error(`The fake Gmail takes no ${method} to ${path}`);
+  if (method === "DELETE") {
+    mailbox.writes.log.push("drafts.delete");
+    const deleted = mailbox.deleteDraft(decodeURIComponent(id));
+    return deleted ? new HttpResponse(null, { status: 204 }) : error(404, "NOT_FOUND");
+  }
+  mailbox.writes.log.push("drafts.update");
+  const draft = mailbox.updateDraft(
+    decodeURIComponent(id),
+    parseRaw(draftUpdate.parse(body).message.raw),
+  );
+  return draft === undefined ? error(404, "NOT_FOUND") : HttpResponse.json(draftResource(draft));
+}
+
+function draftResource(draft: FakeDraft) {
+  return {
+    id: draft.id,
+    message: { id: draft.messageId, threadId: draft.threadId, labelIds: ["DRAFT"] },
+  };
+}
+
 function write(mailbox: WritableMailbox, path: string, body: unknown): Response {
   const { writes } = mailbox;
+  if (path === `${GMAIL}/drafts/send`) {
+    writes.log.push("drafts.send");
+    const sent = mailbox.sendDraft(draftSend.parse(body).id);
+    if (sent === undefined) return error(404, "NOT_FOUND");
+    return HttpResponse.json({ id: sent.messageId, threadId: sent.threadId, labelIds: ["SENT"] });
+  }
   if (path === `${GMAIL}/labels`) {
     writes.log.push("labels.create");
     const label = writes.createLabel(labelCreate.parse(body).name);
@@ -132,8 +186,7 @@ function write(mailbox: WritableMailbox, path: string, body: unknown): Response 
     const { raw, threadId } = draftCreate.parse(body).message;
     const draft = mailbox.addDraft(threadId, parseRaw(raw));
     if (draft === undefined) return error(404, "NOT_FOUND");
-    const message = { id: draft.messageId, threadId: draft.threadId, labelIds: ["DRAFT"] };
-    return HttpResponse.json({ id: draft.id, message });
+    return HttpResponse.json(draftResource(draft));
   }
   throw new Error(`The fake Gmail takes no POST to ${path}`);
 }
@@ -167,7 +220,7 @@ export function newDraftIds() {
 
 // An RFC 2822 message, base64url-encoded: unfolded headers, a blank line, then the body, which
 // may be base64 by its Content-Transfer-Encoding.
-function parseRaw(raw: string): Omit<FakeDraft, "id" | "messageId" | "threadId"> {
+function parseRaw(raw: string): DraftContent {
   const message = Buffer.from(raw, "base64url").toString("utf8");
   const split = message.indexOf("\r\n\r\n");
   if (split < 0) throw new Error("A draft's raw message needs CRLF line ends and a blank line");

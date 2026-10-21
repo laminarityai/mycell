@@ -195,6 +195,29 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await server.listConnections(orgs.orgB.admin.ctx)).toEqual(before);
   },
 
+  proxyPut: async (orgs) => {
+    const { before, memberBefore } = await seedOrgBConnection(orgs);
+    const draft = z.object({ id: z.string() });
+
+    for (const id of orgBIds(before, memberBefore)) {
+      await expect(
+        server.proxyPut(orgs.orgA.admin.ctx, id, "/gmail/v1/users/me/drafts/r-1", {}, draft),
+      ).rejects.toThrow(NotFoundError);
+    }
+    expect(await server.listConnections(orgs.orgB.admin.ctx)).toEqual(before);
+  },
+
+  proxyDelete: async (orgs) => {
+    const { before, memberBefore } = await seedOrgBConnection(orgs);
+
+    for (const id of orgBIds(before, memberBefore)) {
+      await expect(
+        server.proxyDelete(orgs.orgA.admin.ctx, id, "/gmail/v1/users/me/drafts/r-1"),
+      ).rejects.toThrow(NotFoundError);
+    }
+    expect(await server.listConnections(orgs.orgB.admin.ctx)).toEqual(before);
+  },
+
   startReconnect: async (orgs) => {
     const { before, memberBefore } = await seedOrgBConnection(orgs);
 

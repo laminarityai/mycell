@@ -10,7 +10,13 @@ import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import type { ConnectionDetails, IngestedApp, IngestStateUpdate } from "../types";
 import { grantedApps, INTEGRATIONS, proxyTarget } from "./google";
 import { ingestByApp, ingestStatesOf } from "./ingest-states";
-import { NangoConnectionGoneError, nangoProxyGet, nangoProxyPost } from "./nango";
+import {
+  NangoConnectionGoneError,
+  nangoProxyDelete,
+  nangoProxyGet,
+  nangoProxyPost,
+  nangoProxyPut,
+} from "./nango";
 import { connections, ingestStates } from "./schema";
 
 type Connection = typeof connections.$inferSelect;
@@ -114,6 +120,29 @@ export async function proxyPost<T>(
 ): Promise<T | null> {
   return proxied(ctx, connectionId, (connection) =>
     nangoProxyPost(connection, proxyTarget(path), body, schema),
+  );
+}
+
+/** A PUT with a JSON body (Gmail's drafts.update), checked and answered like proxyPost. */
+export async function proxyPut<T>(
+  ctx: Ctx,
+  connectionId: string,
+  path: string,
+  body: unknown,
+  schema: z.ZodType<T>,
+): Promise<T | null> {
+  return proxied(ctx, connectionId, (connection) =>
+    nangoProxyPut(connection, proxyTarget(path), body, schema),
+  );
+}
+
+/**
+ * A DELETE (Gmail's drafts.delete), checked like proxyPost and not retried. False when the
+ * source had no such item.
+ */
+export async function proxyDelete(ctx: Ctx, connectionId: string, path: string): Promise<boolean> {
+  return proxied(ctx, connectionId, (connection) =>
+    nangoProxyDelete(connection, proxyTarget(path)),
   );
 }
 

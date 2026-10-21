@@ -17,7 +17,7 @@ export function SignInWithGoogleButton() {
         // Better Auth sends rejections back to /sign-in with an `?error=` code.
         void authClient.signIn.social({
           provider: "google",
-          callbackURL: "/",
+          callbackURL: "/reviews",
           errorCallbackURL: "/sign-in",
         });
       }}

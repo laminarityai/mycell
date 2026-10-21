@@ -9,3 +9,5 @@ export { runnableConnections } from "./lib/runnable-connections";
 export { checkWorkflowSpec } from "./lib/validation";
 // Called by the trigger's fan-out, as the system ctx: what's switched on for one connection.
 export { listSwitchedOn } from "./lib/switches";
+// For any role: workflows' names, to show beside what another feature lets the caller see.
+export { workflowNames } from "./lib/names";

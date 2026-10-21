@@ -24,7 +24,10 @@ export async function openMeteredStream(
 
   // A plain gateway provider: the metering fetch of `meteredGateway` reads JSON bodies, which
   // would hold back a stream. A streamed step reports its cost on its finish part instead.
-  const provider = createGateway({ apiKey: env.AI_GATEWAY_API_KEY });
+  const provider = createGateway({
+    apiKey: env.AI_GATEWAY_API_KEY,
+    baseURL: env.AI_GATEWAY_BASE_URL,
+  });
   let costUsd = 0;
   let generationId: string | undefined;
   let finished = false;

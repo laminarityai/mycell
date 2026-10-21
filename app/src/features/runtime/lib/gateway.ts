@@ -58,7 +58,11 @@ export function meteredGateway(): MeteredGateway {
   };
 
   return {
-    provider: createGateway({ apiKey: env.AI_GATEWAY_API_KEY, fetch: meteringFetch }),
+    provider: createGateway({
+      apiKey: env.AI_GATEWAY_API_KEY,
+      baseURL: env.AI_GATEWAY_BASE_URL,
+      fetch: meteringFetch,
+    }),
     metering: () => last,
   };
 }

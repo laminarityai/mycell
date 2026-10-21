@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
-import { getConversation, listConversations } from "@/features/builder/server";
+import { getConversation, listConversations, listProposals } from "@/features/builder/server";
 import { Conversation, ConversationList, NewConversationButton } from "@/features/builder/ui";
 import { getCtx } from "@/features/orgs/server";
+import { getWorkflow } from "@/features/workflows/server";
 import { NotFoundError } from "@/lib/errors";
 
 export default function ConversationPage({ params }: PageProps<"/builder/[conversationId]">) {
@@ -35,6 +36,10 @@ async function ConversationView({
     }),
     listConversations(ctx),
   ]);
+  const [proposals, workflow] = await Promise.all([
+    listProposals(ctx, conversation.id),
+    conversation.workflowId === null ? null : getWorkflow(ctx, conversation.workflowId),
+  ]);
   return (
     <div className="grid gap-6 md:grid-cols-[14rem_1fr]">
       <aside className="flex flex-col gap-3">
@@ -42,7 +47,19 @@ async function ConversationView({
         <ConversationList conversations={conversations} activeId={conversation.id} />
       </aside>
       <section aria-label="Conversation">
-        <Conversation conversation={conversation} />
+        <Conversation
+          conversation={conversation}
+          proposals={proposals}
+          workflow={
+            workflow === null
+              ? null
+              : {
+                  id: workflow.id,
+                  name: workflow.name,
+                  unpublishedChanges: workflow.unpublishedChanges,
+                }
+          }
+        />
       </section>
     </div>
   );

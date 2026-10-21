@@ -2,7 +2,8 @@ import Link from "next/link";
 import { BuilderChat } from "./lib/builder-chat";
 import { toUIMessages } from "./lib/history";
 import { NewConversationButton } from "./lib/new-conversation-button";
-import type { BuilderConversation, ConversationSummary } from "./types";
+import type { ConversationWorkflow } from "./lib/proposal-part";
+import type { BuilderConversation, ConversationSummary, Proposal } from "./types";
 
 export { NewConversationButton };
 
@@ -34,14 +35,27 @@ export function ConversationList({
   );
 }
 
-/** One conversation: its stored messages, and new turns as they stream in. */
-export function Conversation({ conversation }: { conversation: BuilderConversation }) {
+/**
+ * One conversation: its stored messages, new turns as they stream in, its proposals as cards,
+ * and Publish once the conversation's workflow has unpublished changes.
+ */
+export function Conversation({
+  conversation,
+  proposals,
+  workflow,
+}: {
+  conversation: BuilderConversation;
+  proposals: Proposal[];
+  workflow: ConversationWorkflow | null;
+}) {
   return (
     <BuilderChat
       // A new conversation gets a fresh chat rather than the last one's state.
       key={conversation.id}
       conversationId={conversation.id}
       initialMessages={toUIMessages(conversation.messages)}
+      proposals={proposals}
+      workflow={workflow}
     />
   );
 }

@@ -4,22 +4,34 @@
 // admin's new message goes to the server, which holds the rest.
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import type { BuilderUIMessage } from "../types";
+import type { BuilderUIMessage, Proposal, ProposeSpecResult } from "../types";
+import { ProposeSpecPart, PublishBar, type ConversationWorkflow } from "./proposal-part";
 
 const TOOL_LABELS: Record<string, string> = {
   get_workflow: "Read a workflow",
 };
 
+/** Tools whose calls show more than their label. */
+const PROPOSE_SPEC = "propose_spec";
+
 export function BuilderChat({
   conversationId,
   initialMessages,
+  proposals,
+  workflow,
 }: {
   conversationId: string;
   initialMessages: BuilderUIMessage[];
+  /** The conversation's proposals, as the server last read them. */
+  proposals: Proposal[];
+  workflow: ConversationWorkflow | null;
 }) {
+  const router = useRouter();
+  const byId = useMemo(() => new Map(proposals.map((p) => [p.id, p])), [proposals]);
   const [input, setInput] = useState("");
   const { messages, sendMessage, status, error } = useChat<BuilderUIMessage>({
     id: conversationId,
@@ -30,6 +42,10 @@ export function BuilderChat({
         body: { conversationId, message: textOf(all.at(-1)) },
       }),
     }),
+    // A turn may have stored proposals: read them again.
+    onFinish: () => {
+      router.refresh();
+    },
   });
   const busy = status === "submitted" || status === "streaming";
 
@@ -51,11 +67,12 @@ export function BuilderChat({
             }
           >
             {message.parts.map((part, index) => (
-              <MessagePart key={index} part={part} />
+              <MessagePart key={index} part={part} proposals={byId} />
             ))}
           </li>
         ))}
       </ol>
+      {workflow === null ? null : <PublishBar workflow={workflow} />}
       {error === undefined ? null : (
         <p role="alert" className="text-sm text-destructive">
           {error.message || "The builder couldn't answer. Try again."}
@@ -87,7 +104,13 @@ export function BuilderChat({
   );
 }
 
-function MessagePart({ part }: { part: BuilderUIMessage["parts"][number] }) {
+function MessagePart({
+  part,
+  proposals,
+}: {
+  part: BuilderUIMessage["parts"][number];
+  proposals: Map<string, Proposal>;
+}) {
   if (part.type === "text") return <p className="whitespace-pre-wrap">{part.text}</p>;
   if (part.type === "data-notice") {
     return (
@@ -103,6 +126,15 @@ function MessagePart({ part }: { part: BuilderUIMessage["parts"][number] }) {
         ? part.type.slice("tool-".length)
         : undefined;
   if (toolName === undefined) return null;
+  if (toolName === PROPOSE_SPEC && "state" in part) {
+    // The stored and streamed result is what `propose_spec` returned.
+    const output =
+      part.state === "output-available" ? (part.output as ProposeSpecResult) : undefined;
+    if (part.state === "output-error") {
+      return <p className="text-xs text-muted-foreground">Couldn&apos;t check a proposal.</p>;
+    }
+    return <ProposeSpecPart output={output} proposals={proposals} />;
+  }
   return <p className="text-xs text-muted-foreground">{TOOL_LABELS[toolName] ?? toolName}</p>;
 }
 

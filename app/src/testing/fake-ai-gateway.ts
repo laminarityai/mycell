@@ -5,6 +5,11 @@
 // left (or the wrong key) fails the test after it ends.
 import { http, HttpResponse } from "msw";
 import { env } from "@/env";
+import {
+  costMetadata,
+  streamedReplyEvents,
+  type FakeStreamedReply,
+} from "./fake-ai-gateway-stream";
 
 const BASE_URL = "https://ai-gateway.vercel.sh/v4/ai";
 
@@ -19,11 +24,7 @@ export type FakeGatewayRequest = {
   body: Record<string, unknown>;
 };
 
-/** One streamed model step: text, tool calls, or both. */
-export type FakeStreamedReply = {
-  text?: string;
-  toolCalls?: { name: string; input: unknown }[];
-};
+export type { FakeStreamedReply };
 
 type ScriptOptions = {
   /** The cost the gateway reports, in US dollars (sent as a string, like the real one). */
@@ -191,43 +192,10 @@ class FakeAiGateway {
   }
 }
 
-// The gateway streams LanguageModelV4 stream parts, one JSON object per server-sent event.
 function streamedResponse(reply: FakeStreamedReply, costUsd: number | undefined): Response {
-  const toolCalls = reply.toolCalls ?? [];
-  const parts: unknown[] = [{ type: "stream-start", warnings: [] }];
-  if (reply.text !== undefined) {
-    parts.push({ type: "text-start", id: "text-1" });
-    for (const delta of reply.text.match(/\S+\s*|\s+/g) ?? []) {
-      parts.push({ type: "text-delta", id: "text-1", delta });
-    }
-    parts.push({ type: "text-end", id: "text-1" });
-  }
-  toolCalls.forEach((call, index) => {
-    parts.push({
-      type: "tool-call",
-      toolCallId: `call-${String(++toolCallCount)}-${String(index)}`,
-      toolName: call.name,
-      input: JSON.stringify(call.input),
-    });
+  return new HttpResponse(streamedReplyEvents(reply, costUsd), {
+    headers: { "content-type": "text/event-stream" },
   });
-  const finish = toolCalls.length > 0 ? "tool-calls" : "stop";
-  parts.push({
-    type: "finish",
-    finishReason: { unified: finish, raw: finish },
-    usage: {
-      inputTokens: { total: 10, noCache: 10, cacheRead: 0, cacheWrite: 0 },
-      outputTokens: { total: 5, text: 5, reasoning: 0 },
-    },
-    providerMetadata: costMetadata(costUsd),
-  });
-  const body = parts.map((part) => `data: ${JSON.stringify(part)}\n\n`).join("");
-  return new HttpResponse(body, { headers: { "content-type": "text/event-stream" } });
-}
-
-let toolCallCount = 0;
-
-function costMetadata(costUsd: number | undefined) {
-  return costUsd === undefined ? undefined : { gateway: { cost: String(costUsd) } };
 }
 
 export const fakeAiGateway = new FakeAiGateway();

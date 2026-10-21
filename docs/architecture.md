@@ -292,6 +292,8 @@ The catalog is code (`features/policy/catalog.ts`), each action with its risk le
 | 3 consecutive failed runs                         | that workflow             | only when an admin resumes it manually                                   |
 | New version raises risk or needs a new connection | each member's enablement  | only when that member re-enables                                         |
 
+A connection that needs reconnecting (`needs_reauth`, when Google refuses its token) is not a pause. It's a connection state: its enablements and org switches stay as they are, the Workflows page says "reconnect Google" rather than "paused", fan-out starts nothing on the connection meanwhile, and reconnecting it resumes everything at once, with no one re-enabling.
+
 ## Failures and observability
 
 - Steps retry with backoff (3 attempts). The attempts run inside the step's Inngest step, so each step's record counts them, and a step whose last attempt fails records the failure and ends its path `failed` instead of throwing (the run `failed`, or `partly_failed` when other paths finished). Some failures aren't retried: out of credits, a connection that's gone (the run ends `cancelled`), an action whose executor isn't built yet, a bad reference, and Gmail having no such message. Every failure is recorded in observability.

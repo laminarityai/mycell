@@ -6,13 +6,15 @@ The always-on rules live in `AGENTS.md` ("Invariants", "Writing code"). This fil
 
 Every `app/src/features/<name>/` has the same shape. Root files are the public entry points (each optional), and subfolders are private. dependency-cruiser makes it a lint error to import a subfolder from outside its feature.
 
-| File         | Exports                                        | Imported by                             |
-| ------------ | ---------------------------------------------- | --------------------------------------- |
-| `server.ts`  | server-side functions, each taking `ctx` first | Server Components, other features, jobs |
-| `actions.ts` | Server Actions (`"use server"`)                | client components                       |
-| `ui.tsx`     | the feature's React components                 | pages in `src/app/`                     |
-| `jobs.ts`    | the feature's Inngest functions                | the single Inngest route                |
-| `types.ts`   | public types and Zod schemas                   | anyone                                  |
+| File                        | Exports                                                                   | Imported by                                |
+| --------------------------- | ------------------------------------------------------------------------- | ------------------------------------------ |
+| `server.ts`                 | server-side functions, each taking `ctx` first                            | Server Components, other features, jobs    |
+| `actions.ts`                | Server Actions (`"use server"`)                                           | client components                          |
+| `ui.tsx`                    | the feature's React components                                            | pages in `src/app/`                        |
+| `jobs.ts`                   | the feature's Inngest functions                                           | the single Inngest route                   |
+| `types.ts`                  | public types and Zod schemas                                              | anyone                                     |
+| `connections/delegation.ts` | `delegatedCtx`: a ctx delegated one connection (ADR-0016)                 | `reviews` only (a dependency-cruiser rule) |
+| `runtime/adapters.ts`       | the pending-form adapters (ADR-0013), clear of `reviews` to avoid a cycle | `reviews`                                  |
 
 - A pure feature (no tables, no IO, no `ctx`, like `spec` and `policy`) has no `server.ts`. Its functions live in root files named for what they hold (`spec/validate.ts`, `policy/catalog.ts`, `policy/engine.ts`), which anyone may import, client code included.
 - `server.ts` functions that exist before any `ctx` does (sign-in, resolving the session to `ctx`, the auth route) are the only ones that don't take it first; they live in `orgs`. The one other is `notifications`' `unsubscribeWithLink(token)`: the digest's signed link stands in for a session, and the function reads the person's ctx fresh with `orgs`' `findCtx`.

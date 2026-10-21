@@ -50,6 +50,20 @@ describe("enabling a member workflow", () => {
     expect((await getVisibleWorkflow(member.ctx, workflowId)).switch).toBeNull();
   });
 
+  it("asks a member whose Gmail is read-only to reconnect it, naming gmail.modify", async () => {
+    const { member, workflowId } = await publishedToSales();
+    const readOnly = [...allBut("gmail"), "https://www.googleapis.com/auth/gmail.readonly"];
+    const own = await connectGoogle(member.ctx, member.email, { scopes: readOnly });
+
+    expect(await enable(member.ctx, workflowId)).toEqual({
+      needs: "reconnect",
+      connectionId: own.id,
+      apps: ["Gmail"],
+      scopes: ["gmail.modify"],
+    });
+    expect((await getVisibleWorkflow(member.ctx, workflowId)).switch).toBeNull();
+  });
+
   it("asks for Sheets by app, even when Drive's scope would let it read", async () => {
     const { member, workflowId } = await publishedToSales(sheetSpec());
     const own = await connectGoogle(member.ctx, member.email, { scopes: allBut("sheets") });

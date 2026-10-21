@@ -36,7 +36,7 @@ async function Reviews() {
   const [reviews, digestOn] = await Promise.all([listReviews(ctx), reviewDigestOn(ctx)]);
   return (
     <>
-      <ReviewsList reviews={reviews} now={new Date()} />
+      <ReviewsList reviews={reviews} viewerId={ctx.userId} now={new Date()} />
       <ReviewDigestSwitch on={digestOn} />
     </>
   );

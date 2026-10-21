@@ -115,6 +115,19 @@ export const isolationCases = defineIsolationCases(server, {
     await untouched(orgs, b);
   },
 
+  handOff: async (orgs) => {
+    const b = await orgBReview(orgs);
+
+    for (const ctx of orgAUsers(orgs)) {
+      const colleague = ctx.userId === orgs.orgA.admin.id ? orgs.orgA.member : orgs.orgA.admin;
+      await expect(server.handOff(ctx, b.review.id, colleague.id)).rejects.toThrow(NotFoundError);
+      await expect(server.handOff(ctx, b.review.id, orgs.orgB.admin.id)).rejects.toThrow(
+        NotFoundError,
+      );
+    }
+    await untouched(orgs, b);
+  },
+
   markDone: async (orgs) => {
     await memberEscalation(orgs, "orgB");
     const escalation = (await server.listReviews(orgs.orgB.member.ctx)).at(0);

@@ -4,6 +4,8 @@ import { createReview } from "@/features/reviews/server";
 import { publishWorkflow, saveWorkflow } from "@/features/workflows/server";
 import { systemCtx } from "@/lib/ctx";
 import { googleScope } from "@/lib/google";
+import type { FixtureOrg } from "@/db/testing/two-org-fixture";
+import type { E2eNango } from "./fake-nango";
 import { expect, test } from "./fixtures";
 
 const QUESTION = "Hello, what would 30 oak chairs cost delivered to Leeds?";
@@ -36,6 +38,30 @@ test("a member lands on Reviews, edits a drafted reply and approves it, and it l
   signInAs,
   nango,
 }) => {
+  const { nangoConnectionId, message } = await draftWaiting(orgA, nango, REPLY_SPEC);
+  await signInAs(orgA.member);
+
+  await page.goto("/");
+  await expect(page).toHaveURL("/reviews");
+  await page.getByRole("link", { name: "Pricing replies" }).click();
+  await expect(page.getByText(QUESTION)).toBeVisible();
+  await expect(page.getByText(REPLY)).toBeVisible();
+  await page.getByRole("button", { name: "Edit" }).click();
+  await page.getByRole("textbox", { name: "Your reply" }).fill(EDITED);
+  await page.getByRole("button", { name: "Send edited reply" }).click();
+
+  await expect(page).toHaveURL("/reviews");
+  await expect(page.getByText("Nothing is waiting for you.")).toBeVisible();
+  const mailbox = await nango.mailbox(nangoConnectionId);
+  expect(mailbox.drafts).toEqual([]);
+  expect(mailbox.sent).toMatchObject([{ threadId: message.threadId, text: EDITED }]);
+});
+
+/**
+ * Org A's admin publishes `spec`, and a draft reply it made waits for review in the member's own
+ * Gmail, a pricing question's thread.
+ */
+async function draftWaiting(orgA: FixtureOrg, nango: E2eNango, spec: Record<string, unknown>) {
   const gmail = [googleScope("gmail.modify")];
   // The admin publishes the workflow, which needs a Gmail connection of their own.
   await seedGoogleConnection({
@@ -44,10 +70,7 @@ test("a member lands on Reviews, edits a drafted reply and approves it, and it l
     accountEmail: orgA.admin.email,
     scopes: gmail,
   });
-  const { id: workflowId } = await saveWorkflow(orgA.admin.ctx, {
-    name: "Pricing replies",
-    spec: REPLY_SPEC,
-  });
+  const { id: workflowId } = await saveWorkflow(orgA.admin.ctx, { name: "Pricing replies", spec });
   const version = await publishWorkflow(orgA.admin.ctx, workflowId);
   // The member's own Gmail, with a question and the reply a run of it drafted, waiting.
   const nangoConnectionId = await nango.connect(orgA.member.email);
@@ -79,22 +102,43 @@ test("a member lands on Reviews, edits a drafted reply and approves it, and it l
     threadRef: message.threadId,
     sourceRef: message.id,
   });
+  return { nangoConnectionId, message };
+}
+
+test("a member hands a drafted reply to the admin, who approves it from the member's mailbox", async ({
+  page,
+  orgs: { orgA },
+  signInAs,
+  nango,
+}) => {
+  const { nangoConnectionId, message } = await draftWaiting(orgA, nango, {
+    ...REPLY_SPEC,
+    review: { handoff: true },
+  });
   await signInAs(orgA.member);
 
-  await page.goto("/");
-  await expect(page).toHaveURL("/reviews");
+  await page.goto("/reviews");
   await page.getByRole("link", { name: "Pricing replies" }).click();
-  await expect(page.getByText(QUESTION)).toBeVisible();
+  await page
+    .getByRole("combobox", { name: "Hand it to" })
+    .selectOption({ label: orgA.admin.email });
+  await page.getByRole("button", { name: "Hand on" }).click();
+
+  await expect(page).toHaveURL("/reviews");
+  await expect(page.getByText(`Handed to ${orgA.admin.email}`)).toBeVisible();
+
+  await signInAs(orgA.admin);
+  await page.goto("/reviews");
+  await expect(page.getByText(`Handed to you by ${orgA.member.email}`)).toBeVisible();
+  await page.getByRole("link", { name: "Pricing replies" }).click();
   await expect(page.getByText(REPLY)).toBeVisible();
-  await page.getByRole("button", { name: "Edit" }).click();
-  await page.getByRole("textbox", { name: "Your reply" }).fill(EDITED);
-  await page.getByRole("button", { name: "Send edited reply" }).click();
+  await page.getByRole("button", { name: "Approve and send" }).click();
 
   await expect(page).toHaveURL("/reviews");
   await expect(page.getByText("Nothing is waiting for you.")).toBeVisible();
-  const mailbox = await nango.mailbox(nangoConnectionId);
-  expect(mailbox.drafts).toEqual([]);
-  expect(mailbox.sent).toMatchObject([{ threadId: message.threadId, text: EDITED }]);
+  expect((await nango.mailbox(nangoConnectionId)).sent).toMatchObject([
+    { threadId: message.threadId, text: REPLY },
+  ]);
 });
 
 // A member-credential workflow that hands every message to a person.

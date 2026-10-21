@@ -1,5 +1,5 @@
 {
-  "id": "172dff9b-86e2-49a9-832e-40f4db65cab6",
+  "id": "5dcd23f7-4237-489e-9f20-2ce8fcd1555a",
   "prevId": "2920043f-2478-47e9-a2b9-b6138d2456c7",
   "version": "7",
   "dialect": "postgresql",
@@ -1525,60 +1525,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.user_settings": {
-      "name": "user_settings",
-      "schema": "",
-      "columns": {
-        "org_id": {
-          "name": "org_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "review_digest": {
-          "name": "review_digest",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "user_settings_member_fk": {
-          "name": "user_settings_member_fk",
-          "tableFrom": "user_settings",
-          "tableTo": "member",
-          "columnsFrom": ["org_id", "user_id"],
-          "columnsTo": ["organization_id", "user_id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "user_settings_org_id_user_id_pk": {
-          "name": "user_settings_org_id_user_id_pk",
-          "columns": ["org_id", "user_id"]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.reviews": {
       "name": "reviews",
       "schema": "",
@@ -1657,6 +1603,18 @@
         },
         "reason": {
           "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "handed_to_user_id": {
+          "name": "handed_to_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "handed_by_user_id": {
+          "name": "handed_by_user_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false

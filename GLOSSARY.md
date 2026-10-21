@@ -169,6 +169,14 @@ _Avoid_: Staged action, preview
 One action waiting for a person's decision, shown on their Reviews page, which points at the waiting item in its app.
 _Avoid_: Approval (the step that creates a review), task (a Google Tasks item), notification
 
+**Shared review**:
+A review from an org connection's run, seen by everyone who can see its workflow through its tags and by every admin. The first to act on it wins.
+_Avoid_: Team review, group review
+
+**Hand-off**:
+Giving one review to a colleague, who then sees it and acts on it from the review's own connection. A workflow allows it or not; a member's own review is handed on only by that member.
+_Avoid_: Delegation (that's connection access, ADR-0016), forwarding (that's sending the email on), reassign
+
 **Review digest**:
 The daily email telling a person how many reviews wait for them, per workflow and oldest first, with no message or draft text. On by default; each person can turn it off.
 _Avoid_: Notification (too broad), reminder

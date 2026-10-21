@@ -12,7 +12,14 @@ import { ForbiddenError } from "@/lib/errors";
 import { connectMailbox } from "@/testing/connect-helpers";
 import { fakeEmail } from "@/testing/fake-email";
 import { approveReview, createReview, listReviews, openReview, sendReviewDigest } from "../server";
-import { memberReview, pricingQuestion, publish, replySpec, reviewOn } from "./review-helpers";
+import {
+  memberReview,
+  orgReview,
+  pricingQuestion,
+  publish,
+  replySpec,
+  reviewOn,
+} from "./review-helpers";
 
 beforeEach(resetDatabase);
 
@@ -85,6 +92,23 @@ describe("sendReviewDigest", () => {
         subject: "1 review is waiting for you in Mycel",
       }),
     ]);
+  });
+
+  it("counts a shared review for everyone who sees it", async () => {
+    const orgs = await seedTwoOrgs();
+    const { orgA } = orgs;
+    await orgReview(orgs);
+    await seedUser(orgA.id, "untagged@org-a.test", "member");
+
+    await sendReviewDigest(systemCtx(orgA.id));
+
+    expect(
+      fakeEmail
+        .sent()
+        .map((email) => email.to[0])
+        .sort(),
+    ).toEqual([orgA.admin.email, orgA.member.email].sort());
+    expect(fakeEmail.sent().at(0)?.text).toContain("Support replies: 1 waiting");
   });
 
   it("lists the count, then each workflow's count and oldest age, oldest first", async () => {

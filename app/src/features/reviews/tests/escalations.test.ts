@@ -51,6 +51,8 @@ describe("an escalation", () => {
         kind: "escalation",
         workflowId,
         workflowName: "Refund requests",
+        shared: false,
+        handOff: null,
         createdAt: expect.any(Date) as Date,
       },
     ]);

@@ -6,6 +6,8 @@ export { createReview } from "./lib/reviews";
 export { listReviews } from "./lib/reviews";
 // The count in the app's navigation, read on each page load.
 export { countWaitingReviews } from "./lib/reviews";
+// Handing a review to a colleague, when its workflow allows it.
+export { handOff } from "./lib/hand-off";
 export {
   approveEditedReview,
   approveReview,

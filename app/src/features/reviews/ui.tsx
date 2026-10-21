@@ -11,8 +11,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { ItemView, MailView } from "@/features/runtime/adapters";
-import { EscalationActions, ReviewActions } from "./lib/review-actions";
-import type { OpenedReview, Review, ReviewKind, ReviewStatus, ReviewSummary } from "./types";
+import { EscalationActions, HandOffForm, ReviewActions } from "./lib/review-actions";
+import type {
+  HandOff,
+  OpenedReview,
+  Review,
+  ReviewKind,
+  ReviewStatus,
+  ReviewSummary,
+} from "./types";
 
 const KIND_LABELS: Record<ReviewKind, string> = {
   approval: "Draft reply",
@@ -20,23 +27,24 @@ const KIND_LABELS: Record<ReviewKind, string> = {
 };
 
 const ENDINGS: Record<Exclude<ReviewStatus, "waiting">, string> = {
-  approved: "It was approved and sent.",
-  edited_approved: "It was edited, approved and sent.",
-  declined: "It was declined, and its draft deleted.",
-  done_in_app: "It was sent from Gmail.",
-  gone: "Its draft is no longer in Gmail.",
+  approved: "It was approved and sent",
+  edited_approved: "It was edited, approved and sent",
+  declined: "It was declined, and its draft deleted",
+  done_in_app: "It was sent from Gmail",
+  gone: "Its draft is no longer in Gmail",
 };
 
 /**
- * How a review ended. An escalation ends done by the person in Mycel, or by their reply in
- * Gmail (no one named), or with its message gone.
+ * How a review ended, and by whom when someone in Mycel ended it. An escalation ends done by a
+ * person in Mycel, or by a reply in Gmail (no one named), or with its message gone.
  */
 function ending(review: Review): string {
   if (review.status === "waiting") return "";
-  if (review.kind !== "escalation") return ENDINGS[review.status];
+  const by = review.endedBy === null ? "" : ` by ${review.endedBy}`;
+  if (review.kind !== "escalation") return `${ENDINGS[review.status]}${by}.`;
   if (review.status === "gone") return "The message is no longer in Gmail.";
   if (review.endedByUserId === null) return "It was replied to from Gmail.";
-  return "It was marked done.";
+  return `It was marked done${by}.`;
 }
 
 /**
@@ -57,8 +65,26 @@ export function ReviewsNavLink({ count, className }: { count: number; className?
   );
 }
 
-/** The caller's waiting reviews, oldest first: each one's workflow, kind and age. */
-export function ReviewsList({ reviews, now }: { reviews: ReviewSummary[]; now: Date }) {
+/** Who has a handed-on review, as the viewer reads it. */
+function handOffText(handOff: HandOff, viewerId: string): string {
+  return handOff.to.id === viewerId
+    ? `Handed to you by ${handOff.by.name}`
+    : `Handed to ${handOff.to.name}`;
+}
+
+/**
+ * The caller's waiting reviews, oldest first: each one's workflow, kind and age, whether it's
+ * shared (an org inbox's) and who it was handed to.
+ */
+export function ReviewsList({
+  reviews,
+  viewerId,
+  now,
+}: {
+  reviews: ReviewSummary[];
+  viewerId: string;
+  now: Date;
+}) {
   if (reviews.length === 0) {
     return <p className="text-sm text-muted-foreground">Nothing is waiting for you.</p>;
   }
@@ -78,6 +104,16 @@ export function ReviewsList({ reviews, now }: { reviews: ReviewSummary[]; now: D
               <Link href={`/reviews/${review.id}`} className="font-medium hover:underline">
                 {review.workflowName}
               </Link>
+              {review.handOff === null && !review.shared ? null : (
+                <p className="text-xs text-muted-foreground">
+                  {[
+                    review.shared ? "Shared inbox" : null,
+                    review.handOff === null ? null : handOffText(review.handOff, viewerId),
+                  ]
+                    .filter((part) => part !== null)
+                    .join(" · ")}
+                </p>
+              )}
             </TableCell>
             <TableCell>
               <Badge variant="outline">{KIND_LABELS[review.kind]}</Badge>
@@ -93,20 +129,36 @@ export function ReviewsList({ reviews, now }: { reviews: ReviewSummary[]; now: D
 /**
  * An open review: the message and the drafted reply, fetched live, with approve, edit and
  * decline; or the escalated message, why it was handed over and a link to it in Gmail, with
- * done. Once it has ended, how it ended.
+ * done. While it waits, who it was handed to, and a colleague to hand it to when the caller
+ * may. Once it has ended, how it ended and by whom.
  */
-export function ReviewDetail({ opened, now }: { opened: OpenedReview; now: Date }) {
-  const { review, view } = opened;
+export function ReviewDetail({
+  opened,
+  viewerId,
+  now,
+}: {
+  opened: OpenedReview;
+  viewerId: string;
+  now: Date;
+}) {
+  const { review, view, handOffTo } = opened;
+  const waiting = review.status === "waiting" && view !== null;
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-muted-foreground">
         {review.workflowName} · {KIND_LABELS[review.kind]} · waiting {age(review.createdAt, now)}
       </p>
-      {review.status !== "waiting" || view === null ? (
-        <p>This review has ended. {ending(review)}</p>
-      ) : (
+      {waiting && review.handOff !== null ? (
+        <p className="text-sm font-medium">{handOffText(review.handOff, viewerId)}.</p>
+      ) : null}
+      {waiting ? (
         <WaitingItem review={review} view={view} />
+      ) : (
+        <p>This review has ended. {ending(review)}</p>
       )}
+      {waiting && handOffTo.length > 0 ? (
+        <HandOffForm reviewId={review.id} colleagues={handOffTo} />
+      ) : null}
     </div>
   );
 }

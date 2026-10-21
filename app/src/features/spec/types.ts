@@ -295,6 +295,9 @@ export const specSettings = {
   // Accepted and stored, unused until M5 (visibility) and M7 (budget).
   budget: specObject({ monthlyCredits: z.number().int().positive().optional() }).optional(),
   visibility: specObject({ tags: z.array(z.string().min(1)) }).optional(),
+  // Whether whoever may act on one of its reviews may hand it to a colleague (ADR-0013). Off
+  // unless the spec says so; not a risk change, since nothing more is sent.
+  review: specObject({ handoff: z.boolean().default(false) }).optional(),
 };
 
 export const specSchema = specObject({

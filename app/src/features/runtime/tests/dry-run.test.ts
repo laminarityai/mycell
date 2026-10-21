@@ -140,7 +140,7 @@ describe("dryRun", () => {
     expect(result.ended).toBe("succeeded");
     expect(result.steps).toMatchObject([
       { stepId: "classify", status: "succeeded", output: { label: "yes", p: 0.92 } },
-      { stepId: "gate", status: "succeeded", output: { passed: true } },
+      { stepId: "gate", status: "succeeded", output: { taken: ["gate-yes"] } },
       {
         stepId: "prices",
         status: "succeeded",
@@ -235,6 +235,6 @@ describe("dryRun", () => {
 
     expect(result.ended).toBe("skipped");
     expect(result.steps.map((step) => step.stepId)).toEqual(["classify", "gate"]);
-    expect(result.steps[1]).toMatchObject({ output: { passed: false } });
+    expect(result.steps[1]).toMatchObject({ output: { taken: ["gate-otherwise"] } });
   });
 });

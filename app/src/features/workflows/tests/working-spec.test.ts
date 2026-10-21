@@ -142,8 +142,20 @@ describe("editing a working spec by hand", () => {
     await connectGmail(admin, orgA.admin.email);
     const { id } = await saveWorkflow(admin, { name: "Pricing", spec: draftSpec() });
     const opened = await getWorkflow(admin, id);
+    const minP = 0.7;
     const steps = opened.workingSpec.steps.map((step) =>
-      step.type === "branch" ? { ...step, when: { ...step.when, minP: 0.7 } } : step,
+      step.type === "branch"
+        ? {
+            ...step,
+            paths: step.paths.map((path) => ({
+              ...path,
+              condition: {
+                ...path.condition,
+                checks: path.condition.checks.map((check) => ({ ...check, minP })),
+              },
+            })),
+          }
+        : step,
     );
 
     await saveWorkflow(admin, {
@@ -155,7 +167,7 @@ describe("editing a working spec by hand", () => {
 
     expect((await getWorkflow(admin, id)).workingSpec.steps[1]).toMatchObject({
       type: "branch",
-      when: { step: "classify", label: "yes", minP: 0.7 },
+      paths: [{ condition: { checks: [{ classify: "classify", is: "yes", minP: 0.7 }] } }],
     });
   });
 

@@ -110,7 +110,7 @@ Specs are JSON, validated by zod, and run by our own interpreter in `features/ru
 
 ```json
 {
-  "specVersion": 1,
+  "specVersion": 2,
   "id": "pricing-inquiry-replies",
   "visibility": { "tags": ["sales"] },
   "credentials": "member",
@@ -127,30 +127,46 @@ Specs are JSON, validated by zod, and run by our own interpreter in `features/ru
     {
       "id": "gate",
       "type": "branch",
-      "when": { "step": "classify", "label": "yes", "minP": 0.85 },
-      "else": "stop"
-    },
-    {
-      "id": "prices",
-      "type": "tool",
-      "action": "google-sheet.read-range",
-      "input": { "spreadsheetId": "sheet-1", "range": "Prices!A1:C50" }
-    },
-    {
-      "id": "draft",
-      "type": "draft",
-      "role": "smart",
-      "instructions": "Reply with our current prices.",
-      "context": ["trigger.message", "prices"],
-      "output": "google-mail.create-draft"
-    },
-    { "id": "approve", "type": "approval", "channel": "gmail_drafts" }
+      "mode": "first",
+      "paths": [
+        {
+          "id": "gate-yes",
+          "name": "Pricing",
+          "condition": {
+            "combine": "all",
+            "checks": [{ "classify": "classify", "is": "yes", "minP": 0.85 }]
+          },
+          "steps": [
+            {
+              "id": "prices",
+              "type": "tool",
+              "action": "google-sheet.read-range",
+              "input": { "spreadsheetId": "sheet-1", "range": "Prices!A1:C50" }
+            },
+            {
+              "id": "draft",
+              "type": "draft",
+              "role": "smart",
+              "instructions": "Reply with our current prices.",
+              "context": ["trigger.message", "prices"],
+              "output": "google-mail.create-draft"
+            },
+            { "id": "approve", "type": "approval", "channel": "gmail_drafts" }
+          ]
+        }
+      ],
+      "otherwise": { "id": "gate-otherwise", "steps": [] }
+    }
   ],
   "autonomy": { "rung": 3 }
 }
 ```
 
-**Shape and structure** (`validateSpec` in `features/spec`, pure): the schema refuses unknown step types and misspelled fields; step IDs are unique; a `branch`'s `when` names an earlier `classify` step and one of its labels, and when the condition fails the run stops (`else: "stop"`, status `skipped`) or escalates (`else: "escalate"`); `tool` inputs are literals or references `{ "from": "<step>.<field>" }` and `{ "from": "trigger.<field>" }`, and a `draft`'s `context` names earlier steps, `trigger.message` or `trigger.thread`, all only to steps before it. `org_memory` as context is refused until memory exists (M9). A `risk` field anywhere is accepted and ignored. Every issue comes back in one list, each with the path of its field.
+**Branches and paths** (ADR-0015): a `branch` holds its paths nested inside it and is the last step of its list. Each path has an ID, a name, a condition and its own steps; the `otherwise` path runs when no path's condition holds, and with no steps the run stops there (status `skipped`). A condition is `all` or `any` of its checks: a classify answer (`{ "classify": "<step>", "is": "<label>", "minP": 0.85 }`) or a value (`{ "subject": { "from": "<step>.<field>" | "trigger.<fact>" }, "op": …, "value"? }`, the operator typed by the value: text, number, yes/no, or empty). `mode` is `first` (the first path that holds, left to right) or `every`. Step and path IDs share one namespace. Until the rest of M12 lands, validation accepts only first match, one path per branch, and classify checks. The run's branch step records the path it took and each check's pass or fail.
+
+**Specs from before** (`specVersion: 1`, a gate with `when` and `else`) are converted when read, never migrated: `readStoredSpec` (`spec/stored.ts`) runs `upgradeSpec` (`spec/upgrade.ts`) at every place a stored spec is read, so code past the read sees v2 only, and saving writes v2. A gate becomes a first-match branch with the gate's ID and one path holding every step after it; `else: "stop"` becomes an empty otherwise path, and `else: "escalate"` one escalate step with fixed words. Every v1 step ID is kept, so published v1 versions run with the same step IDs, and a run memoized part-way through one resumes on the matching path (the walker reads a memoized `{ passed }`). `validateSpec` accepts v1 input and returns it upgraded, naming each issue where the input wrote it (`issuesAsWritten`); the workflow editor's form still shows v1's one list for a spec it can express that way.
+
+**Shape and structure** (`validateSpec` in `features/spec`, pure): the schema refuses unknown step types and misspelled fields; step and path IDs are unique; a branch's classify checks name a `classify` step above the branch and one of its labels; `tool` inputs are literals or references `{ "from": "<step>.<field>" }` and `{ "from": "trigger.<field>" }`, and a `draft`'s `context` names steps above it on its own path, `trigger.message` or `trigger.thread`. `org_memory` as context is refused until memory exists (M9). A `risk` field anywhere is accepted and ignored. Every issue comes back in one list, each with the path of its field.
 
 **Validation before save:**
 

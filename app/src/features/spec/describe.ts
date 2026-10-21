@@ -3,7 +3,7 @@
 // import it. `spec` doesn't know the catalog (policy imports spec), so callers pass what it
 // says about each action, and which approvals the policy engine inserted.
 import { eachStep } from "./tree";
-import type { Spec, Step } from "./types";
+import type { BranchStep, Check, Condition, Spec, Step } from "./types";
 
 /** What the caller knows about one catalog action. */
 export type ActionInfo<Risk extends string = string> = { risk: Risk; description: string };
@@ -52,11 +52,7 @@ export function describeStep(step: Step, actionDescription?: string): string {
     case "classify":
       return `Asks "${step.question}" and picks one of: ${step.labels.join(", ")}.`;
     case "branch":
-      return (
-        `Goes on only if "${step.when.step}" says "${step.when.label}" with at least ` +
-        `${String(Math.round(step.when.minP * 100))}% confidence; otherwise ` +
-        `${step.else === "stop" ? "stops" : "hands the message to a person"}.`
-      );
+      return describeBranch(step);
     case "extract":
       return `Reads ${Object.keys(step.fields).join(", ")} from the message.`;
     case "tool":
@@ -71,3 +67,57 @@ export function describeStep(step: Step, actionDescription?: string): string {
       return `Hands the message to a person: ${step.reason}`;
   }
 }
+
+/**
+ * A branch as a sentence: "Goes on only if …" for one first-match path, as a v1 gate read;
+ * otherwise each path by name with its condition.
+ */
+function describeBranch(step: BranchStep): string {
+  const steps = step.otherwise.steps;
+  const otherwise =
+    steps.length === 0
+      ? "stops"
+      : steps.length === 1 && steps.at(0)?.type === "escalate"
+        ? "hands the message to a person"
+        : "takes the otherwise path";
+  const only = step.paths.at(0);
+  if (step.mode === "first" && step.paths.length === 1 && only !== undefined) {
+    return `Goes on only if ${describeCondition(only.condition)}; otherwise ${otherwise}.`;
+  }
+  const which = step.mode === "first" ? "the first path" : "every path";
+  const paths = step.paths.map((path) => `"${path.name}" if ${describeCondition(path.condition)}`);
+  return `Takes ${which} that applies, checked left to right: ${paths.join("; ")}; otherwise ${otherwise}.`;
+}
+
+/** A condition in plain words: its checks joined by "and" (all of them) or "or" (any). */
+function describeCondition(condition: Condition): string {
+  return condition.checks.map(describeCheck).join(condition.combine === "all" ? " and " : " or ");
+}
+
+function describeCheck(check: Check): string {
+  if ("classify" in check) {
+    const percent = String(Math.round(check.minP * 100));
+    return `"${check.classify}" says "${check.is}" with at least ${percent}% confidence`;
+  }
+  const words = `${check.subject.from} ${OPERATOR_WORDS[check.op]}`;
+  return "value" in check ? `${words} ${JSON.stringify(check.value)}` : words;
+}
+
+const OPERATOR_WORDS: Record<Exclude<Check, { classify: string }>["op"], string> = {
+  is: "is",
+  is_not: "is not",
+  contains: "contains",
+  does_not_contain: "doesn't contain",
+  starts_with: "starts with",
+  ends_with: "ends with",
+  equals: "equals",
+  does_not_equal: "doesn't equal",
+  more_than: "is more than",
+  less_than: "is less than",
+  at_least: "is at least",
+  at_most: "is at most",
+  is_yes: "is yes",
+  is_no: "is no",
+  is_empty: "is empty",
+  is_not_empty: "isn't empty",
+};

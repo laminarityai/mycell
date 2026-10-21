@@ -1,4 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { eachStep } from "@/features/spec/tree";
+import { upgradeSpec } from "@/features/spec/upgrade";
+import { specV1Schema } from "@/features/spec/v1";
+import { validateSpec } from "@/features/spec/validate";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import {
@@ -47,6 +51,19 @@ async function proposedChange() {
   return { orgA, admin, workflowId, version, conversationId, proposal };
 }
 
+describe("this suite's v1 fixtures", () => {
+  it("each upgrade to a valid v2 spec with the same step IDs, and once is enough", () => {
+    for (const raw of [draftSpec(), labelSpec()]) {
+      const v1 = specV1Schema.parse(raw);
+      const spec = upgradeSpec(v1);
+
+      expect(validateSpec(spec)).toEqual({ ok: true, spec });
+      expect(eachStep(spec).map(({ step }) => step.id)).toEqual(v1.steps.map((step) => step.id));
+      expect(upgradeSpec(spec)).toEqual(spec);
+    }
+  });
+});
+
 describe("acceptProposal", () => {
   it("creates a new workflow, unpublished, and links the conversation to it", async () => {
     const { admin } = await setUp();
@@ -58,7 +75,7 @@ describe("acceptProposal", () => {
 
     const workflow = await getWorkflow(admin, workflowId);
     expect(workflow).toMatchObject({ name: "Pricing replies", versions: [] });
-    expect(workflow.workingSpec.steps.map((step) => step.id)).toEqual([
+    expect(eachStep(workflow.workingSpec).map(({ step }) => step.id)).toEqual([
       "classify",
       "gate",
       "reply",
@@ -76,7 +93,7 @@ describe("acceptProposal", () => {
     await acceptProposal(admin, proposal.id);
 
     const workflow = await getWorkflow(admin, workflowId);
-    expect(workflow.workingSpec.steps.map((step) => step.id)).toEqual([
+    expect(eachStep(workflow.workingSpec).map(({ step }) => step.id)).toEqual([
       "classify",
       "gate",
       "reply",

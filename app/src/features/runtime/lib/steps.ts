@@ -1,7 +1,7 @@
 // The model and control steps: classify, extract, branch and escalate. A model step fetches
 // the triggering message inside itself and holds its text in memory only (invariant 8).
 import { z } from "zod";
-import type { Step } from "@/features/spec/types";
+import type { Check, Step } from "@/features/spec/types";
 import type { Json } from "../types";
 import { callModel } from "./call-model";
 import { classify } from "./classify";
@@ -78,14 +78,37 @@ export async function extractStep(
   };
 }
 
+/**
+ * Chooses where the run goes: the first path, left to right, whose condition holds, or the
+ * otherwise path when none does; with nothing on the otherwise path, the run stops here. The
+ * output names the path taken, for the walker. The record keeps each path's checks as passed
+ * or failed, never the values they tested.
+ */
 export function branchStep(step: StepOf<"branch">, context: StepContext): Promise<StepExecution> {
-  const classified = classification(context.outputs[step.when.step]);
-  if (classified === undefined) {
-    throw new RunStepError("bad_reference", `The step ${step.when.step} has no classification.`);
+  const paths = step.paths.map((path) => {
+    const checks = path.condition.checks.map((check) => checkHolds(check, context.outputs));
+    const holds = path.condition.combine === "all" ? checks.every(Boolean) : checks.some(Boolean);
+    return { id: path.id, holds, checks };
+  });
+  const matched = paths.find((path) => path.holds);
+  const taken = [matched?.id ?? step.otherwise.id];
+  const stops = matched === undefined && step.otherwise.steps.length === 0;
+  return Promise.resolve({
+    next: stops ? "skipped" : "continue",
+    output: { taken },
+    record: { taken, paths },
+  });
+}
+
+function checkHolds(check: Check, outputs: StepContext["outputs"]): boolean {
+  if (!("classify" in check)) {
+    throw new RunStepError("bad_reference", "Only a classify answer can be checked for now.");
   }
-  const passed = classified.label === step.when.label && classified.p >= step.when.minP;
-  const next = passed ? "continue" : step.else === "stop" ? "skipped" : "escalated";
-  return Promise.resolve({ next, output: { passed }, record: { passed } });
+  const classified = classification(outputs[check.classify]);
+  if (classified === undefined) {
+    throw new RunStepError("bad_reference", `The step ${check.classify} has no classification.`);
+  }
+  return classified.label === check.is && classified.p >= check.minP;
 }
 
 export function escalateStep(): Promise<StepExecution> {

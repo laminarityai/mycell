@@ -10,8 +10,15 @@ function parsed(input: unknown): Spec {
   return result.spec;
 }
 
+/** The example, its gate handing the message to a person when it doesn't hold. */
+function escalating(): Spec {
+  const spec = exampleSpec();
+  spec.steps[1] = { ...spec.steps[1], else: "escalate" };
+  return parsed(spec);
+}
+
 describe("eachStep", () => {
-  it("visits every step in the order a run reaches them, each with its location and the steps above it", () => {
+  it("visits every step at every depth in the order a run reaches them, each with its location and the steps above it", () => {
     const placed = eachStep(parsed(exampleSpec()));
 
     expect(
@@ -19,9 +26,9 @@ describe("eachStep", () => {
     ).toEqual([
       ["classify", ["steps", 0], []],
       ["gate", ["steps", 1], ["classify"]],
-      ["prices", ["steps", 2], ["classify", "gate"]],
-      ["draft", ["steps", 3], ["classify", "gate", "prices"]],
-      ["approve", ["steps", 4], ["classify", "gate", "prices", "draft"]],
+      ["prices", ["steps", 1, "paths", 0, "steps", 0], ["classify", "gate"]],
+      ["draft", ["steps", 1, "paths", 0, "steps", 1], ["classify", "gate", "prices"]],
+      ["approve", ["steps", 1, "paths", 0, "steps", 2], ["classify", "gate", "prices", "draft"]],
     ]);
   });
 });
@@ -39,7 +46,7 @@ describe("findStep", () => {
 });
 
 describe("stepsAbove", () => {
-  it("lists what a step may use: the steps before it on its own path", () => {
+  it("lists what a step may use: the steps before it on its own path, not a sibling path's", () => {
     const spec = parsed(exampleSpec());
 
     expect(stepsAbove(spec, "draft").map((step) => step.id)).toEqual([
@@ -48,6 +55,10 @@ describe("stepsAbove", () => {
       "prices",
     ]);
     expect(stepsAbove(spec, "classify")).toEqual([]);
+    expect(stepsAbove(escalating(), "gate-escalate").map((step) => step.id)).toEqual([
+      "classify",
+      "gate",
+    ]);
     expect(stepsAbove(spec, "missing")).toEqual([]);
   });
 });
@@ -56,7 +67,7 @@ describe("stepLocation", () => {
   it("names where a step sits in the spec, for an issue about it", () => {
     const spec = parsed(exampleSpec());
 
-    expect(stepLocation(spec, "draft")).toEqual(["steps", 3]);
+    expect(stepLocation(spec, "draft")).toEqual(["steps", 1, "paths", 0, "steps", 1]);
     expect(stepLocation(spec, "missing")).toBeUndefined();
   });
 });
@@ -67,8 +78,13 @@ describe("mapStepLists", () => {
 
     const without = mapStepLists(spec, (steps) => steps.filter((step) => step.type !== "approval"));
 
-    expect(without.steps.map((step) => step.id)).toEqual(["classify", "gate", "prices", "draft"]);
+    expect(eachStep(without).map(({ step }) => step.id)).toEqual([
+      "classify",
+      "gate",
+      "prices",
+      "draft",
+    ]);
     expect({ ...without, steps: spec.steps }).toEqual(spec);
-    expect(spec.steps).toHaveLength(5);
+    expect(eachStep(spec)).toHaveLength(5);
   });
 });

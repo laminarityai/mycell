@@ -63,7 +63,8 @@ function StepOutcome({ step }: { step: DryRunStep }) {
     );
   }
   if (step.type === "branch") {
-    return <p>{output.passed === true ? "Condition met: went on." : "Condition not met."}</p>;
+    const taken = Array.isArray(output.taken) ? output.taken.map(String) : [];
+    return <p>Took the path {taken.join(", ")}.</p>;
   }
   return (
     <code className="font-mono text-xs wrap-anywhere text-muted-foreground">

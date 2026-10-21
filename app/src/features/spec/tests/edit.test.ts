@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { addStep, issuesByStep, moveStep, readSpecJson, removeStep, updateStep } from "../edit";
 import { formatSpec } from "../format";
+import type { StoredSpec } from "../stored";
+import { upgradeDraft, upgradeSpec } from "../upgrade";
 import { validateSpec } from "../validate";
 import { exampleSpec } from "./example-spec";
 
@@ -24,6 +26,49 @@ describe("readSpecJson", () => {
     expect(readSpecJson("[]").ok).toBe(false);
     expect(readSpecJson('{"steps": "none"}').ok).toBe(false);
     expect(readSpecJson('{"steps": [1]}').ok).toBe(false);
+  });
+
+  it("shows a v2 spec as v1's one list of steps, which upgrades back to it", () => {
+    const escalating = exampleSpec();
+    escalating.steps[1] = { ...escalating.steps[1], else: "escalate" };
+    for (const v1 of [exampleSpec(), escalating]) {
+      const v2 = upgradeSpec(v1 as StoredSpec);
+
+      const read = readSpecJson(JSON.stringify(v2));
+
+      expect(read).toEqual({ ok: true, draft: v1 });
+      expect(upgradeDraft(draftOf(v2))).toEqual(v2);
+    }
+  });
+
+  it("refuses a v2 spec the form can't show as one list, naming the JSON view", () => {
+    const v2 = upgradeSpec(exampleSpec() as StoredSpec);
+    const branch = v2.steps.at(1);
+    if (branch?.type !== "branch") throw new Error("the example has a branch");
+    const renamed = {
+      ...v2,
+      steps: [v2.steps[0], { ...branch, paths: [{ ...branch.paths[0], name: "Prices" }] }],
+    };
+    const handedOver = {
+      ...v2,
+      steps: [
+        v2.steps[0],
+        {
+          ...branch,
+          otherwise: {
+            id: "gate-otherwise",
+            steps: [{ id: "tag", type: "escalate", reason: "Look" }],
+          },
+        },
+      ],
+    };
+
+    for (const spec of [renamed, handedOver]) {
+      expect(readSpecJson(JSON.stringify(spec))).toEqual({
+        ok: false,
+        message: expect.stringContaining("JSON view") as string,
+      });
+    }
   });
 
   it("reads a spec with no steps yet as one with an empty list", () => {

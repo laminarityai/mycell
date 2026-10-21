@@ -1,8 +1,35 @@
 import { describe, expect, it } from "vitest";
+import { eachStep, findStep } from "@/features/spec/tree";
+import { upgradeSpec } from "@/features/spec/upgrade";
 import { actionsAllowedBy, catalog } from "../catalog";
 import { googleScope } from "@/lib/google";
 import { applyPolicy, maxRisk } from "../engine";
 import { exampleSteps, labelOnlySpec, specWithSteps } from "./specs";
+
+/** Where a step after the gate sits: on the path its gate became, at `index`. */
+const onGatePath = (index: number, ...field: string[]) => [
+  "steps",
+  1,
+  "paths",
+  0,
+  "steps",
+  index,
+  ...field,
+];
+
+describe("this suite's v1 fixtures", () => {
+  it("each upgrade to a valid v2 spec with the same step IDs, and once is enough", () => {
+    const steps = exampleSteps();
+    for (const [spec, ids] of [
+      [specWithSteps(steps), steps.map((step) => step.id)],
+      [labelOnlySpec(), ["classify", "gate", "label"]],
+    ] as const) {
+      expect(spec.specVersion).toBe(2);
+      expect(eachStep(spec).map(({ step }) => step.id)).toEqual(ids);
+      expect(upgradeSpec(spec)).toBe(spec);
+    }
+  });
+});
 
 describe("the catalog", () => {
   it("lists the actions a connection's granted scopes allow", () => {
@@ -79,14 +106,14 @@ describe("applyPolicy", () => {
       inserted: [{ stepId: "draft-approval", after: "draft", action: "google-mail.create-draft" }],
     });
     if (!result.ok) return;
-    expect(result.spec.steps.map((step) => step.id)).toEqual([
+    expect(eachStep(result.spec).map(({ step }) => step.id)).toEqual([
       "classify",
       "gate",
       "prices",
       "draft",
       "draft-approval",
     ]);
-    expect(result.spec.steps[4]).toEqual({
+    expect(findStep(result.spec, "draft-approval")).toEqual({
       id: "draft-approval",
       type: "approval",
       channel: "gmail_drafts",
@@ -110,11 +137,11 @@ describe("applyPolicy", () => {
       ok: false,
       issues: [
         {
-          path: ["steps", 2, "action"],
+          path: onGatePath(0, "action"),
           message: expect.stringContaining("delete-sheet") as string,
         },
-        { path: ["steps", 3, "output"] },
-        { path: ["steps", 5, "action"] },
+        { path: onGatePath(1, "output") },
+        { path: onGatePath(3, "action") },
       ],
     });
   });
@@ -148,10 +175,10 @@ describe("applyPolicy", () => {
       ok: false,
       issues: [
         {
-          path: ["steps", 2, "input", "range"],
+          path: onGatePath(0, "input", "range"),
           message: expect.stringContaining("Sheet1!A:C") as string,
         },
-        { path: ["steps", 5, "input", "range"] },
+        { path: onGatePath(3, "input", "range") },
       ],
     });
   });

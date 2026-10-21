@@ -48,10 +48,13 @@ const CHECK_DELAY_MS = 400;
 export function SpecEditor(props: SpecEditorProps) {
   const [result, save, saving] = useActionState(saveWorkflowAction, {});
   const [name, setName] = useState(props.name ?? "");
-  const [mode, setMode] = useState<"form" | "json">("form");
+  // The saved spec as the form shows it: one list of steps, when it can. Otherwise the editor
+  // opens on the JSON view.
+  const shown = readSpecJson(JSON.stringify(props.spec));
+  const [mode, setMode] = useState<"form" | "json">(shown.ok ? "form" : "json");
   const steps = useStepDraft(props.spec);
   const { draft } = steps;
-  const [json, setJson] = useState("");
+  const [json, setJson] = useState(() => (shown.ok ? "" : formatSpec(props.spec)));
   const [switchError, setSwitchError] = useState<string | null>(null);
   const [check, setCheck] = useState<{ text: string; result: SpecCheckResult } | null>(null);
 
@@ -63,7 +66,7 @@ export function SpecEditor(props: SpecEditorProps) {
   const saved =
     props.workflowId !== undefined &&
     parsed.ok &&
-    sameValue(parsed.value, props.spec) &&
+    (sameValue(parsed.value, props.spec) || (shown.ok && sameValue(parsed.value, shown.draft))) &&
     name === props.name;
   const current = check?.text === specText ? check.result : null;
   const issues = current?.issues ?? [];

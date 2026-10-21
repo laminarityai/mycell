@@ -1,5 +1,5 @@
-// The example spec from docs/architecture.md ("Workflow spec"), as a fresh object per call so
-// a test can break one part of it.
+// The example spec from docs/architecture.md ("Workflow spec") as v1 wrote it, before branches
+// had paths, as a fresh object per call so a test can break one part of it.
 export function exampleSpec() {
   return {
     specVersion: 1,

@@ -1,5 +1,7 @@
 // A structural diff of two specs, for the before/after a proposal or an edit shows: steps
-// paired by ID, and the top-level settings that changed. Pure, so client code may import it.
+// paired by ID at every depth, and the top-level settings that changed. Pure, so client code
+// may import it.
+import { eachStep } from "./tree";
 import type { Spec, Step } from "./types";
 
 export type StepChange = "added" | "removed" | "changed" | "unchanged";
@@ -20,26 +22,36 @@ export type SpecDiff = {
   settings: string[];
 };
 
-/** `base` is null for a new workflow: every step is added. */
+/**
+ * `base` is null for a new workflow: every step is added. Steps at every depth are listed in
+ * the order a run reaches them; a branch is changed only when its own fields are (its mode, its
+ * paths' names and conditions), not when a step on one of its paths is.
+ */
 export function diffSpecs(base: Spec | null, next: Spec): SpecDiff {
-  const before = new Map((base?.steps ?? []).map((step) => [step.id, step]));
-  const afterIds = new Set(next.steps.map((step) => step.id));
+  const baseSteps = base === null ? [] : allSteps(base);
+  const nextSteps = allSteps(next);
+  const before = new Map(baseSteps.map((step) => [step.id, step]));
+  const afterIds = new Set(nextSteps.map((step) => step.id));
   const steps: StepDiff[] = [];
   // Removed steps go before the first kept step that followed them in the base.
   const pendingRemoved: StepDiff[] = [];
   const removedBefore = new Map<string, StepDiff[]>();
-  for (const step of base?.steps ?? []) {
+  for (const step of baseSteps) {
     if (!afterIds.has(step.id)) {
       pendingRemoved.push({ id: step.id, change: "removed", before: step });
     } else if (pendingRemoved.length > 0) {
       removedBefore.set(step.id, pendingRemoved.splice(0));
     }
   }
-  for (const step of next.steps) {
+  for (const step of nextSteps) {
     steps.push(...(removedBefore.get(step.id) ?? []));
     const old = before.get(step.id);
     const change: StepChange =
-      old === undefined ? "added" : sameValue(old, step) ? "unchanged" : "changed";
+      old === undefined
+        ? "added"
+        : sameValue(ownFields(old), ownFields(step))
+          ? "unchanged"
+          : "changed";
     steps.push({ id: step.id, change, before: old, after: step });
   }
   steps.push(...pendingRemoved);
@@ -57,6 +69,20 @@ export function diffSpecs(base: Spec | null, next: Spec): SpecDiff {
             ),
         );
   return { steps, settings };
+}
+
+function allSteps(spec: Spec): Step[] {
+  return eachStep(spec).map(({ step }) => step);
+}
+
+/** A step without the steps on its paths, which are diffed on their own. */
+function ownFields(step: Step): unknown {
+  if (step.type !== "branch") return step;
+  return {
+    ...step,
+    paths: step.paths.map((path) => ({ ...path, steps: [] })),
+    otherwise: { ...step.otherwise, steps: [] },
+  };
 }
 
 /** Deep equality that ignores object key order. */

@@ -70,7 +70,12 @@ describe("executeRun", () => {
         modelId: "typesafe-ai/jev-1.14.0",
         costUsd: 0.0002,
       },
-      { stepId: "gate", type: "branch", status: "succeeded", output: { passed: true } },
+      {
+        stepId: "gate",
+        type: "branch",
+        status: "succeeded",
+        output: { taken: ["gate-yes"], paths: [{ id: "gate-yes", holds: true, checks: [true] }] },
+      },
       {
         stepId: "thread",
         type: "tool",
@@ -178,7 +183,10 @@ describe("executeRun", () => {
     expect(run.status).toBe("skipped");
     expect(run.steps.map((step) => [step.stepId, step.output])).toEqual([
       ["classify", { label: "yes", p: 0.6, fallback: false }],
-      ["gate", { passed: false }],
+      [
+        "gate",
+        { taken: ["gate-otherwise"], paths: [{ id: "gate-yes", holds: false, checks: [false] }] },
+      ],
     ]);
   });
 });

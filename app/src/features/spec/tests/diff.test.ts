@@ -24,7 +24,7 @@ describe("diffSpecs", () => {
     expect(diff.settings).toEqual([]);
   });
 
-  it("pairs steps by ID: changed, unchanged, removed in place, and added", () => {
+  it("pairs steps by ID at every depth: changed, unchanged, removed in place, and added", () => {
     const base = exampleSpec();
     const proposed = exampleSpec();
     proposed.steps = proposed.steps.filter((step) => step.id !== "prices");
@@ -47,9 +47,24 @@ describe("diffSpecs", () => {
       ["tell", "added"],
     ]);
     const gate = diff.steps.at(1);
-    expect(gate?.before).toMatchObject({ when: { minP: 0.85 } });
-    expect(gate?.after).toMatchObject({ when: { minP: 0.6 } });
+    expect(gate?.before).toMatchObject({ paths: [{ condition: { checks: [{ minP: 0.85 }] } }] });
+    expect(gate?.after).toMatchObject({ paths: [{ condition: { checks: [{ minP: 0.6 }] } }] });
     expect(diff.settings).toEqual(["credentials"]);
+  });
+
+  it("marks a branch changed for its own fields, not for a change to a step on its path", () => {
+    const proposed = exampleSpec();
+    proposed.steps[3] = { ...proposed.steps[3], context: ["trigger.message"] };
+
+    const diff = diffSpecs(parsed(exampleSpec()), parsed(proposed));
+
+    expect(diff.steps.map((step) => [step.id, step.change])).toEqual([
+      ["classify", "unchanged"],
+      ["gate", "unchanged"],
+      ["prices", "unchanged"],
+      ["draft", "changed"],
+      ["approve", "unchanged"],
+    ]);
   });
 
   it("ignores key order, as jsonb shuffles it", () => {
@@ -58,7 +73,7 @@ describe("diffSpecs", () => {
     const shuffled = { ...base, steps: base.steps.map((step) => reversed(step) as typeof step) };
 
     expect(diffSpecs(base, shuffled).steps.map((step) => step.change)).toEqual(
-      base.steps.map(() => "unchanged"),
+      Array.from({ length: 5 }, () => "unchanged"),
     );
   });
 });

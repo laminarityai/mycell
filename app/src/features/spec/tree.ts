@@ -1,7 +1,7 @@
-// A spec's steps as a tree: the root list, and (from specVersion 2) each branch's paths with
-// their own lists. Every reader that needs "every step", "this step", or "what this step may
-// use" goes through these helpers rather than walking `spec.steps`, so the shape of the tree
-// is known here only. Pure, so client code may import it.
+// A spec's steps as a tree: the root list, and each branch's paths with their own lists. Every
+// reader that needs "every step", "this step", or "what this step may use" goes through these
+// helpers rather than walking `spec.steps`, so the shape of the tree is known here only. Pure,
+// so client code may import it.
 import type { Spec, SpecIssue, Step } from "./types";
 
 /** A step, where it sits in the spec, and the steps above it on its own path. */
@@ -13,15 +13,23 @@ export type PlacedStep = {
   above: Step[];
 };
 
-/** Every step at every depth, in the order a run reaches them, each placed. */
+/**
+ * Every step at every depth, each placed, in the order a run reaches them: a branch, then each
+ * of its paths left to right, then its otherwise path.
+ */
 export function eachStep(spec: Spec): PlacedStep[] {
   const placed: PlacedStep[] = [];
   const walk = (location: SpecIssue["path"], steps: Step[], above: Step[]) => {
     steps.forEach((step, index) => {
+      const at = [...location, index];
       const before = [...above, ...steps.slice(0, index)];
-      placed.push({ step, location: [...location, index], above: before });
-      // A v1 step holds no steps. From specVersion 2 a branch's paths are walked here, each
-      // with `[...before, step]` above it, so a step on a path never sees a sibling path's.
+      placed.push({ step, location: at, above: before });
+      if (step.type !== "branch") return;
+      // A step on a path sees the branch and what's above it, never a sibling path's steps.
+      step.paths.forEach((path, p) => {
+        walk([...at, "paths", p, "steps"], path.steps, [...before, step]);
+      });
+      walk([...at, "otherwise", "steps"], step.otherwise.steps, [...before, step]);
     });
   };
   walk(["steps"], spec.steps, []);
@@ -49,8 +57,19 @@ export function stepLocation(spec: Spec, stepId: string): SpecIssue["path"] | un
  * engine's approvals.
  */
 export function mapStepLists(spec: Spec, change: (steps: Step[]) => Step[]): Spec {
-  // A v1 spec has one list. From specVersion 2 each branch's path lists are changed first.
-  return { ...spec, steps: change(spec.steps) };
+  const mapList = (steps: Step[]): Step[] =>
+    change(
+      steps.map((step) =>
+        step.type === "branch"
+          ? {
+              ...step,
+              paths: step.paths.map((path) => ({ ...path, steps: mapList(path.steps) })),
+              otherwise: { ...step.otherwise, steps: mapList(step.otherwise.steps) },
+            }
+          : step,
+      ),
+    );
+  return { ...spec, steps: mapList(spec.steps) };
 }
 
 function placeOf(spec: Spec, stepId: string): PlacedStep | undefined {

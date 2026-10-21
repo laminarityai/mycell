@@ -47,7 +47,11 @@ function lineOf(step: DryRunStep, spec: Spec): string {
     return `${name}: chose ${JSON.stringify(output.label)} with probability ${JSON.stringify(output.p)}.`;
   }
   if (step.type === "branch" && isRecord(output)) {
-    return output.passed === true ? `${name}: went on.` : `${name}: its condition failed.`;
+    const branch = findStep(spec, step.stepId);
+    const taken = Array.isArray(output.taken) ? output.taken : [];
+    const paths = branch?.type === "branch" ? branch.paths.filter((p) => taken.includes(p.id)) : [];
+    if (paths.length === 0) return `${name}: no path applied, so it took the otherwise path.`;
+    return `${name}: went on along ${paths.map((path) => JSON.stringify(path.name)).join(", ")}.`;
   }
   if (step.type === "extract" && isRecord(output)) {
     const filled = Object.entries(output).filter(([, value]) => value !== null && value !== "");

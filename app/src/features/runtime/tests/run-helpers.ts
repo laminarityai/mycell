@@ -54,6 +54,10 @@ export function recordingStepRunner() {
     crashAt: (id: string) => {
       crashAt = id;
     },
+    /** Holds `result` for step `id` as if an earlier invocation had finished it. */
+    memoize: (id: string, result: unknown) => {
+      results.set(id, result);
+    },
   };
 }
 

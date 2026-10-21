@@ -25,9 +25,6 @@ export const MAX_FAILED_PROPOSALS = 3;
 
 export type ProposeSpecInput = { workflowId?: string; spec: unknown; summary: string };
 
-// Failed attempts per turn: each turn has its own TurnInfo object.
-const failedAttempts = new WeakMap<TurnInfo, number>();
-
 /**
  * Validates the spec as saving would, against the workflow's working spec as it is now (the
  * conversation's workflow unless `workflowId` names another), and stores it as a proposal.
@@ -38,18 +35,16 @@ export async function proposeSpec(
   input: ProposeSpecInput,
   turn: TurnInfo,
 ): Promise<ProposeSpecResult> {
-  const failed = failedAttempts.get(turn) ?? 0;
-  if (failed >= MAX_FAILED_PROPOSALS) return gaveUp([]);
+  if (turn.failedProposals >= MAX_FAILED_PROPOSALS) return gaveUp([]);
   const workflowId = input.workflowId ?? turn.workflowId ?? undefined;
   // NotFoundError, for the model, when it names another org's workflow or none at all.
   const base = workflowId === undefined ? undefined : await getWorkflow(ctx, workflowId);
   const check = await checkWorkflowSpec(ctx, input.spec);
   const issues: SpecIssue[] = check.ok ? await specIdIssues(ctx, check.working.id, base?.id) : [];
   if (!check.ok || issues.length > 0) {
-    const attempts = failed + 1;
-    failedAttempts.set(turn, attempts);
+    turn.failedProposals += 1;
     const all = check.ok ? issues : check.issues;
-    if (attempts >= MAX_FAILED_PROPOSALS) return gaveUp(all);
+    if (turn.failedProposals >= MAX_FAILED_PROPOSALS) return gaveUp(all);
     return {
       ok: false,
       gaveUp: false,

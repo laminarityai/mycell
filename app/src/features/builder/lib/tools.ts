@@ -9,8 +9,13 @@ import type { Ctx } from "@/lib/ctx";
 import { proposeSpec } from "./proposals";
 import { readExamples } from "./read-examples";
 
-/** What a tool knows about the turn calling it. */
-export type TurnInfo = { conversationId: string; workflowId: string | null };
+/** What a tool knows about the turn calling it, and the state the turn's tools keep. */
+export type TurnInfo = {
+  conversationId: string;
+  workflowId: string | null;
+  /** The `propose_spec` calls in this turn that failed validation so far. */
+  failedProposals: number;
+};
 
 export type ToolDefinition<I, O> = {
   description: string;

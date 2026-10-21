@@ -51,7 +51,11 @@ export async function streamTurn(
   const history = await messagesOf(ctx, conversation.id);
   await appendMessage(ctx, conversation, { role: "user", parts: [{ type: "text", text }] });
 
-  const turn: TurnInfo = { conversationId: conversation.id, workflowId: conversation.workflowId };
+  const turn: TurnInfo = {
+    conversationId: conversation.id,
+    workflowId: conversation.workflowId,
+    failedProposals: 0,
+  };
   const instructions = instructionsWith(await gatherContext(ctx, turn));
   const assistantId = randomUUID();
   let metered: MeteredStream;

@@ -34,8 +34,13 @@ const meteringSchema = z.object({
  * `{ providerMetadata }`; cost 0 when it reports none.
  */
 export function meteringOf(answer: unknown): Metering {
+  return parseMetering(answer) ?? { costUsd: 0, generationId: undefined };
+}
+
+// The metering in an answer, or undefined when it isn't one the gateway's shape fits.
+function parseMetering(answer: unknown): Metering | undefined {
   const parsed = meteringSchema.safeParse(answer);
-  if (!parsed.success) return { costUsd: 0, generationId: undefined };
+  if (!parsed.success) return undefined;
   const gateway = parsed.data.providerMetadata?.gateway;
   const costUsd = gateway?.cost;
   return {
@@ -53,7 +58,7 @@ export function meteredGateway(): MeteredGateway {
       .clone()
       .json()
       .catch(() => undefined);
-    if (meteringSchema.safeParse(body).success) last = meteringOf(body);
+    last = parseMetering(body) ?? last;
     return response;
   };
 

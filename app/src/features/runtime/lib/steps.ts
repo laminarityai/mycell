@@ -1,13 +1,15 @@
 // The model and control steps: classify, extract, branch and escalate. A model step fetches
 // the triggering message inside itself and holds its text in memory only (invariant 8).
 import { z } from "zod";
+import { checkWords } from "@/features/policy/condition-fields";
 import type { Step } from "@/features/spec/types";
 import type { Json } from "../types";
 import { callModel } from "./call-model";
 import { classify } from "./classify";
-import { RunStepError } from "./failures";
+import { chooseEveryMatch, chooseFirstMatch } from "./conditions";
 import { messageText } from "./gmail";
 import type { StepContext, StepExecution } from "./step-context";
+import { withTriggerFacts } from "./trigger-facts";
 
 type StepOf<T extends Step["type"]> = Extract<Step, { type: T }>;
 
@@ -78,21 +80,36 @@ export async function extractStep(
   };
 }
 
-export function branchStep(step: StepOf<"branch">, context: StepContext): Promise<StepExecution> {
-  const classified = classification(context.outputs[step.when.step]);
-  if (classified === undefined) {
-    throw new RunStepError("bad_reference", `The step ${step.when.step} has no classification.`);
-  }
-  const passed = classified.label === step.when.label && classified.p >= step.when.minP;
-  const next = passed ? "continue" : step.else === "stop" ? "skipped" : "escalated";
-  return Promise.resolve({ next, output: { passed }, record: { passed } });
+/**
+ * Chooses where the run goes: the first path, left to right, whose condition holds (first
+ * match) or every one that holds (every match), or the otherwise path when none does; with
+ * nothing on the otherwise path, the run stops here. The output names the paths taken, for the
+ * walker. The record keeps each path's checks as passed or failed, never the values they tested.
+ */
+export async function branchStep(
+  step: StepOf<"branch">,
+  context: StepContext,
+): Promise<StepExecution> {
+  const choose = step.mode === "every" ? chooseEveryMatch : chooseFirstMatch;
+  const outputs = await withTriggerFacts(step, context);
+  const { taken, paths } = choose(step, outputs, checkWords(context.spec));
+  const stops = taken.includes(step.otherwise.id) && step.otherwise.steps.length === 0;
+  // The paths checked, with each check's pass or fail; never a reason, which may quote a value.
+  const checked = paths
+    .filter((path) => path.id !== step.otherwise.id && path.status !== "not_checked")
+    .map((path) => ({
+      id: path.id,
+      holds: path.status === "taken",
+      checks: path.checks.map((check) => check.passed),
+    }));
+  return {
+    next: stops ? "skipped" : "continue",
+    output: { taken },
+    record: { taken, paths: checked },
+    paths,
+  };
 }
 
 export function escalateStep(): Promise<StepExecution> {
   return Promise.resolve({ next: "escalated", output: null, record: null });
-}
-
-function classification(output: Json | undefined): { label: string; p: number } | undefined {
-  const parsed = z.object({ label: z.string(), p: z.number() }).safeParse(output);
-  return parsed.success ? parsed.data : undefined;
 }

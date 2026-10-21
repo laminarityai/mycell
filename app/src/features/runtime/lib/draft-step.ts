@@ -5,6 +5,7 @@
 // approval step records that, and the run goes on to its later steps.
 import { z } from "zod";
 import { findAction } from "@/features/policy/catalog";
+import { findStep, stepsAbove } from "@/features/spec/tree";
 import type { Step } from "@/features/spec/types";
 import type { Json } from "../types";
 import { callModel } from "./call-model";
@@ -75,7 +76,7 @@ const RANGE_READ = findAction("google-sheet.read-range");
  * range's counts, so the values never crossed a step boundary. Undefined for any other step.
  */
 async function sheetText(name: string, context: StepContext): Promise<string | undefined> {
-  const step = context.spec.steps.find((candidate) => candidate.id === name);
+  const step = findStep(context.spec, name);
   if (step?.type !== "tool" || RANGE_READ === undefined || step.action !== RANGE_READ.name) {
     return undefined;
   }
@@ -91,15 +92,17 @@ async function sheetText(name: string, context: StepContext): Promise<string | u
 const draftOutput = z.object({ draftId: z.string() });
 
 /**
- * Records that the drafts before it await a person, who approves by sending one. It holds
- * nothing back: a Gmail draft is never sent by a run, so the steps after it still run.
+ * Records that the drafts above it on its own path await a person, who approves by sending
+ * one: every one, those an approval above it recorded too, as a v1 approval recorded every
+ * draft before it. It holds nothing back: a Gmail draft is never sent by a run, so the steps
+ * after it still run.
  */
 export function approvalStep(
   step: StepOf<"approval">,
   context: StepContext,
 ): Promise<StepExecution> {
-  const draftIds = Object.values(context.outputs).flatMap((output) => {
-    const parsed = draftOutput.safeParse(output);
+  const draftIds = stepsAbove(context.spec, step.id).flatMap((earlier) => {
+    const parsed = draftOutput.safeParse(context.outputs[earlier.id]);
     return parsed.success ? [parsed.data.draftId] : [];
   });
   const record = { awaiting: "human", channel: step.channel, draftIds };

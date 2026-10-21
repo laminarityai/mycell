@@ -1,9 +1,11 @@
 // The policy engine (invariant 4): a spec's risk comes only from the catalog's fixed levels.
 // Pure: no IO, no ctx.
 import { z } from "zod";
+import { eachStep, mapStepLists, type PlacedStep } from "@/features/spec/tree";
 import type { Spec, SpecIssue, Step } from "@/features/spec/types";
 import { SpecInvalidError } from "@/lib/errors";
 import { findAction } from "./catalog";
+import { conditionIssues } from "./condition-fields";
 import {
   riskLevelSchema,
   type CatalogAction,
@@ -21,12 +23,12 @@ const ORDER = riskLevelSchema.options;
  */
 export function maxRisk(spec: Spec): RiskLevel {
   let highest: RiskLevel = "read";
-  for (const [index, step] of spec.steps.entries()) {
+  for (const { step, location } of eachStep(spec)) {
     const used = actionOf(step);
     if (used === undefined) continue;
     const action = findAction(used.name);
     if (action === undefined) {
-      const path = ["steps", index, used.field];
+      const path = [...location, used.field];
       throw new SpecInvalidError([{ path, message: `"${used.name}" isn't a catalog action.` }]);
     }
     if (ORDER.indexOf(action.risk) > ORDER.indexOf(highest)) highest = action.risk;
@@ -36,30 +38,52 @@ export function maxRisk(spec: Spec): RiskLevel {
 
 /**
  * Checks the spec's actions against the catalog and makes sure every `external_send` action
- * waits for a person: a `draft` output needs an `approval` step before or after it, and one is
+ * waits for a person: a `draft` output needs an `approval` step on its own path, and one is
  * inserted directly after the draft when there's none. Returns the spec with what it
  * inserted, or every issue at once.
  */
 export function applyPolicy(spec: Spec): PolicyResult {
-  const issues = actionIssues(spec);
+  const issues = [...actionIssues(spec), ...conditionIssues(spec)];
   if (issues.length > 0) return { ok: false, issues };
 
   const inserted: InsertedApproval[] = [];
-  const steps: Step[] = [];
-  const ids = new Set(spec.steps.map((step) => step.id));
-  spec.steps.forEach((step, index) => {
-    steps.push(step);
-    if (step.type !== "draft") return;
-    const approved = spec.steps.some((other, i) => i !== index && other.type === "approval");
-    if (approved) return;
-    const stepId = freeId(`${step.id}-approval`, ids);
-    ids.add(stepId);
-    steps.push({ id: stepId, type: "approval", channel: "gmail_drafts" });
-    inserted.push({ stepId, after: step.id, action: step.output });
-  });
+  const placed = eachStep(spec);
+  const ids = new Set(placed.map(({ step }) => step.id));
+  const unreviewed = new Set(unreviewedDrafts(placed));
+  const withApprovals = mapStepLists(spec, (steps) =>
+    steps.flatMap((step): Step[] => {
+      if (step.type !== "draft" || !unreviewed.has(step.id)) return [step];
+      const stepId = freeId(`${step.id}-approval`, ids);
+      ids.add(stepId);
+      inserted.push({ stepId, after: step.id, action: step.output });
+      return [step, { id: stepId, type: "approval", channel: "gmail_drafts" }];
+    }),
+  );
 
-  const result = inserted.length === 0 ? spec : { ...spec, steps };
+  const result = inserted.length === 0 ? spec : withApprovals;
   return { ok: true, spec: result, maxRisk: maxRisk(result), inserted };
+}
+
+/**
+ * The drafts no approval reviews. Only an approval after the draft in its own list reviews it:
+ * every run that makes the draft reaches it. One above the draft ran before the draft was
+ * made; one on a sibling path, or on a path below the draft, which a run may not take, doesn't
+ * count either: a branch chooses a path but never removes a review (ADR-0015).
+ */
+function unreviewedDrafts(placed: PlacedStep[]): string[] {
+  // Each step's list, as the location of the list, and its index in it.
+  const listOf = (location: SpecIssue["path"]) => JSON.stringify(location.slice(0, -1));
+  const indexOf = (location: SpecIssue["path"]) => Number(location.at(-1));
+  return placed.flatMap(({ step, location }) => {
+    if (step.type !== "draft") return [];
+    const reviewed = placed.some(
+      (other) =>
+        other.step.type === "approval" &&
+        listOf(other.location) === listOf(location) &&
+        indexOf(other.location) > indexOf(location),
+    );
+    return reviewed ? [] : [step.id];
+  });
 }
 
 /**
@@ -68,10 +92,10 @@ export function applyPolicy(spec: Spec): PolicyResult {
  */
 function actionIssues(spec: Spec): SpecIssue[] {
   const issues: SpecIssue[] = [];
-  spec.steps.forEach((step, index) => {
-    if (step.type !== "tool" && step.type !== "draft") return;
+  for (const { step, location } of eachStep(spec)) {
+    if (step.type !== "tool" && step.type !== "draft") continue;
     const [field, name] = step.type === "tool" ? ["action", step.action] : ["output", step.output];
-    const path = ["steps", index, field];
+    const path = [...location, field];
     const action = findAction(name);
     if (action === undefined) {
       issues.push({ path, message: `"${name}" isn't a catalog action.` });
@@ -83,9 +107,9 @@ function actionIssues(spec: Spec): SpecIssue[] {
     } else if (step.type === "draft" && action.risk !== "external_send") {
       issues.push({ path, message: `"${name}" doesn't create a draft; use it in a tool step.` });
     } else if (step.type === "tool") {
-      issues.push(...literalInputIssues(step, index, action));
+      issues.push(...literalInputIssues(step, location, action));
     }
-  });
+  }
   return issues;
 }
 
@@ -95,7 +119,7 @@ function actionIssues(spec: Spec): SpecIssue[] {
  */
 function literalInputIssues(
   step: Extract<Step, { type: "tool" }>,
-  index: number,
+  location: SpecIssue["path"],
   action: CatalogAction,
 ): SpecIssue[] {
   if (!(action.input instanceof z.ZodObject)) return [];
@@ -106,7 +130,7 @@ function literalInputIssues(
     const parsed = field.safeParse(value);
     if (parsed.success) return [];
     const reason = parsed.error.issues.at(0)?.message ?? "It isn't valid.";
-    return [{ path: ["steps", index, "input", name], message: `${name}: ${reason}` }];
+    return [{ path: [...location, "input", name], message: `${name}: ${reason}` }];
   });
 }
 

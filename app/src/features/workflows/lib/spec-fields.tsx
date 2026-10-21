@@ -5,22 +5,9 @@
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import type { CatalogAction } from "@/features/policy/types";
-import type { StepDraft } from "@/features/spec/edit";
 import type { SpecIssue } from "@/features/spec/types";
 
 type Path = (string | number)[];
-
-/** What a step type's panel gets: one step of the draft, and where its changes go. */
-export type StepFieldsProps = {
-  step: StepDraft;
-  /** The steps before this one, which it may refer to. */
-  earlier: readonly StepDraft[];
-  issues: readonly SpecIssue[];
-  /** The catalog actions the tool picker offers. */
-  actions: readonly CatalogAction[];
-  onChange: (fields: Record<string, unknown>) => void;
-};
 
 /** The issues at `path` or inside it. */
 export function issuesAt(issues: readonly SpecIssue[], ...path: Path): SpecIssue[] {

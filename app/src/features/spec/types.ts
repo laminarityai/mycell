@@ -1,5 +1,6 @@
 // The workflow contract (docs/architecture.md, "Workflow spec"): the Zod schema for
-// `specVersion: 1`. This is shape only; `validate.ts` adds the rules that span steps.
+// `specVersion: 2`, where a branch holds its paths (ADR-0015). This is shape only; `validate.ts`
+// adds the rules that span steps. Specs from before are read through `upgrade.ts`.
 import { z } from "zod";
 
 /**
@@ -7,7 +8,7 @@ import { z } from "zod";
  * and ignored: only the catalog decides a risk level (invariant 4). Any other unknown key is
  * refused, so a misspelled field is named rather than dropped.
  */
-function specObject<Shape extends z.ZodRawShape>(shape: Shape) {
+export function specObject<Shape extends z.ZodRawShape>(shape: Shape) {
   return z.strictObject({ ...shape, risk: z.unknown().optional() });
 }
 
@@ -15,8 +16,11 @@ const slug = z
   .string()
   .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "Use lowercase letters, digits and single hyphens.");
 
-/** A step ID. `trigger` is reserved for references to the triggering event. */
-const stepId = z
+/**
+ * A step ID, also a path's: steps and paths share one namespace across the spec. `trigger` is
+ * reserved for references to the triggering event.
+ */
+export const stepId = z
   .string()
   .regex(/^[a-z][a-z0-9_-]*$/, "Start with a letter; use lowercase letters, digits, - and _.")
   .refine((id) => id !== "trigger", "`trigger` is reserved for the triggering event.");
@@ -107,9 +111,9 @@ const checksSchema = specObject({
   requiredFields: z.array(z.string().min(1)).optional(),
 });
 
-const stepBase = { id: stepId, checks: checksSchema.optional() };
+export const stepBase = { id: stepId, checks: checksSchema.optional() };
 
-const classifyStep = specObject({
+export const classifyStep = specObject({
   ...stepBase,
   type: z.literal("classify"),
   role: modelRoleSchema,
@@ -117,15 +121,7 @@ const classifyStep = specObject({
   labels: z.array(z.string().min(1)).min(2).max(10),
 });
 
-/** Goes on when `when.step` gave `when.label` with probability at least `when.minP`. */
-const branchStep = specObject({
-  ...stepBase,
-  type: z.literal("branch"),
-  when: specObject({ step: stepId, label: z.string().min(1), minP: z.number().min(0).max(1) }),
-  else: z.enum(["stop", "escalate"]),
-});
-
-const extractStep = specObject({
+export const extractStep = specObject({
   ...stepBase,
   type: z.literal("extract"),
   role: modelRoleSchema,
@@ -137,7 +133,7 @@ const extractStep = specObject({
     .refine((fields) => Object.keys(fields).length > 0, "Name at least one field."),
 });
 
-const toolStep = specObject({
+export const toolStep = specObject({
   ...stepBase,
   type: z.literal("tool"),
   action: actionName,
@@ -145,7 +141,7 @@ const toolStep = specObject({
 });
 
 /** Context a draft reads: earlier step IDs, `trigger.message` or `trigger.thread`. */
-const draftStep = specObject({
+export const draftStep = specObject({
   ...stepBase,
   type: z.literal("draft"),
   role: modelRoleSchema,
@@ -155,17 +151,120 @@ const draftStep = specObject({
 });
 
 /** In v1 a person approves by sending the Gmail draft. */
-const approvalStep = specObject({
+export const approvalStep = specObject({
   ...stepBase,
   type: z.literal("approval"),
   channel: z.literal("gmail_drafts"),
 });
 
-const escalateStep = specObject({
+export const escalateStep = specObject({
   ...stepBase,
   type: z.literal("escalate"),
   reason: z.string().min(1),
 });
+
+/** Holds when the classify step `classify` gave the label `is` with probability at least `minP`. */
+const classifyCheck = specObject({
+  classify: stepId,
+  is: z.string().min(1),
+  minP: z.number().min(0).max(1),
+});
+
+/** The operators a check on a value may use, by the type of the value. */
+export const checkOperators = {
+  text: ["is", "is_not", "contains", "does_not_contain", "starts_with", "ends_with"],
+  number: ["equals", "does_not_equal", "more_than", "less_than", "at_least", "at_most"],
+  yesNo: ["is_yes", "is_no"],
+  any: ["is_empty", "is_not_empty"],
+} as const;
+
+/** The type of a value a check tests, which decides the operators it may use. */
+export type ValueType = Exclude<keyof typeof checkOperators, "any">;
+
+/**
+ * A field a condition may test, as what declares it gives it: a trigger's fact, or a catalog
+ * action's result field (ADR-0015). `label` names it in an admin's words.
+ */
+export type ConditionField = { name: string; type: ValueType; label: string };
+
+// A check on a value read from above the branch (`{ from: "<step>.<field>" }`) or from the
+// trigger (`{ from: "trigger.<fact>" }`). The operator decides what `value` is: text for a text
+// check, a number for a number check, and none for a yes/no or an empty check.
+const textCheck = specObject({
+  subject: referenceSchema,
+  op: z.enum(checkOperators.text),
+  value: z.string(),
+});
+const numberCheck = specObject({
+  subject: referenceSchema,
+  op: z.enum(checkOperators.number),
+  value: z.number(),
+});
+const valuelessCheck = specObject({
+  subject: referenceSchema,
+  op: z.enum([...checkOperators.yesNo, ...checkOperators.any]),
+});
+
+export const checkSchema = z.union([classifyCheck, textCheck, numberCheck, valuelessCheck]);
+export type Check = z.infer<typeof checkSchema>;
+
+/** Holds when all of its checks hold, or any of them. */
+export const conditionSchema = specObject({
+  combine: z.enum(["all", "any"]),
+  // A path that always runs is what the otherwise path is for.
+  checks: z
+    .array(checkSchema)
+    .min(1, "Give the condition at least one check; the otherwise path takes the rest."),
+});
+export type Condition = z.infer<typeof conditionSchema>;
+
+/** One way out of a branch: its condition, and the steps a message follows when it holds. */
+const pathSchema = z.strictObject({
+  id: stepId,
+  name: z.string().trim().min(1, "Name the path."),
+  condition: conditionSchema,
+  get steps(): z.ZodArray<typeof stepSchema> {
+    return z.array(stepSchema);
+  },
+  risk: z.unknown().optional(),
+});
+export type Path = z.infer<typeof pathSchema>;
+
+/** The path a message follows when no other applies. With no steps, the run stops there. */
+const otherwiseSchema = z.strictObject({
+  id: stepId,
+  get steps(): z.ZodArray<typeof stepSchema> {
+    return z.array(stepSchema);
+  },
+  risk: z.unknown().optional(),
+});
+export type OtherwisePath = z.infer<typeof otherwiseSchema>;
+
+/** A branch's paths, at most, not counting its otherwise path; and how deep branches nest. */
+export const MAX_PATHS = 10;
+export const MAX_BRANCH_DEPTH = 3;
+
+/**
+ * Splits the workflow into paths (ADR-0015). First match runs the first path, left to right,
+ * whose condition holds; every match runs each that holds, one after another. The otherwise
+ * path runs when none does. A branch is the last step of its list: paths never join back up.
+ */
+const branchStep = z.strictObject({
+  ...stepBase,
+  type: z.literal("branch"),
+  mode: z.enum(["first", "every"]).default("first"),
+  get paths(): z.ZodArray<typeof pathSchema> {
+    return z
+      .array(pathSchema)
+      .min(1, "Give the branch at least one path.")
+      .max(MAX_PATHS, `A branch has at most ${String(MAX_PATHS)} paths, besides otherwise.`);
+  },
+  get otherwise(): typeof otherwiseSchema {
+    return otherwiseSchema;
+  },
+  risk: z.unknown().optional(),
+});
+export type BranchStep = z.infer<typeof branchStep>;
 
 export const stepSchema = z.discriminatedUnion("type", [
   classifyStep,
@@ -184,19 +283,24 @@ export const stepTypes: readonly StepType[] = stepSchema.options.map(
   (option) => option.shape.type.value,
 );
 
-export const specSchema = specObject({
-  specVersion: z.literal(1),
+/** A spec's fields other than its version and its steps, alike in every version. */
+export const specSettings = {
   id: slug,
   credentials: z.enum(["member", "org"]),
   trigger: specObject({
     type: z.literal("gmail.message_received"),
     labelIds: z.array(z.string().min(1)).min(1).default(["INBOX"]),
   }),
-  steps: z.array(stepSchema).min(1),
   autonomy: specObject({ rung: z.union([z.literal(0), z.literal(3), z.literal(4)]) }),
   // Accepted and stored, unused until M5 (visibility) and M7 (budget).
   budget: specObject({ monthlyCredits: z.number().int().positive().optional() }).optional(),
   visibility: specObject({ tags: z.array(z.string().min(1)) }).optional(),
+};
+
+export const specSchema = specObject({
+  specVersion: z.literal(2),
+  ...specSettings,
+  steps: z.array(stepSchema).min(1),
 });
 
 /** A spec that passed `validateSpec`. */

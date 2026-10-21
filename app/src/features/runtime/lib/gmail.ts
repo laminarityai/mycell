@@ -9,6 +9,7 @@ export const GMAIL = "/gmail/v1/users/me";
 
 type Part = {
   mimeType?: string;
+  filename?: string;
   headers?: { name: string; value: string }[];
   body?: { data?: string };
   parts?: Part[];
@@ -16,6 +17,7 @@ type Part = {
 const partSchema: z.ZodType<Part> = z.lazy(() =>
   z.object({
     mimeType: z.string().optional(),
+    filename: z.string().optional(),
     headers: z.array(z.object({ name: z.string(), value: z.string() })).optional(),
     body: z.object({ data: z.string().optional() }).optional(),
     parts: z.array(partSchema).optional(),
@@ -69,6 +71,39 @@ export async function messageText(ctx: Ctx, connectionId: string, messageId: str
     fullMessageSchema,
   );
   return asText(message);
+}
+
+/**
+ * The facts the Gmail trigger declares (`spec/triggers.ts`), read from the message: its
+ * sender's address and domain, its subject, whether it has an attachment, and whether it
+ * replies to another message. In memory only: never return them from a step or put them in an
+ * error.
+ */
+export async function messageFacts(ctx: Ctx, connectionId: string, messageId: string) {
+  const message = await get(
+    ctx,
+    connectionId,
+    `${GMAIL}/messages/${encodeURIComponent(messageId)}?format=full`,
+    fullMessageSchema,
+  );
+  const { from, subject } = fieldsOf(message);
+  // "Ada Lovelace <ada@customer.test>", or the bare address.
+  const sender = (/<([^>]*)>/.exec(from)?.[1] ?? from).trim().toLowerCase();
+  const headers = message.payload?.headers ?? [];
+  const has = (name: string) => headers.some((h) => h.name.toLowerCase() === name.toLowerCase());
+  return {
+    sender,
+    senderDomain: sender.includes("@") ? (sender.split("@").at(-1) ?? "") : "",
+    subject,
+    hasAttachment: hasAttachment(message.payload),
+    isReply: has("In-Reply-To") || has("References"),
+  };
+}
+
+function hasAttachment(part: Part | undefined): boolean {
+  if (part === undefined) return false;
+  if (part.filename !== undefined && part.filename !== "") return true;
+  return (part.parts ?? []).some(hasAttachment);
 }
 
 /** The thread's messages as text, oldest first, leaving out drafts. In memory only, too. */

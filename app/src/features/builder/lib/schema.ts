@@ -12,7 +12,7 @@ import {
   unique,
 } from "drizzle-orm/pg-core";
 import type { InsertedApproval, RiskLevel } from "@/features/policy/types";
-import type { Spec } from "@/features/spec/types";
+import type { StoredSpec } from "@/features/spec/stored";
 // A conversation about a workflow goes with it.
 import { workflows } from "@/features/workflows/lib/schema";
 import type { StoredPart } from "../types";
@@ -54,9 +54,9 @@ export const builderProposals = pgTable(
     // Null for a new workflow until it's accepted, which creates the workflow.
     workflowId: text("workflow_id"),
     baseRevision: integer("base_revision"),
-    baseSpec: jsonb("base_spec").$type<Spec>(),
+    baseSpec: jsonb("base_spec").$type<StoredSpec>(),
     // The proposed working spec, as `validateSpec` parsed it.
-    spec: jsonb("spec").$type<Spec>().notNull(),
+    spec: jsonb("spec").$type<StoredSpec>().notNull(),
     // The workflow's name: its own for an existing workflow, one made from the spec ID for a new.
     name: text("name").notNull(),
     summary: text("summary").notNull(),

@@ -165,6 +165,76 @@ describe("validateSpec", () => {
   });
 });
 
+describe("validateSpec on a v2 spec", () => {
+  /** The example as v2: classify, then a branch whose one path reads prices and drafts. */
+  function v2Spec() {
+    const result = validateSpec(exampleSpec());
+    if (!result.ok) throw new Error("the example is valid");
+    return JSON.parse(JSON.stringify(result.spec)) as {
+      steps: [Record<string, unknown>, Record<string, unknown> & { paths: object[] }];
+    };
+  }
+  const branchWith = (fields: Record<string, unknown>) => {
+    const spec = v2Spec();
+    spec.steps[1] = { ...spec.steps[1], ...fields };
+    return spec;
+  };
+  const path = (checks: unknown[]) => ({
+    id: "pricing",
+    name: "Pricing",
+    condition: { combine: "any", checks },
+    steps: [],
+  });
+
+  it("accepts the upgraded example as it is, and v1 input comes back as v2", () => {
+    const spec = v2Spec();
+
+    expect(validateSpec(spec)).toEqual({ ok: true, spec });
+    expect(validateSpec(exampleSpec())).toMatchObject({ ok: true, spec: { specVersion: 2 } });
+  });
+
+  it("refuses a branch check on a step that isn't a classify above the branch, or a label it lacks", () => {
+    const later = path([{ classify: "prices", is: "yes", minP: 0.5 }]);
+    const missing = path([{ classify: "classify", is: "maybe", minP: 0.5 }]);
+
+    expect(issuePaths(branchWith({ paths: [later] }))).toEqual([
+      ["steps", 1, "paths", 0, "condition", "checks", 0, "classify"],
+    ]);
+    expect(issuePaths(branchWith({ paths: [missing] }))).toEqual([
+      ["steps", 1, "paths", 0, "condition", "checks", 0, "is"],
+    ]);
+  });
+
+  it("refuses a path ID a step or another path already has", () => {
+    const spec = branchWith({ otherwise: { id: "classify", steps: [] } });
+
+    expect(issuePaths(spec)).toEqual([["steps", 1, "otherwise", "id"]]);
+  });
+
+  it("types a check's value by its operator", () => {
+    const checks = [
+      { subject: { from: "trigger.subject" }, op: "contains", value: "quote" },
+      { subject: { from: "trigger.subject" }, op: "more_than", value: "five" },
+      { subject: { from: "trigger.has_attachment" }, op: "is_yes", value: true },
+    ];
+
+    expect(issuePaths(branchWith({ paths: [path(checks)] }))).toEqual([
+      ["steps", 1, "paths", 0, "condition", "checks", 1],
+      ["steps", 1, "paths", 0, "condition", "checks", 2],
+    ]);
+  });
+
+  it("accepts every match", () => {
+    const classify = { classify: "classify", is: "yes", minP: 0.5 };
+    const spec = branchWith({
+      mode: "every",
+      paths: [path([classify]), { ...path([classify]), id: "other" }],
+    });
+
+    expect(validateSpec(spec)).toMatchObject({ ok: true });
+  });
+});
+
 function issuePaths(spec: unknown) {
   const result = validateSpec(spec);
   if (result.ok) throw new Error("expected the spec to be refused");

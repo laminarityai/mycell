@@ -1,13 +1,15 @@
 // A "Try it" result: each step with what it did, read or would have written, and the total
 // cost. The draft's text and the rows read are shown here and nowhere else (invariant 8).
 import { Badge } from "@/components/ui/badge";
-import type { DryRunEffect, DryRunResult, DryRunStep } from "../types";
+import type { BranchPath, DryRunEffect, DryRunResult, DryRunStep } from "../types";
 
 const ENDINGS: Record<DryRunResult["ended"], string> = {
   succeeded: "Ran to the end.",
   skipped: "Stopped at a branch: the workflow would do nothing more with this message.",
   escalated: "Escalated: the workflow would hand this message to a person.",
   failed: "Failed at the step marked below.",
+  partly_failed:
+    "Partly failed: the step marked below failed and ended its own path, and the other paths ran on.",
 };
 
 /** Rows of a read range shown, at most. */
@@ -17,7 +19,14 @@ function usd(amount: number): string {
   return `$${amount.toFixed(4)}`;
 }
 
-export function TryItResult({ result }: { result: DryRunResult }) {
+/** `onGraph` when the page's workflow graph shows each path's result, so the list needn't. */
+export function TryItResult({
+  result,
+  onGraph = false,
+}: {
+  result: DryRunResult;
+  onGraph?: boolean;
+}) {
   return (
     <section aria-label="Try it result" className="flex flex-col gap-3">
       <p className="text-sm">
@@ -39,7 +48,7 @@ export function TryItResult({ result }: { result: DryRunResult }) {
                 <span className="text-xs text-muted-foreground">{usd(step.costUsd)}</span>
               ) : null}
             </div>
-            <StepOutcome step={step} />
+            <StepOutcome step={step} onGraph={onGraph} />
           </li>
         ))}
       </ol>
@@ -47,7 +56,7 @@ export function TryItResult({ result }: { result: DryRunResult }) {
   );
 }
 
-function StepOutcome({ step }: { step: DryRunStep }) {
+function StepOutcome({ step, onGraph }: { step: DryRunStep; onGraph: boolean }) {
   if (step.error !== null) {
     return <p className="text-destructive">{step.error.message}</p>;
   }
@@ -62,13 +71,60 @@ function StepOutcome({ step }: { step: DryRunStep }) {
       </p>
     );
   }
+  if (step.type === "branch" && step.paths !== undefined) {
+    if (!onGraph) return <BranchPaths paths={step.paths} />;
+    const taken = step.paths.flatMap((path) =>
+      path.status === "taken" ? [path.name ?? "Otherwise"] : [],
+    );
+    return (
+      <p>
+        Took {taken.length === 0 ? "no path" : taken.join(", ")}. The graph shows why each path did
+        or didn&apos;t run.
+      </p>
+    );
+  }
   if (step.type === "branch") {
-    return <p>{output.passed === true ? "Condition met: went on." : "Condition not met."}</p>;
+    const taken = Array.isArray(output.taken) ? output.taken.map(String) : [];
+    return <p>Took the path {taken.join(", ")}.</p>;
   }
   return (
     <code className="font-mono text-xs wrap-anywhere text-muted-foreground">
       {JSON.stringify(output)}
     </code>
+  );
+}
+
+const PATH_STATUSES: Record<BranchPath["status"], string> = {
+  taken: "Ran",
+  not_taken: "Didn't apply",
+  not_checked: "Not checked: an earlier path ran",
+  not_needed: "Not needed: another path applied",
+};
+
+/** Each path out of the branch, and why each check passed or failed, values included. */
+function BranchPaths({ paths }: { paths: BranchPath[] }) {
+  return (
+    <ul aria-label="Paths" className="flex flex-col gap-2">
+      {paths.map((path) => (
+        <li key={path.id} className="flex flex-col gap-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <strong>{path.name ?? "Otherwise"}</strong>
+            <Badge variant={path.status === "taken" ? "default" : "outline"}>
+              {PATH_STATUSES[path.status]}
+            </Badge>
+          </div>
+          {path.checks.length === 0 ? null : (
+            <ul className="flex flex-col gap-0.5 pl-4 text-muted-foreground">
+              {path.checks.map((check, index) => (
+                <li key={index}>
+                  {check.passed ? "Passed" : "Failed"}: {check.check}. It {check.reason}.
+                </li>
+              ))}
+            </ul>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }
 

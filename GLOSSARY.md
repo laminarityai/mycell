@@ -104,7 +104,7 @@ A step where a workflow splits into paths, each with its own condition, plus an 
 _Avoid_: Fork, switch, router, if-step
 
 **Path**:
-One route out of a branch: the steps a message follows when that path's condition holds. Paths never join back up.
+One way out of a branch: the steps a message follows when that path's condition holds. Paths never join back up.
 _Avoid_: Lane, route, arm
 
 **Otherwise path**:

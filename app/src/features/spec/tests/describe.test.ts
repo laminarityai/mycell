@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { describeSpec } from "../describe";
+import { describePathTo, describeSpec } from "../describe";
 import type { Spec } from "../types";
 import { validateSpec } from "../validate";
 import { exampleSpec } from "./example-spec";
+import { pathOf, triageSpec } from "./triage-spec";
 
 function parsed(input: unknown): Spec {
   const result = validateSpec(input);
@@ -42,6 +43,60 @@ describe("describeSpec", () => {
     ]);
   });
 
+  it("says in plain words that an every-match branch runs each path that applies", () => {
+    const spec = triageSpec();
+    spec.steps[2] = {
+      ...spec.steps[2],
+      mode: "every",
+      paths: [
+        pathOf("urgent", [{ subject: { from: "details.urgent" }, op: "is_yes" }]),
+        pathOf("pricing", [{ classify: "kind", is: "pricing", minP: 0.85 }]),
+      ],
+    };
+
+    const route = describeSpec(parsed(spec)).find((step) => step.id === "route");
+
+    expect(route?.text).toBe(
+      `Every match: runs each path that applies, one after another, left to right: "urgent" if whether they say it's urgent is yes; "pricing" if "kind" says "pricing" with at least 85% confidence; if none applies, stops.`,
+    );
+  });
+
+  it("names what each check tests in plain words, never as a reference", () => {
+    const spec = triageSpec();
+    spec.steps.splice(2, 0, {
+      id: "thread",
+      type: "tool",
+      action: "google-mail.read-thread",
+      input: { threadId: { from: "trigger.threadId" } },
+    });
+    spec.steps[3] = {
+      ...spec.steps[3],
+      paths: [
+        pathOf("big", [
+          { subject: { from: "details.total" }, op: "more_than", value: 1000 },
+          { subject: { from: "trigger.senderDomain" }, op: "is", value: "acme.test" },
+          { subject: { from: "thread.messageCount" }, op: "at_least", value: 3 },
+        ]),
+      ],
+    };
+    const action = (name: string) =>
+      name === "google-mail.read-thread"
+        ? {
+            risk: "read",
+            description: "Read the thread a message belongs to.",
+            conditionFields: [
+              { name: "messageCount", type: "number" as const, label: "The number of messages" },
+            ],
+          }
+        : undefined;
+
+    const route = describeSpec(parsed(spec), { action }).find((step) => step.id === "route");
+
+    expect(route?.text).toBe(
+      'Goes on only if the order total is more than 1000 and the sender\'s domain is "acme.test" and the number of messages is at least 3; otherwise stops.',
+    );
+  });
+
   it("marks the steps that wait for a review, and those the policy engine added", () => {
     const spec = parsed(exampleSpec());
 
@@ -55,5 +110,36 @@ describe("describeSpec", () => {
       waitsForReview: false,
       requiredByPolicy: false,
     });
+  });
+});
+
+describe("describePathTo", () => {
+  it("names a step's path after the paths it's nested in, an otherwise path as Otherwise", () => {
+    const spec = triageSpec();
+    spec.steps[2] = {
+      ...spec.steps[2],
+      paths: [
+        pathOf(
+          "pricing",
+          [{ classify: "kind", is: "pricing", minP: 0.8 }],
+          [
+            {
+              id: "size",
+              type: "branch",
+              paths: [pathOf("huge", [{ classify: "kind", is: "pricing", minP: 0.9 }])],
+              otherwise: {
+                id: "small",
+                steps: [{ id: "look", type: "escalate", reason: "Look." }],
+              },
+            },
+          ],
+        ),
+      ],
+    };
+    const parsedSpec = parsed(spec);
+
+    expect(describePathTo(parsedSpec, "look")).toBe("pricing › Otherwise");
+    expect(describePathTo(parsedSpec, "size")).toBe("pricing");
+    expect(describePathTo(parsedSpec, "kind")).toBeNull();
   });
 });

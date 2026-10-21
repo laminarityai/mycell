@@ -9,6 +9,7 @@ import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import { fakeInngest } from "@/testing/fake-inngest";
 import { fakeNango } from "@/testing/fake-nango";
 import { executeRun, getRun, listRuns, startRun } from "../server";
+import type { RunStep } from "../types";
 import {
   connectInbox,
   pricingQuestion,
@@ -70,7 +71,12 @@ describe("executeRun", () => {
         modelId: "typesafe-ai/jev-1.14.0",
         costUsd: 0.0002,
       },
-      { stepId: "gate", type: "branch", status: "succeeded", output: { passed: true } },
+      {
+        stepId: "gate",
+        type: "branch",
+        status: "succeeded",
+        output: { taken: ["gate-yes"], paths: [{ id: "gate-yes", holds: true, checks: [true] }] },
+      },
       {
         stepId: "thread",
         type: "tool",
@@ -132,6 +138,28 @@ describe("executeRun", () => {
     expect(runner.ids).toEqual([]);
   });
 
+  it("keeps when a run finished when a retry that began before then finishes it again", async () => {
+    const { admin, system, runId } = await adminRun();
+    fakeAiGateway.decision({ choice: "yes", probabilities: { yes: 0.9, no: 0.1 } }, { costUsd: 0 });
+    const runner = recordingStepRunner();
+    let finishedFirst: Date | null = null;
+    // A retry that read the run as running, then finishes after another invocation finished it.
+    const retried: RunStep = async (id, run) => {
+      const result = await runner.runStep(id, run);
+      if (id === "thread" && finishedFirst === null) {
+        await executeRun(system, runId, runner.runStep);
+        finishedFirst = (await getRun(admin, runId)).finishedAt;
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+      return result;
+    };
+
+    expect(await executeRun(system, runId, retried)).toEqual({ status: "succeeded" });
+
+    expect(finishedFirst).not.toBeNull();
+    expect((await getRun(admin, runId)).finishedAt).toEqual(finishedFirst);
+  });
+
   it("ends cancelled when the connection is deleted mid-run, taking the run with it", async () => {
     const { admin, system, inbox, workflowId, runId } = await adminRun();
     fakeAiGateway.decision({ choice: "yes", probabilities: { yes: 0.9, no: 0.1 } }, { costUsd: 0 });
@@ -178,7 +206,10 @@ describe("executeRun", () => {
     expect(run.status).toBe("skipped");
     expect(run.steps.map((step) => [step.stepId, step.output])).toEqual([
       ["classify", { label: "yes", p: 0.6, fallback: false }],
-      ["gate", { passed: false }],
+      [
+        "gate",
+        { taken: ["gate-otherwise"], paths: [{ id: "gate-yes", holds: false, checks: [false] }] },
+      ],
     ]);
   });
 });

@@ -5,6 +5,7 @@ import { isUniqueViolation } from "@/db/errors";
 import { forOrg } from "@/db/for-org";
 import { applyPolicy } from "@/features/policy/engine";
 import { sameValue } from "@/features/spec/diff";
+import { readStoredSpec } from "@/features/spec/stored";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { ConflictError, ValidationError } from "@/lib/errors";
 import type {
@@ -111,7 +112,8 @@ export async function getWorkflow(ctx: Ctx, workflowId: string): Promise<Workflo
     workingSpec: row.workingSpec,
     revision: row.revision,
     // Versions hold the spec after the policy engine, so compare it with the working one's.
-    unpublishedChanges: latest === undefined || !policy.ok || !sameValue(latest.spec, policy.spec),
+    unpublishedChanges:
+      latest === undefined || !policy.ok || !sameValue(readStoredSpec(latest.spec), policy.spec),
     maxRisk: policy.ok ? policy.maxRisk : null,
     inserted: policy.ok ? policy.inserted : [],
     versions: versions.map(versionSummary),

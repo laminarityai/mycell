@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { eachStep } from "@/features/spec/tree";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { disconnect, listConnections } from "@/features/connections/server";
@@ -39,7 +40,7 @@ describe("saveWorkflow", () => {
       maxRisk: "external_send",
       versions: [],
     });
-    expect(workflow.workingSpec.steps.map((step) => step.id)).toEqual([
+    expect(eachStep(workflow.workingSpec).map(({ step }) => step.id)).toEqual([
       "classify",
       "gate",
       "reply",
@@ -225,7 +226,7 @@ describe("publishWorkflow", () => {
       requiredActions: ["google-mail.create-draft"],
       publishedBy: orgA.admin.id,
     });
-    expect(first.spec.steps.map((step) => step.id)).toEqual([
+    expect(eachStep(first.spec).map(({ step }) => step.id)).toEqual([
       "classify",
       "gate",
       "reply",

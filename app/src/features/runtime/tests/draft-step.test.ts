@@ -54,7 +54,7 @@ function replySpec(): Record<string, unknown> {
   };
 }
 
-async function replyRun() {
+async function replyRun(spec = replySpec()) {
   const { orgA } = await seedTwoOrgs();
   const admin = orgA.admin.ctx;
   const system = systemCtx(orgA.id);
@@ -63,7 +63,7 @@ async function replyRun() {
     pricingQuestion({ from: "Ada Lovelace <ada@customer.test>", subject: SUBJECT, text: BODY }),
   ]);
   const message = inbox.messages[0];
-  const workflowId = await publish(admin, replySpec());
+  const workflowId = await publish(admin, spec);
   const { runId } = await startRun(admin, workflowId, inbox.connectionId, message.id);
   fakeAiGateway.decision({ choice: "yes", probabilities: { yes: 0.95, no: 0.05 } }, { costUsd: 0 });
   return { admin, system, mailbox: inbox.mailbox, message, workflowId, runId };
@@ -175,6 +175,27 @@ describe("the draft step", () => {
       attempts: 2,
       output: { draftId: mailbox.drafts()[0]?.id },
     });
+  });
+
+  it("records at each approval every draft above it, as a v1 workflow did", async () => {
+    const spec = replySpec();
+    const steps = spec.steps as Record<string, unknown>[];
+    steps.push(
+      { ...steps[2], id: "follow-up", instructions: "Offer a call." },
+      { id: "approve-again", type: "approval", channel: "gmail_drafts" },
+    );
+    const { admin, system, mailbox, runId } = await replyRun(spec);
+    fakeAiGateway.text(REPLY, { costUsd: 0 });
+    fakeAiGateway.text("Happy to talk it over on a call.", { costUsd: 0 });
+
+    expect(await executeRun(system, runId)).toEqual({ status: "succeeded" });
+
+    const [first, second] = mailbox.drafts().map((draft) => draft.id);
+    const approvals = (await getRun(admin, runId)).steps.filter((step) => step.type === "approval");
+    expect(approvals.map((step) => [step.stepId, step.output])).toEqual([
+      ["approve", { awaiting: "human", channel: "gmail_drafts", draftIds: [first] }],
+      ["approve-again", { awaiting: "human", channel: "gmail_drafts", draftIds: [first, second] }],
+    ]);
   });
 
   it("keeps the draft's text, the subject and the body out of the run's records and step state", async () => {

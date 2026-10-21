@@ -9,17 +9,29 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { blankSpec } from "./lib/blank-spec";
+import { GraphTraceProvider, useGraphTrace, useShowOnGraph } from "./lib/graph-trace";
 import { RiskBadge } from "./lib/risk-badge";
 import { SpecEditor } from "./lib/spec-editor";
 import { SwitchForm, type SwitchConnectionOption } from "./lib/switch-form";
 import { PublishButton } from "./lib/workflow-editor";
-import type { EditorConnection, WorkflowDetails, WorkflowSummary, WorkflowSwitch } from "./types";
+import { WorkflowGraph, type WorkflowGraphProps } from "./lib/workflow-graph";
+import { WorkingSpecEditor, type EditableWorkflow } from "./lib/working-spec-editor";
+import type { WorkflowDetails, WorkflowSummary, WorkflowSwitch } from "./types";
 
-export { RiskBadge };
+export {
+  GraphTraceProvider,
+  RiskBadge,
+  useGraphTrace,
+  useShowOnGraph,
+  WorkflowGraph,
+  WorkingSpecEditor,
+  type EditableWorkflow,
+  type WorkflowGraphProps,
+};
 
 /** A new workflow's editor, starting from a spec with no steps. */
-export function NewWorkflowEditor({ connections }: { connections: EditorConnection[] }) {
-  return <SpecEditor spec={blankSpec()} maxRisk={null} inserted={[]} connections={connections} />;
+export function NewWorkflowEditor() {
+  return <SpecEditor spec={blankSpec()} maxRisk={null} />;
 }
 
 /**
@@ -105,16 +117,10 @@ function SwitchBadge({ current }: { current: WorkflowSwitch | null }) {
 }
 
 /**
- * One workflow: its working spec in the editor (form or JSON, validated live), then Publish and
- * its versions. The editor starts again from each save's revision.
+ * One workflow: its working spec in the editor (a graph or JSON, validated live), then Publish
+ * and its versions. The editor starts again from each save's revision.
  */
-export function WorkflowEditor({
-  workflow,
-  connections,
-}: {
-  workflow: WorkflowDetails;
-  connections: EditorConnection[];
-}) {
+export function WorkflowEditor({ workflow }: { workflow: WorkflowDetails }) {
   const latest = workflow.versions.at(0);
   return (
     <div className="flex flex-col gap-6">
@@ -125,8 +131,6 @@ export function WorkflowEditor({
         spec={workflow.workingSpec}
         revision={workflow.revision}
         maxRisk={workflow.maxRisk}
-        inserted={workflow.inserted}
-        connections={connections}
       />
       <section className="flex flex-col gap-2" aria-label="Versions">
         <h2 className="text-lg font-semibold">Versions</h2>

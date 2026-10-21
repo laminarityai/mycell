@@ -1,30 +1,38 @@
 // The interpreter: executes a recorded run's pinned workflow version, one spec step per
 // RunStep under the step's own ID, so Inngest memoizes each and a retry never repeats a
-// finished one (ADR-0006). Each step checks first that the run may go on, tries its work up to
-// the retry policy's attempts, records itself, and ends the run when it's the step that ends
-// it. A step hands on derived data only; content stays inside the step that fetched it.
-import { eq } from "drizzle-orm";
+// finished one (ADR-0006). The step walker decides which step runs next. Each step checks
+// first that the run may go on, tries its work up to the retry policy's attempts, and records
+// itself; when the walk ends, the run's status is written once. A step hands on derived data
+// only; content stays inside the step that fetched it.
+import { and, eq } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { getConnection } from "@/features/connections/server";
 import type { Spec, Step } from "@/features/spec/types";
 import { getWorkflowVersion, listSwitchedOn } from "@/features/workflows/server";
 import type { Ctx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
-import type { Json, RetryPolicy, RunOutcome, RunStep } from "../types";
+import type { RetryPolicy, RunOutcome, RunStep } from "../types";
 import { actionExecutors } from "./actions";
-import { checked } from "./checks";
-import { stepExecutors } from "./executors";
-import { isConnectionGone, RunStepError, type Failure } from "./failures";
+import { attemptStep } from "./executors";
+import { isConnectionGone, type Failure } from "./failures";
 import { defaultRetryPolicy, runInline, withRetries } from "./run-step";
 import { findRun, stepsOf } from "./runs";
 import { runs, runSteps } from "./schema";
-import type { StepContext, StepExecution, StepRun } from "./step-context";
+import type { StepContext, StepExecution } from "./step-context";
+import { walkSteps, type StepEnding, type StepPlace, type WalkedStep } from "./walk";
 
 type Run = NonNullable<Awaited<ReturnType<typeof findRun>>>;
 type Ended = RunOutcome["status"];
 
-/** One step's result as the step state keeps it: whether it ended the run, and its output. */
-type StepResult = { ended: Ended | null; output: Json };
+/** One step's result as the step state keeps it: whether it ended its path, and its output. */
+type StepResult = WalkedStep<StepEnding>;
+
+/**
+ * The run can't go on: its switch went off or its connection went. When the connection row is
+ * gone, the run went with it and there is nothing to record; when only Nango lost it, the run
+ * row stays and shows `cancelled`.
+ */
+const CANCELLED: StepResult = { ended: "cancelled", output: null };
 
 /**
  * Executes the run, as its org's system ctx (ADR-0009). Without a step runner each step runs
@@ -42,76 +50,49 @@ export async function executeRun(
   if (run.status !== "running") return { status: run.status };
   const { spec } = await getWorkflowVersion(ctx, run.workflowVersionId);
 
-  const outputs: Record<string, Json> = {};
-  for (const [position, step] of spec.steps.entries()) {
-    const isLast = position === spec.steps.length - 1;
-    const result = await runStep(step.id, () =>
-      executeStep(ctx, run, step, { spec, position, isLast, outputs, retry }),
-    );
-    if (result.ended !== null) return { status: result.ended };
-    outputs[step.id] = result.output;
-  }
-  return { status: "succeeded" };
+  const status = await walkSteps(spec, (step, place) =>
+    runStep(step.id, () => executeStep(ctx, run, step, { ...place, spec, retry })),
+  );
+  // The one place a run's status is written, once the walk has ended. It's outside any step,
+  // so it writes only a run still running: a retry that replays the walk changes nothing.
+  await finishRun(ctx, run.id, status);
+  return { status };
 }
 
-type StepPlace = {
-  spec: Spec;
-  position: number;
-  isLast: boolean;
-  outputs: Record<string, Json>;
-  retry: RetryPolicy;
-};
+type RunPlace = StepPlace & { spec: Spec; retry: RetryPolicy };
 
-async function executeStep(ctx: Ctx, run: Run, step: Step, place: StepPlace): Promise<StepResult> {
+async function executeStep(ctx: Ctx, run: Run, step: Step, place: RunPlace): Promise<StepResult> {
   const startedAt = new Date();
-  if (!(await mayGoOn(ctx, run))) return cancel(ctx, run);
+  if (!(await mayGoOn(ctx, run))) return CANCELLED;
   const context: StepContext = {
     ctx,
     run: { id: run.id, connectionId: run.connectionId, sourceRef: run.sourceRef },
     attribution: { workflowId: run.workflowId, runId: run.id },
     spec: place.spec,
-    outputs: { ...place.outputs },
+    outputs: place.outputs,
     actions: actionExecutors,
   };
-  const attempted = await withRetries(place.retry, () => attempt(step, context));
+  const attempted = await withRetries(place.retry, () => attemptStep(step, context));
   try {
     if (!attempted.ok) {
-      if (attempted.failure.runStatus === "cancelled") return await cancel(ctx, run);
+      if (attempted.failure.runStatus === "cancelled") return CANCELLED;
       await recordStep(ctx, run, step, place.position, startedAt, attempted, {
         failure: attempted.failure,
       });
-      await finishRun(ctx, run.id, "failed");
-      return { ended: "failed", output: null };
+      // A failure ends its own path; out of credits, every path would meet it, so the run.
+      const endsRun = attempted.failure.code === "out_of_credits";
+      return { ended: "failed", output: null, endsRun };
     }
     const execution = attempted.value;
     await recordStep(ctx, run, step, place.position, startedAt, attempted, {
       execution,
     });
-    const ended =
-      execution.next === "continue" ? (place.isLast ? "succeeded" : null) : execution.next;
-    if (ended !== null) await finishRun(ctx, run.id, ended);
+    const ended = execution.next === "continue" ? null : execution.next;
     return { ended, output: execution.output };
   } catch (error) {
-    if (isConnectionGone(error)) return { ended: "cancelled", output: null };
+    if (isConnectionGone(error)) return CANCELLED;
     throw error;
   }
-}
-
-/**
- * Ends the run cancelled. When the connection row is gone, the run went with it and there is
- * nothing to record; when only Nango lost it, the run row stays and shows `cancelled`.
- */
-async function cancel(ctx: Ctx, run: Run): Promise<StepResult> {
-  await finishRun(ctx, run.id, "cancelled");
-  return { ended: "cancelled", output: null };
-}
-
-function attempt(step: Step, context: StepContext): Promise<StepExecution> {
-  const executor = stepExecutors[step.type];
-  if (executor.status === "pending") {
-    throw new RunStepError("not_available", `The ${step.type} step isn't available yet.`);
-  }
-  return checked(step, () => (executor.run as StepRun<Step>)(step, context));
 }
 
 /**
@@ -181,8 +162,13 @@ async function recordStep(
   await forOrg(ctx).insert(runSteps, values, { onConflictDoNothing: true });
 }
 
+/** Ends a run still running; one an earlier invocation already ended is left as it was. */
 async function finishRun(ctx: Ctx, runId: string, status: Ended): Promise<void> {
   const steps = await stepsOf(ctx, [runId]);
   const costUsd = steps.reduce((sum, step) => sum + step.costUsd, 0);
-  await forOrg(ctx).update(runs, { status, costUsd, finishedAt: new Date() }, eq(runs.id, runId));
+  await forOrg(ctx).update(
+    runs,
+    { status, costUsd, finishedAt: new Date() },
+    and(eq(runs.id, runId), eq(runs.status, "running")),
+  );
 }

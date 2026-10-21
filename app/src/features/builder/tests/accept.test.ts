@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { eachStep } from "@/features/spec/tree";
+import { upgradeSpec } from "@/features/spec/upgrade";
+import { specV1Schema } from "@/features/spec/v1";
+import { validateSpec } from "@/features/spec/validate";
 import { resetDatabase } from "@/db/testing/reset";
+import { seedV1Proposal } from "@/db/testing/seed-proposal";
+import { seedV1Workflow, storedWorkingSpec } from "@/db/testing/seed-workflow";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import {
   getWorkflow,
@@ -19,7 +25,7 @@ import {
   streamTurn,
 } from "../server";
 import { proposeInTurn } from "./proposal-helpers";
-import { draftSpec, labelSpec } from "./specs";
+import { draftSpec, labelSpec, triageSpec } from "./specs";
 import { fundOrg, readTurn } from "./turn-helpers";
 
 beforeEach(resetDatabase);
@@ -47,6 +53,19 @@ async function proposedChange() {
   return { orgA, admin, workflowId, version, conversationId, proposal };
 }
 
+describe("this suite's v1 fixtures", () => {
+  it("each upgrade to a valid v2 spec with the same step IDs, and once is enough", () => {
+    for (const raw of [draftSpec(), labelSpec()]) {
+      const v1 = specV1Schema.parse(raw);
+      const spec = upgradeSpec(v1);
+
+      expect(validateSpec(spec)).toEqual({ ok: true, spec });
+      expect(eachStep(spec).map(({ step }) => step.id)).toEqual(v1.steps.map((step) => step.id));
+      expect(upgradeSpec(spec)).toEqual(spec);
+    }
+  });
+});
+
 describe("acceptProposal", () => {
   it("creates a new workflow, unpublished, and links the conversation to it", async () => {
     const { admin } = await setUp();
@@ -58,7 +77,7 @@ describe("acceptProposal", () => {
 
     const workflow = await getWorkflow(admin, workflowId);
     expect(workflow).toMatchObject({ name: "Pricing replies", versions: [] });
-    expect(workflow.workingSpec.steps.map((step) => step.id)).toEqual([
+    expect(eachStep(workflow.workingSpec).map(({ step }) => step.id)).toEqual([
       "classify",
       "gate",
       "reply",
@@ -71,12 +90,13 @@ describe("acceptProposal", () => {
 
   it("changes an existing workflow's working spec, not its published version", async () => {
     const { admin, workflowId, version, proposal, conversationId } = await proposedChange();
-    expect(proposal.steps.find((step) => step.id === "label")).toMatchObject({ change: "removed" });
+    const steps = proposal.groups.flatMap((group) => group.steps);
+    expect(steps.find((step) => step.id === "label")).toMatchObject({ change: "removed" });
 
     await acceptProposal(admin, proposal.id);
 
     const workflow = await getWorkflow(admin, workflowId);
-    expect(workflow.workingSpec.steps.map((step) => step.id)).toEqual([
+    expect(eachStep(workflow.workingSpec).map(({ step }) => step.id)).toEqual([
       "classify",
       "gate",
       "reply",
@@ -114,6 +134,72 @@ describe("acceptProposal", () => {
     await rejectProposal(admin, proposal.id);
 
     await expect(acceptProposal(admin, proposal.id)).rejects.toThrow(ConflictError);
+  });
+});
+
+describe("a proposal stored before paths", () => {
+  it("shows grouped by path, and is accepted as v2 with the same step IDs", async () => {
+    const { orgA, admin } = await setUp();
+    const base = specV1Schema.parse(labelSpec({ id: "pricing-replies" }));
+    const { workflowId } = await seedV1Workflow({
+      orgId: orgA.id,
+      createdBy: orgA.admin.id,
+      name: "Pricing",
+      workingSpec: base,
+    });
+    const { id: conversationId } = await startConversation(admin, { workflowId });
+    const { proposalId } = await seedV1Proposal({
+      orgId: orgA.id,
+      conversationId,
+      workflowId,
+      name: "Pricing",
+      baseRevision: (await getWorkflow(admin, workflowId)).revision,
+      baseSpec: base,
+      spec: specV1Schema.parse(draftSpec()),
+      maxRisk: "external_send",
+    });
+
+    const proposal = (await listProposals(admin, conversationId)).at(0);
+    expect(proposal?.groups.map((group) => group.path?.name ?? null)).toEqual([
+      null,
+      "yes",
+      "Otherwise",
+    ]);
+
+    await acceptProposal(admin, proposalId);
+
+    expect(await storedWorkingSpec(workflowId)).toMatchObject({ specVersion: 2 });
+    const workflow = await getWorkflow(admin, workflowId);
+    expect(eachStep(workflow.workingSpec).map(({ step }) => step.id)).toEqual([
+      "classify",
+      "gate",
+      "reply",
+    ]);
+    expect((await listProposals(admin, conversationId)).at(0)?.status).toBe("accepted");
+  });
+});
+
+describe("a branching proposal", () => {
+  it("made against an older working spec is refused and marked stale", async () => {
+    const { admin } = await setUp();
+    const { id: workflowId } = await saveWorkflow(admin, { name: "Triage", spec: triageSpec() });
+    const { id: conversationId } = await startConversation(admin, { workflowId });
+    const proposed = triageSpec() as { steps: Record<string, unknown>[] };
+    const route = proposed.steps[2] as { paths: Record<string, unknown>[] };
+    route.paths = route.paths.filter((path) => path.id !== "big");
+    await proposeInTurn(admin, conversationId, [proposed]);
+    const proposal = (await listProposals(admin, conversationId)).at(0);
+    await saveWorkflow(admin, {
+      workflowId,
+      name: "Triage",
+      spec: { ...triageSpec(), autonomy: { rung: 0 } },
+    });
+    const before = await getWorkflow(admin, workflowId);
+
+    await expect(acceptProposal(admin, proposal?.id ?? "")).rejects.toThrow(ConflictError);
+
+    expect(await getWorkflow(admin, workflowId)).toEqual(before);
+    expect((await listProposals(admin, conversationId)).at(0)?.status).toBe("stale");
   });
 });
 

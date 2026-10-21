@@ -1,0 +1,167 @@
+// Evaluating a branch's conditions on the outputs above it (ADR-0015). Each check's result
+// carries a reason, which may quote the value it tested (an extracted value, from the email):
+// Try it shows it to the admin, and nothing records or stores it (invariant 8).
+import { z } from "zod";
+import {
+  describeCheck,
+  subjectParts,
+  type SubjectWords,
+  type ValueCheck,
+} from "@/features/spec/conditions";
+import type { BranchStep, Check } from "@/features/spec/types";
+import type { BranchPath, CheckResult, Json } from "../types";
+import { RunStepError } from "./failures";
+
+type Outputs = Readonly<Record<string, Json>>;
+type Outcome = Omit<CheckResult, "check">;
+
+/** Which paths a branch takes, and how each path's condition went. */
+export type BranchChoice = { taken: string[]; paths: BranchPath[] };
+
+/**
+ * First match: checks the paths left to right until one's condition holds, and takes it, or
+ * the otherwise path when none does. Paths after the one taken aren't checked. `words` names
+ * what each check tests, as the spec's editor labels it.
+ */
+export function chooseFirstMatch(
+  branch: BranchStep,
+  outputs: Outputs,
+  words?: SubjectWords,
+): BranchChoice {
+  const paths: BranchPath[] = [];
+  let taken: string | undefined;
+  for (const path of branch.paths) {
+    if (taken !== undefined) {
+      paths.push({ id: path.id, name: path.name, status: "not_checked", checks: [] });
+      continue;
+    }
+    const checked = checkedPath(path, outputs, words);
+    if (checked.status === "taken") taken = path.id;
+    paths.push(checked);
+  }
+  const otherwise = branch.otherwise.id;
+  const status = taken === undefined ? "taken" : "not_needed";
+  paths.push({ id: otherwise, name: null, status, checks: [] });
+  return { taken: [taken ?? otherwise], paths };
+}
+
+/**
+ * Every match: checks every path, left to right, and takes each whose condition holds, in that
+ * order, or the otherwise path when none does.
+ */
+export function chooseEveryMatch(
+  branch: BranchStep,
+  outputs: Outputs,
+  words?: SubjectWords,
+): BranchChoice {
+  const paths = branch.paths.map((path) => checkedPath(path, outputs, words));
+  const taken = paths.filter((path) => path.status === "taken").map((path) => path.id);
+  const otherwise = branch.otherwise.id;
+  const status = taken.length === 0 ? "taken" : "not_needed";
+  paths.push({ id: otherwise, name: null, status, checks: [] });
+  return { taken: taken.length === 0 ? [otherwise] : taken, paths };
+}
+
+/** A path with each of its checks' outcomes, taken when its condition holds. */
+function checkedPath(
+  path: BranchStep["paths"][number],
+  outputs: Outputs,
+  words: SubjectWords | undefined,
+): BranchPath {
+  const checks = path.condition.checks.map((check): CheckResult => ({
+    check: describeCheck(check, words),
+    ...outcome(check, outputs),
+  }));
+  const passed = checks.map((check) => check.passed);
+  const holds = path.condition.combine === "all" ? passed.every(Boolean) : passed.some(Boolean);
+  return { id: path.id, name: path.name, status: holds ? "taken" : "not_taken", checks };
+}
+
+/** Whether the check passes on the outputs above its branch, and why. */
+function outcome(check: Check, outputs: Outputs): Outcome {
+  if ("classify" in check) {
+    const answer = classification(outputs[check.classify]);
+    if (answer === undefined) {
+      throw new RunStepError("bad_reference", `The step ${check.classify} has no classification.`);
+    }
+    const passed = answer.label === check.is && answer.p >= check.minP;
+    const sure = `${String(Math.round(answer.p * 100))}% sure`;
+    return { passed, reason: `said ${JSON.stringify(answer.label)}, ${sure}` };
+  }
+  return valueResult(check, subjectValue(check.subject.from, outputs));
+}
+
+function valueResult(check: ValueCheck, value: Json | undefined): Outcome {
+  const missing =
+    value === undefined || value === null || (typeof value === "string" && value.trim() === "");
+  if (check.op === "is_empty" || check.op === "is_not_empty") {
+    return { passed: missing === (check.op === "is_empty"), reason: shown(value) };
+  }
+  if (missing) return { passed: false, reason: "had no value" };
+  return { passed: holds(check, value), reason: shown(value) };
+}
+
+/** Text ignores case and surrounding spaces; a value of the wrong type fails the check. */
+function holds(check: ValueCheck, value: Json): boolean {
+  switch (check.op) {
+    case "is_yes":
+    case "is_no":
+      return value === (check.op === "is_yes");
+    case "equals":
+      return typeof value === "number" && value === check.value;
+    case "does_not_equal":
+      return typeof value === "number" && value !== check.value;
+    case "more_than":
+      return typeof value === "number" && value > check.value;
+    case "less_than":
+      return typeof value === "number" && value < check.value;
+    case "at_least":
+      return typeof value === "number" && value >= check.value;
+    case "at_most":
+      return typeof value === "number" && value <= check.value;
+    case "is_empty":
+    case "is_not_empty":
+      return false;
+  }
+  if (typeof value !== "string") return false;
+  const text = normal(value);
+  const wanted = normal(check.value);
+  switch (check.op) {
+    case "is":
+      return text === wanted;
+    case "is_not":
+      return text !== wanted;
+    case "contains":
+      return text.includes(wanted);
+    case "does_not_contain":
+      return !text.includes(wanted);
+    case "starts_with":
+      return text.startsWith(wanted);
+    case "ends_with":
+      return text.endsWith(wanted);
+  }
+}
+
+const normal = (text: string) => text.trim().toLocaleLowerCase("en");
+
+/** The value a check's subject names: an output's field above the branch. */
+function subjectValue(from: string, outputs: Outputs): Json | undefined {
+  const { source, field } = subjectParts(from);
+  const output = outputs[source];
+  // No output at all (a step that didn't run) is refused by typeof too.
+  if (output === null || typeof output !== "object" || Array.isArray(output)) {
+    throw new RunStepError("bad_reference", `The reference ${from} has no value.`);
+  }
+  return output[field];
+}
+
+function shown(value: Json | undefined): string {
+  if (value === undefined || value === null) return "had no value";
+  if (typeof value === "boolean") return value ? "was yes" : "was no";
+  return `was ${JSON.stringify(value)}`;
+}
+
+function classification(output: Json | undefined): { label: string; p: number } | undefined {
+  const parsed = z.object({ label: z.string(), p: z.number() }).safeParse(output);
+  return parsed.success ? parsed.data : undefined;
+}

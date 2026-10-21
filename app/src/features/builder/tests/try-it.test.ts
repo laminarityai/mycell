@@ -7,7 +7,7 @@ import { ValidationError } from "@/lib/errors";
 import { connectGoogle } from "@/testing/connect-helpers";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import { getConversation, startConversation, streamTurn, tryInConversation } from "../server";
-import { draftSpec, labelSpec } from "./specs";
+import { draftSpec, labelSpec, triageSpec } from "./specs";
 import { fundOrg, readTurn } from "./turn-helpers";
 
 beforeEach(resetDatabase);
@@ -106,6 +106,77 @@ describe("tryInConversation", () => {
       m.parts.flatMap((part) => (part.type === "try_it" ? part.lines : [])),
     );
     expect(lines).toContain("label (tool): would add a label from details.city.");
+  });
+
+  it("names the paths and each check's result in the spec's words, never a value it tested", async () => {
+    const { admin, google, message } = await setUp();
+    const { id: workflowId } = await saveWorkflow(admin, { name: "Triage", spec: triageSpec() });
+    const { id: conversationId } = await startConversation(admin, { workflowId });
+    fakeAiGateway.decision({
+      choice: "other",
+      probabilities: { complaint: 0.05, pricing: 0.05, other: 0.9 },
+    });
+    fakeAiGateway.object({ product: "Walnut desks", total: 2750 });
+
+    await tryInConversation(admin, conversationId, {
+      connectionId: google.id,
+      sourceRef: message.id,
+    });
+
+    const { messages } = await getConversation(admin, conversationId);
+    const lines = messages.flatMap((m) =>
+      m.parts.flatMap((part) => (part.type === "try_it" ? part.lines : [])),
+    );
+    expect(lines).toEqual(
+      expect.arrayContaining([
+        'route (branch): went on along "Big order".',
+        'route, path "Complaint": didn\'t apply. "kind" says "complaint" with at least 80% confidence: failed.',
+        'route, path "Big order": ran. what they ask about contains "walnut": passed; ' +
+          "the order total is more than 1000: passed.",
+      ]),
+    );
+    const stored = JSON.stringify(messages);
+    for (const value of ["Walnut desks", "2750", "90% sure"]) expect(stored).not.toContain(value);
+  });
+
+  it("says when an every-match run partly failed, naming every path it went along", async () => {
+    const { admin, google, message } = await setUp();
+    const spec = triageSpec();
+    const route = (spec.steps as Record<string, unknown>[])[2] as {
+      mode: string;
+      paths: { id: string; steps: unknown[] }[];
+    };
+    route.mode = "every";
+    route.paths[1].steps = [
+      {
+        id: "prices",
+        type: "tool",
+        action: "google-sheet.read-range",
+        input: { spreadsheetId: "no-such-sheet", range: "Prices!A1:C50" },
+      },
+    ];
+    const { id: workflowId } = await saveWorkflow(admin, { name: "Triage", spec });
+    const { id: conversationId } = await startConversation(admin, { workflowId });
+    fakeAiGateway.decision({
+      choice: "pricing",
+      probabilities: { complaint: 0.05, pricing: 0.9, other: 0.05 },
+    });
+    fakeAiGateway.object({ product: "Walnut desks", total: 2750 });
+
+    const { result } = await tryInConversation(admin, conversationId, {
+      connectionId: google.id,
+      sourceRef: message.id,
+    });
+
+    expect(result.ended).toBe("partly_failed");
+    const { messages } = await getConversation(admin, conversationId);
+    const lines = messages.flatMap((m) =>
+      m.parts.flatMap((part) => (part.type === "try_it" ? part.lines : [])),
+    );
+    expect(lines).toContain('route (branch): went on along "Pricing", "Big order".');
+    expect(lines.at(-1)).toBe(
+      "It partly failed: a step above failed and ended its own path, and the other paths ran on.",
+    );
   });
 
   it("needs the conversation to be about a workflow", async () => {

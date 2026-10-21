@@ -11,14 +11,14 @@ import type { ConnectionSummary } from "@/features/connections/types";
 import type { Spec, SpecIssue } from "@/features/spec/types";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError, SpecInvalidError, ValidationError } from "@/lib/errors";
-import type { Switch, SwitchedOn, WorkflowSwitch } from "../types";
+import type { Switch, SwitchedOn, WorkflowSwitch, WorkflowVersion } from "../types";
 import { enablements, workflows, workflowVersions } from "./schema";
 import { scopeIssues } from "./scope-check";
 import { reachesGmail } from "./validation";
+import { version } from "./versions";
 import { findWorkflow } from "./access";
 
 type Workflow = typeof workflows.$inferSelect;
-type Version = typeof workflowVersions.$inferSelect;
 
 /**
  * Switches the workflow on for `connectionId`, from now on: messages that arrived earlier start
@@ -213,18 +213,19 @@ function connectionIssues(spec: Spec, connection: ConnectionSummary): SpecIssue[
   return scopeIssues(spec, [connection]);
 }
 
+/** Each workflow's latest version, by workflow ID; none for a workflow never published. */
 export async function latestVersions(
   ctx: Ctx,
   workflowIds: string[],
-): Promise<Map<string, Version>> {
-  const latest = new Map<string, Version>();
+): Promise<Map<string, WorkflowVersion>> {
+  const latest = new Map<string, WorkflowVersion>();
   if (workflowIds.length === 0) return latest;
-  const versions = await forOrg(ctx).select(workflowVersions, {
+  const rows = await forOrg(ctx).select(workflowVersions, {
     where: inArray(workflowVersions.workflowId, workflowIds),
     orderBy: [desc(workflowVersions.number)],
   });
-  for (const version of versions) {
-    if (!latest.has(version.workflowId)) latest.set(version.workflowId, version);
+  for (const row of rows) {
+    if (!latest.has(row.workflowId)) latest.set(row.workflowId, version(row));
   }
   return latest;
 }

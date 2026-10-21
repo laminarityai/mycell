@@ -3,7 +3,9 @@
 import { gmailConnections, listConnections } from "@/features/connections/server";
 import type { ConnectionSummary } from "@/features/connections/types";
 import { applyPolicy } from "@/features/policy/engine";
+import { eachStep } from "@/features/spec/tree";
 import type { Spec, SpecIssue } from "@/features/spec/types";
+import { issuesAsWritten } from "@/features/spec/upgrade";
 import { validateSpec } from "@/features/spec/validate";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { SpecInvalidError } from "@/lib/errors";
@@ -33,12 +35,14 @@ export type SetupCheck = (spec: Spec, setup: OrgSetup) => SpecIssue[];
 export async function validateWorkflowSpec(ctx: Ctx, input: unknown): Promise<ValidatedSpec> {
   const parsed = validateSpec(input);
   if (!parsed.ok) throw new SpecInvalidError(parsed.issues);
+  // The spec past here is v2; issues about it point where the input wrote the field.
+  const refused = (issues: SpecIssue[]) => new SpecInvalidError(issuesAsWritten(input, issues));
   const policy = applyPolicy(parsed.spec);
-  if (!policy.ok) throw new SpecInvalidError(policy.issues);
+  if (!policy.ok) throw refused(policy.issues);
 
   const setup = await readSetup(ctx);
   const issues = SETUP_CHECKS.flatMap((check) => check(parsed.spec, setup));
-  if (issues.length > 0) throw new SpecInvalidError(issues);
+  if (issues.length > 0) throw refused(issues);
 
   return {
     working: parsed.spec,
@@ -106,7 +110,7 @@ export async function readSetup(ctx: Ctx): Promise<OrgSetup> {
 }
 
 function requiredActions(spec: Spec): string[] {
-  const names = spec.steps.flatMap((step) =>
+  const names = eachStep(spec).flatMap(({ step }) =>
     step.type === "tool" ? [step.action] : step.type === "draft" ? [step.output] : [],
   );
   return [...new Set(names)];

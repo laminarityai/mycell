@@ -115,12 +115,16 @@ export type RetryPolicy = {
 export const runStatuses = [
   "running",
   "succeeded",
-  // A branch's condition failed and its `else` was `stop`.
+  // A branch took an otherwise path with no steps.
   "skipped",
   "escalated",
   // The connection went before the run finished.
   "cancelled",
+  // The steps above every branch failed, or every path that ran did.
   "failed",
+  // Some paths of an every-match branch failed and others finished. A failure wherever
+  // failures are counted.
+  "partly_failed",
 ] as const;
 export type RunStatus = (typeof runStatuses)[number];
 
@@ -137,6 +141,11 @@ export type RunOutcome = { status: Exclude<RunStatus, "running"> };
 export type RunStepRecord = {
   stepId: string;
   type: StepType;
+  /**
+   * The path the step is on, in words, after the paths it's nested in: "Pricing", "Pricing ›
+   * Otherwise". Null for a step above every branch.
+   */
+  path: string | null;
   status: RunStepStatus;
   attempts: number;
   /** When the last attempt began. */
@@ -180,6 +189,31 @@ export type DryRunEffect =
   | { kind: "row"; range: string; values: (string | number | boolean | null)[] }
   | { kind: "review"; channel: string };
 
+/**
+ * How one check of a path's condition went. `reason` may quote the value it tested, which can
+ * come from the email: shown on the admin's page only, never stored or summarized.
+ */
+export type CheckResult = {
+  /** The check in words, from the spec's literals only. */
+  check: string;
+  passed: boolean;
+  reason: string;
+};
+
+/**
+ * One path out of a branch, as the branch saw it: `taken`; `not_taken`, its condition failed;
+ * `not_checked`, an earlier path was taken first; or, for the otherwise path, `not_needed`,
+ * another path applied. `checks` follow the path's condition, and are empty when it wasn't
+ * checked and for the otherwise path.
+ */
+export type BranchPath = {
+  id: string;
+  /** The path's name; none for the otherwise path. */
+  name: string | null;
+  status: "taken" | "not_taken" | "not_checked" | "not_needed";
+  checks: CheckResult[];
+};
+
 /** One step of a dry run. */
 export type DryRunStep = {
   stepId: string;
@@ -190,6 +224,8 @@ export type DryRunStep = {
   /** What it handed on to later steps, as a run would. */
   output: Json;
   effect: DryRunEffect | null;
+  /** A branch's paths, each otherwise path last, in the order the spec lists them. */
+  paths?: BranchPath[];
   /** Why it failed, content-free. */
   error: { code: string; message: string } | null;
   modelId: string | null;
@@ -198,7 +234,7 @@ export type DryRunStep = {
 
 /** How a dry run ended, and each step it reached. Returned to the page, never stored. */
 export type DryRunResult = {
-  ended: "succeeded" | "skipped" | "escalated" | "failed";
+  ended: "succeeded" | "skipped" | "escalated" | "failed" | "partly_failed";
   steps: DryRunStep[];
   costUsd: number;
 };

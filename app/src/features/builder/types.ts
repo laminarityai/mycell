@@ -4,7 +4,8 @@ import type { UIMessage } from "ai";
 import { z } from "zod";
 import type { RiskLevel } from "@/features/policy/types";
 import type { StepDescription } from "@/features/spec/describe";
-import type { StepChange } from "@/features/spec/diff";
+import type { Change } from "@/features/spec/diff";
+import type { Spec } from "@/features/spec/types";
 
 /** Why the agent's turn shows a notice instead of (or after) a reply. */
 export const noticeKindSchema = z.enum(["out_of_credits", "failed"]);
@@ -77,10 +78,33 @@ export type ProposalStatus = "proposed" | "accepted" | "rejected" | "stale";
 
 /** One step of a proposal's before/after, in plain words. */
 export type ProposalStep = StepDescription<RiskLevel> & {
-  change: StepChange;
+  change: Change;
   /** For a changed step, what it did before. */
   before: string | null;
 };
+
+/** A path a proposal's changes are grouped under, in plain words. */
+export type ProposalPath = {
+  id: string;
+  /** The branch it leaves. */
+  branchId: string;
+  /** The path's name; "Otherwise" for a branch's otherwise path. */
+  name: string;
+  /** The names of the paths it sits on, outermost first; empty under a top-level branch. */
+  within: string[];
+  otherwise: boolean;
+  change: Change;
+  /** When it runs: "Runs when …". */
+  text: string;
+  /** For a changed path, its name and words before. */
+  before: { name: string; text: string } | null;
+};
+
+/**
+ * The changed steps of one list: the steps before any branch (no path), or one path's. A
+ * group is listed when its path or one of its steps changed.
+ */
+export type ProposalGroup = { path: ProposalPath | null; steps: ProposalStep[] };
 
 /** A proposal as the conversation shows it. */
 export type Proposal = {
@@ -92,10 +116,17 @@ export type Proposal = {
   summary: string;
   status: ProposalStatus;
   maxRisk: RiskLevel;
-  /** The proposed steps (policy-inserted approvals included), each removed one where it stood. */
-  steps: ProposalStep[];
+  /**
+   * What it changes, grouped by path in the order a run reaches them (policy-inserted approvals
+   * included), each removed step or path where it stood. For a new workflow, everything.
+   */
+  groups: ProposalGroup[];
   /** Top-level settings it changes, such as `credentials`. */
   settings: string[];
+  /** The working spec it proposes, as written (the graph applies the policy engine itself). */
+  spec: Spec;
+  /** The working spec it was made against; null for a new workflow. */
+  baseSpec: Spec | null;
   createdAt: Date;
   decidedAt: Date | null;
 };

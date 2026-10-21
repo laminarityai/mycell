@@ -38,7 +38,7 @@ async function run(steps: unknown[]) {
 }
 
 describe("the steps", () => {
-  it("escalates the run when a branch with else: escalate fails", async () => {
+  it("escalates the run on the otherwise path of a gate that escalated", async () => {
     const { admin, system, runId } = await run([
       classify,
       {
@@ -60,6 +60,7 @@ describe("the steps", () => {
     expect((await getRun(admin, runId)).steps.map((step) => step.stepId)).toEqual([
       "classify",
       "gate",
+      "gate-escalate",
     ]);
   });
 

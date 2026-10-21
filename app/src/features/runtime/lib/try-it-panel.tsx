@@ -3,9 +3,10 @@
 // The "Try it" panel: pick one of the newest messages on the admin's own or an org connection,
 // run the working spec on it with every write stubbed, and see each step's result. The page
 // that holds it gives the Server Action (the workflow page's, or the builder chat's) and the
-// hidden fields it needs.
-import { useActionState, useState } from "react";
+// hidden fields it needs. On a page with a workflow graph, the result lights it up too.
+import { useActionState, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useShowOnGraph } from "@/features/workflows/ui";
 import type { RecentMessages, TryItState } from "../types";
 import { TryItResult } from "./try-it-result";
 
@@ -20,6 +21,10 @@ export function TryItPanel({
   fields: Record<string, string>;
 }) {
   const [state, tryIt, trying] = useActionState(action, {});
+  const showOnGraph = useShowOnGraph();
+  useEffect(() => {
+    showOnGraph?.(state.result ?? null);
+  }, [showOnGraph, state.result]);
   const first = sources
     .flatMap((source) => source.messages.slice(0, 1).map((message) => ({ source, message })))
     .at(0);
@@ -95,7 +100,9 @@ export function TryItPanel({
           )}
         </div>
       )}
-      {state.result === undefined ? null : <TryItResult result={state.result} />}
+      {state.result === undefined ? null : (
+        <TryItResult result={state.result} onGraph={showOnGraph !== null} />
+      )}
     </div>
   );
 }

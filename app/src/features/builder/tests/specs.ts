@@ -61,3 +61,77 @@ export function draftSpec(overrides: Record<string, unknown> = {}): Record<strin
     ...overrides,
   };
 }
+
+/**
+ * Classify the kind and extract the order, then a first-match branch: complaints to a person,
+ * pricing questions labelled, big walnut orders labelled, and otherwise nothing.
+ */
+export function triageSpec(): Record<string, unknown> {
+  const label = (id: string, name: string) => ({
+    id,
+    type: "tool",
+    action: "google-mail.add-label",
+    input: { messageId: { from: "trigger.messageId" }, label: name },
+  });
+  const isKind = (is: string) => ({
+    combine: "all",
+    checks: [{ classify: "kind", is, minP: 0.8 }],
+  });
+  return {
+    specVersion: 2,
+    id: "triage",
+    credentials: "member",
+    trigger: { type: "gmail.message_received" },
+    steps: [
+      {
+        id: "kind",
+        type: "classify",
+        role: "classify",
+        question: "What kind of message is this?",
+        labels: ["complaint", "pricing", "other"],
+      },
+      {
+        id: "details",
+        type: "extract",
+        role: "fast",
+        fields: {
+          product: { type: "string", description: "What they ask about" },
+          total: { type: "number", description: "The order total" },
+        },
+      },
+      {
+        id: "route",
+        type: "branch",
+        mode: "first",
+        paths: [
+          {
+            id: "complaint",
+            name: "Complaint",
+            condition: isKind("complaint"),
+            steps: [{ id: "to-person", type: "escalate", reason: "A person handles complaints." }],
+          },
+          {
+            id: "pricing",
+            name: "Pricing",
+            condition: isKind("pricing"),
+            steps: [label("pricing-label", "Pricing")],
+          },
+          {
+            id: "big",
+            name: "Big order",
+            condition: {
+              combine: "all",
+              checks: [
+                { subject: { from: "details.product" }, op: "contains", value: "walnut" },
+                { subject: { from: "details.total" }, op: "more_than", value: 1000 },
+              ],
+            },
+            steps: [label("big-label", "Big order")],
+          },
+        ],
+        otherwise: { id: "rest", steps: [] },
+      },
+    ],
+    autonomy: { rung: 3 },
+  };
+}

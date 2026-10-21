@@ -1,5 +1,6 @@
 // Inngest events one feature sends and another triggers on, where neither may import the other:
-// discovery sends gmail.message_received, and runtime's fan-out triggers on it.
+// discovery sends gmail.message_received, and runtime's fan-out triggers on it; discovery sends
+// gmail.message_sent, and reviews ends a review its person finished in Gmail.
 import { eventType } from "inngest";
 import { z } from "zod";
 import { inngest } from "./inngest";
@@ -28,6 +29,32 @@ export async function sendGmailMessagesReceived(messages: GmailMessageReceived[]
       gmailMessageReceived.create(data, {
         id: `gmail-received-${data.connectionId}-${data.sourceRef}`,
       }),
+    ),
+  );
+}
+
+/**
+ * Polling (or a recovery) newly stored a sent Gmail message on a connection: the person sent a
+ * draft, or replied, from Gmail itself. Pointers only: the message's ID and its thread's.
+ */
+export const gmailMessageSent = eventType("discovery/gmail.message_sent", {
+  schema: z.object({
+    orgId: z.string().min(1),
+    connectionId: z.string().min(1),
+    sourceRef: z.string().min(1),
+    threadId: z.string().min(1),
+    occurredAt: z.iso.datetime(),
+  }),
+});
+
+export type GmailMessageSent = z.infer<typeof gmailMessageSent.schema>;
+
+/** Sends one event per sent message. The event ID makes a resent message end nothing new. */
+export async function sendGmailMessagesSent(messages: GmailMessageSent[]): Promise<void> {
+  if (messages.length === 0) return;
+  await inngest.send(
+    messages.map((data) =>
+      gmailMessageSent.create(data, { id: `gmail-sent-${data.connectionId}-${data.sourceRef}` }),
     ),
   );
 }

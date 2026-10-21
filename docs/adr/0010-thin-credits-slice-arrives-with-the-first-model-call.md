@@ -4,5 +4,5 @@ Invariant 7 says every model call checks credits first and records its usage, bu
 
 ## Consequences
 
-- M7 keeps everything beyond that: budgets, pausing a workflow or org when credits run out, admin emails, discovery cost estimates, and real pricing. Until then a run that runs out of credits simply fails.
+- M7 keeps everything beyond that: budgets, pausing a workflow or org when credits run out, admin alerts (in the app: Mycel sends no email in v1), discovery cost estimates, and real pricing. Until then a run that runs out of credits simply fails.
 - The ratio of credits to gateway cost is a placeholder in config until M7 sets pricing.

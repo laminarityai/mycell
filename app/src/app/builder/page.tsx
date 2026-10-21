@@ -1,18 +1,16 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { listConversations } from "@/features/builder/server";
 import { ConversationList, NewConversationButton } from "@/features/builder/ui";
 import { getCtx } from "@/features/orgs/server";
+import { AppNav } from "@/app/app-nav";
 
 export default function BuilderPage() {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
-      <header className="flex items-center justify-between">
+      <header className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold tracking-tight">Builder chat</h1>
-        <Link href="/" className="text-sm text-muted-foreground hover:text-foreground">
-          Back to your org
-        </Link>
+        <AppNav />
       </header>
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading conversations…</p>}>
         <Conversations />

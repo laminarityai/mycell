@@ -40,7 +40,8 @@ async function seedOrg(letter: "a" | "b"): Promise<FixtureOrg> {
   };
 }
 
-async function seedUser(orgId: string, email: string, role: Role): Promise<FixtureUser> {
+/** One more user in a seeded org, for a test that needs a second admin or member. */
+export async function seedUser(orgId: string, email: string, role: Role): Promise<FixtureUser> {
   const db = getDb();
   const userId = randomUUID();
   await db.insert(user).values({ id: userId, name: email, email, emailVerified: true });

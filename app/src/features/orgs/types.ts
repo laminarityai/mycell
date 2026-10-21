@@ -22,3 +22,6 @@ export type OrgUser = {
   email: string;
   role: Role;
 };
+
+/** What a user is called wherever Mycel names them, by user ID (`userNames`). */
+export type UserNames = (userId: string) => string;

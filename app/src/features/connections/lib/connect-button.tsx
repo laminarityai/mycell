@@ -5,9 +5,20 @@ import { startConnectAction } from "../actions";
 import type { ConnectionKind } from "../types";
 import { useConnectUI } from "./connect-ui";
 
-/** Opens Nango's Connect UI to connect a Google account, then refreshes once the popup closes. */
-export function ConnectButton({ kind, label }: { kind: ConnectionKind; label: string }) {
-  const { open, error, pending } = useConnectUI(() => startConnectAction(kind));
+/**
+ * Opens Nango's Connect UI to connect a Google account, then refreshes once the popup closes,
+ * and calls `onDone` (the return target) when there is one.
+ */
+export function ConnectButton({
+  kind,
+  label,
+  onDone,
+}: {
+  kind: ConnectionKind;
+  label: string;
+  onDone?: () => void;
+}) {
+  const { open, error, pending } = useConnectUI(() => startConnectAction(kind), onDone);
 
   return (
     <div className="flex flex-col gap-1">

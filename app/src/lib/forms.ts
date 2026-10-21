@@ -4,9 +4,19 @@
 import type { z } from "zod";
 import { ValidationError } from "./errors";
 
-/** The form's fields parsed with `schema`, or ValidationError. */
-export function parseForm<T>(schema: z.ZodType<T>, form: FormData): T {
-  const parsed = schema.safeParse(Object.fromEntries(form));
+/**
+ * The form's fields parsed with `schema`, or ValidationError. Each field is one value, except
+ * those named in `lists`, which are every value sent under that name (none gives an empty list),
+ * as a group of checkboxes sends them.
+ */
+export function parseForm<T>(
+  schema: z.ZodType<T>,
+  form: FormData,
+  lists: readonly string[] = [],
+): T {
+  const fields: Record<string, unknown> = Object.fromEntries(form);
+  for (const name of lists) fields[name] = form.getAll(name);
+  const parsed = schema.safeParse(fields);
   if (!parsed.success) {
     throw new ValidationError("The form was missing something. Reload the page and try again.");
   }

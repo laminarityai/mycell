@@ -33,17 +33,23 @@ export type SetupCheck = (spec: Spec, setup: OrgSetup) => SpecIssue[];
  * and the policy engine run first: the setup checks need a spec they can read.
  */
 export async function validateWorkflowSpec(ctx: Ctx, input: unknown): Promise<ValidatedSpec> {
+  const validated = checkedByPolicy(input);
+  const setup = await readSetup(ctx);
+  const issues = SETUP_CHECKS.flatMap((check) => check(validated.working, setup));
+  if (issues.length > 0) throw new SpecInvalidError(issuesAsWritten(input, issues));
+  return validated;
+}
+
+/**
+ * The spec schema and the policy engine on `input`, without the org-setup checks: what a version
+ * of it would hold and need. Throws SpecInvalidError with every issue.
+ */
+export function checkedByPolicy(input: unknown): ValidatedSpec {
   const parsed = validateSpec(input);
   if (!parsed.ok) throw new SpecInvalidError(parsed.issues);
   // The spec past here is v2; issues about it point where the input wrote the field.
-  const refused = (issues: SpecIssue[]) => new SpecInvalidError(issuesAsWritten(input, issues));
   const policy = applyPolicy(parsed.spec);
-  if (!policy.ok) throw refused(policy.issues);
-
-  const setup = await readSetup(ctx);
-  const issues = SETUP_CHECKS.flatMap((check) => check(parsed.spec, setup));
-  if (issues.length > 0) throw refused(issues);
-
+  if (!policy.ok) throw new SpecInvalidError(issuesAsWritten(input, policy.issues));
   return {
     working: parsed.spec,
     applied: policy.spec,

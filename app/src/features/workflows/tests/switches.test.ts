@@ -55,6 +55,10 @@ describe("switching a member workflow on", () => {
       kind: "member",
       connectionId: own.id,
       since: expect.any(Date) as Date,
+      status: "on",
+      pausedReason: null,
+      pausedChange: null,
+      needsReconnect: false,
     });
     expect(workflow.switch?.since.getTime()).toBeGreaterThanOrEqual(before.getTime() - 1000);
     const latest = workflow.versions[0];
@@ -131,6 +135,10 @@ describe("switching an org workflow on", () => {
       kind: "org",
       connectionId: support.id,
       since: expect.any(Date) as Date,
+      status: "on",
+      pausedReason: null,
+      pausedChange: null,
+      needsReconnect: false,
     });
     expect(await listSwitchedOn(systemCtx(orgA.id), support.id)).toEqual([
       {

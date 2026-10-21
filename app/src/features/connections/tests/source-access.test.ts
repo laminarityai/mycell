@@ -48,6 +48,7 @@ describe("recording a connection", () => {
       id,
       source: "google",
       kind: "member",
+      accountEmail: orgA.member.email,
       ownerUserId: orgA.member.id,
       needsReauth: false,
       grantedScopes: Object.values(GOOGLE_APP_SCOPES),

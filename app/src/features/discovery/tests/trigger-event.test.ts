@@ -135,3 +135,54 @@ describe("discovery/gmail.message_received", () => {
     expect(fakeInngest.sent(RECEIVED).map((event) => event.data.sourceRef)).toEqual([message.id]);
   });
 });
+
+const SENT = "discovery/gmail.message_sent";
+
+describe("discovery/gmail.message_sent", () => {
+  it("is sent once for a sent message a poll newly stores, with its thread", async () => {
+    const { orgA, connection, me, poll } = await backfilledMailbox();
+    const at = new Date();
+    const question = connection.mailbox.add({ from: CUSTOMER, to: [me], text: "Hi", at });
+    const reply = connection.mailbox.add({
+      from: me,
+      to: [CUSTOMER],
+      text: "Hello",
+      at,
+      sent: true,
+      threadId: question.threadId,
+    });
+
+    await poll();
+    await poll();
+
+    expect(fakeInngest.sent(SENT)).toEqual([
+      {
+        name: SENT,
+        id: `gmail-sent-${connection.id}-${reply.id}`,
+        data: {
+          orgId: orgA.id,
+          connectionId: connection.id,
+          sourceRef: reply.id,
+          threadId: question.threadId,
+          occurredAt: at.toISOString(),
+        },
+        ts: expect.any(Number) as unknown,
+      },
+    ]);
+  });
+
+  it("isn't sent for a received message, a draft, or what the backfill stores", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const me = orgA.member.email;
+    const connection = await connectMailbox(orgA.member.ctx, me, [
+      { from: me, to: [CUSTOMER], text: "Old", at: daysAgo(2), sent: true },
+    ]);
+    await backfillConnection(orgA.member.ctx, connection.id);
+    connection.mailbox.add({ from: CUSTOMER, to: [me], text: "Hi", at: new Date() });
+    connection.mailbox.add({ from: me, text: "Draft", at: new Date(), labelIds: ["DRAFT"] });
+
+    await pollConnection(systemCtx(orgA.id), connection.id);
+
+    expect(fakeInngest.sent(SENT)).toEqual([]);
+  });
+});

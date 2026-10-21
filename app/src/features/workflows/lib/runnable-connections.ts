@@ -5,7 +5,8 @@ import type { ConnectionSummary } from "@/features/connections/types";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { findWorkflow } from "./access";
 import { scopeIssues } from "./scope-check";
-import { latestVersions, switchOf } from "./switches";
+import { switchOf } from "./switches";
+import { latestVersions } from "./latest-versions";
 import { candidateConnections, readSetup } from "./validation";
 
 /**

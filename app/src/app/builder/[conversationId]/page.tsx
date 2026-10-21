@@ -12,6 +12,7 @@ import { getCtx } from "@/features/orgs/server";
 import { recentMessages } from "@/features/runtime/server";
 import { getWorkflow } from "@/features/workflows/server";
 import { NotFoundError } from "@/lib/errors";
+import { AppNav } from "@/app/app-nav";
 
 // A Server Action here may try the working spec on a message, model steps and all.
 export const maxDuration = 300;
@@ -23,17 +24,18 @@ export default function ConversationPage({
 }: PageProps<"/builder/[conversationId]">) {
   return (
     <main className="flex h-dvh flex-col">
-      <header className="flex items-center justify-between gap-4 border-b px-4 py-3">
-        <h1 className="text-lg font-semibold tracking-tight">Builder chat</h1>
-        <nav className="flex items-center gap-4 text-sm text-muted-foreground">
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b px-4 py-3">
+        <div className="flex items-center gap-4">
+          <h1 className="text-lg font-semibold tracking-tight">Builder chat</h1>
           {/* Narrower than the conversation list's column, the list is a page of its own. */}
-          <Link href="/builder" className="hover:text-foreground lg:hidden">
+          <Link
+            href="/builder"
+            className="text-sm text-muted-foreground hover:text-foreground lg:hidden"
+          >
             All conversations
           </Link>
-          <Link href="/" className="hover:text-foreground">
-            Back to your org
-          </Link>
-        </nav>
+        </div>
+        <AppNav />
       </header>
       <Suspense
         fallback={<p className="p-4 text-sm text-muted-foreground">Loading conversation…</p>}

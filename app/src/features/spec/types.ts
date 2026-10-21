@@ -292,9 +292,14 @@ export const specSettings = {
     labelIds: z.array(z.string().min(1)).min(1).default(["INBOX"]),
   }),
   autonomy: specObject({ rung: z.union([z.literal(0), z.literal(3), z.literal(4)]) }),
-  // Accepted and stored, unused until M5 (visibility) and M7 (budget).
+  // Accepted and stored, unused until M7.
   budget: specObject({ monthlyCredits: z.number().int().positive().optional() }).optional(),
+  // The names of the tags it's published to (M5): members with any of them see it. Publishing
+  // resolves the names to the org's tags and refuses one no tag has.
   visibility: specObject({ tags: z.array(z.string().min(1)) }).optional(),
+  // Whether whoever may act on one of its reviews may hand it to a colleague (ADR-0013). Off
+  // unless the spec says so; not a risk change, since nothing more is sent.
+  review: specObject({ handoff: z.boolean().default(false) }).optional(),
 };
 
 export const specSchema = specObject({

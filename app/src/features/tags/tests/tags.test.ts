@@ -6,7 +6,9 @@ import {
   assignTag,
   createTag,
   deleteTag,
+  findTagsByName,
   listMyTags,
+  listTagIdsByUser,
   listTags,
   renameTag,
   unassignTag,
@@ -245,5 +247,59 @@ describe("listMyTags", () => {
       { id: support.id, name: "support" },
     ]);
     expect(await listMyTags(orgA.admin.ctx)).toEqual([{ id: sales.id, name: "sales" }]);
+  });
+});
+
+describe("findTagsByName", () => {
+  it("finds each named tag once, in the order named", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const sales = await createTag(orgA.admin.ctx, "sales");
+    const support = await createTag(orgA.admin.ctx, "support");
+
+    expect(await findTagsByName(orgA.admin.ctx, ["support", "sales", "support"])).toEqual([
+      { id: support.id, name: "support" },
+      { id: sales.id, name: "sales" },
+    ]);
+    expect(await findTagsByName(orgA.admin.ctx, [])).toEqual([]);
+  });
+
+  it("refuses a name no tag has, naming it", async () => {
+    const { orgA } = await seedTwoOrgs();
+    await createTag(orgA.admin.ctx, "sales");
+
+    const finding = findTagsByName(orgA.admin.ctx, ["sales", "slaes"]);
+
+    await expect(finding).rejects.toThrow(ValidationError);
+    await expect(finding).rejects.toThrow(/"slaes"/);
+  });
+
+  it("is refused to a member", async () => {
+    const { orgA } = await seedTwoOrgs();
+    await createTag(orgA.admin.ctx, "sales");
+
+    await expect(findTagsByName(orgA.member.ctx, ["sales"])).rejects.toThrow(ForbiddenError);
+  });
+});
+
+describe("listTagIdsByUser", () => {
+  it("gives each user's tag IDs, leaving out users with none", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const sales = await createTag(orgA.admin.ctx, "sales");
+    const support = await createTag(orgA.admin.ctx, "support");
+    await assignTag(orgA.admin.ctx, sales.id, orgA.member.id);
+    await assignTag(orgA.admin.ctx, support.id, orgA.member.id);
+
+    const byUser = await listTagIdsByUser(orgA.admin.ctx, [orgA.member.id, orgA.admin.id]);
+
+    expect([...byUser.keys()]).toEqual([orgA.member.id]);
+    expect(byUser.get(orgA.member.id)?.toSorted()).toEqual([sales.id, support.id].toSorted());
+  });
+
+  it("is refused to a member", async () => {
+    const { orgA } = await seedTwoOrgs();
+
+    await expect(listTagIdsByUser(orgA.member.ctx, [orgA.admin.id])).rejects.toThrow(
+      ForbiddenError,
+    );
   });
 });

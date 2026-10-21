@@ -1,5 +1,6 @@
 // Vitest setup file: every test reaches the fake Nango, the fake Inngest and the fake AI Gateway
-// instead of the network. A request to anything the fakes don't handle fails the test.
+// instead of the network. A request to anything the fakes don't handle
+// fails the test.
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, beforeEach, expect } from "vitest";
 import { fakeAiGateway } from "./fake-ai-gateway";

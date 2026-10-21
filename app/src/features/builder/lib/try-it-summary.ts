@@ -3,7 +3,8 @@
 // and counts only. No message content, draft text, row value or extracted value reaches it
 // (invariant 8): those stay on the admin's page. A tool input the spec fills from a reference
 // is named by its reference, never by the value it resolved to, which may come from the email.
-import type { DryRunResult, DryRunStep } from "@/features/runtime/types";
+import type { BranchPath, DryRunResult, DryRunStep } from "@/features/runtime/types";
+import { describeCheck } from "@/features/spec/conditions";
 import { findStep } from "@/features/spec/tree";
 import type { Spec } from "@/features/spec/types";
 import type { TryItSummary } from "../types";
@@ -18,7 +19,10 @@ const ENDINGS: Record<DryRunResult["ended"], string> = {
 /** Summarizes a dry run of `spec`. */
 export function summarizeTryIt(result: DryRunResult, spec: Spec): TryItSummary {
   return {
-    lines: [...result.steps.map((step) => lineOf(step, spec)), ENDINGS[result.ended]],
+    lines: [
+      ...result.steps.flatMap((step) => [lineOf(step, spec), ...pathLines(step, spec)]),
+      ENDINGS[result.ended],
+    ],
     costUsd: result.costUsd,
   };
 }
@@ -58,6 +62,37 @@ function lineOf(step: DryRunStep, spec: Spec): string {
     return `${name}: filled ${filled.map(([field]) => field).join(", ") || "no fields"}.`;
   }
   return `${name}: done.`;
+}
+
+const PATH_WORDS: Record<BranchPath["status"], string> = {
+  taken: "ran",
+  not_taken: "didn't apply",
+  not_checked: "not checked, since an earlier path ran",
+  not_needed: "not needed, since another path applied",
+};
+
+/**
+ * A line per path out of a branch, naming the path and each check as the spec writes them,
+ * with whether it passed: never its reason, which may quote the value it tested. The branch's
+ * own line already says whether it took the otherwise path.
+ */
+function pathLines(step: DryRunStep, spec: Spec): string[] {
+  const branch = findStep(spec, step.stepId);
+  if (branch?.type !== "branch" || step.paths === undefined) return [];
+  return step.paths.flatMap((result) => {
+    const path = branch.paths.find((candidate) => candidate.id === result.id);
+    if (path === undefined) return [];
+    const checks = path.condition.checks.flatMap((check, index) => {
+      const passed = result.checks.at(index)?.passed;
+      return passed === undefined
+        ? []
+        : [`${describeCheck(check)}: ${passed ? "passed" : "failed"}`];
+    });
+    const said = checks.length === 0 ? "" : ` ${checks.join("; ")}.`;
+    return [
+      `${step.stepId}, path ${JSON.stringify(path.name)}: ${PATH_WORDS[result.status]}.${said}`,
+    ];
+  });
 }
 
 // A tool step's input as the spec writes it: `the label "Pricing"` for a literal, `a label from

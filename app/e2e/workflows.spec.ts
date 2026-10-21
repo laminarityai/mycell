@@ -289,3 +289,54 @@ test("saving over a newer working spec is refused, and members can't reach the e
   await page.goto("/workflows/new");
   await expect(page).toHaveURL("/");
 });
+
+/** Makes the tag `name` on the tags screen, and gives it to `user` when there is one. */
+async function makeTag(page: Page, name: string, user?: FixtureUser) {
+  await page.goto("/tags");
+  await page.getByRole("textbox", { name: "New tag name" }).fill(name);
+  await page.getByRole("button", { name: "Add tag" }).click();
+  const tag = page.getByRole("row").filter({ hasText: name });
+  await expect(tag).toBeVisible();
+  if (user === undefined) return;
+  await tag.getByRole("combobox", { name: "User to tag" }).selectOption(user.email);
+  await tag.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(tag.getByRole("button", { name: `Remove tag from ${user.email}` })).toBeVisible();
+}
+
+test("an admin publishes a workflow to a tag, and a member with that tag sees it", async ({
+  page,
+  orgs: { orgA },
+  signInAs,
+}) => {
+  await withGmail(orgA.admin, orgA.id);
+  await signInAs(orgA.admin);
+  await makeTag(page, "sales", orgA.member);
+  await makeTag(page, "support");
+  await page.goto("/workflows/new");
+  await page.getByRole("textbox", { name: "Name" }).fill("Triage");
+  await saveInJson(page, TRIAGE);
+  await expect(page.getByText("Not published yet.")).toBeVisible();
+
+  await page.getByRole("button", { name: "Publish" }).click();
+  const dialog = page.getByRole("dialog", { name: "Publish version 1" });
+  await dialog.getByRole("checkbox", { name: "sales" }).click();
+  await dialog.getByRole("button", { name: "Publish version 1" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByText("Version 1 is the latest.")).toBeVisible();
+
+  await page.goto("/workflows");
+  const row = page.getByRole("row").filter({ hasText: "Triage" });
+  await expect(row).toContainText("sales");
+  await expect(row).toContainText("1 user");
+
+  await page.context().clearCookies();
+  await signInAs(orgA.member);
+  await page.goto("/");
+  await page.getByRole("link", { name: "Workflows" }).click();
+  const card = page.getByRole("listitem").filter({ hasText: "Triage" });
+  await expect(card).toContainText("Runs on your own Google account.");
+  await expect(card).toContainText("Gmail");
+  await expect(card).toContainText("External send");
+  await expect(card).toContainText("Off");
+  await expect(page.getByRole("link", { name: "New workflow" })).toBeHidden();
+});

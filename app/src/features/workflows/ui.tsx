@@ -13,10 +13,13 @@ import { GraphTraceProvider, useGraphTrace, useShowOnGraph } from "./lib/graph-t
 import { RiskBadge } from "./lib/risk-badge";
 import { SpecEditor } from "./lib/spec-editor";
 import { SwitchForm, type SwitchConnectionOption } from "./lib/switch-form";
-import { PublishButton } from "./lib/workflow-editor";
+import type { Tag } from "@/features/tags/types";
+import { PublishDialog } from "./lib/workflow-editor";
 import { WorkflowGraph, type WorkflowGraphProps } from "./lib/workflow-graph";
 import { WorkingSpecEditor, type EditableWorkflow } from "./lib/working-spec-editor";
-import type { WorkflowDetails, WorkflowSummary, WorkflowSwitch } from "./types";
+import type { Audience, WorkflowDetails, WorkflowSummary, WorkflowSwitch } from "./types";
+
+export { VisibleWorkflowsList } from "./lib/visible-workflows";
 
 export {
   GraphTraceProvider,
@@ -58,7 +61,10 @@ export function WorkflowSwitchSection({
   );
 }
 
-/** The admin's workflows: name, latest version, its max risk level, and whether it's on. */
+/**
+ * The admin's workflows: name, latest version, its max risk level, the tags it's published to
+ * and how many users they reach, and whether it's on.
+ */
 export function WorkflowsList({ workflows }: { workflows: WorkflowSummary[] }) {
   if (workflows.length === 0) {
     return <p className="text-sm text-muted-foreground">No workflows yet.</p>;
@@ -70,6 +76,8 @@ export function WorkflowsList({ workflows }: { workflows: WorkflowSummary[] }) {
           <TableHead>Workflow</TableHead>
           <TableHead>Latest version</TableHead>
           <TableHead>Max risk</TableHead>
+          <TableHead>Published to</TableHead>
+          <TableHead>Reach</TableHead>
           <TableHead>Switch</TableHead>
         </TableRow>
       </TableHeader>
@@ -97,6 +105,10 @@ export function WorkflowsList({ workflows }: { workflows: WorkflowSummary[] }) {
               )}
             </TableCell>
             <TableCell>
+              <AudienceTags audience={workflow.audience} />
+            </TableCell>
+            <TableCell>{reach(workflow.audience)}</TableCell>
+            <TableCell>
               <SwitchBadge current={workflow.switch} />
             </TableCell>
           </TableRow>
@@ -104,6 +116,26 @@ export function WorkflowsList({ workflows }: { workflows: WorkflowSummary[] }) {
       </TableBody>
     </Table>
   );
+}
+
+/** The tags a published workflow is published to, or a dash. */
+function AudienceTags({ audience }: { audience: Audience | null }) {
+  if (audience === null) return "—";
+  if (audience.tags.length === 0) return <span className="text-muted-foreground">No tags</span>;
+  return (
+    <span className="flex flex-wrap gap-1">
+      {audience.tags.map((tag) => (
+        <Badge key={tag.id} variant="outline">
+          {tag.name}
+        </Badge>
+      ))}
+    </span>
+  );
+}
+
+function reach(audience: Audience | null): string {
+  if (audience === null) return "—";
+  return audience.reach === 1 ? "1 user" : `${String(audience.reach)} users`;
 }
 
 /** Whether the workflow is on: for the admin's own connection, for the org's, or off. */
@@ -118,9 +150,9 @@ function SwitchBadge({ current }: { current: WorkflowSwitch | null }) {
 
 /**
  * One workflow: its working spec in the editor (a graph or JSON, validated live), then Publish
- * and its versions. The editor starts again from each save's revision.
+ * (to the org's `tags`) and its versions. The editor starts again from each save's revision.
  */
-export function WorkflowEditor({ workflow }: { workflow: WorkflowDetails }) {
+export function WorkflowEditor({ workflow, tags }: { workflow: WorkflowDetails; tags: Tag[] }) {
   const latest = workflow.versions.at(0);
   return (
     <div className="flex flex-col gap-6">
@@ -139,7 +171,14 @@ export function WorkflowEditor({ workflow }: { workflow: WorkflowDetails }) {
             ? "Not published yet."
             : `Version ${String(latest.number)} is the latest. Publishing makes the saved spec version ${String(latest.number + 1)}.`}
         </p>
-        <PublishButton workflowId={workflow.id} />
+        <PublishDialog
+          // A publish or a save starts the dialog again from the working spec's tags.
+          key={workflow.revision}
+          workflowId={workflow.id}
+          nextNumber={(latest?.number ?? 0) + 1}
+          tags={tags}
+          chosen={workflow.workingSpec.visibility?.tags ?? []}
+        />
         {workflow.versions.length === 0 ? null : (
           <ul className="flex flex-col gap-1 text-sm">
             {workflow.versions.map((version) => (

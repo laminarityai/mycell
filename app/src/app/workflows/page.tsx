@@ -1,9 +1,8 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { getCtx } from "@/features/orgs/server";
-import { listWorkflows } from "@/features/workflows/server";
-import { WorkflowsList } from "@/features/workflows/ui";
+import { listVisibleWorkflows, listWorkflows } from "@/features/workflows/server";
+import { VisibleWorkflowsList, WorkflowsList } from "@/features/workflows/ui";
 
 export default function WorkflowsPage() {
   return (
@@ -14,12 +13,6 @@ export default function WorkflowsPage() {
           Back to your org
         </Link>
       </header>
-      <Link
-        href="/workflows/new"
-        className="text-sm font-medium underline-offset-4 hover:underline"
-      >
-        New workflow
-      </Link>
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading workflows…</p>}>
         <Workflows />
       </Suspense>
@@ -27,9 +20,21 @@ export default function WorkflowsPage() {
   );
 }
 
+// Admins see and edit every workflow; members see those published to their tags.
 async function Workflows() {
   const ctx = await getCtx();
-  // Workflows are admin-only in M3; members get them through tags in M5.
-  if (ctx.role !== "admin") redirect("/");
-  return <WorkflowsList workflows={await listWorkflows(ctx)} />;
+  if (ctx.role !== "admin") {
+    return <VisibleWorkflowsList workflows={await listVisibleWorkflows(ctx)} />;
+  }
+  return (
+    <>
+      <Link
+        href="/workflows/new"
+        className="text-sm font-medium underline-offset-4 hover:underline"
+      >
+        New workflow
+      </Link>
+      <WorkflowsList workflows={await listWorkflows(ctx)} />
+    </>
+  );
 }

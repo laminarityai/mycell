@@ -1,7 +1,7 @@
 // A "Try it" result: each step with what it did, read or would have written, and the total
 // cost. The draft's text and the rows read are shown here and nowhere else (invariant 8).
 import { Badge } from "@/components/ui/badge";
-import type { DryRunEffect, DryRunResult, DryRunStep } from "../types";
+import type { BranchPath, DryRunEffect, DryRunResult, DryRunStep } from "../types";
 
 const ENDINGS: Record<DryRunResult["ended"], string> = {
   succeeded: "Ran to the end.",
@@ -62,6 +62,7 @@ function StepOutcome({ step }: { step: DryRunStep }) {
       </p>
     );
   }
+  if (step.type === "branch" && step.paths !== undefined) return <BranchPaths paths={step.paths} />;
   if (step.type === "branch") {
     const taken = Array.isArray(output.taken) ? output.taken.map(String) : [];
     return <p>Took the path {taken.join(", ")}.</p>;
@@ -70,6 +71,40 @@ function StepOutcome({ step }: { step: DryRunStep }) {
     <code className="font-mono text-xs wrap-anywhere text-muted-foreground">
       {JSON.stringify(output)}
     </code>
+  );
+}
+
+const PATH_STATUSES: Record<BranchPath["status"], string> = {
+  taken: "Ran",
+  not_taken: "Didn't apply",
+  not_checked: "Not checked: an earlier path ran",
+  not_needed: "Not needed: another path applied",
+};
+
+/** Each path out of the branch, and why each check passed or failed, values included. */
+function BranchPaths({ paths }: { paths: BranchPath[] }) {
+  return (
+    <ul aria-label="Paths" className="flex flex-col gap-2">
+      {paths.map((path) => (
+        <li key={path.id} className="flex flex-col gap-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <strong>{path.name ?? "Otherwise"}</strong>
+            <Badge variant={path.status === "taken" ? "default" : "outline"}>
+              {PATH_STATUSES[path.status]}
+            </Badge>
+          </div>
+          {path.checks.length === 0 ? null : (
+            <ul className="flex flex-col gap-0.5 pl-4 text-muted-foreground">
+              {path.checks.map((check, index) => (
+                <li key={index}>
+                  {check.passed ? "Passed" : "Failed"}: {check.check}. It {check.reason}.
+                </li>
+              ))}
+            </ul>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }
 

@@ -184,7 +184,12 @@ export type DryRunEffect =
  * How one check of a path's condition went. `reason` may quote the value it tested, which can
  * come from the email: shown on the admin's page only, never stored or summarized.
  */
-export type CheckResult = { passed: boolean; reason: string };
+export type CheckResult = {
+  /** The check in words, from the spec's literals only. */
+  check: string;
+  passed: boolean;
+  reason: string;
+};
 
 /**
  * One path out of a branch, as the branch saw it: `taken`; `not_taken`, its condition failed;
@@ -194,6 +199,8 @@ export type CheckResult = { passed: boolean; reason: string };
  */
 export type BranchPath = {
   id: string;
+  /** The path's name; none for the otherwise path. */
+  name: string | null;
   status: "taken" | "not_taken" | "not_checked" | "not_needed";
   checks: CheckResult[];
 };

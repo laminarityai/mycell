@@ -16,6 +16,39 @@ export function operatorsFor(type: ValueType): readonly Operator[] {
   return [...checkOperators[type], ...checkOperators.any];
 }
 
+const OPERATOR_WORDS: Record<Operator, string> = {
+  is: "is",
+  is_not: "isn't",
+  contains: "contains",
+  does_not_contain: "doesn't contain",
+  starts_with: "starts with",
+  ends_with: "ends with",
+  equals: "is",
+  does_not_equal: "isn't",
+  more_than: "is more than",
+  less_than: "is less than",
+  at_least: "is at least",
+  at_most: "is at most",
+  is_yes: "is yes",
+  is_no: "is no",
+  is_empty: "is empty",
+  is_not_empty: "isn't empty",
+};
+
+/**
+ * A check in words, from the spec's own literals only: `kind is "pricing", at least 85% sure`,
+ * `details.total is more than 1000`. Never a value a run tested, so it may go anywhere the spec
+ * may, the builder's conversation included.
+ */
+export function describeCheck(check: Check): string {
+  if ("classify" in check) {
+    const sure = `${String(Math.round(check.minP * 100))}% sure`;
+    return `${check.classify} is ${JSON.stringify(check.is)}, at least ${sure}`;
+  }
+  const words = `${check.subject.from} ${OPERATOR_WORDS[check.op]}`;
+  return "value" in check ? `${words} ${JSON.stringify(check.value)}` : words;
+}
+
 const DECLARED: Record<"string" | "number" | "boolean", ValueType> = {
   string: "text",
   number: "number",

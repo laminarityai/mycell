@@ -85,6 +85,7 @@ export async function dryRun(ctx: Ctx, spec: unknown, options: DryRunOptions) {
       status: "succeeded",
       output: execution.output,
       effect: step.type === "approval" ? { kind: "review", channel: step.channel } : current.effect,
+      ...(execution.paths === undefined ? {} : { paths: execution.paths }),
       error: null,
       modelId: execution.model?.modelId ?? null,
       costUsd: execution.model?.costUsd ?? 0,

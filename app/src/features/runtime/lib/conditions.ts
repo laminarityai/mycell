@@ -2,12 +2,13 @@
 // carries a reason, which may quote the value it tested (an extracted value, from the email):
 // Try it shows it to the admin, and nothing records or stores it (invariant 8).
 import { z } from "zod";
-import { subjectParts, type ValueCheck } from "@/features/spec/conditions";
+import { describeCheck, subjectParts, type ValueCheck } from "@/features/spec/conditions";
 import type { BranchStep, Check } from "@/features/spec/types";
 import type { BranchPath, CheckResult, Json } from "../types";
 import { RunStepError } from "./failures";
 
 type Outputs = Readonly<Record<string, Json>>;
+type Outcome = Omit<CheckResult, "check">;
 
 /** Which paths a branch takes, and how each path's condition went. */
 export type BranchChoice = { taken: string[]; paths: BranchPath[] };
@@ -21,22 +22,26 @@ export function chooseFirstMatch(branch: BranchStep, outputs: Outputs): BranchCh
   let taken: string | undefined;
   for (const path of branch.paths) {
     if (taken !== undefined) {
-      paths.push({ id: path.id, status: "not_checked", checks: [] });
+      paths.push({ id: path.id, name: path.name, status: "not_checked", checks: [] });
       continue;
     }
-    const checks = path.condition.checks.map((check) => checkResult(check, outputs));
+    const checks = path.condition.checks.map((check): CheckResult => ({
+      check: describeCheck(check),
+      ...outcome(check, outputs),
+    }));
     const passed = checks.map((check) => check.passed);
     const holds = path.condition.combine === "all" ? passed.every(Boolean) : passed.some(Boolean);
     if (holds) taken = path.id;
-    paths.push({ id: path.id, status: holds ? "taken" : "not_taken", checks });
+    paths.push({ id: path.id, name: path.name, status: holds ? "taken" : "not_taken", checks });
   }
   const otherwise = branch.otherwise.id;
-  paths.push({ id: otherwise, status: taken === undefined ? "taken" : "not_needed", checks: [] });
+  const status = taken === undefined ? "taken" : "not_needed";
+  paths.push({ id: otherwise, name: null, status, checks: [] });
   return { taken: [taken ?? otherwise], paths };
 }
 
 /** Whether the check passes on the outputs above its branch, and why. */
-function checkResult(check: Check, outputs: Outputs): CheckResult {
+function outcome(check: Check, outputs: Outputs): Outcome {
   if ("classify" in check) {
     const answer = classification(outputs[check.classify]);
     if (answer === undefined) {
@@ -49,7 +54,7 @@ function checkResult(check: Check, outputs: Outputs): CheckResult {
   return valueResult(check, subjectValue(check.subject.from, outputs));
 }
 
-function valueResult(check: ValueCheck, value: Json | undefined): CheckResult {
+function valueResult(check: ValueCheck, value: Json | undefined): Outcome {
   const missing =
     value === undefined || value === null || (typeof value === "string" && value.trim() === "");
   if (check.op === "is_empty" || check.op === "is_not_empty") {

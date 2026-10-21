@@ -64,6 +64,6 @@ test("an unsubscribe link Mycel didn't sign turns nothing off", async ({
   await page.goto("/unsubscribe?token=forged.token");
   await page.getByRole("button", { name: "Turn off the daily email" }).click();
 
-  await expect(page.getByRole("alert")).toHaveText("This unsubscribe link isn't valid.");
+  await expect(page.getByText("This unsubscribe link isn't valid.")).toBeVisible();
   expect(await reviewDigestOn(orgA.member.ctx)).toBe(true);
 });

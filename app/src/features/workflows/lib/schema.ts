@@ -1,6 +1,8 @@
 // Workflows, their published versions, and what switches them on. All are tenant-owned. A
 // version is immutable: the feature has no update path for it, only inserts.
+import { sql } from "drizzle-orm";
 import {
+  check,
   foreignKey,
   integer,
   jsonb,
@@ -15,6 +17,7 @@ import { member } from "@/db/auth-schema";
 import { connections } from "@/features/connections/lib/schema";
 import type { RiskLevel } from "@/features/policy/types";
 import type { StoredSpec } from "@/features/spec/stored";
+import type { EnablementStatus, PausedChange, PausedReason } from "../types";
 // A version's tags reference the tag itself, so renaming a tag keeps who sees the workflow.
 import { tags } from "@/features/tags/lib/schema";
 
@@ -53,9 +56,10 @@ export const workflows = pgTable(
 );
 
 /**
- * An enablement: one admin's switch-on of one member-credential workflow on their own member
- * connection. It follows the workflow's latest version. Switching off deletes it, and so does
- * deleting the connection or removing the user. `status` is only `on` until M5 adds `paused`.
+ * An enablement: one user's switch-on of one member-credential workflow on their own Google
+ * connection. It follows the workflow's latest version. Switching off deletes it (there's no
+ * "off" row), and so does deleting the connection or removing the user. A `paused` one starts
+ * no runs until its user enables it again, and always says why.
  */
 export const enablements = pgTable(
   "enablements",
@@ -65,15 +69,24 @@ export const enablements = pgTable(
     workflowId: text("workflow_id").notNull(),
     userId: text("user_id").notNull(),
     connectionId: text("connection_id").notNull(),
-    status: text("status", { enum: ["on"] })
+    status: text("status", { enum: ["on", "paused"] })
+      .$type<EnablementStatus>()
       .notNull()
       .default("on"),
+    // Set exactly while paused.
+    pausedReason: text("paused_reason", { enum: ["needs_reenable"] }).$type<PausedReason>(),
+    // What a `needs_reenable` pause is about: what the new version needs that the old didn't.
+    pausedChange: jsonb("paused_change").$type<PausedChange>(),
     // Written from JS, like the message times it's compared with (no default: the column has
     // no time zone, and the database's now() would be read back hours off).
     enabledAt: timestamp("enabled_at", { withTimezone: true }).notNull(),
   },
   (table) => [
     unique("enablements_workflow_id_user_id_unique").on(table.workflowId, table.userId),
+    check(
+      "enablements_paused_with_reason",
+      sql`(${table.status} = 'paused') = (${table.pausedReason} is not null)`,
+    ),
     unique("enablements_org_id_id_unique").on(table.orgId, table.id),
     foreignKey({
       name: "enablements_workflow_fk",

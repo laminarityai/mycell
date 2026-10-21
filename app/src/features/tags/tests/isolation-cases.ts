@@ -1,6 +1,7 @@
 import { expect } from "vitest";
 import { defineIsolationCases } from "@/db/testing/isolation";
 import type { TwoOrgs } from "@/db/testing/two-org-fixture";
+import { systemCtx } from "@/lib/ctx";
 import { NotFoundError, ValidationError } from "@/lib/errors";
 import * as server from "../server";
 
@@ -77,6 +78,20 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await server.findTagsByName(orgs.orgB.admin.ctx, ["sales"])).toEqual([
       { id: tag.id, name: "sales" },
     ]);
+  },
+
+  listTagIdsByUser: async (orgs) => {
+    const { tag } = await seedOrgBTag(orgs);
+    const own = await server.createTag(orgs.orgA.admin.ctx, "support");
+    await server.assignTag(orgs.orgA.admin.ctx, own.id, orgs.orgA.member.id);
+    const users = [orgs.orgA.member.id, orgs.orgB.member.id];
+
+    expect(await server.listTagIdsByUser(systemCtx(orgs.orgA.id), users)).toEqual(
+      new Map([[orgs.orgA.member.id, [own.id]]]),
+    );
+    expect(await server.listTagIdsByUser(orgs.orgB.admin.ctx, users)).toEqual(
+      new Map([[orgs.orgB.member.id, [tag.id]]]),
+    );
   },
 
   unassignTag: async (orgs) => {

@@ -17,7 +17,14 @@ import type { Tag } from "@/features/tags/types";
 import { PublishDialog } from "./lib/workflow-editor";
 import { WorkflowGraph, type WorkflowGraphProps } from "./lib/workflow-graph";
 import { WorkingSpecEditor, type EditableWorkflow } from "./lib/working-spec-editor";
-import type { Audience, WorkflowDetails, WorkflowSummary, WorkflowSwitch } from "./types";
+import { pausedReasonText } from "./lib/visible-workflows";
+import type {
+  Audience,
+  EnablementSummary,
+  WorkflowDetails,
+  WorkflowSummary,
+  WorkflowSwitch,
+} from "./types";
 
 export { VisibleWorkflowsList } from "./lib/visible-workflows";
 
@@ -63,9 +70,16 @@ export function WorkflowSwitchSection({
 
 /**
  * The admin's workflows: name, latest version, its max risk level, the tags it's published to
- * and how many users they reach, and whether it's on.
+ * and how many users they reach, whether it's on for them or the org, and who has it on or
+ * paused (`enablements`, by workflow ID).
  */
-export function WorkflowsList({ workflows }: { workflows: WorkflowSummary[] }) {
+export function WorkflowsList({
+  workflows,
+  enablements,
+}: {
+  workflows: WorkflowSummary[];
+  enablements: ReadonlyMap<string, EnablementSummary[]>;
+}) {
   if (workflows.length === 0) {
     return <p className="text-sm text-muted-foreground">No workflows yet.</p>;
   }
@@ -79,6 +93,7 @@ export function WorkflowsList({ workflows }: { workflows: WorkflowSummary[] }) {
           <TableHead>Published to</TableHead>
           <TableHead>Reach</TableHead>
           <TableHead>Switch</TableHead>
+          <TableHead>Enabled by</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -110,6 +125,9 @@ export function WorkflowsList({ workflows }: { workflows: WorkflowSummary[] }) {
             <TableCell>{reach(workflow.audience)}</TableCell>
             <TableCell>
               <SwitchBadge current={workflow.switch} />
+            </TableCell>
+            <TableCell className="whitespace-normal">
+              <EnabledBy enablements={enablements.get(workflow.id) ?? []} />
             </TableCell>
           </TableRow>
         ))}
@@ -145,6 +163,23 @@ function SwitchBadge({ current }: { current: WorkflowSwitch | null }) {
     <Badge variant="outline">
       {current.kind === "member" ? "On for your connection" : "On for the org"}
     </Badge>
+  );
+}
+
+/** Who has the workflow switched on, each marked when paused. */
+function EnabledBy({ enablements }: { enablements: EnablementSummary[] }) {
+  if (enablements.length === 0) return <span className="text-muted-foreground">Nobody</span>;
+  return (
+    <ul className="flex flex-col gap-1">
+      {enablements.map((enablement) => (
+        <li key={enablement.userId}>
+          {enablement.name}
+          {enablement.status === "paused"
+            ? ` (paused: ${pausedReasonText(enablement.pausedReason)})`
+            : null}
+        </li>
+      ))}
+    </ul>
   );
 }
 

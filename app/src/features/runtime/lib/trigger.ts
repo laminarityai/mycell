@@ -8,7 +8,7 @@ import { isForeignKeyViolation } from "@/db/errors";
 import { forOrg } from "@/db/for-org";
 import { getConnection } from "@/features/connections/server";
 import type { ConnectionDetails } from "@/features/connections/types";
-import { listSwitchedOn } from "@/features/workflows/server";
+import { listStartable } from "@/features/workflows/server";
 import type { SwitchedOn } from "@/features/workflows/types";
 import type { Ctx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
@@ -30,14 +30,16 @@ export async function startTriggeredRuns(
 ): Promise<{ runIds: string[] }> {
   if (ctx.role !== "system") throw new ForbiddenError();
   const occurredAt = new Date(message.occurredAt);
-  const due = (await listSwitchedOn(ctx, message.connectionId)).filter(
+  const due = (await listStartable(ctx, message.connectionId)).filter(
     (on) =>
       occurredAt.getTime() >= on.since.getTime() &&
       on.labelIds.some((label) => message.labelIds.includes(label)),
   );
   if (due.length === 0) return { runIds: [] };
   const connection = await connectionOrNull(ctx, message.connectionId);
-  if (connection === null) return { runIds: [] };
+  // Google refused its token: its switches stay as they are, and start runs again once its
+  // owner reconnects.
+  if (connection === null || connection.needsReauth) return { runIds: [] };
 
   const runIds: string[] = [];
   for (const on of due) {

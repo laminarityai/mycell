@@ -1,7 +1,7 @@
 // Publishing: a workflow's working spec, validated again, becomes its next immutable version.
 // There is no update path for a version.
 import { randomUUID } from "node:crypto";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { isUniqueViolation } from "@/db/errors";
 import { forOrg } from "@/db/for-org";
 import { sameValue } from "@/features/spec/diff";
@@ -122,4 +122,21 @@ export function version(row: Version): WorkflowVersion {
     publishedBy: row.publishedBy,
     publishedAt: row.publishedAt,
   };
+}
+
+/** Each workflow's latest version, by workflow ID; none for a workflow never published. */
+export async function latestVersions(
+  ctx: Ctx,
+  workflowIds: string[],
+): Promise<Map<string, WorkflowVersion>> {
+  const latest = new Map<string, WorkflowVersion>();
+  if (workflowIds.length === 0) return latest;
+  const rows = await forOrg(ctx).select(workflowVersions, {
+    where: inArray(workflowVersions.workflowId, workflowIds),
+    orderBy: [desc(workflowVersions.number)],
+  });
+  for (const row of rows) {
+    if (!latest.has(row.workflowId)) latest.set(row.workflowId, version(row));
+  }
+  return latest;
 }

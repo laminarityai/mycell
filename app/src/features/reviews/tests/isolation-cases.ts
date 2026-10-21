@@ -4,6 +4,7 @@ import { defineIsolationCases } from "@/db/testing/isolation";
 import type { TwoOrgs } from "@/db/testing/two-org-fixture";
 import { systemCtx, type Ctx } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
+import { fakeEmail } from "@/testing/fake-email";
 import * as server from "../server";
 import { memberEscalation } from "./escalation-helpers";
 import { memberReview } from "./review-helpers";
@@ -53,6 +54,27 @@ export const isolationCases = defineIsolationCases(server, {
       expect(await server.listReviews(ctx)).toEqual([]);
     }
     await untouched(orgs, b);
+  },
+
+  countWaitingReviews: async (orgs) => {
+    const b = await orgBReview(orgs);
+
+    for (const ctx of [...orgAUsers(orgs), systemCtx(orgs.orgA.id)]) {
+      expect(await server.countWaitingReviews(ctx)).toBe(0);
+    }
+    expect(await server.countWaitingReviews(orgs.orgB.member.ctx)).toBe(1);
+    await untouched(orgs, b);
+  },
+
+  // Org A's digest neither emails org B's people nor checks (and so ends) org B's reviews.
+  sendReviewDigest: async (orgs) => {
+    const b = await orgBReview(orgs);
+    b.mailbox.deleteDraft(b.draft.id);
+
+    expect(await server.sendReviewDigest(systemCtx(orgs.orgA.id))).toEqual({ sent: 0 });
+
+    expect(fakeEmail.sent()).toEqual([]);
+    expect(await server.listReviews(orgs.orgB.member.ctx)).toEqual([b.review]);
   },
 
   openReview: async (orgs) => {

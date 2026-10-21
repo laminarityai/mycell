@@ -12,6 +12,7 @@ import {
 } from "./types";
 import { issuesAsWritten, upgradeSpec } from "./upgrade";
 import { specV1Schema } from "./v1";
+import { isRecord } from "@/lib/utils";
 
 type At = (...path: (string | number)[]) => SpecIssue["path"];
 
@@ -21,7 +22,7 @@ type At = (...path: (string | number)[]) => SpecIssue["path"];
  * named where it wrote them. Pure: no IO, no ctx.
  */
 export function validateSpec(input: unknown): SpecValidation {
-  const v1 = isObject(input) && input.specVersion === 1;
+  const v1 = isRecord(input) && input.specVersion === 1;
   const parsed = v1 ? specV1Schema.safeParse(input) : specSchema.safeParse(input);
   if (!parsed.success) return { ok: false, issues: schemaIssues(parsed.error) };
   const spec = upgradeSpec(parsed.data);
@@ -132,10 +133,6 @@ function checkIssues(step: Step, at: At) {
     }
   });
   return issues;
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /** What a draft may read from the trigger: the message, or its whole thread. */

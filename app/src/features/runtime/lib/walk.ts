@@ -4,6 +4,7 @@
 // and its record, or in memory) is the caller's.
 import type { BranchStep, Spec, Step } from "@/features/spec/types";
 import type { Json } from "../types";
+import { isRecord } from "@/lib/utils";
 
 /** Where a step runs: its place in the order steps ran, and the outputs above it. */
 export type StepPlace = { position: number; outputs: Readonly<Record<string, Json>> };
@@ -113,8 +114,4 @@ function takenPaths(branch: BranchStep, output: Json): Step[][] {
     return list === undefined ? [] : [list];
   }
   return [];
-}
-
-function isRecord(value: Json): value is { [key: string]: Json } {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

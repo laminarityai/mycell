@@ -6,6 +6,7 @@
 // import it.
 import type { Spec, SpecIssue } from "./types";
 import type { SpecV1 } from "./v1";
+import { isRecord } from "@/lib/utils";
 
 /** The reason on the escalate step a gate that escalated becomes: fixed words, as v1 had none. */
 export const ESCALATE_REASON = "The message didn't meet the branch's condition.";
@@ -26,7 +27,7 @@ export function upgradeSpec(spec: SpecV1 | Spec): Spec {
 export function upgradeDraft<Draft extends object>(draft: Draft): Draft {
   const { specVersion, steps } = draft as { specVersion?: unknown; steps?: unknown };
   if (specVersion !== 1 || !Array.isArray(steps)) return draft;
-  const list = steps.filter(isObject);
+  const list = steps.filter(isRecord);
   const taken = new Set(list.map((step) => step.id).filter((id) => typeof id === "string"));
   return { ...draft, specVersion: 2, steps: upgradeSteps(list, taken) };
 }
@@ -36,7 +37,7 @@ function upgradeSteps(steps: StepLike[], taken: Set<string>): StepLike[] {
   if (at === -1) return steps;
   const gate = steps[at];
   const { when, else: otherwise, ...own } = gate;
-  const { step, label, minP } = isObject(when) ? when : {};
+  const { step, label, minP } = isRecord(when) ? when : {};
   const id = String(gate.id);
   const name = typeof label === "string" ? label : "";
   const pathId = freeId(`${id}-${idPart(name) || "path"}`, taken);
@@ -67,7 +68,7 @@ function upgradeSteps(steps: StepLike[], taken: Set<string>): StepLike[] {
  * Issues about a v2 input come back as they were.
  */
 export function issuesAsWritten(input: unknown, issues: SpecIssue[]): SpecIssue[] {
-  if (!isObject(input) || input.specVersion !== 1) return issues;
+  if (!isRecord(input) || input.specVersion !== 1) return issues;
   return issues.map((issue) => ({ ...issue, path: v1Path(issue.path) }));
 }
 
@@ -115,8 +116,4 @@ function freeId(wanted: string, taken: Set<unknown>): string {
   for (let n = 2; taken.has(id); n++) id = `${wanted}-${String(n)}`;
   taken.add(id);
   return id;
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

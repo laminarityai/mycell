@@ -3,6 +3,7 @@
 // about). Pure, so client code may import it.
 import type { Spec, SpecIssue } from "./types";
 import { validateSpec } from "./validate";
+import { isRecord } from "@/lib/utils";
 
 /** One step as the editor holds it: whatever fields it has, not yet validated. */
 export type StepDraft = { id?: unknown; type?: unknown; [field: string]: unknown };
@@ -26,9 +27,9 @@ export function readSpecJson(text: string): SpecJsonRead {
       message: "This isn't valid JSON. Check for a missing comma, quote or bracket.",
     };
   }
-  if (!isObject(value)) return { ok: false, message: "The spec must be a JSON object." };
+  if (!isRecord(value)) return { ok: false, message: "The spec must be a JSON object." };
   const steps = value.steps ?? [];
-  if (!Array.isArray(steps) || !steps.every(isObject)) {
+  if (!Array.isArray(steps) || !steps.every(isRecord)) {
     return { ok: false, message: "The spec's steps must be a list of objects." };
   }
   return { ok: true, draft: { ...value, steps } };
@@ -76,15 +77,11 @@ function targetOf(draft: SpecDraft, path: SpecIssue["path"]): string | null {
   let at: unknown = draft;
   let target: string | null = null;
   path.forEach((key, i) => {
-    at = isObject(at) || Array.isArray(at) ? (at as Record<string, unknown>)[key] : undefined;
+    at = isRecord(at) || Array.isArray(at) ? (at as Record<string, unknown>)[key] : undefined;
     // A step or path is an object in a `steps` or `paths` list, or a branch's `otherwise`.
     const parent = path[i - 1];
     const holder = key === "otherwise" || parent === "steps" || parent === "paths";
-    if (holder && isObject(at) && typeof at.id === "string") target = at.id;
+    if (holder && isRecord(at) && typeof at.id === "string") target = at.id;
   });
   return target;
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

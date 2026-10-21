@@ -9,6 +9,7 @@ import { describeCheck } from "@/features/spec/conditions";
 import { findStep } from "@/features/spec/tree";
 import type { Spec } from "@/features/spec/types";
 import type { TryItSummary } from "../types";
+import { isRecord } from "@/lib/utils";
 
 const ENDINGS: Record<DryRunResult["ended"], string> = {
   succeeded: "It ran to the end.",
@@ -110,10 +111,6 @@ function specInput(spec: Spec, stepId: string, field: string): string {
     return `a ${field} from ${value.from}`;
   }
   return `the ${field} the spec names`;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /** The summary as the agent reads it, in the admin's turn. */

@@ -178,6 +178,18 @@ export const isolationCases = defineIsolationCases(server, {
     }
   },
 
+  reviewSharing: async (orgs) => {
+    const b = await publishedToSalesInOrgB(orgs);
+    await tagUsers(orgs.orgA.admin.ctx, "sales", [orgs.orgA.member]);
+
+    for (const ctx of [orgs.orgA.admin.ctx, orgs.orgA.member.ctx, systemCtx(orgs.orgA.id)]) {
+      expect(await server.reviewSharing(ctx, [b.workflowId])).toEqual(new Map());
+    }
+    expect(await server.reviewSharing(orgs.orgB.member.ctx, [b.workflowId])).toEqual(
+      new Map([[b.workflowId, { seen: true, handOff: false }]]),
+    );
+  },
+
   checkWorkflowSpec: async (orgs) => {
     // Only org B has a Gmail connection: org A's check can't count it.
     await connectGmail(orgs.orgB.admin.ctx, orgs.orgB.admin.email);

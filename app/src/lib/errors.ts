@@ -38,11 +38,15 @@ export class ConflictError extends Error {
 
 /**
  * Someone acted on a review before the caller did: the first to act wins, and nothing was
- * carried out for the caller.
+ * carried out for the caller. Names who handled it, when someone in Mycel did.
  */
 export class AlreadyHandledError extends Error {
-  constructor() {
-    super("This review was already handled.");
+  constructor(handledBy?: string) {
+    super(
+      handledBy === undefined
+        ? "This review was already handled."
+        : `This review was already handled by ${handledBy}.`,
+    );
     this.name = "AlreadyHandledError";
   }
 }

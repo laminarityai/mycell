@@ -1,6 +1,8 @@
 "use client";
 
-// The top of the form: the spec's ID, whose credentials it runs with, its trigger and its rung.
+// The top of the form: the spec's ID, whose credentials it runs with, its trigger, its rung, its
+// budget and whether its reviews may be handed on.
+import { Switch } from "@/components/ui/switch";
 import type { SpecDraft } from "@/features/spec/draft";
 import type { SpecIssue } from "@/features/spec/types";
 import { issuesAt, ListField, NumberField, record, SelectField, TextField } from "./spec-fields";
@@ -30,6 +32,7 @@ export function SpecSettings({
   const trigger = record(draft.trigger);
   const autonomy = record(draft.autonomy);
   const budget = record(draft.budget);
+  const review = record(draft.review);
   return (
     <section aria-label="Settings" className="flex flex-col gap-3">
       <h3 className="text-base font-semibold">Settings</h3>
@@ -77,6 +80,16 @@ export function SpecSettings({
           onChange({ budget: monthlyCredits === undefined ? undefined : { monthlyCredits } });
         }}
       />
+      <label className="flex items-center gap-2 text-sm">
+        <Switch
+          checked={review.handoff === true}
+          aria-invalid={invalid("review")}
+          onCheckedChange={(handoff) => {
+            onChange({ review: handoff ? { handoff } : undefined });
+          }}
+        />
+        Reviews can be handed on to a colleague
+      </label>
     </section>
   );
 }

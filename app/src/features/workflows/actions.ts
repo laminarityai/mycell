@@ -176,8 +176,11 @@ export async function publishWorkflowAction(
   const ctx = await getCtx();
   try {
     const { workflowId } = parseForm(publishInput, form);
-    const tags = form.has("chooseTags") ? chosenTags(form) : undefined;
-    await publishWorkflow(ctx, workflowId, { tags });
+    // The dialog sends its choices with `chooseTags`; a bare publish keeps the working spec's.
+    const chosen = form.has("chooseTags");
+    const tags = chosen ? chosenTags(form) : undefined;
+    const handoff = chosen ? form.get("handoff") === "on" : undefined;
+    await publishWorkflow(ctx, workflowId, { tags, handoff });
   } catch (error) {
     return actionError(error);
   }

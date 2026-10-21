@@ -18,3 +18,6 @@ export { listSwitchedOn } from "./lib/switches";
 export { listStartable } from "./lib/startable";
 // For any role: workflows' names, to show beside what another feature lets the caller see.
 export { workflowNames } from "./lib/names";
+// For any role: whether the caller sees each workflow through its tags, and whether its latest
+// version lets a review be handed on. Reviews decides from it who sees an org review.
+export { reviewSharing } from "./lib/review-sharing";

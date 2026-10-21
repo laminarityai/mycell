@@ -4,7 +4,13 @@ import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { ActionResult } from "@/lib/errors";
-import { approveReviewAction, declineReviewAction, markDoneAction } from "../actions";
+import {
+  approveReviewAction,
+  declineReviewAction,
+  handOffReviewAction,
+  markDoneAction,
+} from "../actions";
+import type { ReviewPerson } from "../types";
 
 /**
  * What a person does with an open review: approve the draft as it is, edit it and approve the
@@ -89,6 +95,46 @@ export function EscalationActions({ reviewId }: { reviewId: string }) {
       </form>
       <Problem result={result} />
     </div>
+  );
+}
+
+/** Handing the review to a colleague, chosen from those the caller may hand it to. */
+export function HandOffForm({
+  reviewId,
+  colleagues,
+}: {
+  reviewId: string;
+  colleagues: ReviewPerson[];
+}) {
+  const [result, hand, handing] = useActionState(handOffReviewAction, {});
+  return (
+    <form action={hand} className="flex flex-col gap-2 border-t pt-4">
+      <input type="hidden" name="reviewId" value={reviewId} />
+      <div className="flex items-end gap-2">
+        <label className="flex flex-col gap-1 text-sm font-medium">
+          Hand it to
+          <select
+            name="toUserId"
+            required
+            defaultValue=""
+            className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm dark:bg-input/30"
+          >
+            <option value="" disabled>
+              Choose a colleague…
+            </option>
+            {colleagues.map((colleague) => (
+              <option key={colleague.id} value={colleague.id}>
+                {colleague.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <Button type="submit" variant="outline" disabled={handing}>
+          Hand on
+        </Button>
+      </div>
+      <Problem result={result} />
+    </form>
   );
 }
 

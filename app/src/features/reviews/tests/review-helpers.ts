@@ -11,7 +11,8 @@ import { systemCtx, type Ctx } from "@/lib/ctx";
 import { connectGoogle, connectMailbox } from "@/testing/connect-helpers";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import type { FakeMessageInput } from "@/testing/fake-gmail";
-import { createReview } from "../server";
+import { publishTo, tagUsers } from "@/testing/visibility-helpers";
+import { createReview, listReviews } from "../server";
 
 export const SUBJECT = "Quote for 30 oak chairs";
 export const QUESTION = "Hello, what would 30 oak chairs cost delivered to Leeds?";
@@ -111,18 +112,21 @@ export async function exampleRun(
 /**
  * A review waiting on a member's own mailbox (org A's, unless `org` says otherwise): a pricing
  * question with a draft reply in its thread, as a run of the member's enablement would leave it.
+ * `handoff` is its workflow's hand-off setting.
  */
 export async function memberReview(
   orgs: TwoOrgs,
-  options: { org?: keyof TwoOrgs; text?: string; draft?: string } = {},
+  options: { org?: keyof TwoOrgs; text?: string; draft?: string; handoff?: boolean } = {},
 ) {
+  const { handoff, ...rest } = options;
   const org = orgs[options.org ?? "orgA"];
   await connectMailbox(org.admin.ctx, org.admin.email);
-  const { workflowId, versionId } = await publish(org.admin.ctx, replySpec());
+  const spec = handoff === undefined ? replySpec() : { ...replySpec(), review: { handoff } };
+  const { workflowId, versionId } = await publish(org.admin.ctx, spec);
   return reviewOn(org.member.ctx, org.member.email, systemCtx(org.id), {
     workflowId,
     versionId,
-    ...options,
+    ...rest,
   });
 }
 
@@ -139,6 +143,47 @@ export async function reviewOn(
   const google = await connectMailbox(owner, email, [
     pricingQuestion(options.text === undefined ? {} : { text: options.text }),
   ]);
+  return draftReview(google, system, options);
+}
+
+/**
+ * An org review: org A's shared inbox runs an org-credential reply workflow published to the
+ * `sales` tag, which org A's member has, and its draft waits for review. `handoff` is the
+ * workflow's hand-off setting.
+ */
+export async function orgReview(orgs: TwoOrgs, options: { handoff?: boolean } = {}) {
+  const { orgA } = orgs;
+  const admin = orgA.admin.ctx;
+  const sales = await tagUsers(admin, "sales", [orgA.member]);
+  const google = await connectMailbox(
+    admin,
+    `support@${orgA.workspaceDomain}`,
+    [pricingQuestion()],
+    "org",
+  );
+  const spec = { ...replySpec(), id: "support-replies", credentials: "org" };
+  const published = await publishTo(
+    admin,
+    "Support replies",
+    options.handoff === undefined ? spec : { ...spec, review: { handoff: options.handoff } },
+    ["sales"],
+  );
+  const { workflowId } = published;
+  const seeded = await draftReview(google, systemCtx(orgA.id), {
+    workflowId,
+    versionId: published.version.id,
+  });
+  const review = (await listReviews(admin)).at(0);
+  if (review === undefined) throw new Error("no org review");
+  return { ...seeded, workflowId, sales, reviewId: review.id };
+}
+
+// Seeds a draft reply in the connection's first message's thread, and records its review.
+async function draftReview(
+  google: Awaited<ReturnType<typeof connectMailbox>>,
+  system: Ctx,
+  options: { workflowId: string; versionId: string; draft?: string },
+) {
   const message = google.mailbox.list(new URLSearchParams()).messages?.at(0);
   if (message === undefined) throw new Error("no message");
   const draft = google.mailbox.addDraft(message.threadId, {

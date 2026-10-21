@@ -59,12 +59,23 @@ export type NewReview = {
   reason?: string;
 };
 
-/** A waiting review as the Reviews page lists it. */
+/** A user, as a review names them. */
+export type ReviewPerson = { id: string; name: string };
+
+/** Who a review was last handed to, and who handed it to them. */
+export type HandOff = { to: ReviewPerson; by: ReviewPerson };
+
+/**
+ * A waiting review as the Reviews page lists it. `shared` is an org review, seen by everyone who
+ * sees its workflow; `handOff` says who it was handed to, if anyone.
+ */
 export type ReviewSummary = {
   id: string;
   kind: ReviewKind;
   workflowId: string;
   workflowName: string;
+  shared: boolean;
+  handOff: HandOff | null;
   createdAt: Date;
 };
 
@@ -76,11 +87,14 @@ export type Review = ReviewSummary & {
   reason: string | null;
   status: ReviewStatus;
   endedByUserId: string | null;
+  /** The name of whoever ended it in Mycel; null while waiting, or when nobody did. */
+  endedBy: string | null;
   endedAt: Date | null;
 };
 
 /**
- * An opened review: the review, and its item fetched live from its app while it's waiting
- * (null once it has ended). Never stored.
+ * An opened review: the review, its item fetched live from its app while it's waiting (null
+ * once it has ended; never stored), and the colleagues the caller may hand it to (none when they
+ * may not hand it on).
  */
-export type OpenedReview = { review: Review; view: ItemView | null };
+export type OpenedReview = { review: Review; view: ItemView | null; handOffTo: ReviewPerson[] };

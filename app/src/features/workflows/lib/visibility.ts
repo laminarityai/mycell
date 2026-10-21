@@ -111,8 +111,8 @@ async function visible(ctx: Ctx, rows: Workflow[]): Promise<VisibleWorkflow[]> {
   }));
 }
 
-// The workflows whose latest version has one of the caller's tags.
-async function sharingATag<T extends { version: WorkflowVersion }>(
+/** The workflows whose latest version has one of the caller's tags. */
+export async function sharingATag<T extends { version: WorkflowVersion }>(
   ctx: Ctx,
   published: T[],
   versionIds: string[],

@@ -31,7 +31,11 @@ export const reviews = pgTable(
     // An escalation's reason, from the escalate step in the spec (never the message); null for
     // an approval.
     reason: text("reason"),
-    // Hand-off (#65) adds handed_to_user_id and handed_by_user_id here.
+    // The colleague the review was last handed to, who may then see and act on it, and who
+    // handed it to them; null until it's handed on. Plain user IDs, like ended_by_user_id: a
+    // colleague leaving the org doesn't take the review with them.
+    handedToUserId: text("handed_to_user_id"),
+    handedByUserId: text("handed_by_user_id"),
     status: text("status", { enum: reviewStatuses }).notNull().default("waiting"),
     // Who ended it (a plain user ID, kept for the counts after they leave), and when. Null while
     // waiting, and for an item done in the app or gone, which nobody ended in Mycel.

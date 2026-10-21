@@ -1,15 +1,19 @@
 // Creating reviews and finding the ones the caller may see. Who sees a review: a member's review
-// only its owner (ADR-0001), so admins never read members' mail; an org review, until shared
-// reviews arrive (#65), only admins. Anything else is "not found", as is another org's.
+// only its owner (ADR-0001), so admins never read members' mail; an org review everyone who sees
+// its workflow through its tags, and every admin (ADR-0013); and either one the colleague it was
+// handed to. Tags are read on every call, so losing one hides its org reviews at once. Anything
+// else is "not found", as is another org's.
 import { randomUUID } from "node:crypto";
 import { and, asc, eq } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { getConnection } from "@/features/connections/server";
+import { listUsers } from "@/features/orgs/server";
 import type { PendingItem } from "@/features/runtime/adapters";
-import { workflowNames } from "@/features/workflows/server";
+import type { ReviewSharing } from "@/features/workflows/types";
+import { reviewSharing, workflowNames } from "@/features/workflows/server";
 import type { Ctx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
-import type { NewReview, Review, ReviewSummary } from "../types";
+import type { HandOff, NewReview, Review, ReviewSummary } from "../types";
 import { reviews } from "./schema";
 
 export type ReviewRow = typeof reviews.$inferSelect;
@@ -37,46 +41,80 @@ export async function createReview(ctx: Ctx, review: NewReview): Promise<void> {
 
 /** The caller's waiting reviews, oldest first, with each one's workflow's name. */
 export async function listReviews(ctx: Ctx): Promise<ReviewSummary[]> {
-  const rows = (
+  const rows = await visibleOf(
+    ctx,
     await forOrg(ctx).select(reviews, {
       where: eq(reviews.status, "waiting"),
       orderBy: [asc(reviews.createdAt), asc(reviews.id)],
-    })
-  ).filter((row) => isVisibleTo(ctx, row));
+    }),
+  );
   const names = await workflowNames(
     ctx,
     rows.map((row) => row.workflowId),
   );
-  return rows.map((row) => summaryOf(row, names.get(row.workflowId)));
+  const users = rows.some((row) => row.handedToUserId !== null)
+    ? await userNames(ctx)
+    : new Map<string, string>();
+  return rows.map((row) => summaryOf(row, users, names.get(row.workflowId)));
 }
 
 /** One review the caller may see; NotFoundError for any other, another org's included. */
 export async function visibleReview(ctx: Ctx, reviewId: string): Promise<ReviewRow> {
-  const row = (await forOrg(ctx).select(reviews, { where: eq(reviews.id, reviewId) })).at(0);
-  if (row === undefined || !isVisibleTo(ctx, row)) throw new NotFoundError("review");
+  const rows = await forOrg(ctx).select(reviews, { where: eq(reviews.id, reviewId) });
+  const row = (await visibleOf(ctx, rows)).at(0);
+  if (row === undefined) throw new NotFoundError("review");
   return row;
 }
 
 /**
- * Whether the caller may see and act on a review: its owner for a member's, admins for an org's.
- * The system ctx, which jobs act as, sees every review in its org (ADR-0009). #65 adds the
- * colleague a review was handed to, and an org review's tags.
+ * The rows the caller may see and act on: a member's review its owner's, an org review that of
+ * whoever sees its workflow now (every admin included), and either the colleague it was handed
+ * to. The system ctx, which jobs act as, sees every review in its org (ADR-0009).
  */
-function isVisibleTo(ctx: Ctx, row: ReviewRow): boolean {
-  if (ctx.role === "system") return true;
-  return row.ownerScope === "member" ? row.ownerUserId === ctx.userId : ctx.role === "admin";
+async function visibleOf(ctx: Ctx, rows: ReviewRow[]): Promise<ReviewRow[]> {
+  if (ctx.role === "system") return rows;
+  const byTags = rows.filter((row) => row.ownerScope === "org" && ctx.role !== "admin");
+  const sharing =
+    byTags.length === 0
+      ? new Map<string, ReviewSharing>()
+      : await reviewSharing(
+          ctx,
+          byTags.map((row) => row.workflowId),
+        );
+  return rows.filter((row) => {
+    if (row.handedToUserId === ctx.userId) return true;
+    if (row.ownerScope === "member") return row.ownerUserId === ctx.userId;
+    return ctx.role === "admin" || sharing.get(row.workflowId)?.seen === true;
+  });
 }
 
-/** The review as its row now stands, with its workflow's name. */
+/** The review as its row now stands, with its workflow's name and the names of its people. */
 export async function reviewOf(ctx: Ctx, row: ReviewRow): Promise<Review> {
   const names = await workflowNames(ctx, [row.workflowId]);
+  const users = await userNames(ctx);
   return {
-    ...summaryOf(row, names.get(row.workflowId)),
+    ...summaryOf(row, users, names.get(row.workflowId)),
     reason: row.reason,
     status: row.status,
     endedByUserId: row.endedByUserId,
+    endedBy: row.endedByUserId === null ? null : nameOf(users, row.endedByUserId),
     endedAt: row.endedAt,
   };
+}
+
+/**
+ * The name of whoever ended the review in Mycel, read now: for AlreadyHandledError to say who
+ * acted first. Undefined while it waits, or when nobody in Mycel ended it.
+ */
+export async function handledBy(ctx: Ctx, reviewId: string): Promise<string | undefined> {
+  const row = (await forOrg(ctx).select(reviews, { where: eq(reviews.id, reviewId) })).at(0);
+  if (row?.endedByUserId == null) return undefined;
+  return nameOf(await userNames(ctx), row.endedByUserId);
+}
+
+/** The org's users' names, by user ID. */
+export async function userNames(ctx: Ctx): Promise<Map<string, string>> {
+  return new Map((await listUsers(ctx)).map((user) => [user.id, user.name]));
 }
 
 /** Where the review's item waits, as its adapter takes it. */
@@ -105,12 +143,29 @@ export async function endReview(
   return ended.at(0);
 }
 
-function summaryOf(row: ReviewRow, workflowName = "A deleted workflow"): ReviewSummary {
+function summaryOf(
+  row: ReviewRow,
+  users: Map<string, string>,
+  workflowName = "A deleted workflow",
+): ReviewSummary {
   return {
     id: row.id,
     kind: row.kind,
     workflowId: row.workflowId,
     workflowName,
+    shared: row.ownerScope === "org",
+    handOff: handOffOf(row, users),
     createdAt: row.createdAt,
   };
+}
+
+function handOffOf(row: ReviewRow, users: Map<string, string>): HandOff | null {
+  const { handedToUserId: to, handedByUserId: by } = row;
+  if (to === null || by === null) return null;
+  return { to: { id: to, name: nameOf(users, to) }, by: { id: by, name: nameOf(users, by) } };
+}
+
+// A user who has left the org keeps no name here.
+function nameOf(users: Map<string, string>, userId: string): string {
+  return users.get(userId) ?? "someone no longer in the org";
 }

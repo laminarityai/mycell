@@ -3,7 +3,7 @@ import { defineIsolationCases } from "@/db/testing/isolation";
 import type { TwoOrgs } from "@/db/testing/two-org-fixture";
 import { getWorkflow, saveWorkflow } from "@/features/workflows/server";
 import { NotFoundError } from "@/lib/errors";
-import { connectGmail } from "@/testing/connect-helpers";
+import { connectGmail, connectGoogle } from "@/testing/connect-helpers";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import * as server from "../server";
 import { proposeInTurn } from "./proposal-helpers";
@@ -39,6 +39,21 @@ async function seedOrgBProposal(orgs: TwoOrgs) {
 }
 
 export const isolationCases = defineIsolationCases(server, {
+  tryInConversation: async (orgs) => {
+    const orgB = await seedOrgB(orgs);
+    const { id: connectionId } = await connectGoogle(orgs.orgA.admin.ctx, orgs.orgA.admin.email);
+
+    await expect(
+      server.tryInConversation(orgs.orgA.admin.ctx, orgB.conversationId, {
+        connectionId,
+        sourceRef: "m",
+      }),
+    ).rejects.toThrow(NotFoundError);
+    expect(await server.getConversation(orgs.orgB.admin.ctx, orgB.conversationId)).toEqual(
+      orgB.before,
+    );
+  },
+
   listProposals: async (orgs) => {
     const orgB = await seedOrgBProposal(orgs);
 

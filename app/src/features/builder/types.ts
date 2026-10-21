@@ -29,6 +29,12 @@ export const storedPartSchema = z.discriminatedUnion("type", [
     isError: z.boolean(),
   }),
   z.object({ type: z.literal("notice"), kind: noticeKindSchema, text: z.string() }),
+  /** An admin tried the working spec: what each step did, without the message's content. */
+  z.object({
+    type: z.literal("try_it"),
+    lines: z.array(z.string()),
+    costUsd: z.number(),
+  }),
 ]);
 export type StoredPart = z.infer<typeof storedPartSchema>;
 
@@ -57,8 +63,11 @@ export type BuilderConversation = ConversationSummary & {
   messages: BuilderMessage[];
 };
 
-/** The chat page's messages: the AI SDK's UI messages, with notices as a data part. */
-export type BuilderUIMessage = UIMessage<never, { notice: Notice }>;
+/** A try-it summary as the conversation keeps it: content-free lines, and what it cost. */
+export type TryItSummary = { lines: string[]; costUsd: number };
+
+/** The chat page's messages: the AI SDK's UI messages, with notices and try-it summaries. */
+export type BuilderUIMessage = UIMessage<never, { notice: Notice; tryIt: TryItSummary }>;
 
 /**
  * `stale`: the workflow's working spec changed after the proposal was made against it, so

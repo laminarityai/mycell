@@ -14,6 +14,8 @@ const ENDINGS: Record<DryRunResult["ended"], string> = {
   skipped: "It stopped at a branch: the workflow would do nothing more with this message.",
   escalated: "It escalated: the workflow would hand this message to a person.",
   failed: "It failed at the step above.",
+  partly_failed:
+    "It partly failed: a step above failed and ended its own path, and the other paths ran on.",
 };
 
 /** Summarizes a dry run of `spec`. */

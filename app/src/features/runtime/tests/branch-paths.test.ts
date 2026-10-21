@@ -185,6 +185,129 @@ describe("a branch with several paths, first match", () => {
   });
 });
 
+/** The triage spec as every match, with `steps` replacing each named path's steps. */
+function everyMatch(steps: Record<string, unknown[]> = {}, otherwise: unknown[] = []) {
+  const spec = triage(otherwise);
+  const route = spec.steps[2] as { mode: string; paths: { id: string; steps: unknown[] }[] };
+  route.mode = "every";
+  for (const path of route.paths) path.steps = steps[path.id] ?? path.steps;
+  return spec;
+}
+
+/** A sheet read that fails, without retrying: the spreadsheet isn't there. */
+const missingSheet = (id: string) => ({
+  id,
+  type: "tool",
+  action: "google-sheet.read-range",
+  input: { spreadsheetId: "no-such-sheet", range: "Prices!A1:C50" },
+});
+
+describe("a branch with several paths, every match", () => {
+  it("runs every path whose condition holds, one after another, left to right", async () => {
+    const { admin, system, runId } = await triageRun(
+      everyMatch({}, [labelStep("rest-label", "Other")]),
+    );
+    answers("pricing");
+    const runner = recordingStepRunner();
+
+    expect(await executeRun(system, runId, runner.runStep)).toEqual({ status: "succeeded" });
+
+    expect(runner.ids).toEqual(["kind", "details", "route", "pricing-label", "big-label"]);
+    const run = await getRun(admin, runId);
+    expect(run.steps.map((step) => step.stepId)).toEqual(runner.ids);
+    expect(run.steps.find((step) => step.stepId === "route")?.output).toEqual({
+      taken: ["pricing", "big"],
+      paths: [
+        { id: "complaint", holds: false, checks: [false] },
+        { id: "pricing", holds: true, checks: [true] },
+        { id: "big", holds: true, checks: [true, true] },
+      ],
+    });
+  });
+
+  it("runs the otherwise path only when no path holds", async () => {
+    const { system, runId } = await triageRun(everyMatch({}, [labelStep("rest-label", "Other")]));
+    answers("other", { product: "Pine tables", total: TOTAL });
+    const runner = recordingStepRunner();
+
+    expect(await executeRun(system, runId, runner.runStep)).toEqual({ status: "succeeded" });
+
+    expect(runner.ids).toEqual(["kind", "details", "route", "rest-label"]);
+  });
+
+  it("leaves the other paths running when one fails, and ends the run partly failed", async () => {
+    const spec = everyMatch({
+      pricing: [missingSheet("prices"), labelStep("pricing-label", "Pricing")],
+    });
+    const { admin, system, runId } = await triageRun(spec);
+    answers("pricing");
+    const runner = recordingStepRunner();
+
+    expect(await executeRun(system, runId, runner.runStep)).toEqual({ status: "partly_failed" });
+
+    expect(runner.ids).toEqual(["kind", "details", "route", "prices", "big-label"]);
+    const run = await getRun(admin, runId);
+    expect(run.status).toBe("partly_failed");
+    expect(run.steps.map((step) => [step.stepId, step.status])).toEqual([
+      ["kind", "succeeded"],
+      ["details", "succeeded"],
+      ["route", "succeeded"],
+      ["prices", "failed"],
+      ["big-label", "succeeded"],
+    ]);
+  });
+
+  it("ends the run failed when every path that ran failed", async () => {
+    const spec = everyMatch({
+      pricing: [missingSheet("prices")],
+      big: [missingSheet("big-prices")],
+    });
+    const { system, runId } = await triageRun(spec);
+    answers("pricing");
+    const runner = recordingStepRunner();
+
+    expect(await executeRun(system, runId, runner.runStep)).toEqual({ status: "failed" });
+
+    expect(runner.ids).toEqual(["kind", "details", "route", "prices", "big-prices"]);
+  });
+
+  it("ends the run escalated when one path hands the message over and another finishes", async () => {
+    const spec = everyMatch({
+      pricing: [{ id: "hand-over", type: "escalate", reason: "A person prices this." }],
+    });
+    const { system, runId } = await triageRun(spec);
+    answers("pricing");
+    const runner = recordingStepRunner();
+
+    expect(await executeRun(system, runId, runner.runStep)).toEqual({ status: "escalated" });
+
+    expect(runner.ids).toEqual(["kind", "details", "route", "hand-over", "big-label"]);
+  });
+
+  it("stops every path when credits run out, and ends the run failed", async () => {
+    const reply = {
+      id: "reply",
+      type: "draft",
+      role: "smart",
+      instructions: "Reply with our prices.",
+      context: ["trigger.message"],
+      output: "google-mail.create-draft",
+    };
+    const { system, runId } = await triageRun(everyMatch({ pricing: [reply] }));
+    fakeAiGateway.decision(
+      { choice: "pricing", probabilities: decided("pricing", 0.9) },
+      { costUsd: 0 },
+    );
+    // The extract spends far more than the 100 credits granted.
+    fakeAiGateway.object({ product: PRODUCT, total: TOTAL }, { costUsd: 1000 });
+    const runner = recordingStepRunner();
+
+    expect(await executeRun(system, runId, runner.runStep)).toEqual({ status: "failed" });
+
+    expect(runner.ids).toEqual(["kind", "details", "route", "reply"]);
+  });
+});
+
 describe("an approval on a path", () => {
   it("collects only the drafts on its own path, not those an approval above already has", async () => {
     const reply = (id: string) => ({

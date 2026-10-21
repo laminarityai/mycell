@@ -63,7 +63,7 @@ const triage = {
   ],
 };
 
-async function tryTriage(kind: string, extracted: Record<string, unknown>) {
+async function tryTriage(kind: string, extracted: Record<string, unknown>, spec: unknown = triage) {
   const { orgA } = await seedTwoOrgs();
   const admin = orgA.admin.ctx;
   await grantCredits(systemCtx(orgA.id), 100);
@@ -75,7 +75,7 @@ async function tryTriage(kind: string, extracted: Record<string, unknown>) {
     probabilities: { [kind]: 0.93, ...Object.fromEntries(others.map((o) => [o, 0.035])) },
   });
   fakeAiGateway.object(extracted);
-  return dryRun(admin, triage, { connectionId: google.id, sourceRef: message.id });
+  return dryRun(admin, spec, { connectionId: google.id, sourceRef: message.id });
 }
 
 describe("Try it on a branch with several paths", () => {
@@ -133,6 +133,47 @@ describe("Try it on a branch with several paths", () => {
         ],
       },
       { id: "rest", name: null, status: "taken", checks: [] },
+    ]);
+  });
+});
+
+describe("Try it on an every-match branch", () => {
+  it("runs each path that holds, left to right, and ends partly failed when one fails", async () => {
+    const [route] = triage.steps.slice(2);
+    const missingSheet = {
+      id: "prices",
+      type: "tool",
+      action: "google-sheet.read-range",
+      input: { spreadsheetId: "no-such-sheet", range: "Prices!A1:C50" },
+    };
+    const paths = [
+      path("complaint", [{ classify: "kind", is: "complaint", minP: 0.8 }]),
+      {
+        ...path("pricing", [{ classify: "kind", is: "pricing", minP: 0.8 }]),
+        steps: [missingSheet],
+      },
+      path("big", [{ subject: { from: "details.total" }, op: "more_than", value: 1000 }]),
+    ];
+    const spec = {
+      ...triage,
+      steps: [...triage.steps.slice(0, 2), { ...route, mode: "every", paths }],
+    };
+
+    const result = await tryTriage("pricing", { product: "Oak chairs", total: 2400 }, spec);
+
+    expect(result.ended).toBe("partly_failed");
+    expect(result.steps.map((step) => [step.stepId, step.status])).toEqual([
+      ["kind", "succeeded"],
+      ["details", "succeeded"],
+      ["route", "succeeded"],
+      ["prices", "failed"],
+      ["big-label", "succeeded"],
+    ]);
+    expect(result.steps[2]?.paths?.map((each) => [each.id, each.status])).toEqual([
+      ["complaint", "not_taken"],
+      ["pricing", "taken"],
+      ["big", "taken"],
+      ["rest", "not_needed"],
     ]);
   });
 });

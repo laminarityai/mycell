@@ -5,6 +5,7 @@ import { applyPolicy } from "@/features/policy/engine";
 import type { InsertedApproval, RiskLevel } from "@/features/policy/types";
 import { describeSpec, type ActionInfo, type StepDescription } from "@/features/spec/describe";
 import { diffSpecs } from "@/features/spec/diff";
+import { readStoredSpec } from "@/features/spec/stored";
 import type { Spec } from "@/features/spec/types";
 import type { Proposal, ProposalStep } from "../types";
 import type { builderProposals } from "./schema";
@@ -13,8 +14,8 @@ type ProposalRow = typeof builderProposals.$inferSelect;
 
 export function toProposal(row: ProposalRow): Proposal {
   // Both sides as a version would hold them: with the approvals the policy engine inserts.
-  const before = row.baseSpec === null ? null : withPolicy(row.baseSpec);
-  const after = withPolicy(row.spec);
+  const before = row.baseSpec === null ? null : withPolicy(readStoredSpec(row.baseSpec));
+  const after = withPolicy(readStoredSpec(row.spec));
   const diff = diffSpecs(before?.spec ?? null, after.spec);
   const beforeSteps = described(before);
   const afterSteps = described(after);

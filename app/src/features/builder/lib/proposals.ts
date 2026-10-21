@@ -5,6 +5,7 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
+import { readStoredSpec } from "@/features/spec/stored";
 import type { SpecIssue } from "@/features/spec/types";
 import {
   checkWorkflowSpec,
@@ -128,8 +129,9 @@ export async function acceptProposal(
 ): Promise<{ workflowId: string }> {
   requireAdmin(ctx);
   const row = await openProposal(ctx, proposalId);
+  const spec = readStoredSpec(row.spec);
   if (row.workflowId === null) {
-    const saved = await saveWorkflow(ctx, { name: row.name, spec: row.spec });
+    const saved = await saveWorkflow(ctx, { name: row.name, spec });
     await decide(ctx, row.id, "accepted", { workflowId: saved.id });
     // A conversation is about one workflow: the first accepted proposal links it.
     await forOrg(ctx).update(
@@ -144,7 +146,7 @@ export async function acceptProposal(
     await saveWorkflow(ctx, {
       workflowId: row.workflowId,
       name: row.name,
-      spec: row.spec,
+      spec,
       baseRevision,
     });
   } catch (error) {

@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { desc, eq } from "drizzle-orm";
 import { isUniqueViolation } from "@/db/errors";
 import { forOrg } from "@/db/for-org";
+import { readStoredSpec } from "@/features/spec/stored";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { ConflictError, ForbiddenError, NotFoundError } from "@/lib/errors";
 import type { WorkflowVersion } from "../types";
@@ -65,12 +66,13 @@ export async function getWorkflowVersion(ctx: Ctx, versionId: string): Promise<W
   return version(row);
 }
 
-function version(row: Version): WorkflowVersion {
+/** A version's row as a WorkflowVersion, its spec read in the current version's shape. */
+export function version(row: Version): WorkflowVersion {
   return {
     id: row.id,
     workflowId: row.workflowId,
     number: row.number,
-    spec: row.spec,
+    spec: readStoredSpec(row.spec),
     maxRisk: row.maxRisk,
     requiredActions: row.requiredActions,
     publishedBy: row.publishedBy,

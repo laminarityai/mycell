@@ -1,4 +1,3 @@
-import type { ConnectionSummary } from "@/features/connections/types";
 import type { InsertedApproval, RiskLevel } from "@/features/policy/types";
 import type { Spec, SpecIssue } from "@/features/spec/types";
 
@@ -118,6 +117,3 @@ export type SpecCheckResult = {
   maxRisk: RiskLevel | null;
   inserted: InsertedApproval[];
 };
-
-/** A connection as the editor sees it: whose it is and what it was granted. */
-export type EditorConnection = Pick<ConnectionSummary, "id" | "kind" | "grantedScopes" | "apps">;

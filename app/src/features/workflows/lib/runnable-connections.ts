@@ -3,26 +3,10 @@
 // offer a connection either would refuse.
 import type { ConnectionSummary } from "@/features/connections/types";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
-import type { EditorConnection } from "../types";
 import { findWorkflow } from "./access";
 import { scopeIssues } from "./scope-check";
 import { latestVersions, switchOf } from "./switches";
 import { candidateConnections, readSetup } from "./validation";
-
-/**
- * The connections a spec the caller edits could run on, whatever its credentials: their own
- * member connections and the org's, each with what it was granted, for the tool step's picker.
- */
-export async function editorConnections(ctx: Ctx): Promise<EditorConnection[]> {
-  requireAdmin(ctx);
-  const setup = await readSetup(ctx);
-  return [...setup.ownConnections, ...setup.orgConnections].map((connection) => ({
-    id: connection.id,
-    kind: connection.kind,
-    grantedScopes: connection.grantedScopes,
-    apps: connection.apps,
-  }));
-}
 
 /**
  * The connections the workflow's latest version (its working spec, until it's published) could

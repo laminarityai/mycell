@@ -2,15 +2,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { ConflictError, ForbiddenError, SpecInvalidError } from "@/lib/errors";
-import { GOOGLE_APP_SCOPES } from "@/features/connections/types";
-import { connectGmail, connectGoogle } from "@/testing/connect-helpers";
-import {
-  checkWorkflowSpec,
-  editorConnections,
-  getWorkflow,
-  publishWorkflow,
-  saveWorkflow,
-} from "../server";
+import { connectGmail } from "@/testing/connect-helpers";
+import { checkWorkflowSpec, getWorkflow, publishWorkflow, saveWorkflow } from "../server";
 import { draftSpec, labelSpec } from "./specs";
 
 beforeEach(resetDatabase);
@@ -190,31 +183,6 @@ describe("editing a working spec by hand", () => {
       saveWorkflow(admin, { workflowId: id, name: "Pricing", spec, baseRevision: 1 }),
     ).rejects.toThrow(SpecInvalidError);
     expect(await getWorkflow(admin, id)).toEqual(before);
-  });
-
-  it("offers the tool picker the admin's own connections and the org's, with their grants", async () => {
-    const { orgA } = await seedTwoOrgs();
-    const admin = orgA.admin.ctx;
-    const own = await connectGoogle(admin, orgA.admin.email, {
-      scopes: [GOOGLE_APP_SCOPES.gmail],
-    });
-    const shared = await connectGoogle(admin, "support@org-a.test", { kind: "org" });
-    // Another admin's own connection isn't one this admin's member workflows could run on.
-    await connectGoogle(orgA.member.ctx, orgA.member.email);
-
-    const connections = await editorConnections(admin);
-
-    expect(connections.map((c) => [c.id, c.kind])).toEqual(
-      expect.arrayContaining([
-        [own.id, "member"],
-        [shared.id, "org"],
-      ]),
-    );
-    expect(connections).toHaveLength(2);
-    expect(connections.find((c) => c.id === own.id)?.grantedScopes).toEqual([
-      GOOGLE_APP_SCOPES.gmail,
-    ]);
-    await expect(editorConnections(orgA.member.ctx)).rejects.toThrow(ForbiddenError);
   });
 
   it("refuses members a check", async () => {

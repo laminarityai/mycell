@@ -21,10 +21,10 @@ export function upgradeSpec(spec: SpecV1 | Spec): Spec {
 }
 
 /**
- * Any spec-like object with v1's version upgraded the same way, valid or not: for the form,
- * which edits a v1-shaped draft. Anything else comes back as it was.
+ * Any spec-like object with v1's version upgraded the same way, valid or not. Anything else
+ * comes back as it was.
  */
-export function upgradeDraft<Draft extends object>(draft: Draft): Draft {
+function upgradeDraft<Draft extends object>(draft: Draft): Draft {
   const { specVersion, steps } = draft as { specVersion?: unknown; steps?: unknown };
   if (specVersion !== 1 || !Array.isArray(steps)) return draft;
   const list = steps.filter(isRecord);

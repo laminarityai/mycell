@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
+import { listConversations } from "@/features/builder/server";
+import { ConversationList, NewConversationButton } from "@/features/builder/ui";
 import { getCtx } from "@/features/orgs/server";
 import { listRuns } from "@/features/runtime/server";
 import { RecentRuns, RunOnMessageForm } from "@/features/runtime/ui";
@@ -42,10 +44,11 @@ async function Workflow({ params }: Pick<PageProps<"/workflows/[workflowId]">, "
     if (error instanceof NotFoundError) notFound();
     throw error;
   });
-  const [runs, runnable, editing] = await Promise.all([
+  const [runs, runnable, editing, conversations] = await Promise.all([
     listRuns(ctx, workflowId),
     runnableConnections(ctx, workflowId),
     editorConnections(ctx),
+    listConversations(ctx, { workflowId }),
   ]);
   // Only the connections a run could use, the one it's switched on for first.
   const connections = runnable.map((connection) => ({
@@ -56,6 +59,14 @@ async function Workflow({ params }: Pick<PageProps<"/workflows/[workflowId]">, "
     <div className="flex flex-col gap-8">
       <WorkflowEditor workflow={workflow} connections={editing} />
       <WorkflowSwitchSection workflow={workflow} connections={connections} />
+      <section className="flex flex-col gap-3" aria-label="Builder conversations">
+        <h2 className="text-lg font-semibold">Builder conversations</h2>
+        <p className="text-sm text-muted-foreground">
+          Ask the builder to change this workflow, or continue a conversation about it.
+        </p>
+        <ConversationList conversations={conversations} />
+        <NewConversationButton workflowId={workflow.id} />
+      </section>
       <section className="flex flex-col gap-3" aria-label="Runs">
         <h2 className="text-lg font-semibold">Runs</h2>
         <RunOnMessageForm workflowId={workflow.id} connections={connections} />

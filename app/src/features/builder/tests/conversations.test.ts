@@ -96,6 +96,20 @@ describe("builder conversations", () => {
     );
   });
 
+  it("lists one workflow's conversations, for its page to continue", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const admin = orgA.admin.ctx;
+    await connectGmail(admin, orgA.admin.email);
+    const workflow = await saveWorkflow(admin, { name: "Label", spec: labelSpec() });
+    const about = await startConversation(admin, { workflowId: workflow.id });
+    await startConversation(admin, {});
+
+    expect(await listConversations(admin, { workflowId: workflow.id })).toEqual([
+      expect.objectContaining({ id: about.id, workflowId: workflow.id }),
+    ]);
+    expect(await listConversations(admin)).toHaveLength(2);
+  });
+
   it("refuses an empty message", async () => {
     const { orgA } = await seedTwoOrgs();
     const { id } = await startConversation(orgA.admin.ctx, {});

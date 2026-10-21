@@ -39,10 +39,17 @@ export async function startConversation(
   return summary(row);
 }
 
-/** The org's conversations, most recently active first. */
-export async function listConversations(ctx: Ctx): Promise<ConversationSummary[]> {
+/** The org's conversations, or one workflow's, most recently active first. */
+export async function listConversations(
+  ctx: Ctx,
+  filter: { workflowId?: string } = {},
+): Promise<ConversationSummary[]> {
   requireAdmin(ctx);
   const rows = await forOrg(ctx).select(builderConversations, {
+    where:
+      filter.workflowId === undefined
+        ? undefined
+        : eq(builderConversations.workflowId, filter.workflowId),
     orderBy: [desc(builderConversations.updatedAt), desc(builderConversations.id)],
   });
   return rows.map(summary);

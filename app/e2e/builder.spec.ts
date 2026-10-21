@@ -83,6 +83,15 @@ test("an admin accepts the builder's proposal and gets an unpublished workflow w
   );
   await page.getByRole("tab", { name: "JSON" }).click();
   await expect(page.getByRole("textbox", { name: "Spec (JSON)" })).toHaveValue(/"id": "reply"/);
+
+  // The workflow's page lists its conversation, and starts another about it.
+  const conversations = page.getByRole("region", { name: "Builder conversations" });
+  await expect(
+    conversations.getByRole("link", { name: "Draft replies to pricing questions" }),
+  ).toBeVisible();
+  await conversations.getByRole("button", { name: "New conversation" }).click();
+  await expect(page).toHaveURL(/\/builder\/[\w-]+$/);
+  await expect(page.getByRole("button", { name: "Publish" })).toBeVisible();
 });
 
 // Out of credits, a turn reaches the streaming route and the chat page, and no model.

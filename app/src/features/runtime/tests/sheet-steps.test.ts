@@ -234,9 +234,11 @@ describe("an approval step", () => {
     expect(await executeRun(system, runId)).toEqual({ status: "succeeded" });
 
     expect(google.mailbox.drafts()).toHaveLength(1);
+    // The approval above the draft ran before it was made, so the policy engine adds one after.
     expect((await getRun(admin, runId)).steps).toMatchObject([
       { stepId: "approve", status: "succeeded" },
       { stepId: "draft", status: "succeeded" },
+      { stepId: "draft-approval", status: "succeeded" },
     ]);
   });
 });

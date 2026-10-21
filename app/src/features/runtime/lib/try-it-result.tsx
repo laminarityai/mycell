@@ -17,7 +17,14 @@ function usd(amount: number): string {
   return `$${amount.toFixed(4)}`;
 }
 
-export function TryItResult({ result }: { result: DryRunResult }) {
+/** `onGraph` when the page's workflow graph shows each path's result, so the list needn't. */
+export function TryItResult({
+  result,
+  onGraph = false,
+}: {
+  result: DryRunResult;
+  onGraph?: boolean;
+}) {
   return (
     <section aria-label="Try it result" className="flex flex-col gap-3">
       <p className="text-sm">
@@ -39,7 +46,7 @@ export function TryItResult({ result }: { result: DryRunResult }) {
                 <span className="text-xs text-muted-foreground">{usd(step.costUsd)}</span>
               ) : null}
             </div>
-            <StepOutcome step={step} />
+            <StepOutcome step={step} onGraph={onGraph} />
           </li>
         ))}
       </ol>
@@ -47,7 +54,7 @@ export function TryItResult({ result }: { result: DryRunResult }) {
   );
 }
 
-function StepOutcome({ step }: { step: DryRunStep }) {
+function StepOutcome({ step, onGraph }: { step: DryRunStep; onGraph: boolean }) {
   if (step.error !== null) {
     return <p className="text-destructive">{step.error.message}</p>;
   }
@@ -62,7 +69,18 @@ function StepOutcome({ step }: { step: DryRunStep }) {
       </p>
     );
   }
-  if (step.type === "branch" && step.paths !== undefined) return <BranchPaths paths={step.paths} />;
+  if (step.type === "branch" && step.paths !== undefined) {
+    if (!onGraph) return <BranchPaths paths={step.paths} />;
+    const taken = step.paths.flatMap((path) =>
+      path.status === "taken" ? [path.name ?? "Otherwise"] : [],
+    );
+    return (
+      <p>
+        Took {taken.length === 0 ? "no path" : taken.join(", ")}. The graph shows why each path did
+        or didn&apos;t run.
+      </p>
+    );
+  }
   if (step.type === "branch") {
     const taken = Array.isArray(output.taken) ? output.taken.map(String) : [];
     return <p>Took the path {taken.join(", ")}.</p>;

@@ -43,6 +43,8 @@ export type GraphStep<Risk extends string = string> = {
   type: StepType;
   /** The kind of step, as a box's heading says it: "Classify", "Gmail · add label". */
   title: string;
+  /** The app its action acts in, as the catalog names it; null for a step that uses none. */
+  app: string | null;
   /** One plain line about what it does. */
   text: string;
   /** The risk level of the action it uses; null for a step that uses none. */
@@ -234,7 +236,7 @@ function routeOf(trace: GraphTrace | undefined) {
 
 type StepWords<Risk extends string> = Pick<
   GraphStep<Risk>,
-  "id" | "type" | "title" | "text" | "risk" | "review"
+  "id" | "type" | "title" | "app" | "text" | "risk" | "review"
 >;
 
 const TITLES: Record<StepType, string> = {
@@ -258,6 +260,7 @@ function stepWords<Risk extends string>(
       id: step.id,
       type: step.type,
       title: titleOf(step, info),
+      app: info?.app ?? null,
       text: step.type === "branch" ? branchLine(step) : describeStep(step, info?.description),
       risk: info?.risk ?? null,
       review: step.type !== "approval" ? null : inserted.has(step.id) ? "policy" : "spec",

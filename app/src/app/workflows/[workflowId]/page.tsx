@@ -6,8 +6,8 @@ import { ConversationList, NewConversationButton } from "@/features/builder/ui";
 import { getCtx } from "@/features/orgs/server";
 import { listRuns } from "@/features/runtime/server";
 import { RecentRuns, RunOnMessageForm } from "@/features/runtime/ui";
-import { editorConnections, getWorkflow, runnableConnections } from "@/features/workflows/server";
-import { WorkflowEditor, WorkflowSwitchSection } from "@/features/workflows/ui";
+import { getWorkflow, runnableConnections } from "@/features/workflows/server";
+import { GraphTraceProvider, WorkflowEditor, WorkflowSwitchSection } from "@/features/workflows/ui";
 import { NotFoundError } from "@/lib/errors";
 import { TryIt } from "./try-it";
 
@@ -19,19 +19,22 @@ export default function WorkflowPage({
   searchParams,
 }: PageProps<"/workflows/[workflowId]">) {
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
+    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">
       <header className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">Workflow</h1>
         <Link href="/workflows" className="text-sm text-muted-foreground hover:text-foreground">
           Back to workflows
         </Link>
       </header>
-      <Suspense fallback={<p className="text-sm text-muted-foreground">Loading workflow…</p>}>
-        <Workflow params={params} />
-      </Suspense>
-      <Suspense fallback={<p className="text-sm text-muted-foreground">Loading recent mail…</p>}>
-        <TryIt params={params} searchParams={searchParams} />
-      </Suspense>
+      {/* Try it lights up its route on the workflow's graph. */}
+      <GraphTraceProvider>
+        <Suspense fallback={<p className="text-sm text-muted-foreground">Loading workflow…</p>}>
+          <Workflow params={params} />
+        </Suspense>
+        <Suspense fallback={<p className="text-sm text-muted-foreground">Loading recent mail…</p>}>
+          <TryIt params={params} searchParams={searchParams} />
+        </Suspense>
+      </GraphTraceProvider>
     </main>
   );
 }
@@ -44,10 +47,9 @@ async function Workflow({ params }: Pick<PageProps<"/workflows/[workflowId]">, "
     if (error instanceof NotFoundError) notFound();
     throw error;
   });
-  const [runs, runnable, editing, conversations] = await Promise.all([
+  const [runs, runnable, conversations] = await Promise.all([
     listRuns(ctx, workflowId),
     runnableConnections(ctx, workflowId),
-    editorConnections(ctx),
     listConversations(ctx, { workflowId }),
   ]);
   // Only the connections a run could use, the one it's switched on for first.
@@ -57,7 +59,7 @@ async function Workflow({ params }: Pick<PageProps<"/workflows/[workflowId]">, "
   }));
   return (
     <div className="flex flex-col gap-8">
-      <WorkflowEditor workflow={workflow} connections={editing} />
+      <WorkflowEditor workflow={workflow} />
       <WorkflowSwitchSection workflow={workflow} connections={connections} />
       <section className="flex flex-col gap-3" aria-label="Builder conversations">
         <h2 className="text-lg font-semibold">Builder conversations</h2>

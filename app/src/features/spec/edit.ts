@@ -1,11 +1,7 @@
-// Editing a working spec by hand, as the workflow editor's form does. The form edits a draft:
-// any JSON object with a list of step objects, which needn't be a valid spec yet (validation
-// says what's wrong, at the step and field it's about). The form shows v1's one list of steps,
-// where a branch goes on or stops: a v2 spec whose branches each have one path is shown that
-// way, and saving upgrades it back. Pure, so client code may import it.
-import { sameValue } from "./diff";
+// Editing a working spec by hand, as the workflow editor does. The editor edits a draft: any
+// JSON object with a list of step objects, which needn't be a valid spec yet (validation says
+// what's wrong, at the step and field it's about). Pure, so client code may import it.
 import type { SpecIssue, StepType } from "./types";
-import { upgradeDraft } from "./upgrade";
 
 /** One step as the form edits it: whatever fields it has, not yet validated. */
 export type StepDraft = { id?: unknown; type?: unknown; [field: string]: unknown };
@@ -16,9 +12,8 @@ export type SpecDraft = { steps: StepDraft[]; [field: string]: unknown };
 export type SpecJsonRead = { ok: true; draft: SpecDraft } | { ok: false; message: string };
 
 /**
- * The JSON view's text as a draft the form can show, or why it can't: it isn't JSON, or isn't
- * an object whose `steps` is a list of objects, or is a v2 spec the form can't show as one
- * list. A spec with no `steps` yet gets an empty list.
+ * The JSON view's text as a draft, or why it can't be one: it isn't JSON, or isn't an object
+ * whose `steps` is a list of objects. A spec with no `steps` yet gets an empty list.
  */
 export function readSpecJson(text: string): SpecJsonRead {
   let value: unknown;
@@ -35,49 +30,7 @@ export function readSpecJson(text: string): SpecJsonRead {
   if (!Array.isArray(steps) || !steps.every(isObject)) {
     return { ok: false, message: "The spec's steps must be a list of objects." };
   }
-  const draft = { ...value, steps };
-  if (value.specVersion !== 2) return { ok: true, draft };
-  const flat = oneList(draft);
-  if (flat === undefined) {
-    return {
-      ok: false,
-      message:
-        "The form shows a workflow whose branches each have one path, and stop or hand the message to a person otherwise. Edit this one in the JSON view.",
-    };
-  }
-  return { ok: true, draft: flat };
-}
-
-/** A v2 draft as v1's one list of steps, when upgrading that list gives the draft back. */
-function oneList(draft: SpecDraft): SpecDraft | undefined {
-  const steps = gatesOf(draft.steps);
-  if (steps === undefined) return undefined;
-  const flat = { ...draft, specVersion: 1, steps };
-  return sameValue(upgradeDraft(flat), draft) ? flat : undefined;
-}
-
-/** Each branch as a v1 gate followed by its one path's steps; undefined for one v1 can't show. */
-function gatesOf(steps: StepDraft[]): StepDraft[] | undefined {
-  const flat: StepDraft[] = [];
-  for (const step of steps) {
-    if (step.type !== "branch" || !("paths" in step)) {
-      flat.push(step);
-      continue;
-    }
-    const own = Object.fromEntries(
-      Object.entries(step).filter(([field]) => !["mode", "paths", "otherwise"].includes(field)),
-    );
-    const path = listOf(step.paths).at(0);
-    const check =
-      isObject(path) && isObject(path.condition) ? listOf(path.condition.checks).at(0) : undefined;
-    const after = isObject(path) ? listOf(path.steps).filter(isObject) : [];
-    const handsOver = isObject(step.otherwise) && listOf(step.otherwise.steps).length > 0;
-    const rest = gatesOf(after);
-    if (!isObject(check) || rest === undefined) return undefined;
-    const when = { step: check.classify, label: check.is, minP: check.minP };
-    flat.push({ ...own, when, else: handsOver ? "escalate" : "stop" }, ...rest);
-  }
-  return flat;
+  return { ok: true, draft: { ...value, steps } };
 }
 
 /**
@@ -177,10 +130,6 @@ function blankFields(type: StepType, draft: SpecDraft): Record<string, unknown> 
 function withFields(step: StepDraft, fields: Record<string, unknown>): StepDraft {
   const entries = Object.entries({ ...step, ...fields });
   return Object.fromEntries(entries.filter(([, value]) => value !== undefined));
-}
-
-function listOf(value: unknown): unknown[] {
-  return Array.isArray(value) ? (value as unknown[]) : [];
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

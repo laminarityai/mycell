@@ -1,5 +1,5 @@
 {
-  "id": "b24c5753-0e02-4a50-95c1-f4dbb2363363",
+  "id": "97500440-a049-404b-9027-35406031b263",
   "prevId": "ceaa5f77-ffc2-4788-bf0b-bf8df9b9a339",
   "version": "7",
   "dialect": "postgresql",
@@ -1525,169 +1525,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.reviews": {
-      "name": "reviews",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "org_id": {
-          "name": "org_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "connection_id": {
-          "name": "connection_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "run_id": {
-          "name": "run_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "workflow_id": {
-          "name": "workflow_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "workflow_version_id": {
-          "name": "workflow_version_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "owner_scope": {
-          "name": "owner_scope",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "owner_user_id": {
-          "name": "owner_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "item_ref": {
-          "name": "item_ref",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "thread_ref": {
-          "name": "thread_ref",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "source_ref": {
-          "name": "source_ref",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'waiting'"
-        },
-        "ended_by_user_id": {
-          "name": "ended_by_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "ended_at": {
-          "name": "ended_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "reviews_org_id_status_idx": {
-          "name": "reviews_org_id_status_idx",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "status",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "reviews_connection_fk": {
-          "name": "reviews_connection_fk",
-          "tableFrom": "reviews",
-          "tableTo": "connections",
-          "columnsFrom": ["org_id", "connection_id"],
-          "columnsTo": ["org_id", "id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "reviews_owner_fk": {
-          "name": "reviews_owner_fk",
-          "tableFrom": "reviews",
-          "tableTo": "member",
-          "columnsFrom": ["org_id", "owner_user_id"],
-          "columnsTo": ["organization_id", "user_id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "reviews_org_id_run_id_item_ref_unique": {
-          "name": "reviews_org_id_run_id_item_ref_unique",
-          "nullsNotDistinct": false,
-          "columns": ["org_id", "run_id", "item_ref"]
-        },
-        "reviews_org_id_id_unique": {
-          "name": "reviews_org_id_id_unique",
-          "nullsNotDistinct": false,
-          "columns": ["org_id", "id"]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.model_roles": {
       "name": "model_roles",
       "schema": "",
@@ -2242,6 +2079,61 @@
           "columns": ["org_id", "id"]
         }
       },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.workflow_version_tags": {
+      "name": "workflow_version_tags",
+      "schema": "",
+      "columns": {
+        "org_id": {
+          "name": "org_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "workflow_version_id": {
+          "name": "workflow_version_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tag_id": {
+          "name": "tag_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "workflow_version_tags_version_fk": {
+          "name": "workflow_version_tags_version_fk",
+          "tableFrom": "workflow_version_tags",
+          "tableTo": "workflow_versions",
+          "columnsFrom": ["org_id", "workflow_version_id"],
+          "columnsTo": ["org_id", "id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "workflow_version_tags_tag_fk": {
+          "name": "workflow_version_tags_tag_fk",
+          "tableFrom": "workflow_version_tags",
+          "tableTo": "tags",
+          "columnsFrom": ["org_id", "tag_id"],
+          "columnsTo": ["org_id", "id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "workflow_version_tags_workflow_version_id_tag_id_pk": {
+          "name": "workflow_version_tags_workflow_version_id_tag_id_pk",
+          "columns": ["workflow_version_id", "tag_id"]
+        }
+      },
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

@@ -6,6 +6,7 @@ import {
   assignTag,
   createTag,
   deleteTag,
+  findTagsByName,
   listMyTags,
   listTags,
   renameTag,
@@ -245,5 +246,36 @@ describe("listMyTags", () => {
       { id: support.id, name: "support" },
     ]);
     expect(await listMyTags(orgA.admin.ctx)).toEqual([{ id: sales.id, name: "sales" }]);
+  });
+});
+
+describe("findTagsByName", () => {
+  it("finds each named tag once, in the order named", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const sales = await createTag(orgA.admin.ctx, "sales");
+    const support = await createTag(orgA.admin.ctx, "support");
+
+    expect(await findTagsByName(orgA.admin.ctx, ["support", "sales", "support"])).toEqual([
+      { id: support.id, name: "support" },
+      { id: sales.id, name: "sales" },
+    ]);
+    expect(await findTagsByName(orgA.admin.ctx, [])).toEqual([]);
+  });
+
+  it("refuses a name no tag has, naming it", async () => {
+    const { orgA } = await seedTwoOrgs();
+    await createTag(orgA.admin.ctx, "sales");
+
+    const finding = findTagsByName(orgA.admin.ctx, ["sales", "slaes"]);
+
+    await expect(finding).rejects.toThrow(ValidationError);
+    await expect(finding).rejects.toThrow(/"slaes"/);
+  });
+
+  it("is refused to a member", async () => {
+    const { orgA } = await seedTwoOrgs();
+    await createTag(orgA.admin.ctx, "sales");
+
+    await expect(findTagsByName(orgA.member.ctx, ["sales"])).rejects.toThrow(ForbiddenError);
   });
 });

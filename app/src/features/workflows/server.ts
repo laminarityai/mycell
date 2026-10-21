@@ -1,6 +1,7 @@
-// The workflows feature: specs saved as workflows, published as immutable workflow versions.
-// Admin-only in M3; members get ForbiddenError.
+// The workflows feature: specs saved as workflows, published as immutable workflow versions to
+// tags. Editing and publishing are admin-only; members see the workflows published to their tags.
 export { getWorkflowVersion, publishWorkflow } from "./lib/versions";
+export { getVisibleWorkflow, listVisibleWorkflows } from "./lib/visibility";
 export { getWorkflow, listWorkflows, saveWorkflow } from "./lib/workflows";
 export { switchWorkflowOff, switchWorkflowOn } from "./lib/switches";
 export { runnableConnections } from "./lib/runnable-connections";

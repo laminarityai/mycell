@@ -4,7 +4,7 @@ import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getCtx } from "@/features/orgs/server";
-import { actionError, type ActionResult } from "@/lib/errors";
+import { actionError, ValidationError, type ActionResult } from "@/lib/errors";
 import { parseForm } from "@/lib/forms";
 import {
   checkWorkflowSpec,
@@ -23,6 +23,16 @@ const saveInput = z.object({
   baseRevision: z.coerce.number().int().positive().optional(),
 });
 const publishInput = z.object({ workflowId: z.string().min(1) });
+const tagNames = z.array(z.string().min(1));
+
+// The publish dialog's ticked tags: one `tag` field each.
+function chosenTags(form: FormData): string[] {
+  const parsed = tagNames.safeParse(form.getAll("tag"));
+  if (!parsed.success) {
+    throw new ValidationError("The form was missing something. Reload the page and try again.");
+  }
+  return parsed.data;
+}
 const switchOnInput = z.object({ workflowId: z.string().min(1), connectionId: z.string().min(1) });
 
 /**
@@ -111,6 +121,11 @@ export async function switchWorkflowOffAction(
   return {};
 }
 
+/**
+ * Publishes the working spec. From the publish dialog (`chooseTags` set), the ticked `tag`
+ * fields are the tags it's published to, saved into the working spec; without it (the builder's
+ * Publish), the working spec's own tags.
+ */
 export async function publishWorkflowAction(
   _previous: ActionResult,
   form: FormData,
@@ -118,7 +133,8 @@ export async function publishWorkflowAction(
   const ctx = await getCtx();
   try {
     const { workflowId } = parseForm(publishInput, form);
-    await publishWorkflow(ctx, workflowId);
+    const tags = form.has("chooseTags") ? chosenTags(form) : undefined;
+    await publishWorkflow(ctx, workflowId, { tags });
   } catch (error) {
     return actionError(error);
   }

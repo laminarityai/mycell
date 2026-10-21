@@ -2,6 +2,7 @@
 // Every read, update, and delete is filtered to ctx.orgId, and every insert takes its
 // org_id from ctx. A caller can't name another org: org_id isn't accepted as input.
 import { and, eq, type InferInsertModel, type InferSelectModel, type SQL } from "drizzle-orm";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { AnyPgColumn, PgColumn, PgTable } from "drizzle-orm/pg-core";
 import type { Ctx } from "@/lib/ctx";
 import { getDb } from "./client";
@@ -36,10 +37,21 @@ export type OrgScopedDb = {
     where?: SQL,
   ): Promise<InferSelectModel<T>[]>;
   delete<T extends TenantTable>(table: T, where?: SQL): Promise<InferSelectModel<T>[]>;
+  /**
+   * Runs `fn` in one database transaction, with a handle scoped to the same org: its writes
+   * commit together, or none do when `fn` throws (the error is rethrown).
+   */
+  transaction<R>(fn: (tx: OrgScopedDb) => Promise<R>): Promise<R>;
 };
 
+// The database, or a transaction on it: both run the same queries.
+type Executor = Pick<NodePgDatabase, "select" | "insert" | "update" | "delete" | "transaction">;
+
 export function forOrg(ctx: Ctx): OrgScopedDb {
-  const db = getDb();
+  return scoped(ctx, getDb());
+}
+
+function scoped(ctx: Ctx, db: Executor): OrgScopedDb {
   const inOrg = (table: TenantTable, where?: SQL) => and(eq(table.orgId, ctx.orgId), where);
 
   return {
@@ -83,6 +95,10 @@ export function forOrg(ctx: Ctx): OrgScopedDb {
     async delete(table, where) {
       const deleted = await db.delete(table).where(inOrg(table, where)).returning();
       return deleted as InferSelectModel<typeof table>[];
+    },
+
+    transaction(fn) {
+      return db.transaction((tx) => fn(scoped(ctx, tx)));
     },
   };
 }

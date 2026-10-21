@@ -11,6 +11,9 @@ export default function ReviewsPage() {
       <header className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">Reviews</h1>
         <nav className="flex gap-4 text-sm text-muted-foreground">
+          <Link href="/workflows" className="hover:text-foreground">
+            Workflows
+          </Link>
           <Link href="/connections" className="hover:text-foreground">
             Connections
           </Link>

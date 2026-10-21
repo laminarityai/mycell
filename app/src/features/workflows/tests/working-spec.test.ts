@@ -111,7 +111,7 @@ describe("checkWorkflowSpec", () => {
 });
 
 describe("editing a working spec by hand", () => {
-  it("saves a classify step's new question and threshold over the revision it was opened at", async () => {
+  it("saves a classify step's new question and check threshold over the revision it was opened at", async () => {
     const { orgA } = await seedTwoOrgs();
     const admin = orgA.admin.ctx;
     await connectGmail(admin, orgA.admin.email);
@@ -133,6 +133,29 @@ describe("editing a working spec by hand", () => {
     expect((await getWorkflow(admin, id)).workingSpec.steps[0]).toMatchObject({
       question: "Is this about prices?",
       checks: { minP: 0.9 },
+    });
+  });
+
+  it("saves a branch's new threshold, the confidence it goes on at", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const admin = orgA.admin.ctx;
+    await connectGmail(admin, orgA.admin.email);
+    const { id } = await saveWorkflow(admin, { name: "Pricing", spec: draftSpec() });
+    const opened = await getWorkflow(admin, id);
+    const steps = opened.workingSpec.steps.map((step) =>
+      step.type === "branch" ? { ...step, when: { ...step.when, minP: 0.7 } } : step,
+    );
+
+    await saveWorkflow(admin, {
+      workflowId: id,
+      name: opened.name,
+      spec: { ...opened.workingSpec, steps },
+      baseRevision: opened.revision,
+    });
+
+    expect((await getWorkflow(admin, id)).workingSpec.steps[1]).toMatchObject({
+      type: "branch",
+      when: { step: "classify", label: "yes", minP: 0.7 },
     });
   });
 

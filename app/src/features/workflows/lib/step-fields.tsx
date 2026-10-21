@@ -54,7 +54,7 @@ export function StepFields(props: StepFieldsProps) {
             }}
           />
           <NumberField
-            label="Minimum confidence (0 to 1)"
+            label="Check: fail the run below confidence (0 to 1)"
             value={record(step.checks).minP}
             min={0}
             max={1}
@@ -181,7 +181,7 @@ function BranchFields({ step, earlier, issues, onChange }: StepFieldsProps) {
         />
       )}
       <NumberField
-        label="With confidence at least (0 to 1)"
+        label="Go on only with confidence at least (0 to 1)"
         value={when.minP}
         min={0}
         max={1}

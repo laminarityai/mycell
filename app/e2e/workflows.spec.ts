@@ -89,16 +89,19 @@ test("an admin writes a workflow in the JSON view, then edits it in the form", a
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByRole("heading", { name: "Workflow", exact: true })).toBeVisible();
 
-  // A classify step's question and threshold, changed in the form, show in the JSON view.
+  // A classify step's question and check threshold, and the branch's threshold, changed in the
+  // form, show in the JSON view.
+  const gate = page.getByRole("region", { name: "Step gate" });
   await classify.getByRole("textbox", { name: "Question" }).fill("Is this about prices?");
-  await classify.getByRole("spinbutton", { name: "Minimum confidence" }).fill("0.9");
+  await classify.getByRole("spinbutton", { name: "fail the run below confidence" }).fill("0.9");
+  await gate.getByRole("spinbutton", { name: "Go on only with confidence" }).fill("0.7");
   await page.getByRole("tab", { name: "JSON" }).click();
   await expect(jsonView(page)).toHaveValue(/"question": "Is this about prices\?"/);
-  await expect(jsonView(page)).toHaveValue(/"minP": 0.9/);
+  await expect(jsonView(page)).toHaveValue(/"checks": \{\s*"minP": 0.9/);
+  await expect(jsonView(page)).toHaveValue(/"label": "yes",\s*"minP": 0.7/);
   await page.getByRole("tab", { name: "Form" }).click();
 
   // An issue shows on the step it's about.
-  const gate = page.getByRole("region", { name: "Step gate" });
   await gate.getByRole("combobox", { name: "When step" }).selectOption("classify");
   await classify.getByRole("textbox", { name: "Labels (comma-separated)" }).fill("pricing, other");
   await expect(gate.getByRole("list", { name: "Issues with step gate" })).toContainText(
@@ -114,7 +117,12 @@ test("an admin writes a workflow in the JSON view, then edits it in the form", a
   await expect(classify.getByRole("textbox", { name: "Question" })).toHaveValue(
     "Is this about prices?",
   );
-  await expect(classify.getByRole("spinbutton", { name: "Minimum confidence" })).toHaveValue("0.9");
+  await expect(
+    classify.getByRole("spinbutton", { name: "fail the run below confidence" }),
+  ).toHaveValue("0.9");
+  await expect(gate.getByRole("spinbutton", { name: "Go on only with confidence" })).toHaveValue(
+    "0.7",
+  );
 });
 
 test("saving over a newer working spec is refused, and members can't reach the editor", async ({

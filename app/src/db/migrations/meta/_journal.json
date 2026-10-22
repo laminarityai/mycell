@@ -201,8 +201,15 @@
     {
       "idx": 28,
       "version": "7",
-      "when": 1792650385987,
-      "tag": "0028_memory-budget-and-exclusions",
+      "when": 1792650291647,
+      "tag": "0028_memory-company-wide-lists",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1792652366132,
+      "tag": "0029_memory-budget-and-exclusions",
       "breakpoints": true
     }
   ]

@@ -32,3 +32,9 @@ export { addExclusion, removeExclusion } from "./lib/exclusions";
 // forgetting what a new exclusion covers.
 export { queueStoredItems, resumePostponed } from "./lib/budget";
 export { forgetExcluded } from "./lib/exclusions";
+// Group addresses an admin marks company-wide. Admins only.
+export {
+  listCompanyWideLists,
+  markCompanyWideList,
+  unmarkCompanyWideList,
+} from "./lib/company-wide-lists";

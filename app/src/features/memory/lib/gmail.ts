@@ -81,9 +81,11 @@ export async function readEmail(
   const body = bodyText(flatten(message.payload)).slice(0, MAX_BODY_CHARS);
   return {
     sourceRef: message.id,
+    // With no Message-ID, the copy is its own item: Gmail's message IDs are only unique within
+    // one mailbox, and a shared item key makes a copy visible to its holder.
     itemKey:
       messageIdHeader === ""
-        ? `gmail:${message.id}`
+        ? `gmail:${connectionId}:${message.id}`
         : messageIdHeader.replace(/^<|>$/g, "").toLowerCase(),
     occurredAt: new Date(Number(message.internalDate)),
     labelIds: message.labelIds,

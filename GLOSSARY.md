@@ -227,6 +227,10 @@ An exact identifier of an object, such as a person's email address or a company'
 **Exclusion**:
 A Gmail label, Drive folder or similar that an admin keeps out of memory for the whole company.
 
+**Company-wide list**:
+A group address, such as all@, that an admin marked company-wide, so what memory learns from email sent to it is visible to everyone in the org.
+_Avoid_: Public list, shared list
+
 **Injection screen**:
 The check that content fetched from a company's apps doesn't try to give a model instructions, made before any model reads it; an item it flags is skipped.
 _Avoid_: Guardrail, filter, firewall

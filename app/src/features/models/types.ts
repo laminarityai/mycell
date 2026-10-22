@@ -2,10 +2,19 @@
 // throws.
 import type { LanguageModel } from "ai";
 import type { z } from "zod";
+import type { CreditPurpose } from "@/features/credits/types";
 import type { ModelRole } from "@/features/spec/types";
 
-/** What a model call is for; recorded on its ledger entry. */
-export type CallAttribution = { workflowId?: string; runId?: string; dryRun?: boolean };
+/**
+ * What a model call is for; recorded on its ledger entry. `purpose` tags usage a budget of its
+ * own caps (memory's learning).
+ */
+export type CallAttribution = {
+  workflowId?: string;
+  runId?: string;
+  dryRun?: boolean;
+  purpose?: CreditPurpose;
+};
 
 /** A streamed call's model and its metering (`openMeteredStream`). */
 export type MeteredStream = {
@@ -112,8 +121,8 @@ export type ScreenResult = { verdict: ScreenVerdict; costUsd: number };
 export type InjectionScreen = {
   /** What the ledger names as the call's model: `provider/service`. */
   service: string;
-  /** What screening `text` costs, in US dollars, estimated before the call. */
-  costUsd(text: string): number;
+  /** What screening a text of `characters` characters costs, in US dollars, estimated before. */
+  costUsd(characters: number): number;
   /** Whether `text` tries to instruct a model. Throws InjectionScreenError when it can't say. */
   isInjection(text: string): Promise<boolean>;
 };

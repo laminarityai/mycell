@@ -85,6 +85,7 @@ export async function meteredCall<R>(
     workflowId: attribution.workflowId,
     runId: attribution.runId,
     dryRun: attribution.dryRun,
+    purpose: attribution.purpose,
   };
   let output: R;
   try {

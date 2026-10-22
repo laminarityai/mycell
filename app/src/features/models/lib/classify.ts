@@ -69,6 +69,7 @@ async function fallback(ctx: Ctx, request: ClassifyRequest): Promise<Classificat
     workflowId: request.workflowId,
     runId: request.runId,
     dryRun: request.dryRun,
+    purpose: request.purpose,
   });
   return { ...output, modelId, costUsd, fallback: true };
 }

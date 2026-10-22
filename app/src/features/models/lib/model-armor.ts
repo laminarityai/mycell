@@ -46,8 +46,8 @@ export function modelArmorScreen(config: ModelArmorConfig): InjectionScreen {
   const url = `https://modelarmor.${location}.rep.googleapis.com/v1/${config.template}:sanitizeUserPrompt`;
   return {
     service: SERVICE,
-    costUsd: (text) =>
-      (Math.ceil(text.length / CHARS_PER_TOKEN) * USD_PER_MILLION_TOKENS) / 1_000_000,
+    costUsd: (characters) =>
+      (Math.ceil(characters / CHARS_PER_TOKEN) * USD_PER_MILLION_TOKENS) / 1_000_000,
     async isInjection(text) {
       let token: string;
       try {

@@ -3,7 +3,14 @@ import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { systemCtx } from "@/lib/ctx";
 import { ForbiddenError, OutOfCreditsError, ValidationError } from "@/lib/errors";
-import { checkCredits, getBalance, grantCredits, listLedger, recordUsage } from "../server";
+import {
+  checkCredits,
+  getBalance,
+  getSpending,
+  grantCredits,
+  listLedger,
+  recordUsage,
+} from "../server";
 
 beforeEach(resetDatabase);
 
@@ -87,5 +94,35 @@ describe("listLedger", () => {
     const { orgA } = await seedTwoOrgs();
 
     await expect(listLedger(orgA.member.ctx)).rejects.toThrow(ForbiddenError);
+  });
+});
+
+describe("getSpending", () => {
+  it("adds up the credits one purpose used since a time, and nothing else", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const ctx = systemCtx(orgA.id);
+    await grantCredits(ctx, 100);
+    const call = { role: "fast" as const, modelId: "openai/x", outcome: "succeeded" as const };
+    await recordUsage(ctx, { ...call, costUsd: 0.002, purpose: "memory" });
+    await recordUsage(ctx, {
+      ...call,
+      role: null,
+      modelId: "google/model-armor",
+      costUsd: 0.001,
+      purpose: "memory",
+    });
+    // A workflow's call isn't memory's.
+    await recordUsage(ctx, { ...call, costUsd: 0.05 });
+
+    const anHourAgo = new Date(Date.now() - 3_600_000);
+    expect(await getSpending(ctx, { purpose: "memory", since: anHourAgo })).toBeCloseTo(3);
+    const inAnHour = new Date(Date.now() + 3_600_000);
+    expect(await getSpending(ctx, { purpose: "memory", since: inAnHour })).toBe(0);
+    expect((await listLedger(ctx)).map((entry) => entry.purpose).sort()).toEqual([
+      "memory",
+      "memory",
+      null,
+      null,
+    ]);
   });
 });

@@ -63,9 +63,13 @@ export type ScriptedExtraction = {
 /**
  * Scripts one business email's learning: classify says business, the extraction answers
  * `extraction`, and the embedding answers one vector for each fact it keeps (`kept`, every fact
- * by default).
+ * by default): `vectors` in order, or made-up ones.
  */
-export function scriptLearning(extraction: ScriptedExtraction, kept = extraction.facts.length) {
+export function scriptLearning(
+  extraction: ScriptedExtraction,
+  kept = extraction.facts.length,
+  vectors?: number[][],
+) {
   classifiedAs("business");
   fakeAiGateway.object({
     objects: extraction.objects.map((object) => ({
@@ -83,11 +87,19 @@ export function scriptLearning(extraction: ScriptedExtraction, kept = extraction
     })),
   });
   if (kept > 0) {
-    fakeAiGateway.embeddings(Array.from({ length: kept }, (_, i) => vector(i + 1)));
+    fakeAiGateway.embeddings(vectors ?? Array.from({ length: kept }, (_, i) => vector(i + 1)));
   }
 }
 
 /** A vector of the `embed` role's 1536 dimensions. */
 export function vector(seed: number): number[] {
   return Array.from({ length: 1536 }, (_, i) => ((seed * 31 + i) % 97) / 97);
+}
+
+/**
+ * A 1536-dimension vector pointing mostly along `axis`, leaning `lean` of the way towards
+ * `towards`: two facts on one axis mean nearly the same, two on different axes nothing alike.
+ */
+export function meaning(axis: number, towards = axis, lean = 0): number[] {
+  return Array.from({ length: 1536 }, (_, i) => (i === axis ? 1 - lean : i === towards ? lean : 0));
 }

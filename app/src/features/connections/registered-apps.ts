@@ -4,14 +4,16 @@
 // because `connections` connects and proxies them, and `custom-actions` imports `connections`.
 //
 // Registering an app: add its ID to `registeredAppIdSchema` (types.ts), its entry below, its API
-// description under `app/api-descriptions/`, how to read which account it reached
-// (lib/apps.ts), its integration to `pnpm nango:preflight`, and a fake of it to the fake Nango.
+// description under `app/api-descriptions/` and the operation index `pnpm api-index` builds from
+// it, how to read which account it reached (lib/apps.ts), its integration to
+// `pnpm nango:preflight`, and a fake of it to the fake Nango.
 import { GOOGLE_API_PREFIXES, GOOGLE_HOSTS } from "@/lib/google";
 import {
   GOOGLE_APP_SCOPES,
   registeredAppIdSchema,
   type RegisteredApp,
   type RegisteredAppId,
+  type Source,
 } from "./types";
 
 const DISCOVERY = "https://www.googleapis.com/discovery/v1/apis";
@@ -94,6 +96,11 @@ export const REGISTERED_APPS: Record<RegisteredAppId, RegisteredApp> = {
 export const registeredApps: readonly RegisteredApp[] = registeredAppIdSchema.options.map(
   (id) => REGISTERED_APPS[id],
 );
+
+/** The registered app a connection reaches: a one-app connection from before ADR-0014, Google. */
+export function registeredAppOf(source: Source): RegisteredAppId {
+  return source === "gmail" || source === "drive" ? "google" : source;
+}
 
 /**
  * The URL a path reaches on the app: on Google, the host of the API its prefix names; on any

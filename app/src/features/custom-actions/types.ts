@@ -4,6 +4,7 @@
 import { z } from "zod";
 import { registeredAppIdSchema, type RegisteredAppId } from "@/features/connections/types";
 import { httpMethodSchema, type RiskLevel } from "@/features/policy/types";
+import type { ApiField, ApiOperation } from "./lib/api-index-types";
 
 /** `microsoft.read-message`: the app's word, a dot, then what it does. Unique in the org. */
 export const customActionNameSchema = z
@@ -187,3 +188,41 @@ export type FiledCapabilityRequest = {
   status: CapabilityRequestStatus;
   message: string;
 };
+
+/**
+ * What the builder chat's API lookup takes: a registered app, then plain words to search its
+ * API description by (optionally one HTTP method), or one of its types by name.
+ */
+export const apiLookupInputSchema = z
+  .strictObject({
+    app: registeredAppIdSchema,
+    search: z.string().min(1).optional(),
+    method: httpMethodSchema.optional(),
+    type: z.string().min(1).optional(),
+  })
+  .refine((input) => (input.search === undefined) !== (input.type === undefined), {
+    message: "Pass either search (plain words) or type (a type's name), not both.",
+  });
+export type ApiLookupInput = z.infer<typeof apiLookupInputSchema>;
+
+/** A type as the lookup shows it: its name, what it is, and its fields, one level deep. */
+export type ApiTypeShown = {
+  type: string;
+  description?: string;
+  fields: ApiField[];
+  /** How many more fields it has than are shown. */
+  moreFields?: number;
+};
+
+export type FoundOperation = Omit<ApiOperation, "body" | "response"> & {
+  /** What the fixed risk rule makes of a custom action making this call. */
+  rule: string;
+  body?: ApiTypeShown;
+  response?: ApiTypeShown;
+  /** For a list response (Graph's `value`): each item's type. */
+  eachItem?: ApiTypeShown;
+};
+
+export type ApiLookupResult =
+  | { app: RegisteredAppId; search: string; operations: FoundOperation[] }
+  | { app: RegisteredAppId; type: ApiTypeShown | null; message?: string };

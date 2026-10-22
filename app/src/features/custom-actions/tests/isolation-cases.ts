@@ -1,6 +1,6 @@
 import { expect } from "vitest";
 import { readOutlookMessage, storeCustomAction } from "@/db/testing/custom-actions";
-import { defineIsolationCases } from "@/db/testing/isolation";
+import { defineIsolationCases, notTenantScoped } from "@/db/testing/isolation";
 import { systemCtx } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
 import * as server from "../server";
@@ -19,6 +19,10 @@ export const isolationCases = defineIsolationCases(server, {
       undefined,
     );
   },
+
+  lookUpAppApi: notTenantScoped(
+    "It searches a registered app's published API description, the same for every org, and reads no org data.",
+  ),
 
   listCustomActions: async ({ orgA, orgB }) => {
     await storeCustomAction(orgB.admin.ctx);

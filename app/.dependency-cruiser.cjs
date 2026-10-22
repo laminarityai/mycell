@@ -79,6 +79,14 @@ module.exports = {
       to: { path: `^${R}/connections/delegation\\.ts$` },
     },
     {
+      name: "discovery-never-imports-memory",
+      comment:
+        "Memory imports discovery's neighbours and learns from discovery's Inngest events (discovery/item.stored); discovery tells memory about changes only through those events, never by importing it.",
+      severity: "error",
+      from: { path: `^${R}/discovery/` },
+      to: { path: `^${R}/memory/` },
+    },
+    {
       name: "no-circular",
       comment:
         "No dependency cycles. Scope to `^${R}/` if you want to allow cycles outside features.",

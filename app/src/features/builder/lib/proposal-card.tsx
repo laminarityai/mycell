@@ -13,7 +13,14 @@ import type { Change } from "@/features/spec/diff";
 import type { ActionResult } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { acceptProposalAction, rejectProposalAction } from "../actions";
-import type { Proposal, ProposalGroup, ProposalPath, ProposalStatus, ProposalStep } from "../types";
+import type {
+  Proposal,
+  ProposalGroup,
+  ProposalPath,
+  ProposalStatus,
+  ProposalStep,
+  ProposedCustomAction,
+} from "../types";
 import { useProposalOnGraph } from "./proposal-on-graph";
 
 const STATUS_LABELS: Record<ProposalStatus, string> = {
@@ -48,6 +55,13 @@ export function ProposalCard({ proposal }: { proposal: Proposal }) {
         </Badge>
       </header>
       <p>{proposal.summary}</p>
+      {proposal.customActions.length === 0 ? null : (
+        <ul className="flex flex-col gap-2" aria-label="New custom actions">
+          {proposal.customActions.map((action) => (
+            <CustomActionPart key={action.name} action={action} />
+          ))}
+        </ul>
+      )}
       {proposal.settings.length === 0 ? null : (
         <p className="text-xs text-muted-foreground">
           Also changes: {proposal.settings.join(", ")}
@@ -89,6 +103,29 @@ export function ProposalCard({ proposal }: { proposal: Proposal }) {
       <Problem result={accepted} />
       <Problem result={rejected} />
     </article>
+  );
+}
+
+/**
+ * A custom action the proposal brings (ADR-0018), in plain words: its app, what it does, the call
+ * it makes, and the level the fixed rule set. Accepting the proposal stores it.
+ */
+function CustomActionPart({ action }: { action: ProposedCustomAction }) {
+  return (
+    <li className="flex flex-col gap-1 rounded-md border border-dashed p-3 text-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="outline">New custom action</Badge>
+        <span className="font-medium">{action.app}</span>
+      </div>
+      <p>{action.description}</p>
+      <p className="text-xs text-muted-foreground">
+        Calls <code className="font-mono break-all">{action.call}</code>
+      </p>
+      <p className="flex flex-wrap items-center gap-2 text-xs">
+        <RiskBadge risk={action.risk} />
+        <span className="text-muted-foreground">set by rule</span>
+      </p>
+    </li>
   );
 }
 

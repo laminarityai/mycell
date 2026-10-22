@@ -63,6 +63,19 @@ export class ItemGoneError extends Error {
   }
 }
 
+/**
+ * An approved item Mycel held was handed to its app, but the app never confirmed it: an error
+ * or a lost answer after the request may have reached it (ADR-0020). The held-send adapter
+ * throws it once the item is no longer held, so nothing sends it again; acting on a review
+ * ends the review `unconfirmed` and turns this into a ConflictError.
+ */
+export class SendUnconfirmedError extends Error {
+  constructor() {
+    super("The app didn't confirm the send.");
+    this.name = "SendUnconfirmedError";
+  }
+}
+
 /** The input breaks a rule the user can fix; the message says which. */
 export class ValidationError extends Error {
   constructor(message: string) {

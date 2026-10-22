@@ -11,6 +11,7 @@ import {
   timestamp,
   unique,
 } from "drizzle-orm/pg-core";
+import type { CustomActionRecord } from "@/features/custom-actions/types";
 import type { InsertedApproval, RiskLevel } from "@/features/policy/types";
 import type { StoredSpec } from "@/features/spec/stored";
 // A conversation about a workflow goes with it.
@@ -67,6 +68,9 @@ export const builderProposals = pgTable(
       .$type<RiskLevel>()
       .notNull(),
     inserted: jsonb("inserted").$type<InsertedApproval[]>().notNull(),
+    // The custom actions it brings, checked, with their levels from the fixed rule: stored with
+    // the spec when it's accepted (ADR-0018), never before.
+    customActions: jsonb("custom_actions").$type<CustomActionRecord[]>().notNull().default([]),
     status: text("status", { enum: ["proposed", "accepted", "rejected", "stale"] })
       .notNull()
       .default("proposed"),

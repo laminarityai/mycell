@@ -6,3 +6,4 @@ Replaces ADR-0013's rule that an app with no pending form waits until we design 
 
 - Disconnecting deletes held sends with everything else from the connection (invariant 3).
 - A held send can't be finished in the app, so it never ends as "done in the app".
+- Unlike a Gmail draft, which sending consumes, a held send is sent at most once only because Mycel deletes it before sending. When the app's answer to an approved send is lost (an error or a timeout after it may have reached the app), Mycel can't tell whether it went, so the review ends as **unconfirmed** and the send is never retried; a person checks the app. A send refused before it reached the app waits again.

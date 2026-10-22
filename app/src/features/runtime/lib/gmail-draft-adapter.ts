@@ -9,7 +9,7 @@ import type { Ctx } from "@/lib/ctx";
 import { fullMessageSchema, GMAIL, mailOf } from "./gmail";
 import { createReplyDraft, editedMessage } from "./gmail-drafts";
 import { sentSince, threadMessages } from "./gmail-sent";
-import { ItemGoneError } from "@/lib/errors";
+import { ItemGoneError, ValidationError } from "@/lib/errors";
 import type { PendingFormAdapter, PendingItem } from "./pending-forms";
 import type { Compose } from "./step-context";
 
@@ -42,6 +42,7 @@ export const gmailDraftAdapter: PendingFormAdapter<ReplyDraftInput> = {
   // drafts.update with the edited text (only when edited), then drafts.send.
   async approve(ctx, item, edits) {
     if (edits !== undefined) {
+      if (!("text" in edits)) throw new ValidationError("Edit the reply's text to send it.");
       const draft = await draftOf(ctx, item, "full");
       if (draft === null) throw new ItemGoneError();
       const raw = editedMessage(draft.message.payload?.headers ?? [], edits.text);

@@ -5,6 +5,8 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
+import { actionSetWith } from "@/features/custom-actions/description";
+import { listCustomActions } from "@/features/custom-actions/server";
 import { readStoredSpec } from "@/features/spec/stored";
 import type { SpecIssue } from "@/features/spec/types";
 import {
@@ -40,7 +42,8 @@ export async function proposeSpec(
   const workflowId = input.workflowId ?? turn.workflowId ?? undefined;
   // NotFoundError, for the model, when it names another org's workflow or none at all.
   const base = workflowId === undefined ? undefined : await getWorkflow(ctx, workflowId);
-  const check = await checkWorkflowSpec(ctx, input.spec);
+  // With the custom actions this turn described, as if they were stored.
+  const check = await checkWorkflowSpec(ctx, input.spec, turn.customActions);
   const issues: SpecIssue[] = check.ok ? await specIdIssues(ctx, check.working.id, base?.id) : [];
   if (!check.ok || issues.length > 0) {
     turn.failedProposals += 1;
@@ -66,6 +69,10 @@ export async function proposeSpec(
     summary: input.summary,
     maxRisk: check.maxRisk,
     inserted: check.inserted,
+    // Only those the spec uses: the rest go with the turn.
+    customActions: turn.customActions.filter((action) =>
+      check.requiredActions.includes(action.name),
+    ),
   });
   return {
     ok: true,
@@ -115,7 +122,9 @@ export async function listProposals(ctx: Ctx, conversationId: string): Promise<P
     where: eq(builderProposals.conversationId, conversation.id),
     orderBy: [asc(builderProposals.createdAt), asc(builderProposals.id)],
   });
-  return rows.map(toProposal);
+  // Each proposal is drawn with the custom actions it brings, which aren't stored until accepted.
+  const stored = await listCustomActions(ctx);
+  return rows.map((row) => toProposal(row, actionSetWith([...stored, ...row.customActions])));
 }
 
 /**
@@ -130,8 +139,11 @@ export async function acceptProposal(
   requireAdmin(ctx);
   const row = await openProposal(ctx, proposalId);
   const spec = readStoredSpec(row.spec);
+  // Its custom actions are stored with the spec, in one transaction, or not at all.
+  const newCustomActions =
+    row.customActions.length === 0 ? undefined : { actions: row.customActions, proposalId: row.id };
   if (row.workflowId === null) {
-    const saved = await saveWorkflow(ctx, { name: row.name, spec });
+    const saved = await saveWorkflow(ctx, { name: row.name, spec, newCustomActions });
     await decide(ctx, row.id, "accepted", { workflowId: saved.id });
     // A conversation is about one workflow: the first accepted proposal links it.
     await forOrg(ctx).update(
@@ -148,6 +160,7 @@ export async function acceptProposal(
       name: row.name,
       spec,
       baseRevision,
+      newCustomActions,
     });
   } catch (error) {
     if (!(error instanceof ConflictError)) throw error;

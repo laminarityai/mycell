@@ -38,8 +38,8 @@ const stepRunner =
     step.run(id, run) as Promise<T>;
 
 /**
- * Backfills a connection's apps once it's recorded, and the apps a reconnect grants it, one
- * page per step.
+ * Backfills a connection's apps once it's recorded, and the apps a reconnect grants it or
+ * whose backfill it restarts, one page per step.
  */
 export const backfillJob = inngest.createFunction(
   {

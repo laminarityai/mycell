@@ -1,6 +1,7 @@
 // What a new workflow version needs that the previous one didn't (M5): decided from the
 // catalog's fixed risk levels, apps and scopes, never from anything a spec or model says.
 import { describe, expect, it } from "vitest";
+import { catalogActionSet } from "../catalog";
 import { requirementsGained } from "../engine";
 
 const LABEL = "google-mail.add-label";
@@ -12,7 +13,7 @@ describe("comparing a new version's requirements with the previous one's", () =>
   it("finds nothing gained when only a prompt or threshold changed", () => {
     const before = { maxRisk: "internal_reversible", requiredActions: [LABEL] } as const;
 
-    expect(requirementsGained(before, before)).toBeNull();
+    expect(requirementsGained(before, before, catalogActionSet)).toBeNull();
   });
 
   it("finds the max risk raised when an external send is added", () => {
@@ -20,6 +21,7 @@ describe("comparing a new version's requirements with the previous one's", () =>
       requirementsGained(
         { maxRisk: "internal_reversible", requiredActions: [LABEL] },
         { maxRisk: "external_send", requiredActions: [LABEL, DRAFT] },
+        catalogActionSet,
       ),
     ).toEqual({ maxRiskRaised: { from: "internal_reversible", to: "external_send" } });
   });
@@ -29,6 +31,7 @@ describe("comparing a new version's requirements with the previous one's", () =>
       requirementsGained(
         { maxRisk: "read", requiredActions: [READ_MESSAGE] },
         { maxRisk: "read", requiredActions: [READ_MESSAGE, READ_RANGE] },
+        catalogActionSet,
       ),
     ).toEqual({ newApps: ["Sheets"], newScopes: ["drive.readonly"] });
   });
@@ -40,6 +43,7 @@ describe("comparing a new version's requirements with the previous one's", () =>
       requirementsGained(
         { maxRisk: "external_send", requiredActions: [DRAFT] },
         { maxRisk: "external_send", requiredActions: [DRAFT, LABEL] },
+        catalogActionSet,
       ),
     ).toEqual({ newScopes: ["gmail.modify"] });
   });
@@ -50,6 +54,7 @@ describe("comparing a new version's requirements with the previous one's", () =>
       requirementsGained(
         { maxRisk: "internal_reversible", requiredActions: [LABEL] },
         { maxRisk: "internal_reversible", requiredActions: [LABEL, READ_MESSAGE] },
+        catalogActionSet,
       ),
     ).toBeNull();
   });
@@ -59,6 +64,7 @@ describe("comparing a new version's requirements with the previous one's", () =>
       requirementsGained(
         { maxRisk: "external_send", requiredActions: [DRAFT, LABEL, READ_RANGE] },
         { maxRisk: "internal_reversible", requiredActions: [LABEL] },
+        catalogActionSet,
       ),
     ).toBeNull();
   });

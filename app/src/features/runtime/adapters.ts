@@ -4,7 +4,9 @@
 // imports to create reviews, so the two features' files never import each other in a cycle.
 export { escalationAdapter } from "./lib/escalation-adapter";
 export { gmailDraftAdapter } from "./lib/gmail-draft-adapter";
+export { heldSendAdapter } from "./lib/held-send-adapter";
 export {
+  type HeldSendField,
   type ItemState,
   type ItemView,
   type MailView,

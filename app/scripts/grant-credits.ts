@@ -6,6 +6,7 @@ import { z } from "zod";
 import { getBalance, grantCredits } from "@/features/credits/server";
 import { listOrgIds } from "@/features/orgs/server";
 import { systemCtx } from "@/lib/ctx";
+import { sendCreditsGranted } from "@/lib/events";
 
 const argsSchema = z.tuple([z.string().min(1), z.coerce.number().positive()]);
 
@@ -22,6 +23,8 @@ async function main(): Promise<void> {
   }
   const ctx = systemCtx(orgId);
   await grantCredits(ctx, credits);
+  // Work that stopped for want of credits goes on: memory learns what it postponed.
+  await sendCreditsGranted(orgId);
   console.log(
     `Granted ${String(credits)} credits. Org ${orgId} now has ${String(await getBalance(ctx))}.`,
   );

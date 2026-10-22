@@ -15,7 +15,7 @@ import { getConnection, recordIngestState } from "@/features/connections/server"
 import { ingestedAppSchema, type IngestedApp } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
 import type { PollOutcome } from "../types";
-import { announcedOf, sendAnnounced, NOTHING, type Announced } from "./announce";
+import { announcedFor, changesOf, sendAnnounced, NOTHING, type Announced } from "./announce";
 import { BACKFILL_DAYS, DAY_MS } from "./backfill";
 import { CONNECTORS, runInline, sourceClient, storeWindow, untilGone } from "./ingest-steps";
 import type { RunStep } from "./ingest-steps";
@@ -64,7 +64,7 @@ async function pollApp(
   if (polled.gone) return { outcome: "gone" };
   if (polled.result === "skipped") return { outcome: "skipped" };
   if (polled.result === "polled") {
-    await sendAnnounced(ctx, connectionId, polled, runStep, `${app}-poll-announce`);
+    await sendAnnounced(ctx, connectionId, app, polled, runStep, `${app}-poll-announce`);
     return { outcome: "polled", items: polled.items };
   }
   return recover(ctx, connectionId, app, runStep);
@@ -72,8 +72,8 @@ async function pollApp(
 
 type PollOnce = { result: "skipped" | "expired" | "polled"; items: number } & Announced;
 
-// Stores what's new, and hands on the Gmail messages it newly stored, received and sent, for the
-// step after it to announce.
+// Stores what's new, and hands on what it newly stored (Gmail messages, received and sent, and
+// Drive file versions), and what it found removed or changed, for the step after it to announce.
 async function pollOnce(ctx: Ctx, connectionId: string, app: IngestedApp): Promise<PollOnce> {
   const connection = await getConnection(ctx, connectionId);
   const state = connection.ingest[app];
@@ -88,8 +88,9 @@ async function pollOnce(ctx: Ctx, connectionId: string, app: IngestedApp): Promi
     cursor: found.nextCursor,
     lastPolledAt: new Date(),
   });
-  const announced = app === "gmail" ? announcedOf(created) : NOTHING;
-  return { result: "polled", items: found.events.length, ...announced };
+  const announced = announcedFor(app, created, { newMail: true });
+  const changes = changesOf(app, state.cursor, found, created);
+  return { result: "polled", items: found.events.length, ...announced, changes };
 }
 
 // The source no longer knows the app's cursor: backfill the app from the latest stored event,

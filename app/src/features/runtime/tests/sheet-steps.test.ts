@@ -9,7 +9,13 @@ import { connectGoogle } from "@/testing/connect-helpers";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import { fakeNango } from "@/testing/fake-nango";
 import { executeRun, getRun, startRun } from "../server";
-import { pricingQuestion, publish, recordedBackoff, threadSpec } from "./run-helpers";
+import {
+  pricingQuestion,
+  publish,
+  recordedBackoff,
+  recordingStepRunner,
+  threadSpec,
+} from "./run-helpers";
 
 beforeEach(resetDatabase);
 
@@ -100,7 +106,13 @@ describe("the read-range action", () => {
       {
         stepId: "prices",
         status: "succeeded",
-        output: { range: "Prices!A1:C50", rowCount: 3, columnCount: 3 },
+        output: {
+          fields: {
+            range: { kind: "text", size: "Prices!A1:C50".length },
+            rowCount: { kind: "number" },
+            columnCount: { kind: "number" },
+          },
+        },
       },
       {
         stepId: "draft",
@@ -114,13 +126,14 @@ describe("the read-range action", () => {
 
   it("counts an empty range as no rows", async () => {
     const pricesStep = (exampleSpec().steps as Record<string, unknown>[])[2];
-    const { admin, system, google, runId } = await sheetRun(threadSpec({ steps: [pricesStep] }));
+    const { system, google, runId } = await sheetRun(threadSpec({ steps: [pricesStep] }));
     google.sheets.add("sheet-1", "Prices", []);
+    const runner = recordingStepRunner();
 
-    expect(await executeRun(system, runId)).toEqual({ status: "succeeded" });
-    expect((await getRun(admin, runId)).steps).toMatchObject([
-      { stepId: "prices", output: { range: "Prices!A1:C50", rowCount: 0, columnCount: 0 } },
-    ]);
+    expect(await executeRun(system, runId, runner.runStep)).toEqual({ status: "succeeded" });
+    expect(runner.results()).toMatchObject({
+      prices: { output: { range: "Prices!A1:C50", rowCount: 0, columnCount: 0 } },
+    });
   });
 });
 
@@ -156,14 +169,15 @@ describe("the append-row action", () => {
     expect(google.sheets.appends).toHaveLength(1);
     expect(google.sheets.rows("sheet-1", "Log")).toHaveLength(2);
     expect((await getRun(admin, runId)).steps).toMatchObject([
-      { stepId: "log", attempts: 2, output: { updatedRange: "Log!A2:D2" } },
+      { stepId: "log", attempts: 2, output: { fields: { updatedRange: { kind: "text" } } } },
     ]);
   });
 
-  it("appends one row after the table, as typed, and records the range it wrote", async () => {
+  it("appends one row after the table, as typed, and hands on the range it wrote", async () => {
     const { admin, system, google, message, runId } = await logRun();
+    const runner = recordingStepRunner();
 
-    expect(await executeRun(system, runId)).toEqual({ status: "succeeded" });
+    expect(await executeRun(system, runId, runner.runStep)).toEqual({ status: "succeeded" });
 
     expect(google.sheets.rows("sheet-1", "Log")).toEqual([
       ["Message", "Kind", "Note"],
@@ -171,8 +185,13 @@ describe("the append-row action", () => {
     ]);
     expect(google.sheets.appends.map((append) => append.valueInputOption)).toEqual(["RAW"]);
     expect((await getRun(admin, runId)).steps).toMatchObject([
-      { stepId: "log", status: "succeeded", output: { updatedRange: "Log!A2:D2" } },
+      {
+        stepId: "log",
+        status: "succeeded",
+        output: { fields: { updatedRange: { kind: "text", size: "Log!A2:D2".length } } },
+      },
     ]);
+    expect(runner.results()).toMatchObject({ log: { output: { updatedRange: "Log!A2:D2" } } });
   });
 
   it("appends exactly one row when its first answer was lost and it's tried again", async () => {
@@ -186,7 +205,7 @@ describe("the append-row action", () => {
     expect(google.sheets.appends).toHaveLength(1);
     expect(google.sheets.rows("sheet-1", "Log")).toHaveLength(2);
     expect((await getRun(admin, runId)).steps).toMatchObject([
-      { stepId: "log", attempts: 2, output: { updatedRange: "Log!A2:D2" } },
+      { stepId: "log", attempts: 2, output: { fields: { updatedRange: { kind: "text" } } } },
     ]);
   });
 });

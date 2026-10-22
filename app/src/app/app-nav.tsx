@@ -43,6 +43,9 @@ function NavLinks({ waiting, admin }: { waiting: number; admin: boolean }) {
       <Link href="/org" className={LINK}>
         Your org
       </Link>
+      <Link href="/memory/access-log" className={LINK}>
+        Memory log
+      </Link>
       {admin ? (
         <>
           <Link href="/tags" className={LINK}>
@@ -50,6 +53,15 @@ function NavLinks({ waiting, admin }: { waiting: number; admin: boolean }) {
           </Link>
           <Link href="/builder" className={LINK}>
             Builder chat
+          </Link>
+          <Link href="/memory" className={LINK}>
+            Memory settings
+          </Link>
+          <Link href="/custom-actions" className={LINK}>
+            Custom actions
+          </Link>
+          <Link href="/capability-requests" className={LINK}>
+            Capability requests
           </Link>
         </>
       ) : null}

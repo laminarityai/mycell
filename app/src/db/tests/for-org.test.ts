@@ -61,6 +61,18 @@ describe("forOrg(ctx).select", () => {
   });
 });
 
+describe("forOrg(ctx).count and sum", () => {
+  it("count and add up only the caller's org's rows the filter picks", async () => {
+    const a = forOrg(orgs.orgA.member.ctx);
+    expect(await a.count(notes)).toBe(2);
+    expect(await a.count(notes, eq(notes.body, "a2"))).toBe(1);
+    expect(await a.count(notes, eq(notes.body, "b1"))).toBe(0);
+    expect(await a.sum(notes, notes.position)).toBe(3);
+    expect(await a.sum(notes, notes.position, eq(notes.body, "b1"))).toBe(0);
+    expect(await forOrg(orgs.orgB.member.ctx).sum(notes, notes.position)).toBe(1);
+  });
+});
+
 describe("forOrg(ctx).insert", () => {
   it("sets org_id from ctx", async () => {
     const rows = await forOrg(orgs.orgB.member.ctx).insert(notes, { body: "b2" });

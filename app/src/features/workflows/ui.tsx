@@ -8,6 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ActionSetProvider } from "./lib/action-set-context";
 import { ArchiveForm } from "./lib/archive-form";
 import { blankSpec } from "./lib/blank-spec";
 import { GraphTraceProvider, useGraphTrace, useShowOnGraph } from "./lib/graph-trace";
@@ -32,6 +33,7 @@ export { VisibleWorkflowsList } from "./lib/visible-workflows";
 export type { SwitchConnectionOption };
 
 export {
+  ActionSetProvider,
   GraphTraceProvider,
   RiskBadge,
   useGraphTrace,

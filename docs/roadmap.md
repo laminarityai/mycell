@@ -9,7 +9,7 @@ The builder chat is primary (ADR-0007), so it comes before mining. Milestones ke
 | Milestone | State       | Spec | Notes                                                                                                                                         |
 | --------- | ----------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | M0        | Done        | #1   |                                                                                                                                               |
-| M1        | In progress | #11  | Merged: connect, org connections, disconnect cascade, Gmail backfill. Open: polling #15, reconciliation #16 (PR #31), Drive #17, dogfood #19. |
+| M1        | In progress | #11  | Merged: connect, org connections, disconnect cascade, Gmail backfill, polling #15, reconciliation #16, Drive #17 (PR #59). Open: dogfood #19. |
 | M3        | Done        | #33  | Spec, policy and runtime (PR #74). Open: dogfood check #42. Decisions in ADR-0010 to ADR-0012 and ADR-0014.                                   |
 | M6        | Done        | #43  | Builder chat (PR #76). Open: dogfood check #50. Capability requests moved to M13 (#101).                                                      |
 | M12       | Done        | #77  | Branches and the workflow graph (PR #88). Open: dogfood check #87. Decisions in ADR-0015.                                                     |
@@ -102,8 +102,8 @@ Planned in this order, each its own milestone or part of one, after M12:
 - Objects, links and facts built from Gmail, Drive docs and Calendar, in Postgres with pgvector: facts and pointers only, stated facts only, business items only within a monthly extraction budget (ADR-0022).
 - Each source record keeps its app's access list; a fact is visible to anyone who can see one of its sources; company-wide lists and org connections (ADR-0023). Admin exclusions.
 - Retention (with its source, at most 24 months), forget a person and the do-not-learn list, an access log of every read, a key per company in a KMS (ADR-0024). Slack and similar apps are searched live (ADR-0025).
-- Memory feeds workflows and the builder chat's context.
-- **Done when:** a workflow on one of our inboxes uses a fact about a customer drawn from another source its member can see, a member never sees a fact from a source they can't, and forgetting a person removes every trace of them from memory.
+- Memory feeds workflows and the builder chat's context (company-wide memory only, since builder conversations are shared among admins).
+- **Done when:** a workflow on one of our inboxes uses a fact about a customer drawn from another source its member can see, a member never sees a fact from a source they can't, and forgetting a person removes everything memory keyed by their address and learns nothing more from their mail (by address only: facts that name them without it stay, ADR-0024).
 
 ## M7: Credits and budgets
 

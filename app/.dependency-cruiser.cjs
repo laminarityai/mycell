@@ -95,6 +95,18 @@ module.exports = {
       to: { circular: true },
     },
   ],
+  required: [
+    {
+      name: "server-entry-files-import-server-only",
+      comment:
+        "A feature's server.ts and jobs.ts, the database client and the env module import `server-only`, so a client component that reaches one (and so the database or a secret) fails the build.",
+      severity: "error",
+      module: {
+        path: [`^${R}/[^/]+/(server|jobs)\\.ts$`, "^src/db/client\\.ts$", "^src/env\\.ts$"],
+      },
+      to: { path: "(^|/)node_modules/server-only/" },
+    },
+  ],
   options: {
     doNotFollow: { path: "node_modules" },
     tsConfig: { fileName: "tsconfig.json" },

@@ -2,6 +2,7 @@
 // connection's (org_id, connection_id) with a cascading foreign key, so deleting the connection
 // deletes them (invariant 3). Neither holds content: no subject, body, snippet or file name
 // (invariant 8). `source_ref` is how content is re-fetched.
+import "server-only";
 import { foreignKey, index, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { zodJsonb } from "@/db/columns";

@@ -51,6 +51,16 @@ const dateFormatting = [
   },
 ];
 
+// Form controls come from src/components/ui, so every one looks and behaves alike. A raw <input>
+// stays allowed: hidden inputs carry a form's IDs.
+const rawControls = {
+  forbid: [
+    { element: "select", message: "use NativeSelect from @/components/ui/native-select." },
+    { element: "textarea", message: "use Textarea from @/components/ui/textarea." },
+    { element: "button", message: "use Button from @/components/ui/button, with a variant." },
+  ],
+};
+
 // A plain Error can't be told from a bug, so a caller couldn't catch only the failures it
 // expects. src/db and tests may throw one.
 const plainErrors = [
@@ -141,9 +151,17 @@ export default defineConfig([
       // a label's text may sit in a span holding its name and hint.
       "jsx-a11y/label-has-associated-control": [
         "error",
-        { controlComponents: ["Input", "Textarea", "Checkbox", "Switch"], depth: 3 },
+        {
+          controlComponents: ["Input", "NativeSelect", "Textarea", "Checkbox", "Switch"],
+          depth: 3,
+        },
       ],
     },
+  },
+  {
+    files: ["src/**/*.tsx"],
+    ignores: ["src/components/ui/**"],
+    rules: { "react/forbid-elements": ["error", rawControls] },
   },
   {
     files: ["src/**/*.{ts,tsx}", "e2e/**/*.ts", "scripts/**/*.ts"],

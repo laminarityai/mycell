@@ -1,10 +1,11 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { FormError } from "@/components/form-error";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import type { HeldSendField } from "@/features/runtime/adapters";
-import type { ActionResult } from "@/lib/errors";
 import {
   approveReviewAction,
   declineReviewAction,
@@ -53,7 +54,7 @@ export function ReviewActions({ reviewId, draftText }: { reviewId: string; draft
             Cancel
           </Button>
         </div>
-        <Problem result={approveResult} />
+        <FormError message={approveResult.error} />
       </form>
     );
   }
@@ -83,8 +84,8 @@ export function ReviewActions({ reviewId, draftText }: { reviewId: string; draft
           </Button>
         </form>
       </div>
-      <Problem result={approveResult} />
-      <Problem result={declineResult} />
+      <FormError message={approveResult.error} />
+      <FormError message={declineResult.error} />
     </div>
   );
 }
@@ -138,7 +139,7 @@ export function HeldSendActions({
             Cancel
           </Button>
         </div>
-        <Problem result={approveResult} />
+        <FormError message={approveResult.error} />
       </form>
     );
   }
@@ -170,8 +171,8 @@ export function HeldSendActions({
           </Button>
         </form>
       </div>
-      <Problem result={approveResult} />
-      <Problem result={declineResult} />
+      <FormError message={approveResult.error} />
+      <FormError message={declineResult.error} />
     </div>
   );
 }
@@ -187,7 +188,7 @@ export function EscalationActions({ reviewId }: { reviewId: string }) {
           Done
         </Button>
       </form>
-      <Problem result={result} />
+      <FormError message={result.error} />
     </div>
   );
 }
@@ -207,36 +208,27 @@ export function HandOffForm({
       <div className="flex items-end gap-2">
         <label className="flex flex-col gap-1 text-sm font-medium">
           Hand it to
-          <select
+          <NativeSelect
             name="toUserId"
             required
             defaultValue={result.values?.toUserId ?? ""}
-            className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm dark:bg-input/30"
+            className="w-full"
           >
-            <option value="" disabled>
+            <NativeSelectOption value="" disabled>
               Choose a colleague…
-            </option>
+            </NativeSelectOption>
             {colleagues.map((colleague) => (
-              <option key={colleague.id} value={colleague.id}>
+              <NativeSelectOption key={colleague.id} value={colleague.id}>
                 {colleague.name}
-              </option>
+              </NativeSelectOption>
             ))}
-          </select>
+          </NativeSelect>
         </label>
         <Button type="submit" variant="outline" disabled={handing}>
           Hand on
         </Button>
       </div>
-      <Problem result={result} />
+      <FormError message={result.error} />
     </form>
-  );
-}
-
-function Problem({ result }: { result: ActionResult }) {
-  if (result.error === undefined) return null;
-  return (
-    <p role="alert" className="text-sm text-destructive">
-      {result.error}
-    </p>
   );
 }

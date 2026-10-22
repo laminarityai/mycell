@@ -1,6 +1,7 @@
 // The orgs feature: signing in to a Workspace domain's org, the ctx every request runs as, and
 // the org's users with their roles (ADR-0002). It is the only feature that touches Better
 // Auth's tables.
+import "server-only";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";

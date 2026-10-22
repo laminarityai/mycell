@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { FormError } from "@/components/form-error";
 import { Button } from "@/components/ui/button";
 import type { ActionResult } from "@/lib/errors";
 import { removeUserAction, setRoleAction } from "../actions";
@@ -53,11 +54,7 @@ export function UserControls({ user }: { user: OrgUser }) {
           </Button>
         )}
       </div>
-      {error === undefined ? null : (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
+      <FormError message={error} />
     </div>
   );
 }

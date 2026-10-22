@@ -1,5 +1,6 @@
 "use client";
 
+import { FormError } from "@/components/form-error";
 import { Button } from "@/components/ui/button";
 import { startReconnectAction } from "../actions";
 import { useConnectUI } from "./connect-ui";
@@ -32,11 +33,7 @@ export function ReconnectButton({
       >
         {label}
       </Button>
-      {error === undefined ? null : (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
+      <FormError message={error} />
     </div>
   );
 }

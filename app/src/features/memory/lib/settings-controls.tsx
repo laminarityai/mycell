@@ -1,8 +1,10 @@
 "use client";
 
 import { useActionState } from "react";
+import { FormError } from "@/components/form-error";
 import { Button } from "@/components/ui/button";
-import type { ActionResult } from "@/lib/errors";
+import { Input } from "@/components/ui/input";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import {
   addExclusionAction,
   removeExclusionAction,
@@ -10,9 +12,6 @@ import {
   startMemoryAction,
 } from "../actions";
 import { EXCLUSION_KIND_NAMES, EXCLUSION_KINDS } from "../types";
-
-export const fieldClass =
-  "h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
 /** The monthly budget, and the button that starts memory, or saves a new budget once started. */
 export function BudgetForm({ started, budget }: { started: boolean; budget: number }) {
@@ -26,7 +25,7 @@ export function BudgetForm({ started, budget }: { started: boolean; budget: numb
         <label htmlFor="monthly-budget" className="text-sm">
           Monthly budget (credits)
         </label>
-        <input
+        <Input
           id="monthly-budget"
           name="monthlyBudget"
           type="number"
@@ -34,13 +33,13 @@ export function BudgetForm({ started, budget }: { started: boolean; budget: numb
           step="any"
           required
           defaultValue={budget}
-          className={`${fieldClass} w-32`}
+          className="w-32"
         />
         <Button type="submit" size="sm" disabled={submitting}>
           {started ? "Save budget" : "Start memory"}
         </Button>
       </div>
-      <ErrorMessage result={result} />
+      <FormError message={result.error} />
     </form>
   );
 }
@@ -50,26 +49,26 @@ export function AddExclusionForm() {
   return (
     <form action={add} className="flex flex-col gap-1">
       <div className="flex flex-wrap gap-2">
-        <select name="kind" aria-label="What to exclude" className={fieldClass}>
+        <NativeSelect name="kind" aria-label="What to exclude">
           {EXCLUSION_KINDS.map((kind) => (
-            <option key={kind} value={kind}>
+            <NativeSelectOption key={kind} value={kind}>
               {EXCLUSION_KIND_NAMES[kind]}
-            </option>
+            </NativeSelectOption>
           ))}
-        </select>
-        <input
+        </NativeSelect>
+        <Input
           name="value"
           required
           maxLength={320}
           placeholder="HR, firm.example, a folder link…"
           aria-label="Label, address, domain or folder"
-          className={`${fieldClass} w-64`}
+          className="w-64"
         />
         <Button type="submit" size="sm" disabled={adding}>
           Exclude
         </Button>
       </div>
-      <ErrorMessage result={result} />
+      <FormError message={result.error} />
     </form>
   );
 }
@@ -88,15 +87,7 @@ export function RemoveExclusionButton({ id, name }: { id: string; name: string }
       >
         Remove
       </Button>
-      <ErrorMessage result={result} />
+      <FormError message={result.error} />
     </form>
-  );
-}
-
-export function ErrorMessage({ result }: { result: ActionResult }) {
-  return result.error === undefined ? null : (
-    <p role="alert" className="text-sm text-destructive">
-      {result.error}
-    </p>
   );
 }

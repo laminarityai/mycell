@@ -1,5 +1,6 @@
 // Tags and who has them. Both tables are tenant-owned; composite foreign keys keep a tag and
 // the member it's assigned to in the same org as the assignment.
+import "server-only";
 import {
   foreignKey,
   index,

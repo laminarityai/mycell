@@ -2,6 +2,7 @@
 // resolves to the org's model (invariant 6), passes the credit check before anything is sent,
 // and records one usage entry in the ledger (invariant 7). runtime, builder and memory call
 // models through here.
+import "server-only";
 export { callModel, CREDIT_ESTIMATES } from "./lib/call-model";
 export { classify } from "./lib/classify";
 export { embed } from "./lib/embed";

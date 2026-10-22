@@ -13,8 +13,16 @@ type GraphTraceState = {
 
 const GraphTraceContext = createContext<GraphTraceState | null>(null);
 
-export function GraphTraceProvider({ children }: { children: ReactNode }) {
-  const [trace, show] = useState<GraphTrace | null>(null);
+/**
+ * `of` names what the graph draws, such as the working spec's revision: a Try it shown while it
+ * named something else is put away, derived as the page renders rather than cleared after.
+ */
+export function GraphTraceProvider({ of = "", children }: { of?: string; children: ReactNode }) {
+  const [shown, setShown] = useState<{ trace: GraphTrace; of: string } | null>(null);
+  const trace = shown?.of === of ? shown.trace : null;
+  const show = (next: GraphTrace | null) => {
+    setShown(next === null ? null : { trace: next, of });
+  };
   return <GraphTraceContext value={{ trace, show }}>{children}</GraphTraceContext>;
 }
 

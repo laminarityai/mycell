@@ -1,5 +1,6 @@
 // The reviews feature's Inngest functions. Thin: each calls server.ts, as the org's system ctx
 // (ADR-0009). The daily check is a cron, so it acts inside each org in turn.
+import "server-only";
 import { cron } from "inngest";
 import { listOrgIds } from "@/features/orgs/server";
 import { systemCtx } from "@/lib/ctx";

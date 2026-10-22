@@ -2,6 +2,7 @@
 // asked for one. All are tenant-owned and hold no connection_id: a custom action describes a
 // call and outlives the connections it runs through, and a request holds the agent's words and
 // code draft; none holds source content (invariant 8), so disconnecting leaves them alone.
+import "server-only";
 import { foreignKey, index, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { zodJsonb } from "@/db/columns";

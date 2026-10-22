@@ -6,6 +6,7 @@
 import { X } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 import { z } from "zod";
+import { Button } from "@/components/ui/button";
 import type { ActionSet } from "@/features/policy/types";
 import type { NewStepKind } from "@/features/spec/new-step";
 import { useActionSet } from "./action-set-context";
@@ -60,54 +61,78 @@ export function AddStepMenu({
 }) {
   const actions = useActionSet();
   const groups = useMemo(() => menuGroups(actions), [actions]);
-  const first = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  // What had focus when the menu opened (the "+"), to hand it back when the menu closes unused.
+  const opener = useRef<Element | null>(null);
   useEffect(() => {
-    first.current?.focus();
+    opener.current = document.activeElement;
+    menu.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
   }, []);
+  const close = () => {
+    onClose();
+    if (opener.current instanceof HTMLElement && opener.current.isConnected) {
+      opener.current.focus();
+    }
+  };
   return (
     <div
+      ref={menu}
       role="menu"
       aria-label="Add a step"
       tabIndex={-1}
       style={point}
       className="nodrag nopan nowheel absolute z-30 max-h-[calc(100%-16px)] w-64 overflow-y-auto rounded-lg border bg-popover p-1 text-sm shadow-lg"
       onKeyDown={(event) => {
-        if (event.key === "Escape") onClose();
+        if (event.key === "Escape") {
+          close();
+          return;
+        }
+        const items = [...event.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+        const at = items.findIndex((item) => item === document.activeElement);
+        const next = nextItem(event.key, at, items.length);
+        if (next === null) return;
+        event.preventDefault();
+        items[next]?.focus();
       }}
     >
       <div className="flex items-center justify-between px-2 py-1">
         <span className="text-xs font-medium text-muted-foreground">Add a step</span>
-        <button
-          type="button"
-          aria-label="Close"
-          onClick={onClose}
-          className="rounded p-0.5 hover:bg-muted"
-        >
-          <X aria-hidden className="size-3" />
-        </button>
+        <Button type="button" variant="ghost" size="icon-xs" aria-label="Close" onClick={close}>
+          <X aria-hidden />
+        </Button>
       </div>
-      {groups.map((group, g) => (
+      {groups.map((group) => (
         <div key={group.app} role="group" aria-label={group.app} className="border-t py-1">
           <p className="px-2 pt-1 pb-0.5 text-[11px] font-medium text-muted-foreground uppercase">
             {group.app}
           </p>
-          {group.items.map((item, i) => (
-            <button
+          {group.items.map((item) => (
+            <Button
               key={item.label}
-              ref={g === 0 && i === 0 ? first : undefined}
               type="button"
+              variant="ghost"
               role="menuitem"
-              className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-left hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+              tabIndex={-1}
+              className="h-auto w-full justify-between gap-2 px-2 py-1 font-normal focus-visible:bg-muted focus-visible:ring-0"
               onClick={() => {
                 onPick(item.kind);
               }}
             >
               <span className="truncate">{item.label}</span>
               <span className="shrink-0 text-[10px] text-muted-foreground">{item.hint}</span>
-            </button>
+            </Button>
           ))}
         </div>
       ))}
     </div>
   );
+}
+
+/** Where an arrow key, Home or End moves focus among `count` items from `at`; null for other keys. */
+function nextItem(key: string, at: number, count: number): number | null {
+  if (key === "ArrowDown") return (at + 1) % count;
+  if (key === "ArrowUp") return at <= 0 ? count - 1 : at - 1;
+  if (key === "Home") return 0;
+  if (key === "End") return count - 1;
+  return null;
 }

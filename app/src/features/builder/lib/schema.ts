@@ -1,6 +1,7 @@
 // Builder conversations and their messages. Both are tenant-owned and hold no connection_id:
 // messages keep the admins' and the agent's words and tool calls, never source content
 // (invariant 8), so disconnecting a connection leaves them alone.
+import "server-only";
 import {
   bigserial,
   foreignKey,

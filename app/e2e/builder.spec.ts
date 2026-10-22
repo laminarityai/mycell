@@ -204,7 +204,16 @@ test("on a narrow screen, the chat and the graph are two tabs, and a proposal tu
   await expect(page.getByRole("textbox", { name: "Message" })).toBeHidden();
   await chatTab.click();
 
-  await page.getByRole("textbox", { name: "Message" }).fill("Sort my inbox");
+  // The tabs take arrow keys, and the chat keeps what was typed while the graph is shown.
+  const message = page.getByRole("textbox", { name: "Message" });
+  await message.fill("Sort my inbox");
+  await chatTab.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(workflowTab).toHaveAttribute("aria-selected", "true");
+  await expect(message).toBeHidden();
+  await page.keyboard.press("ArrowLeft");
+  await expect(chatTab).toHaveAttribute("aria-selected", "true");
+  await expect(message).toHaveValue("Sort my inbox");
   await page.getByRole("button", { name: "Send" }).click();
 
   // The proposal is shown on the graph, so the page turns to it.

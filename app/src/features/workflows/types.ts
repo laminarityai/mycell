@@ -258,8 +258,6 @@ export type SpecCheck = ({ ok: true } & ValidatedSpec) | { ok: false; issues: Sp
 
 /** The editor's live validation: the spec's issues, or what the policy engine made of it. */
 export type SpecCheckResult = {
-  /** Set when the check itself was refused (a member, say). */
-  error?: string;
   issues: SpecIssue[];
   /** Null while the spec has issues. */
   maxRisk: RiskLevel | null;

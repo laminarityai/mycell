@@ -1,13 +1,14 @@
 // The Calendar trigger in a spec (M11): a new invite starts the run, so the steps read the
 // invite, never a Gmail message.
 import { describe, expect, it } from "vitest";
+import { readDraftTree } from "../draft";
 import { graphView } from "../graph";
 import { layoutTree } from "../layout";
 import { newPath, newStep } from "../new-step";
 import type { Spec } from "../types";
 import { validateSpec } from "../validate";
 
-function inviteSpec(steps: unknown[]) {
+function inviteSpec(steps: Record<string, unknown>[]) {
   return {
     specVersion: 2,
     id: "invite-triage",
@@ -191,6 +192,31 @@ describe("a spec with the Calendar trigger", () => {
         { type: "tool", action: "x.y", inputs: ["eventId"] },
       ),
     ).toMatchObject({ input: { eventId: { from: "trigger.eventId" } } });
+  });
+
+  it("is read with the editor's draft, so a branch on the invite's facts draws", () => {
+    const branch = {
+      id: "route",
+      type: "branch",
+      mode: "first",
+      paths: [
+        {
+          id: "a",
+          name: "A",
+          condition: {
+            combine: "all",
+            checks: [{ subject: { from: "trigger.organizer" }, op: "is", value: "a@b.c" }],
+          },
+          steps: [],
+        },
+      ],
+      otherwise: { id: "rest", steps: [] },
+    };
+
+    expect(readDraftTree(inviteSpec([branch]))).toMatchObject({
+      trigger: { type: "calendar.invite_received" },
+    });
+    expect(readDraftTree({ ...inviteSpec([branch]), trigger: { type: "nope" } })).toBeNull();
   });
 
   it("is drawn on the graph as what starts the run", () => {

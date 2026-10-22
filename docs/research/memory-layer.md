@@ -1,6 +1,6 @@
 # Memory layer: how others build one, and what businesses and platforms require
 
-Checked 2026-10-21 against primary sources: each product's docs, papers and source, and Google's, Microsoft's and Slack's policy pages. Each claim links to its source. Benchmark figures are the vendors' own. Claims marked † are quoted from official text that wouldn't load on the day (EUR-Lex, the gated AICPA criteria, CCPA PDFs). The decisions this informed are ADR-0021 to ADR-0024.
+Checked 2026-10-21 against primary sources: each product's docs, papers and source, and Google's, Microsoft's and Slack's policy pages. Each claim links to its source. Benchmark figures are the vendors' own. Claims marked † are quoted from official text that wouldn't load on the day (EUR-Lex, the gated AICPA criteria, CCPA PDFs). The decisions this informed are ADR-0022 to ADR-0025.
 
 ## 1. How memory layers are built
 
@@ -36,7 +36,7 @@ Only the closed enterprise products do the last.
 - merged facts and stored summaries can leak what a restricted source says;
 - inferred facts look like stated ones unless marked.
 
-**For Mycel:** no product combines Postgres, TypeScript, deletion by source and copied permissions. Hence ADR-0021: build our own on Graphiti's model, with Glean's permission model.
+**For Mycel:** no product combines Postgres, TypeScript, deletion by source and copied permissions. Hence ADR-0022: build our own on Graphiti's model, with Glean's permission model.
 
 ## 2. What platforms require
 
@@ -77,7 +77,7 @@ Only the closed enterprise products do the last.
 - Keep data from outside your organization to the minimum.
 - For the Data Access and Real-Time Search APIs: no "persistent copies, archives, indexes, or long-term data stores of other organizations' API Data", with caching only when "essential for the immediate operation".
 
-Hence ADR-0024.
+Hence ADR-0025.
 
 ## 3. What the law requires
 

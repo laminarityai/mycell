@@ -15,8 +15,8 @@ The builder chat is primary (ADR-0007), so it comes before mining. Milestones ke
 | M12       | Grilling    |      | Branches and the workflow graph. Decisions in ADR-0015 (paths that never join); research in `docs/research/workflow-builders.md`.                                           |
 | M5        | Done        | #51  | Publish, tags, member toggles and the Reviews page (PR #89). Open: dogfood check #57.                                                                                       |
 | M11       | Ready       | #67  | Calendar, Docs and Tasks, each through its pending form (ADR-0013); tickets ready for agents.                                                                               |
-| M13       | Ready       | #91  | Custom actions made by the builder chat. Decisions in ADR-0017 to ADR-0020; research in `docs/research/integrations/`. Tickets to cut.                                      |
-| M14       | Ready       | #92  | Memory foundation. Decisions in ADR-0021 to ADR-0024; research in `docs/research/memory-layer.md`. Tickets to cut.                                                          |
+| M13       | Ready       | #91  | Custom actions made by the builder chat. Decisions in ADR-0018 to ADR-0021; research in `docs/research/integrations/`. Tickets to cut.                                      |
+| M14       | Ready       | #92  | Memory foundation. Decisions in ADR-0022 to ADR-0025; research in `docs/research/memory-layer.md`. Tickets to cut.                                                          |
 | M7 onward | Not started |      | Build order after M14: M7, M8, M9 (the agent), then M2 (discovery) and M4, then M10.                                                                                        |
 
 ## M0: Scaffold and tenancy
@@ -30,7 +30,7 @@ The builder chat is primary (ADR-0007), so it comes before mining. Milestones ke
 ## Alongside M1: the discovery-lens experiment
 
 - Blind lists from everyone, a minimal synthetic generator seeded from them, and both lenses run in `experiments/discovery-lenses/` (`docs/research/discovery-multi-app.md`).
-- It doesn't block any milestone, and no longer gates objects: ADR-0021 replaced that gate. M2's synthetic generator measures discovery instead.
+- It doesn't block any milestone, and no longer gates objects: ADR-0022 replaced that gate. M2's synthetic generator measures discovery instead.
 
 ## M1: Connect and ingest
 
@@ -90,8 +90,8 @@ Planned in this order, each its own milestone or part of one, after M12:
 
 ## M13: Custom actions
 
-- When no catalog action fits, the builder chat describes one call to a registered app as a custom action of the org, with its risk set by a fixed rule; anything but a read waits for a person every time (ADR-0017, ADR-0018).
-- Where an app can't hold a waiting send, Mycel holds it until its review ends (ADR-0019).
+- When no catalog action fits, the builder chat describes one call to a registered app as a custom action of the org, with its risk set by a fixed rule; anything but a read waits for a person every time (ADR-0018, ADR-0019).
+- Where an app can't hold a waiting send, Mycel holds it until its review ends (ADR-0020).
 - Capability requests (moved from M10): code the builder drafts, reviewed by our team into the catalog.
 - Our team registers apps in `docs/research/integrations/ranking.md`'s order.
 - **To revisit:** letting admins connect a vendor's MCP server by its address alone, once those servers leave preview and their terms allow apps like ours.
@@ -99,9 +99,9 @@ Planned in this order, each its own milestone or part of one, after M12:
 
 ## M14: Memory foundation
 
-- Objects, links and facts built from Gmail, Drive docs and Calendar, in Postgres with pgvector: facts and pointers only, stated facts only, business items only within a monthly extraction budget (ADR-0021).
-- Each source record keeps its app's access list; a fact is visible to anyone who can see one of its sources; company-wide lists and org connections (ADR-0022). Admin exclusions.
-- Retention (with its source, at most 24 months), forget a person and the do-not-learn list, an access log of every read, a key per company in a KMS (ADR-0023). Slack and similar apps are searched live (ADR-0024).
+- Objects, links and facts built from Gmail, Drive docs and Calendar, in Postgres with pgvector: facts and pointers only, stated facts only, business items only within a monthly extraction budget (ADR-0022).
+- Each source record keeps its app's access list; a fact is visible to anyone who can see one of its sources; company-wide lists and org connections (ADR-0023). Admin exclusions.
+- Retention (with its source, at most 24 months), forget a person and the do-not-learn list, an access log of every read, a key per company in a KMS (ADR-0024). Slack and similar apps are searched live (ADR-0025).
 - Memory feeds workflows and the builder chat's context.
 - **Done when:** a workflow on one of our inboxes uses a fact about a customer drawn from another source its member can see, a member never sees a fact from a source they can't, and forgetting a person removes every trace of them from memory.
 
@@ -115,12 +115,12 @@ Planned in this order, each its own milestone or part of one, after M12:
 
 ## M9: The agent
 
-- A Mycel agent in each person's own view of memory (ADR-0022): it reads memory, acts only through workflows and the Reviews page, and turns "remember this" into a fact owned by that person. **To grill when scoping M9.**
+- A Mycel agent in each person's own view of memory (ADR-0023): it reads memory, acts only through workflows and the Reviews page, and turns "remember this" into a fact owned by that person. **To grill when scoping M9.**
 
 ## M2: Mining and suggestions
 
 - **Entry task:** the eval-grade synthetic company generator (planted workflows and decoys), to measure discovery's recall and precision.
-- Embeddings, clustering, cluster labeling, template detection, request→response pairs, built on M14's objects (ADR-0021).
+- Embeddings, clustering, cluster labeling, template detection, request→response pairs, built on M14's objects (ADR-0022).
 - Ranking, rung mapping, a suggestions UI with evidence (re-fetched via the proxy; visibility per ADR-0001). Suggestions and mined patterns feed the builder chat's context.
 - Nightly incremental mining; the dismissed-suggestion resurfacing rule.
 - Mine our own run logs (runs, approvals, edits, overrides) as a discovery source.
@@ -141,4 +141,4 @@ Planned in this order, each its own milestone or part of one, after M12:
 
 ## After M10: Memory over MCP
 
-- An MCP server giving each person's own view of memory to other AI tools, with the same access log and prompt-injection screening (ADR-0022, ADR-0023). **To grill when scoping:** how clients sign in and which tools it offers.
+- An MCP server giving each person's own view of memory to other AI tools, with the same access log and prompt-injection screening (ADR-0023, ADR-0024). **To grill when scoping:** how clients sign in and which tools it offers.

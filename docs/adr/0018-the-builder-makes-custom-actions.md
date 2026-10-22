@@ -4,7 +4,7 @@ Replaces invariant 5's "use existing catalog actions; integration code is writte
 
 ## Consequences
 
-- **Risk:** a read is `read`. Every other call is at least `external_send`, so it waits for a person each time it runs, because no rule can tell a record change from words sent in someone's name (ADR-0018). The rule refuses deletes, refunds, voids and any write in an accounting or payments app. To run without a review, an action goes through our review into the catalog.
+- **Risk:** a read is `read`. Every other call is at least `external_send`, so it waits for a person each time it runs, because no rule can tell a record change from words sent in someone's name (ADR-0019). The rule refuses deletes, refunds, voids and any write in an accounting or payments app. To run without a review, an action goes through our review into the catalog.
 - **Approval:** a new custom action appears in the builder's proposal, saying in plain words what it calls and how risky the rule made it, and the admin accepts it with the proposal.
 - **Ownership:** a custom action belongs to the company that made it. Accepted custom actions don't change; an edit makes a new one, and switching a published workflow to it is a new workflow version under M5's rules. Prebuilt workflows, when we make them, use only the shared catalog.
 - **Try it** runs a custom read for real and shows the exact request a custom write would send, without sending it.

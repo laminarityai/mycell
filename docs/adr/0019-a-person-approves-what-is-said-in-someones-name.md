@@ -4,4 +4,4 @@
 
 ## Consequences
 
-- Our team sets each catalog action's level by this line. A fixed rule can't apply it to an arbitrary call, so every custom write waits (ADR-0017).
+- Our team sets each catalog action's level by this line. A fixed rule can't apply it to an arbitrary call, so every custom write waits (ADR-0018).

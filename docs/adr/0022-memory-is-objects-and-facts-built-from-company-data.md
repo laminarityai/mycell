@@ -11,4 +11,4 @@ Replaces ADR-0008's gate on an entity backbone. Mycel builds a memory of each co
 - **What it learns from:** a cheap `classify` step skips newsletters, marketing, notifications and personal mail, and facts are extracted only from business items in Gmail, Drive docs and Calendar, within a monthly extraction budget per company, estimated before the first run (invariant 7).
 - **People outside the company** (customers, vendors) are kept with work facts only: name, company, role, relationship, recent interactions.
 - **Retrieval** combines embeddings, keyword search and links between objects, with no model call when someone searches.
-- Who sees what is ADR-0022; retention, deletion and logging are ADR-0023.
+- Who sees what is ADR-0023; retention, deletion and logging are ADR-0024.

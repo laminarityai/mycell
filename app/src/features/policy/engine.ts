@@ -81,8 +81,10 @@ export function requirementsGained(
   if (ORDER.indexOf(after.maxRisk) > ORDER.indexOf(before.maxRisk)) {
     gained.maxRiskRaised = { from: before.maxRisk, to: after.maxRisk };
   }
-  const apps = appsUsed(before.requiredActions);
-  const newApps = appsUsed(after.requiredActions).filter((app) => !apps.includes(app));
+  const apps = appsUsed(before.requiredActions, before.trigger);
+  const newApps = appsUsed(after.requiredActions, after.trigger).filter(
+    (app) => !apps.includes(app),
+  );
   if (newApps.length > 0) gained.newApps = newApps;
   const needed = scopeSets(before.requiredActions);
   const newScopes = scopeSets(after.requiredActions)

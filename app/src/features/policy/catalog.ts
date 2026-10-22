@@ -2,6 +2,7 @@
 // by our team, and nothing a spec or a model says changes it. v1 has six Gmail and Sheets
 // actions; no action is `financial` or `destructive`.
 import { z } from "zod";
+import { triggers, type TriggerType } from "@/features/spec/triggers";
 import { GOOGLE_HOSTS, googleScope as scope } from "@/lib/google";
 import type { CatalogAction } from "./types";
 
@@ -131,10 +132,14 @@ export function findAction(name: string): CatalogAction | undefined {
 }
 
 /**
- * The apps a workflow calling `actionNames` uses, as admins name them: Gmail, whose new mail
- * every workflow's trigger watches, then each action's app, each once.
+ * The apps a workflow calling `actionNames` uses, as admins name them: the app its trigger
+ * watches (Gmail's new mail unless the trigger says otherwise), then each action's app, each
+ * once.
  */
-export function appsUsed(actionNames: readonly string[]): CatalogAction["app"][] {
+export function appsUsed(
+  actionNames: readonly string[],
+  trigger: TriggerType = "gmail.message_received",
+): CatalogAction["app"][] {
   const apps = actionNames.flatMap((name) => findAction(name)?.app ?? []);
-  return [...new Set<CatalogAction["app"]>(["Gmail", ...apps])];
+  return [...new Set<CatalogAction["app"]>([triggers[trigger].app, ...apps])];
 }

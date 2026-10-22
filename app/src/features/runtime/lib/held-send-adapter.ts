@@ -63,7 +63,7 @@ export const heldSendAdapter: PendingFormAdapter<HeldSendInput> = {
     if (taken === undefined) throw new ItemGoneError();
     let answer: unknown;
     try {
-      answer = await sent(ctx, send.connectionId, request);
+      answer = await sent(ctx, send.connectionId, request, record.call.path);
     } catch (error) {
       if (!neverReachedApp(error)) throw new SendUnconfirmedError();
       await putBackHeldSend(ctx, taken);
@@ -153,15 +153,20 @@ function neverReachedApp(error: unknown): boolean {
 }
 
 // Sends a write's request through the proxy; null when the app had no such item (404 or 410).
-function sent(ctx: Ctx, connectionId: string, request: RenderedRequest): Promise<unknown> {
+function sent(
+  ctx: Ctx,
+  connectionId: string,
+  request: RenderedRequest,
+  template: string,
+): Promise<unknown> {
   const body = request.body ?? {};
   switch (request.method) {
     case "POST":
-      return proxyPost(ctx, connectionId, request.path, body, answer);
+      return proxyPost(ctx, connectionId, request.path, body, answer, { template });
     case "PUT":
-      return proxyPut(ctx, connectionId, request.path, body, answer);
+      return proxyPut(ctx, connectionId, request.path, body, answer, { template });
     case "PATCH":
-      return proxyPatch(ctx, connectionId, request.path, body, answer);
+      return proxyPatch(ctx, connectionId, request.path, body, answer, { template });
     case "GET":
       throw new ValidationError("A held send is a write.");
   }

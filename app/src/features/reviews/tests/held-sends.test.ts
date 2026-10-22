@@ -198,8 +198,11 @@ describe("a held send whose app doesn't confirm it was sent", () => {
     const heldSendId = await heldSendIdOf(owner, runId);
     fakeNango.revokeAccess(microsoftNangoId);
 
-    await expect(approveReview(owner, reviewId)).rejects.toThrow();
+    const refused = await approveReview(owner, reviewId).catch((error: unknown) => error);
 
+    // The error names the call by its path template, never the input values filled into it.
+    expect(String(refused)).toContain("/v1.0/me/messages/{messageId}/reply");
+    expect(String(refused)).not.toContain(OUTLOOK_MESSAGE);
     expect(writes(outlook.requests)).toEqual([]);
     expect((await openReview(owner, reviewId)).review.status).toBe("waiting");
     expect(await tablesHolding(heldSendId)).toContain("held_sends");

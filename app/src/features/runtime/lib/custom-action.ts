@@ -46,7 +46,9 @@ export async function runCustomAction(
   const { connectionId, request } = await renderCustomCall(ctx, runConnectionId, action, input);
   let response: unknown;
   try {
-    response = await proxyGet(ctx, connectionId, request.path, z.unknown());
+    response = await proxyGet(ctx, connectionId, request.path, z.unknown(), {
+      template: action.request.path,
+    });
   } catch (error) {
     // The app's connection went, not the run's.
     if (error instanceof NotFoundError && connectionId !== runConnectionId) {

@@ -206,15 +206,16 @@ export type ReconciliationSummary = {
 /**
  * The source refused a proxied request (anything but a 404 or 410, which read as "no such
  * item"). It carries the source's status and parsed error body, so a connector can tell a
- * refusal it recovers from (Drive's invalid page token) from a failure.
+ * refusal it recovers from (Drive's invalid page token) from a failure. Its message names the
+ * call by its path, or a custom call by its path template, never the input values in it.
  */
 export class SourceRequestError extends Error {
   constructor(
     readonly status: number,
     readonly body: unknown,
-    path: string,
+    call: string,
   ) {
-    super(`Nango proxy ${path} failed: ${String(status)}`);
+    super(`Nango proxy ${call} failed: ${String(status)}`);
     this.name = "SourceRequestError";
   }
 }

@@ -72,3 +72,33 @@ export type MemoryObject = {
   keys: { kind: ObjectKeyKind; value: string }[];
   facts: MemoryFact[];
 };
+
+/** The most facts one search returns. */
+export const MAX_SEARCH_RESULTS = 50;
+
+const searchLimit = z.number().int().min(1).max(MAX_SEARCH_RESULTS).optional();
+
+/**
+ * A search of memory: by text (its words, and any email address or domain in it), or by one
+ * exact key. `limit` caps the facts returned (20 by default).
+ */
+export const memorySearchSchema = z.union([
+  z.object({ text: z.string().trim().min(1).max(500), limit: searchLimit }),
+  z.object({
+    key: z.object({
+      kind: z.enum(OBJECT_KEY_KINDS),
+      value: z.string().trim().toLowerCase().min(1).max(320),
+    }),
+    limit: searchLimit,
+  }),
+]);
+export type MemorySearch = z.input<typeof memorySearchSchema>;
+
+/** An object a search found, without its facts (`readObject` reads them). */
+export type FoundObject = Omit<MemoryObject, "facts">;
+
+/** A fact a search found, with the object it's about. */
+export type FoundFact = MemoryFact & { subject: { id: string; kind: ObjectKind; name: string } };
+
+/** What a search found that its caller can see, best match first. */
+export type MemorySearchResult = { objects: FoundObject[]; facts: FoundFact[] };

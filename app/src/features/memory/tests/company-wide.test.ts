@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs, seedUser } from "@/db/testing/two-org-fixture";
-import { backfillConnection } from "@/features/discovery/server";
+import { backfillConnection, pollConnection } from "@/features/discovery/server";
 import { systemCtx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import { connectMailbox, daysAgo } from "@/testing/connect-helpers";
@@ -10,6 +10,7 @@ import {
   listCompanyWideLists,
   markCompanyWideList,
   readObject,
+  searchMemory,
   unmarkCompanyWideList,
 } from "../server";
 import {
@@ -23,6 +24,9 @@ beforeEach(resetDatabase);
 
 const DANA = "dana@acme.example";
 const ROLE = "Dana Ruiz leads procurement at Acme.";
+const MOVING = "Dana Ruiz is moving to Acme's Leeds office.";
+const DEMO = "Dana Ruiz asked for a demo.";
+const BUDGET = "Dana Ruiz approved the budget.";
 
 const DANA_ROLE: ScriptedExtraction = {
   objects: [{ ref: "dana", kind: "person", name: "Dana Ruiz", email: DANA }],
@@ -179,6 +183,63 @@ describe("a list an admin marked company-wide", () => {
     for (const ctx of [orgA.admin.ctx, lee.ctx, systemCtx(orgA.id)]) {
       await expect(readObject(ctx, byDana)).rejects.toThrow(NotFoundError);
     }
+  });
+});
+
+describe("searching memory", () => {
+  it("finds company-wide facts for everyone, and the rest only for whoever can see them", async () => {
+    const { orgA, lee, danaEmail } = await setup();
+    const support = `support@${orgA.workspaceDomain}`;
+    const all = `all@${orgA.workspaceDomain}`;
+    const sales = `sales@${orgA.workspaceDomain}`;
+    await markCompanyWideList(orgA.admin.ctx, all);
+    const learn = async (statement: string, evidence: string) => {
+      scriptLearning({
+        objects: DANA_ROLE.objects,
+        facts: [{ about: "dana", statement, evidence }],
+      });
+      await learnStoredItems(orgA.id);
+    };
+    const said = (text: string, to: string[], headers?: Record<string, string>) =>
+      danaEmail(to, { text, at: new Date(), ...(headers === undefined ? {} : { headers }) });
+    // From the shared inbox.
+    const inbox = await connectMailbox(
+      orgA.admin.ctx,
+      support,
+      [said("I lead procurement at Acme.", [support])],
+      "org",
+    );
+    await backfillConnection(orgA.admin.ctx, inbox.id);
+    await learn(ROLE, "I lead procurement at Acme");
+    // To all@, which is marked.
+    const mailbox = await connectMailbox(orgA.member.ctx, orgA.member.email, [
+      said("I'm moving to the Leeds office.", [all]),
+    ]);
+    await backfillConnection(orgA.member.ctx, mailbox.id);
+    await learn(MOVING, "I'm moving to the Leeds office");
+    // To sales@, which isn't: the member's and Lee's mailboxes both hold it.
+    const demo = said("Could we see a demo?", [sales], { "Message-ID": "<demo-1@acme.example>" });
+    mailbox.mailbox.add(demo);
+    await pollConnection(systemCtx(orgA.id), mailbox.id);
+    await learn(DEMO, "Could we see a demo?");
+    // To the member alone.
+    mailbox.mailbox.add(said("The budget is approved.", [orgA.member.email]));
+    await pollConnection(systemCtx(orgA.id), mailbox.id);
+    await learn(BUDGET, "The budget is approved");
+    const leeBox = await connectMailbox(lee.ctx, lee.email, [demo]);
+    await backfillConnection(lee.ctx, leeBox.id);
+    await learnStoredItems(orgA.id);
+
+    const found = async (ctx: Parameters<typeof searchMemory>[0]) =>
+      (await searchMemory(ctx, byDana)).facts.map((fact) => fact.statement).sort();
+    expect(await found(orgA.member.ctx)).toEqual([BUDGET, DEMO, ROLE, MOVING].sort());
+    expect(await found(lee.ctx)).toEqual([DEMO, ROLE, MOVING].sort());
+    // The admin may be in sales@, but isn't on any of these but the company-wide ones.
+    expect(await found(orgA.admin.ctx)).toEqual([ROLE, MOVING].sort());
+    expect(await found(systemCtx(orgA.id))).toEqual([ROLE, MOVING].sort());
+    expect(
+      (await searchMemory(lee.ctx, { text: "budget approved" })).facts.map((f) => f.statement),
+    ).toEqual([]);
   });
 });
 

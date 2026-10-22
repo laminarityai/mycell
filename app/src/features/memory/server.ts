@@ -5,6 +5,9 @@
 // Called only by memory's job (and tests), as the org's system ctx.
 export { learnFromItem } from "./lib/learn";
 export { readObject } from "./lib/read";
+// Ranks what the caller can see by keywords, keys, links and stored embeddings, with no model
+// call: the query itself is never embedded.
+export { searchMemory } from "./lib/search";
 // Admins only.
 export {
   listCompanyWideLists,

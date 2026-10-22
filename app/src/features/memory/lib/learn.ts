@@ -6,9 +6,10 @@
 // on the do-not-learn list (`forgotten`), a copy of an item another connection taught (linked
 // to its facts there and then), or else, once the injection screen has passed it (an item it
 // flags, or one nothing could screen, is skipped before any model reads it), whether it's
-// business (`classify`). The second, for a business
-// item, reads it again, checks the exclusions again, extracts objects and facts, drops any object keyed by a forgotten
-// address with the facts about it or linking to it, embeds the statements and stores them.
+// business (`classify`). The second, for a business item, reads it again, checks the exclusions
+// again (one added since may have had its forgetting run between the steps), extracts objects
+// and facts, drops any object keyed by a forgotten address with the facts about it or linking
+// to it, embeds the statements and stores them.
 // Every model call is tagged `memory` in the ledger. The item's content is fetched inside each
 // step and never leaves it (invariant 8): a step returns only what it decided. A connection or
 // item that's gone ends learning quietly. An item learning can't pay for (the org is out of
@@ -18,10 +19,10 @@ import { isForeignKeyViolation } from "@/db/errors";
 import { getConnection } from "@/features/connections/server";
 import type { ConnectionDetails } from "@/features/connections/types";
 import { embed, screenForInjection } from "@/features/models/server";
+import { InjectionScreenError } from "@/features/models/types";
 import { getWorkspaceDomain } from "@/features/orgs/server";
 import type { Ctx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError, OutOfCreditsError } from "@/lib/errors";
-import { InjectionScreenError } from "@/features/models/types";
 import type { ItemToLearn, LearnOutcome, MemoryApp, PostponeReason } from "../types";
 import { gate, MEMORY_USAGE, postpone } from "./budget";
 import { readDoc } from "./drive";

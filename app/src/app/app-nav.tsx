@@ -43,6 +43,9 @@ function NavLinks({ waiting, admin }: { waiting: number; admin: boolean }) {
       <Link href="/org" className={LINK}>
         Your org
       </Link>
+      <Link href="/memory/access-log" className={LINK}>
+        Memory log
+      </Link>
       {admin ? (
         <>
           <Link href="/tags" className={LINK}>

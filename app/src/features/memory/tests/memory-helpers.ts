@@ -63,7 +63,7 @@ export type ScriptedExtraction = {
 /**
  * Scripts one business email's learning: classify says business, the extraction answers
  * `extraction`, and the embedding answers one vector for each fact it keeps (`kept`, every fact
- * by default): `vectors` in order, or made-up ones.
+ * by default): `vectors` in order, or ones unrelated to every other.
  */
 export function scriptLearning(
   extraction: ScriptedExtraction,
@@ -87,13 +87,22 @@ export function scriptLearning(
     })),
   });
   if (kept > 0) {
-    fakeAiGateway.embeddings(vectors ?? Array.from({ length: kept }, (_, i) => vector(i + 1)));
+    fakeAiGateway.embeddings(vectors ?? Array.from({ length: kept }, () => unrelated()));
   }
 }
 
-/** A vector of the `embed` role's 1536 dimensions. */
-export function vector(seed: number): number[] {
-  return Array.from({ length: 1536 }, (_, i) => ((seed * 31 + i) % 97) / 97);
+// Axes no test picks for `meaning`, handed out in turn.
+const UNRELATED_AXES = { from: 1000, to: 1536 };
+let nextAxis = UNRELATED_AXES.from;
+
+/**
+ * A vector meaning nothing like any other: the default embedding of a scripted fact, so facts a
+ * test doesn't relate are never alike (and never make objects match candidates).
+ */
+export function unrelated(): number[] {
+  const axis = nextAxis;
+  nextAxis = axis + 1 === UNRELATED_AXES.to ? UNRELATED_AXES.from : axis + 1;
+  return meaning(axis);
 }
 
 /**

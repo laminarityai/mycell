@@ -202,6 +202,10 @@ _Avoid_: Toolset, action registry
 Code the builder chat drafts when a custom action can't do the job, sent to our team to review into the catalog.
 _Avoid_: Feature request
 
+**Agent**:
+Each person's own private chat with Mycel. It answers from what that person can see in memory and in their own mail, remembers what they tell it, and acts only by running their own workflows, whose actions still wait as reviews.
+_Avoid_: Assistant, copilot, bot
+
 **Builder chat**:
 The admin-only agent that turns descriptions and suggestions into proposed spec changes. It reads only company-wide memory, since its conversations are shared among admins.
 _Avoid_: Copilot, assistant
@@ -213,6 +217,10 @@ _Avoid_: Thread (an email thread), session
 **Proposal**:
 A change to a workflow that the builder chat suggests and an admin accepts or rejects.
 _Avoid_: Spec diff, suggestion (a suggestion comes from discovery)
+
+**Alert**:
+A notice in Mycel telling admins something needs them, such as a workflow paused for failing or credits running out. It goes away by itself once the cause is fixed.
+_Avoid_: Notification, warning, email
 
 ### Money
 

@@ -5,6 +5,7 @@
 import { eq } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { listConnections } from "@/features/connections/server";
+import { getActionSet } from "@/features/custom-actions/server";
 import { userNames } from "@/features/orgs/server";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
@@ -36,8 +37,11 @@ export async function enable(ctx: Ctx, workflowId: string): Promise<EnableResult
   const connection = (await listConnections(ctx)).connections.find(
     (own) => own.source === "google",
   );
-  if (connection === undefined) return { needs: "connect", ...missingAccess(version, null) };
-  const missing = missingAccess(version, connection);
+  const actions = await getActionSet(ctx);
+  if (connection === undefined) {
+    return { needs: "connect", ...missingAccess(version, null, actions) };
+  }
+  const missing = missingAccess(version, connection, actions);
   if (missing.apps.length > 0 || missing.scopes.length > 0) {
     return { needs: "reconnect", connectionId: connection.id, ...missing };
   }

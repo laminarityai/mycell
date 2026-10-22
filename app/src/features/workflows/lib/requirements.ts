@@ -1,9 +1,9 @@
 // What a workflow version needs from the Google connection it runs on: the apps it uses
-// (ADR-0014) and the scope of each catalog action it calls. Both come from the catalog, never
-// from a model.
+// (ADR-0014) and the scope of each action it calls. Both come from the company's action set,
+// never from a model.
 import { GOOGLE_APP_SCOPES, type GoogleApp } from "@/features/connections/types";
-import { appsUsed, findAction } from "@/features/policy/catalog";
-import type { CatalogAction } from "@/features/policy/types";
+import { appsUsed } from "@/features/policy/action-set";
+import type { ActionSet, CatalogAction } from "@/features/policy/types";
 import type { WorkflowVersion } from "../types";
 import { scopeName } from "./scope-check";
 
@@ -15,10 +15,13 @@ export type MissingAccess = { apps: CatalogAction["app"][]; scopes: string[] };
 
 /**
  * The apps the version uses, as the catalog names them: Gmail for the trigger, then each app a
- * catalog action it calls belongs to, each once.
+ * action it calls belongs to, each once, from the company's action set.
  */
-export function requiredApps(version: Pick<WorkflowVersion, "requiredActions">) {
-  return appsUsed(version.requiredActions);
+export function requiredApps(
+  version: Pick<WorkflowVersion, "requiredActions">,
+  actions: ActionSet,
+) {
+  return appsUsed(version.requiredActions, actions);
 }
 
 /**
@@ -29,12 +32,15 @@ export function requiredApps(version: Pick<WorkflowVersion, "requiredActions">) 
 export function missingAccess(
   version: Pick<WorkflowVersion, "requiredActions">,
   granted: { apps: readonly GoogleApp[]; grantedScopes: readonly string[] } | null,
+  actions: ActionSet,
 ): MissingAccess {
   const apps = granted?.apps ?? [];
   const scopes = granted?.grantedScopes ?? [];
-  const missingApps = requiredApps(version).filter((app) => !apps.includes(GOOGLE_APPS[app]));
+  const missingApps = requiredApps(version, actions).filter(
+    (app) => !apps.includes(GOOGLE_APPS[app]),
+  );
   const actionScopes = version.requiredActions.flatMap((name) => {
-    const action = findAction(name);
+    const action = actions.find(name);
     if (action === undefined || action.scopes.some((scope) => scopes.includes(scope))) return [];
     return action.scopes.slice(0, 1);
   });

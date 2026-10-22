@@ -40,6 +40,18 @@ export type CatalogAction = {
   readonly conditionFields?: readonly ConditionField[];
 };
 
+/**
+ * The actions one company's workflows may use, resolved once per company (ADR-0018) and handed
+ * to the policy engine and to everything else that looks an action up. Today it is the catalog
+ * alone; the company's custom actions join it in M13.
+ */
+export type ActionSet = {
+  /** Every action in the set, in order: the catalog's first. */
+  readonly actions: readonly CatalogAction[];
+  /** The action with this name, or undefined when the set has none. */
+  find(name: string): CatalogAction | undefined;
+};
+
 /** An approval step the policy engine added because the spec was missing it. */
 export type InsertedApproval = {
   /** The new approval step's ID. */
@@ -56,7 +68,7 @@ export type PolicyResult =
 /** What a workflow version needs, as the policy engine compares one version with the next. */
 export type Requirements = {
   maxRisk: RiskLevel;
-  /** The catalog actions the version calls. */
+  /** The actions the version calls. */
   requiredActions: readonly string[];
 };
 

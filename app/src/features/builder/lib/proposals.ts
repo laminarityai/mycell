@@ -5,6 +5,7 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
+import { getActionSet } from "@/features/custom-actions/server";
 import { readStoredSpec } from "@/features/spec/stored";
 import type { SpecIssue } from "@/features/spec/types";
 import {
@@ -115,7 +116,8 @@ export async function listProposals(ctx: Ctx, conversationId: string): Promise<P
     where: eq(builderProposals.conversationId, conversation.id),
     orderBy: [asc(builderProposals.createdAt), asc(builderProposals.id)],
   });
-  return rows.map(toProposal);
+  const actions = await getActionSet(ctx);
+  return rows.map((row) => toProposal(row, actions));
 }
 
 /**

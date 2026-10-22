@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { isUniqueViolation } from "@/db/errors";
 import { forOrg } from "@/db/for-org";
+import { getActionSet } from "@/features/custom-actions/server";
 import { applyPolicy } from "@/features/policy/engine";
 import { sameValue } from "@/features/spec/diff";
 import { readStoredSpec } from "@/features/spec/stored";
@@ -36,7 +37,7 @@ export async function saveWorkflow(ctx: Ctx, input: WorkflowInput): Promise<Save
   if (name === "") throw new ValidationError("Give the workflow a name.");
   const existing =
     input.workflowId === undefined ? undefined : await findWorkflow(ctx, input.workflowId);
-  const validated = await validateWorkflowSpec(ctx, input.spec);
+  const validated = await validateWorkflowSpec(ctx, input.spec, await getActionSet(ctx));
 
   const values = { name, specId: validated.working.id, workingSpec: validated.working };
   const db = forOrg(ctx);
@@ -111,7 +112,7 @@ export async function getWorkflow(ctx: Ctx, workflowId: string): Promise<Workflo
     where: eq(workflowVersions.workflowId, workflowId),
     orderBy: [desc(workflowVersions.number)],
   });
-  const policy = applyPolicy(row.workingSpec);
+  const policy = applyPolicy(row.workingSpec, await getActionSet(ctx));
   const latest = versions.at(0);
   return {
     id: row.id,

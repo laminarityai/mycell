@@ -4,10 +4,10 @@
 // spec by the step's ID. Its ID and, for an action, its risk level are shown, never edited: the
 // ID is what other steps name, and only the catalog decides a risk level (invariant 4).
 import { ShieldCheck } from "lucide-react";
-import { findAction } from "@/features/policy/catalog";
 import { removeStep, updateStep } from "@/features/spec/edit";
 import { findStep, stepLocation } from "@/features/spec/tree";
 import type { Step } from "@/features/spec/types";
+import { useActionSet } from "./action-set-context";
 import { BranchFields } from "./branch-fields";
 import { RiskBadge } from "./risk-badge";
 import { PanelShell, type PanelProps, type StepEdit } from "./panel-shell";
@@ -28,6 +28,7 @@ const ROLES = ["classify", "fast", "smart", "judge"].map((role) => ({ value: rol
 
 export function StepForm({ stepId, ...props }: PanelProps & { stepId: string }) {
   const { spec, edit, issues, onClose } = props;
+  const actions = useActionSet();
   const step = findStep(spec, stepId);
   if (step === undefined) {
     return (
@@ -44,8 +45,8 @@ export function StepForm({ stepId, ...props }: PanelProps & { stepId: string }) 
   const here = issues.get(step.id) ?? [];
   const depth = stepLocation(spec, step.id)?.length ?? 0;
   const invalid = (field: string) => here.some((issue) => issue.path[depth] === field);
-  const action = findAction(step.type === "tool" ? step.action : "");
-  const risk = step.type === "draft" ? findAction(step.output)?.risk : action?.risk;
+  const action = actions.find(step.type === "tool" ? step.action : "");
+  const risk = step.type === "draft" ? actions.find(step.output)?.risk : action?.risk;
   return (
     <PanelShell
       title={action === undefined ? TITLES[step.type] : `${action.app} · ${TITLES[step.type]}`}

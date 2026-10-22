@@ -1,9 +1,11 @@
 // The action catalog, as code (invariant 4): every catalog action's risk level is fixed here
 // by our team, and nothing a spec or a model says changes it. v1 has six Gmail and Sheets
-// actions; no action is `financial` or `destructive`.
+// actions; no action is `financial` or `destructive`. Code that looks up the action a workflow
+// names takes the company's action set (`action-set.ts`), which starts from this catalog.
 import { z } from "zod";
 import { GOOGLE_HOSTS, googleScope as scope } from "@/lib/google";
-import type { CatalogAction } from "./types";
+import { actionSetOf } from "./action-set";
+import type { ActionSet, CatalogAction } from "./types";
 
 const GMAIL_HOST = GOOGLE_HOSTS.gmail;
 const SHEETS_HOST = GOOGLE_HOSTS.sheets;
@@ -117,24 +119,13 @@ function byName() {
 
 export const actionNames = actions.map((action) => action.name);
 
+/** The catalog alone, as an action set: what every company's action set starts from. */
+export const catalogActionSet: ActionSet = actionSetOf(actions);
+
 /**
  * The catalog actions a connection granted `grantedScopes` may run, in catalog order: those
  * with any one of their scopes granted, the same rule as save-time validation's scope check.
  */
 export function actionsAllowedBy(grantedScopes: readonly string[]): CatalogAction[] {
   return actions.filter((action) => action.scopes.some((s) => grantedScopes.includes(s)));
-}
-
-/** The catalog action with this name, or undefined when there is none. */
-export function findAction(name: string): CatalogAction | undefined {
-  return (catalog as Readonly<Record<string, CatalogAction>>)[name];
-}
-
-/**
- * The apps a workflow calling `actionNames` uses, as admins name them: Gmail, whose new mail
- * every workflow's trigger watches, then each action's app, each once.
- */
-export function appsUsed(actionNames: readonly string[]): CatalogAction["app"][] {
-  const apps = actionNames.flatMap((name) => findAction(name)?.app ?? []);
-  return [...new Set<CatalogAction["app"]>(["Gmail", ...apps])];
 }

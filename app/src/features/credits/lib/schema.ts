@@ -11,7 +11,8 @@ export const creditLedger = pgTable(
     kind: text("kind", { enum: ["grant", "usage"] }).notNull(),
     // Credits: positive for a grant, negative (or zero) for usage.
     amount: numeric("amount", { mode: "number" }).notNull(),
-    // Usage only: the role the call named, the model it resolved to, and how the call ended.
+    // Usage only: the role the call named, the model it resolved to, and how the call ended. The
+    // injection screen names no role: its row has the service as its model.
     role: text("role", { enum: modelRoleSchema.options as [ModelRole, ...ModelRole[]] }),
     modelId: text("model_id"),
     outcome: text("outcome", { enum: ["succeeded", "failed"] }),

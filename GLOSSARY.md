@@ -227,6 +227,10 @@ An exact identifier of an object, such as a person's email address or a company'
 **Exclusion**:
 A Gmail label, Drive folder or similar that an admin keeps out of memory for the whole company.
 
+**Injection screen**:
+The check that content fetched from a company's apps doesn't try to give a model instructions, made before any model reads it; an item it flags is skipped.
+_Avoid_: Guardrail, filter, firewall
+
 **Do-not-learn list**:
 The addresses of people an admin asked Mycel to forget, which memory never learns about again.
 

@@ -26,12 +26,18 @@ export const itemToLearnSchema = z.object({
 export type ItemToLearn = z.infer<typeof itemToLearnSchema>;
 
 /**
+ * Why learning skipped an item: learned already; the injection screen flagged it, or no screen
+ * is configured, so no model read it; not business; or it stated no fact memory keeps.
+ */
+export type SkipReason = "known" | "flagged" | "unscreened" | "not_business" | "nothing_stated";
+
+/**
  * What learning from one item did: stored facts about objects (a copy of an item learned
  * already reuses its facts), skipped it, or found its connection or the item gone.
  */
 export type LearnOutcome =
   | { outcome: "learned"; objects: number; facts: number }
-  | { outcome: "skipped"; reason: "known" | "not_business" | "nothing_stated" }
+  | { outcome: "skipped"; reason: SkipReason }
   | { outcome: "gone" };
 
 /** How a reader names an object: by its ID, or by one of its exact keys. */

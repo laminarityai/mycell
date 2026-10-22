@@ -10,6 +10,9 @@ export { readObject } from "./lib/logged-reads";
 // Ranks what the caller can see by keywords, keys, links and stored embeddings, with no model
 // call: the query itself is never embedded.
 export { searchMemory } from "./lib/logged-reads";
+// A summary of one object, from only the facts the caller can see: one metered `fast` call, its
+// read logged as the reader named, and nothing stored.
+export { summarizeObject } from "./lib/summarize";
 // The access log: admins see the company's, members the reads of facts from their own sources.
 // Pruned nightly, as the org's system ctx.
 export { listAccessLog, pruneAccessLog } from "./lib/access-log";

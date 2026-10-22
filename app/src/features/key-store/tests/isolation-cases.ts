@@ -1,5 +1,6 @@
 import { expect } from "vitest";
 import { defineIsolationCases } from "@/db/testing/isolation";
+import { systemCtx } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
 import * as server from "../server";
 
@@ -21,7 +22,7 @@ export const isolationCases = defineIsolationCases(server, {
     const forA = await server.encryptForOrg(orgA.member.ctx, "Org A's text");
     const forB = await server.encryptForOrg(orgB.member.ctx, "Org B's text");
 
-    await server.destroyOrgKey(orgA.admin.ctx);
+    await server.destroyOrgKey(systemCtx(orgA.id));
 
     expect(await server.decryptForOrg(orgB.member.ctx, forB)).toBe("Org B's text");
     await expect(server.decryptForOrg(orgA.member.ctx, forA)).rejects.toThrow(NotFoundError);

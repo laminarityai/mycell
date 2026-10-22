@@ -52,7 +52,7 @@ it("destroying a company's key makes its encrypted data unreadable, for good", a
   const forA = await encryptForOrg(orgA.member.ctx, "Org A's held send");
   const forB = await encryptForOrg(orgB.member.ctx, "Org B's held send");
 
-  await destroyOrgKey(orgA.admin.ctx);
+  await destroyOrgKey(systemCtx(orgA.id));
 
   await expect(decryptForOrg(orgA.admin.ctx, forA)).rejects.toThrow(NotFoundError);
   expect(keyStates()).toEqual([
@@ -99,7 +99,7 @@ it("never puts key material in a table, a log, or what it returns", async () => 
   ];
   await decryptForOrg(orgA.member.ctx, encrypted[0] ?? "");
   await expect(decryptForOrg(orgB.member.ctx, encrypted[0] ?? "")).rejects.toThrow(NotFoundError);
-  await destroyOrgKey(orgA.admin.ctx);
+  await destroyOrgKey(systemCtx(orgA.id));
 
   const material = fakeKms.keyMaterial();
   expect(material).toHaveLength(4);
@@ -110,16 +110,17 @@ it("never puts key material in a table, a log, or what it returns", async () => 
   }
 });
 
-it("lets an admin or a scheduled job destroy the company's key, and not a member", async () => {
+it("lets only the org's system ctx destroy its key, never an admin or a member", async () => {
   const { orgA, orgB } = await seedTwoOrgs();
   const forA = await encryptForOrg(orgA.member.ctx, "Org A's held send");
 
   await expect(destroyOrgKey(orgA.member.ctx)).rejects.toThrow(ForbiddenError);
+  await expect(destroyOrgKey(orgA.admin.ctx)).rejects.toThrow(ForbiddenError);
   expect(await decryptForOrg(orgA.member.ctx, forA)).toBe("Org A's held send");
 
   await destroyOrgKey(systemCtx(orgA.id));
-  await destroyOrgKey(orgA.admin.ctx);
-  await destroyOrgKey(orgB.admin.ctx);
+  await destroyOrgKey(systemCtx(orgA.id));
+  await destroyOrgKey(systemCtx(orgB.id));
   await expect(decryptForOrg(orgA.member.ctx, forA)).rejects.toThrow(NotFoundError);
   expect(keyStates()).toEqual([{ state: "PendingDeletion", aliases: [] }]);
 });

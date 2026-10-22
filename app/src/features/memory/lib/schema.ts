@@ -111,7 +111,11 @@ export const memoryObjects = pgTable(
     name: text("name").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [unique("memory_objects_org_id_id_unique").on(table.orgId, table.id)],
+  (table) => [
+    unique("memory_objects_org_id_id_unique").on(table.orgId, table.id),
+    // Matching's name candidates (`%`, trigram similarity; pg_trgm, migration 0027).
+    index("memory_objects_name_trgm_idx").using("gin", table.name.op("gin_trgm_ops")),
+  ],
 );
 
 /** An exact identifier of an object, unique in its org: what exact matching matches on. */
@@ -182,11 +186,9 @@ export const facts = pgTable(
       columns: [table.orgId, table.objectId],
       foreignColumns: [memoryObjects.orgId, memoryObjects.id],
     }).onDelete("cascade"),
-    foreignKey({
-      name: "facts_superseded_by_fk",
-      columns: [table.supersededById],
-      foreignColumns: [table.id],
-    }).onDelete("set null"),
+    // `superseded_by_id` has no foreign key: when the fact it points to is deleted, a trigger
+    // (migration 0029) points it at that fact's own replacement, or makes it current again.
+    index("facts_superseded_by_id_idx").on(table.supersededById),
   ],
 );
 

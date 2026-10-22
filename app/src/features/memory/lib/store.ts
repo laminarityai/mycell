@@ -1,6 +1,6 @@
 // Storing what an item taught memory, in one transaction: its source record with its access
-// list, its objects matched on exact keys (ADR-0022; fuzzy matching comes later), and its facts
-// linked to the record. A fact with the same subject and statement as a current one is that
+// list, its objects (each the existing object matching found, given any keys it lacked, or a new
+// one), and its facts linked to the record. A fact with the same subject and statement as a current one is that
 // fact, newly supported by this record. A copy of an item learned already, under the same item
 // key in another mailbox, takes the facts its first copy taught, with no model call.
 import { randomUUID } from "node:crypto";
@@ -11,6 +11,7 @@ import type { Ctx } from "@/lib/ctx";
 import type { MemoryApp } from "../types";
 import type { ExtractedFact, ExtractedObject } from "./extract";
 import type { EmailToLearn } from "./gmail";
+import type { Matches } from "./match";
 import {
   accessListEntries,
   factSources,
@@ -69,19 +70,23 @@ export async function storeCopy(ctx: Ctx, source: Source): Promise<Stored | null
   });
 }
 
-/** Stores the item's source record, objects and facts. `embeddings` match `extracted.facts`. */
+/**
+ * Stores the item's source record, objects and facts. `embeddings` match `extracted.facts`, and
+ * `matches` are the existing objects matching found.
+ */
 export async function storeLearned(
   ctx: Ctx,
   source: Source,
   extracted: { objects: ExtractedObject[]; facts: ExtractedFact[] },
   embeddings: number[][],
+  matches: Matches,
 ): Promise<Stored | null> {
   return forOrg(ctx).transaction(async (tx) => {
     const recordId = await insertRecord(tx, source);
     if (recordId === null) return null;
     const objectIds = new Map<string, string>();
     for (const object of extracted.objects) {
-      objectIds.set(object.ref, await matchObject(tx, object));
+      objectIds.set(object.ref, await storeObject(tx, object, matches.get(object.ref)));
     }
     const factIds: string[] = [];
     for (const [i, fact] of extracted.facts.entries()) {
@@ -92,7 +97,7 @@ export async function storeLearned(
       factIds.push(await storeFact(tx, { ...fact, subjectId, objectId, embedding }));
     }
     await linkFacts(tx, source.connection.id, recordId, [...new Set(factIds)]);
-    return { objects: objectIds.size, facts: new Set(factIds).size };
+    return { objects: new Set(objectIds.values()).size, facts: new Set(factIds).size };
   });
 }
 
@@ -138,37 +143,28 @@ async function linkFacts(tx: OrgScopedDb, connectionId: string, recordId: string
   );
 }
 
-// The object with one of its keys, given any keys it lacked; or a new object. An object with no
-// keys (a deal, a project) is always new until fuzzy matching arrives. Learning runs one item
-// at a time per org (memory's job), so two items never race to create one key.
-async function matchObject(tx: OrgScopedDb, object: ExtractedObject): Promise<string> {
-  let objectId: string | undefined;
-  for (const key of object.keys) {
-    const found = (
-      await tx.select(objectKeys, {
-        where: and(eq(objectKeys.kind, key.kind), eq(objectKeys.value, key.value)),
-      })
-    ).at(0);
-    objectId ??= found?.objectId;
-  }
-  if (objectId === undefined) {
+// The matched object, given any keys it lacked, or a new object. Learning runs one item at a
+// time per org (memory's job), so nothing has taken a key since matching looked.
+async function storeObject(
+  tx: OrgScopedDb,
+  object: ExtractedObject,
+  matched: string | undefined,
+): Promise<string> {
+  let id = matched;
+  if (id === undefined) {
     const created = (
-      await tx.insert(memoryObjects, {
-        id: randomUUID(),
-        kind: object.kind,
-        name: object.name,
-      })
+      await tx.insert(memoryObjects, { id: randomUUID(), kind: object.kind, name: object.name })
     ).at(0);
     if (created === undefined) throw new Error("The object wasn't stored.");
-    objectId = created.id;
+    id = created.id;
   }
-  const id = objectId;
+  const objectId = id;
   await tx.insert(
     objectKeys,
-    object.keys.map((key) => ({ objectId: id, ...key })),
+    object.keys.map((key) => ({ objectId, ...key })),
     { onConflictDoNothing: true },
   );
-  return id;
+  return objectId;
 }
 
 type FactToStore = Omit<ExtractedFact, "about" | "object"> & {

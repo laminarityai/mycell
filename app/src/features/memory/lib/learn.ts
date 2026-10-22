@@ -15,6 +15,7 @@ import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import type { ItemToLearn, LearnOutcome } from "../types";
 import { extract, isBusiness } from "./extract";
 import { readEmail, type EmailToLearn } from "./gmail";
+import { matchObjects } from "./match";
 import { isKnown, storeCopy, storeLearned, type Stored } from "./store";
 
 /** A step result: JSON, since Inngest stores it and replays it instead of re-running. */
@@ -93,7 +94,8 @@ async function extractAndStore(ctx: Ctx, item: ItemToLearn): Promise<Learned> {
   const { output: embeddings } = await embed(ctx, {
     values: extracted.facts.map((fact) => fact.statement),
   });
-  const stored = await storeLearned(ctx, source, extracted, embeddings);
+  const matches = await matchObjects(ctx, extracted, embeddings);
+  const stored = await storeLearned(ctx, source, extracted, embeddings, matches);
   return stored === null ? { decision: "known" } : { decision: "stored", ...stored };
 }
 

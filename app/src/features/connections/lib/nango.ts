@@ -3,6 +3,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { env } from "@/env";
+import { InvariantError, NangoRequestError } from "@/lib/errors";
 import { SourceRequestError } from "../types";
 
 /** The Nango connection no longer exists (deleted at Nango, or never created). */
@@ -23,11 +24,11 @@ export type ConnectSessionRequest = {
 };
 
 export async function createConnectSession(request: ConnectSessionRequest): Promise<string> {
-  const response = await nangoFetch("/connect/sessions", {
+  const response = await nangoFetch("connect session", "/connect/sessions", {
     method: "POST",
     body: JSON.stringify({ allowed_integrations: [request.integration], tags: request.tags }),
   });
-  if (!response.ok) throw new Error(`Nango connect session failed: ${String(response.status)}`);
+  if (!response.ok) throw new NangoRequestError("connect session", response.status);
   return connectSessionResponse.parse(await response.json()).data.token;
 }
 
@@ -39,11 +40,11 @@ export async function createReconnectSession(
   connectionId: string,
   integration: string,
 ): Promise<string> {
-  const response = await nangoFetch("/connect/sessions/reconnect", {
+  const response = await nangoFetch("reconnect session", "/connect/sessions/reconnect", {
     method: "POST",
     body: JSON.stringify({ connection_id: connectionId, integration_id: integration }),
   });
-  if (!response.ok) throw new Error(`Nango reconnect session failed: ${String(response.status)}`);
+  if (!response.ok) throw new NangoRequestError("reconnect session", response.status);
   return connectSessionResponse.parse(await response.json()).data.token;
 }
 
@@ -54,11 +55,12 @@ export async function deleteNangoConnection(
 ): Promise<void> {
   const query = new URLSearchParams({ provider_config_key: integration });
   const response = await nangoFetch(
+    "connection delete",
     `/connections/${encodeURIComponent(connectionId)}?${query.toString()}`,
     { method: "DELETE" },
   );
   if (!response.ok && response.status !== 404) {
-    throw new Error(`Nango connection delete failed: ${String(response.status)}`);
+    throw new NangoRequestError("connection delete", response.status);
   }
 }
 
@@ -92,8 +94,10 @@ export async function listNangoConnections(): Promise<ListedNangoConnection[]> {
   const listed = new Map<string, ListedNangoConnection>();
   for (let page = 0; page < MAX_LIST_PAGES; page++) {
     const query = new URLSearchParams({ limit: String(LIST_PAGE_SIZE), page: String(page) });
-    const response = await nangoFetch(`/connections?${query.toString()}`, { method: "GET" });
-    if (!response.ok) throw new Error(`Nango connection list failed: ${String(response.status)}`);
+    const response = await nangoFetch("connection list", `/connections?${query.toString()}`, {
+      method: "GET",
+    });
+    if (!response.ok) throw new NangoRequestError("connection list", response.status);
     const { connections } = connectionsPage.parse(await response.json());
     if (connections.length === 0) return [...listed.values()];
     let added = 0;
@@ -107,9 +111,11 @@ export async function listNangoConnections(): Promise<ListedNangoConnection[]> {
         tags: stringTags(connection.tags ?? {}),
       });
     }
-    if (added === 0) throw new Error(`Nango repeated page ${String(page)} of its connections`);
+    if (added === 0) {
+      throw new InvariantError(`Nango repeated page ${String(page)} of its connections`);
+    }
   }
-  throw new Error(`Nango listed more than ${String(MAX_LIST_PAGES)} pages of connections`);
+  throw new InvariantError(`Nango listed more than ${String(MAX_LIST_PAGES)} pages of connections`);
 }
 
 // Mycel's tags are strings; anything else on a listed connection isn't Mycel's and is dropped.
@@ -121,7 +127,7 @@ function stringTags(tags: Record<string, unknown>): Partial<Record<string, strin
 
 /**
  * Asks Nango about one connection by ID: false only when Nango answers that it has no such
- * connection. Any other failure throws, so an outage never reads as "gone".
+ * connection. Any other failure throws NangoRequestError, so an outage never reads as "gone".
  */
 export async function nangoConnectionExists(
   connectionId: string,
@@ -130,6 +136,7 @@ export async function nangoConnectionExists(
   // The response carries credentials; only the status is read, and nothing is kept.
   const query = new URLSearchParams({ provider_config_key: integration });
   const response = await nangoFetch(
+    "connection read",
     `/connections/${encodeURIComponent(connectionId)}?${query.toString()}`,
     { method: "GET" },
   );
@@ -137,7 +144,7 @@ export async function nangoConnectionExists(
   // 424: Nango has the connection, but its token refresh is exhausted.
   if (response.ok || response.status === 424) return true;
   if (response.status === 404) return false;
-  throw new Error(`Nango connection read failed: ${String(response.status)}`);
+  throw new NangoRequestError("connection read", response.status);
 }
 
 // The parts of a connection Mycel reads: the app's token response, kept whole by Nango as
@@ -159,11 +166,12 @@ export async function readGrantedScopes(
   // The response carries credentials; only the scopes are read, and nothing else is kept.
   const query = new URLSearchParams({ provider_config_key: integration });
   const response = await nangoFetch(
+    "connection read",
     `/connections/${encodeURIComponent(connectionId)}?${query.toString()}`,
     { method: "GET" },
   );
   if (response.status === 404) throw new NangoConnectionGoneError();
-  if (!response.ok) throw new Error(`Nango connection read failed: ${String(response.status)}`);
+  if (!response.ok) throw new NangoRequestError("connection read", response.status);
   const { credentials } = connectionCredentials.parse(await response.json());
   return (credentials.raw?.scope ?? "").split(/\s+/).filter((scope) => scope !== "");
 }
@@ -196,7 +204,8 @@ type ProxiedConnection = { connectionId: string; integration: string };
  * A GET through the Nango proxy to the source's own API, parsed with `schema`. Returns null when
  * the source answers 404 or 410 (the item is gone at the source), and throws
  * NangoConnectionGoneError when Nango no longer has the connection (asked by ID whenever Nango
- * itself refuses the call), and SourceRequestError for any other refusal.
+ * itself refuses the call), SourceRequestError for any other refusal, and NangoRequestError when
+ * Nango doesn't answer, or fails when asked about the connection.
  */
 export async function nangoProxyGet<T>(
   connection: ProxiedConnection,
@@ -283,7 +292,7 @@ async function nangoProxy<T>(
   parse: (text: string) => T,
   init: { method?: string; body?: string; headers?: Record<string, string> },
 ): Promise<T | null> {
-  const response = await nangoFetch(`/proxy${path}`, {
+  const response = await nangoFetch(`proxy ${template ?? path}`, `/proxy${path}`, {
     ...init,
     headers: {
       ...init.headers,
@@ -318,9 +327,15 @@ export function isSignedByNango(rawBody: string, signature: string | null): bool
 
 export const NANGO_SIGNATURE_HEADER = "x-nango-hmac-sha256";
 
-async function nangoFetch(path: string, init: RequestInit): Promise<Response> {
+// A request to Nango's API. Nothing answering (Nango down, or the network on the way to it) is
+// NangoRequestError, named as `call`, like an error status; anything else thrown is Mycel's own.
+async function nangoFetch(call: string, path: string, init: RequestInit): Promise<Response> {
   const headers = new Headers(init.headers);
   headers.set("Authorization", `Bearer ${env.NANGO_API_KEY}`);
   if (init.body !== undefined) headers.set("Content-Type", "application/json");
-  return fetch(`${env.NANGO_API_URL}${path}`, { ...init, headers });
+  try {
+    return await fetch(`${env.NANGO_API_URL}${path}`, { ...init, headers });
+  } catch {
+    throw new NangoRequestError(call);
+  }
 }

@@ -44,6 +44,21 @@ const dateFormatting = [
   },
 ];
 
+// A plain Error can't be told from a bug, so a caller couldn't catch only the failures it
+// expects. src/db and tests may throw one.
+const plainErrors = [
+  {
+    selector: "ThrowStatement > NewExpression[callee.name='Error']",
+    message: "Throw a typed error from @/lib/errors (InvariantError for a can't-happen state).",
+  },
+];
+const PLAIN_ERRORS_ALLOWED = [
+  "src/db/**",
+  "src/testing/**",
+  "src/**/tests/**",
+  "src/**/*.test.{ts,tsx}",
+];
+
 // A Server Action goes through runFormAction (or runValueAction), which parses its input inside
 // the `try`, turns typed errors into messages and hands a failed form back what it sent.
 const ACTION_HELPER =
@@ -125,7 +140,16 @@ export default defineConfig([
   {
     files: ["src/**/*.{ts,tsx}"],
     ignores: ["src/components/date-time.tsx"],
+    rules: { "no-restricted-syntax": ["error", ...dateFormatting, ...plainErrors] },
+  },
+  {
+    // A rule's options replace, not merge: here the date rule is repeated without plainErrors.
+    files: PLAIN_ERRORS_ALLOWED,
     rules: { "no-restricted-syntax": ["error", ...dateFormatting] },
+  },
+  {
+    files: ["src/components/date-time.tsx"],
+    rules: { "no-restricted-syntax": ["error", ...plainErrors] },
   },
   {
     // A rule's options replace, not merge, so the restrictions above are repeated here.
@@ -138,7 +162,7 @@ export default defineConfig([
           patterns: [rawClientImport, authSchemaImport, driverImports],
         },
       ],
-      "no-restricted-syntax": ["error", ...dateFormatting, actionParsing],
+      "no-restricted-syntax": ["error", ...dateFormatting, ...plainErrors, actionParsing],
     },
   },
   { files: ["src/env.ts"], rules: { "no-restricted-properties": "off" } },

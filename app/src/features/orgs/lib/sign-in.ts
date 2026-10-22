@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { member, organization } from "@/db/auth-schema";
 import { getDb } from "@/db/client";
 import type { Ctx, Role } from "@/lib/ctx";
-import { WorkspaceAccountRequiredError } from "@/lib/errors";
+import { InvariantError, WorkspaceAccountRequiredError } from "@/lib/errors";
 import type { VerifiedGoogleProfile } from "../types";
 import { findCtx } from "./find-ctx";
 
@@ -49,6 +49,6 @@ async function orgIdForDomain(tx: Tx, domain: string): Promise<string> {
     .from(organization)
     .where(eq(organization.workspaceDomain, domain));
   const org = rows.at(0);
-  if (org === undefined) throw new Error(`No org for Workspace domain ${domain}`);
+  if (org === undefined) throw new InvariantError(`No org for Workspace domain ${domain}`);
   return org.id;
 }

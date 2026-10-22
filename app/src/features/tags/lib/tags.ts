@@ -3,7 +3,13 @@ import { asc, eq, inArray } from "drizzle-orm";
 import { isUniqueViolation } from "@/db/errors";
 import { forOrg } from "@/db/for-org";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
-import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
+import {
+  ConflictError,
+  ForbiddenError,
+  InvariantError,
+  NotFoundError,
+  ValidationError,
+} from "@/lib/errors";
 import type { Tag, TagSummary } from "../types";
 import { sendTagDeleted, sendTagRenamed } from "./events";
 import { tagAssignments, tags } from "./schema";
@@ -16,7 +22,7 @@ export async function createTag(ctx: Ctx, name: string): Promise<TagSummary> {
     .insert(tags, { id: randomUUID(), name: normalized })
     .catch(rethrowDuplicate(normalized));
   const tag = inserted.at(0);
-  if (tag === undefined) throw new Error("Insert returned no tag");
+  if (tag === undefined) throw new InvariantError("Insert returned no tag");
   return { id: tag.id, name: tag.name, userIds: [] };
 }
 

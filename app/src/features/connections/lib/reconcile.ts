@@ -5,6 +5,7 @@ import { and, eq, gt, sql } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { listOrgIds } from "@/features/orgs/server";
 import { systemCtx } from "@/lib/ctx";
+import { NangoRequestError } from "@/lib/errors";
 import type { NangoConnectionRef, ReconciliationSummary } from "../types";
 import { ATTEMPT_TAGS } from "./connect";
 import {
@@ -72,6 +73,8 @@ export async function reconcileConnections(now = new Date()): Promise<Reconcilia
       await deleteNangoConnection(orphan.nangoConnectionId, orphan.integration);
       summary.deletedAtNango.push(withoutAttempt(orphan));
     } catch (error) {
+      // Nango failed: the next run tries again. Anything else is a bug, and stops this run.
+      if (!(error instanceof NangoRequestError)) throw error;
       console.warn(`Deleting orphan Nango connection ${orphan.nangoConnectionId} failed.`, error);
     }
   }
@@ -109,6 +112,7 @@ async function goneAtNango(ref: NangoConnectionRef): Promise<boolean> {
   try {
     return !(await nangoConnectionExists(ref.nangoConnectionId, ref.integration));
   } catch (error) {
+    if (!(error instanceof NangoRequestError)) throw error;
     console.warn(`Couldn't confirm Nango connection ${ref.nangoConnectionId} is gone.`, error);
     return false;
   }

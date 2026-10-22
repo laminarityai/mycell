@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
+import { env } from "@/env";
 import { removeUser, setRole } from "@/features/orgs/server";
 import type { Ctx } from "@/lib/ctx";
 import { ConflictError, ForbiddenError, NotFoundError } from "@/lib/errors";
@@ -94,6 +95,33 @@ describe("disconnect", () => {
 
     expect((await listConnections(orgA.member.ctx)).connections).toEqual([]);
     // Left for reconciliation to delete.
+    expect(fakeNango.hasConnection(connection.nangoConnectionId)).toBe(true);
+  });
+
+  it("still forgets the connection when Nango doesn't answer", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const connection = await connectOwnGmail(orgA.member.ctx, orgA.member.email);
+    fakeNango.stopAnswering();
+
+    await disconnect(orgA.member.ctx, connection.id);
+
+    expect((await listConnections(orgA.member.ctx)).connections).toEqual([]);
+    expect(fakeNango.hasConnection(connection.nangoConnectionId)).toBe(true);
+  });
+
+  it("keeps the connection when the delete fails on Mycel's side, not Nango's", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const connection = await connectOwnGmail(orgA.member.ctx, orgA.member.email);
+    // A misconfigured key that no header can carry: the request never leaves Mycel.
+    const key = env.NANGO_API_KEY;
+    env.NANGO_API_KEY = `${key}\nsecond line`;
+    try {
+      await expect(disconnect(orgA.member.ctx, connection.id)).rejects.toThrow(TypeError);
+    } finally {
+      env.NANGO_API_KEY = key;
+    }
+
+    expect((await listConnections(orgA.member.ctx)).connections).toHaveLength(1);
     expect(fakeNango.hasConnection(connection.nangoConnectionId)).toBe(true);
   });
 

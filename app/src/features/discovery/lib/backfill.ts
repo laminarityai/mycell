@@ -1,9 +1,10 @@
 // Backfilling a connection: for each app still backfilling on it (on a new connection, every
-// ingested app it was granted; after a reconnect, the ones it newly allows), record where
-// polling will start, then store the last 90 days page by page. Each page is one step, so
-// Inngest retries a failed page without redoing the others. A connection deleted while this
-// runs ends it quietly: a missing connection is NotFoundError, and a write for it breaks its
-// foreign key.
+// ingested app it was granted; after a reconnect, the ones it newly allows and any whose
+// backfill failed), record where polling will start, then store the last 90 days page by page.
+// Each page is one step, so Inngest retries a failed page without redoing the others. A
+// connection deleted while this runs ends it quietly: a missing connection is NotFoundError,
+// and a write for it breaks its foreign key. Finishing sets only the app's ingest status, so a
+// `needs_reauth` Nango reported meanwhile (kept on the connection itself) stays.
 import { getConnection, recordIngestState } from "@/features/connections/server";
 import { ingestedAppSchema, type IngestedApp } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";

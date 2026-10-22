@@ -3,7 +3,7 @@
 export { startConnect } from "./lib/connect";
 export { deleteMemberConnectionsOf, disconnect } from "./lib/disconnect";
 // The Inngest events that start a backfill: a connection was recorded, or a reconnect granted
-// it an ingested app it didn't have. Ingest jobs trigger on them.
+// it an ingested app it didn't have, or one whose backfill failed. Ingest jobs trigger on them.
 export { connectionAppsGranted, connectionRecorded } from "./lib/events";
 export { listConnections } from "./lib/list";
 // The one rule for which connections an admin may build on: their own and the org's, granted

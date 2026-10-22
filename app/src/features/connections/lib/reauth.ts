@@ -2,7 +2,8 @@
 // success false) means Google no longer accepts Mycel's access: the connection needs its owner
 // to reconnect, and polling skips it. A later successful refresh clears that. A reconnect
 // (`override`) clears it too, and re-reads what Google granted: a reconnect can allow an app
-// the connection lacked, which then backfills, or leave one out, which it then stops using.
+// the connection lacked, which then backfills, or leave one out, which it then stops using. An
+// app whose backfill failed (Google refused the token mid-backfill, say) backfills again.
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { forOrg } from "@/db/for-org";
@@ -10,7 +11,7 @@ import { systemCtx, type Ctx } from "@/lib/ctx";
 import { ATTEMPT_TAGS } from "./connect";
 import { sendAppsGranted } from "./events";
 import { grantedApps, INTEGRATIONS, readAccountEmail } from "./google";
-import { dropIngestStates, syncIngestStates } from "./ingest-states";
+import { failIngestStates, syncIngestStates } from "./ingest-states";
 import { NangoConnectionGoneError, readGrantedScopes } from "./nango";
 import { connections } from "./schema";
 
@@ -70,7 +71,7 @@ async function recordReconnect(ctx: Ctx, connection: Connection): Promise<void> 
     await sendAppsGranted(ctx, connection.id, started);
   } catch (error) {
     // Nango redelivers the webhook, which starts them again and sends the event then.
-    await dropIngestStates(ctx, started);
+    await failIngestStates(ctx, started);
     throw error;
   }
 }

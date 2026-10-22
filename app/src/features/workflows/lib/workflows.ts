@@ -24,6 +24,7 @@ import type {
   WorkflowVersionSummary,
 } from "../types";
 import { findWorkflow } from "./access";
+import { latestVersions } from "./latest-versions";
 import { workflows, workflowVersions } from "./schema";
 import { switchesOf, switchOf } from "./switches";
 import { validateWorkflowSpec } from "./validation";
@@ -115,14 +116,14 @@ export async function saveWorkflowIn(
 /** The org's workflows by name, each with its latest version and its switch. */
 export async function listWorkflows(ctx: Ctx): Promise<WorkflowSummary[]> {
   requireAdmin(ctx);
-  const db = forOrg(ctx);
-  const rows = await db.select(workflows, { orderBy: [workflows.name] });
-  const versions = await db.select(workflowVersions, { orderBy: [desc(workflowVersions.number)] });
-  const latest = new Map<string, Version>();
-  for (const version of versions) {
-    if (!latest.has(version.workflowId)) latest.set(version.workflowId, version);
-  }
-  const switches = await switchesOf(ctx, rows);
+  const rows = await forOrg(ctx).select(workflows, { orderBy: [workflows.name] });
+  const [latest, switches] = await Promise.all([
+    latestVersions(
+      ctx,
+      rows.map((row) => row.id),
+    ),
+    switchesOf(ctx, rows),
+  ]);
   const audiences = await audiencesOf(
     ctx,
     [...latest.values()].map((version) => version.id),
@@ -179,7 +180,9 @@ export async function getWorkflow(
   };
 }
 
-export function versionSummary(version: Version): WorkflowVersionSummary {
+export function versionSummary(
+  version: Pick<Version, "id" | "number" | "maxRisk" | "publishedBy" | "publishedAt">,
+): WorkflowVersionSummary {
   return {
     id: version.id,
     number: version.number,

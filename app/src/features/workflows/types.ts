@@ -110,6 +110,15 @@ export type WorkflowSummary = {
   updatedAt: Date;
 };
 
+/** A workflow's working spec, as the builder chat's context lists every workflow's. */
+export type WorkingSpecSummary = {
+  id: string;
+  name: string;
+  workingSpec: Spec;
+  /** The latest version's number; null while not published. */
+  latestVersionNumber: number | null;
+};
+
 /**
  * A published workflow as the Workflows page shows it to someone who can see it: what its latest
  * version does and needs, and the caller's switch.

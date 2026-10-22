@@ -71,6 +71,39 @@ describe("forOrg(ctx).select", () => {
 
     expect(rows.map((row) => row.body)).toEqual(["a1", "a2"]);
   });
+
+  it("reads only the named columns, still within the org", async () => {
+    const rows = await forOrg(orgs.orgA.admin.ctx).select(notes, {
+      columns: ["body"],
+      orderBy: [asc(notes.position)],
+    });
+
+    expect(rows).toEqual([{ body: "a1" }, { body: "a2" }]);
+    expectTypeOf(rows).toEqualTypeOf<{ body: string }[]>();
+  });
+
+  it("can't reach another org's row through named columns, even when the filter names it", async () => {
+    const rows = await forOrg(orgs.orgA.admin.ctx).select(notes, {
+      columns: ["id", "body"],
+      where: eq(notes.body, "b1"),
+    });
+    expect(rows).toEqual([]);
+  });
+
+  it("names columns with distinctOn too", async () => {
+    await forOrg(orgs.orgA.admin.ctx).insert(notes, { body: "a0", position: 1 });
+
+    const rows = await forOrg(orgs.orgA.admin.ctx).select(notes, {
+      columns: ["position", "body"],
+      distinctOn: [notes.position],
+      orderBy: [asc(notes.position), desc(notes.body)],
+    });
+
+    expect(rows).toEqual([
+      { position: 1, body: "a1" },
+      { position: 2, body: "a2" },
+    ]);
+  });
 });
 
 describe("forOrg(ctx).count", () => {

@@ -2,7 +2,7 @@
 // (M5): an enablement each. Enabling first checks the member may see the workflow and that their
 // connection allows what its latest version needs; when it doesn't, it says what's missing so
 // the page can take them through connecting or reconnecting, then enable again.
-import { eq } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { listConnections } from "@/features/connections/server";
 import { getActionSet } from "@/features/custom-actions/server";
@@ -71,17 +71,36 @@ export async function disable(ctx: Ctx, workflowId: string): Promise<void> {
 export async function listEnablements(ctx: Ctx, workflowId: string): Promise<EnablementSummary[]> {
   requireAdmin(ctx);
   await findWorkflow(ctx, workflowId);
-  const rows = await forOrg(ctx).select(enablements, {
-    where: eq(enablements.workflowId, workflowId),
-    orderBy: [enablements.enabledAt],
-  });
-  const nameOf = await userNames(ctx);
-  return rows.map((row) => ({
-    userId: row.userId,
-    name: nameOf(row.userId),
-    status: row.status,
-    pausedReason: row.pausedReason,
-    pausedChange: row.pausedChange,
-    since: row.enabledAt,
-  }));
+  return (await listEnablementsFor(ctx, [workflowId])).get(workflowId) ?? [];
+}
+
+/**
+ * Each workflow's enablements, as listEnablements gives them, by workflow ID: read together,
+ * for the Workflows page. A workflow not in the caller's org has none. Admins only.
+ */
+export async function listEnablementsFor(
+  ctx: Ctx,
+  workflowIds: string[],
+): Promise<Map<string, EnablementSummary[]>> {
+  requireAdmin(ctx);
+  if (workflowIds.length === 0) return new Map();
+  const [rows, nameOf] = await Promise.all([
+    forOrg(ctx).select(enablements, {
+      where: inArray(enablements.workflowId, workflowIds),
+      orderBy: [enablements.enabledAt],
+    }),
+    userNames(ctx),
+  ]);
+  const byWorkflow = new Map(workflowIds.map((id): [string, EnablementSummary[]] => [id, []]));
+  for (const row of rows) {
+    byWorkflow.get(row.workflowId)?.push({
+      userId: row.userId,
+      name: nameOf(row.userId),
+      status: row.status,
+      pausedReason: row.pausedReason,
+      pausedChange: row.pausedChange,
+      since: row.enabledAt,
+    });
+  }
+  return byWorkflow;
 }

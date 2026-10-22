@@ -9,7 +9,7 @@ export default function MemoryPage() {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
       <header className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold tracking-tight">Memory</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Memory settings</h1>
         <AppNav />
       </header>
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading memory…</p>}>

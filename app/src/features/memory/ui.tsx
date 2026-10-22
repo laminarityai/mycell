@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -6,97 +8,179 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { AddExclusionForm, BudgetForm, RemoveExclusionButton } from "./lib/settings-controls";
-import { EXCLUSION_KIND_NAMES, type MemorySettings } from "./types";
+import { GrantStaffConsentForm, RevokeStaffConsentButton } from "./lib/staff-consent-controls";
 
-const credits = new Intl.NumberFormat("en", { maximumFractionDigits: 1 });
-const day = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeZone: "UTC" });
+// The admin's memory settings: the estimate and start, the budget, and the exclusions.
+export { MemorySettingsPanel } from "./lib/settings-panel";
+import {
+  ACCESS_LOG_RETENTION_DAYS,
+  type AccessLogEntry,
+  type MemoryReadOperation,
+  type StaffConsent,
+} from "./types";
+
+const OPERATIONS: Record<MemoryReadOperation, string> = {
+  search: "Searched",
+  read_object: "Read",
+};
+
+const when = (at: Date) =>
+  `${at.toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" })} UTC`;
 
 /**
- * The admin's memory screen: the estimate and the start, the monthly budget and this month's
- * spending, and the company-wide exclusions.
+ * The access log (ADR-0024): who or what read memory, when, and which objects, never what it
+ * read. `workflowNames` names the workflows runs read for, by workflow ID.
  */
-export function MemorySettingsPanel({ settings }: { settings: MemorySettings }) {
+export function AccessLog({
+  entries,
+  admin,
+  workflowNames,
+}: {
+  entries: AccessLogEntry[];
+  admin: boolean;
+  workflowNames: Map<string, string>;
+}) {
   return (
-    <div className="flex flex-col gap-8">
-      <Learning settings={settings} />
-      <Exclusions settings={settings} />
-    </div>
-  );
-}
-
-function Learning({ settings }: { settings: MemorySettings }) {
-  const { started, estimate } = settings;
-  return (
-    <section className="flex flex-col gap-3" aria-labelledby="memory-learning">
-      <h2 id="memory-learning" className="text-lg font-medium">
-        Learning
-      </h2>
-      {started === null ? (
-        <>
-          <p className="text-sm text-muted-foreground">
-            Memory learns about your customers, suppliers and deals from your team&apos;s business
-            email. It hasn&apos;t started yet.
-          </p>
-          <p className="text-sm" data-testid="memory-estimate">
-            Your connected mailboxes hold {credits.format(estimate.items)} emails so far. Learning
-            from all of them costs at most {credits.format(estimate.credits)} credits (up to{" "}
-            {credits.format(estimate.creditsPerItem)} an email; newsletters and other mail that
-            isn&apos;t business cost less). Choose a monthly budget and start: learning pauses when
-            a month&apos;s budget is spent, and carries on the next month.
-          </p>
-          <BudgetForm started={false} budget={Math.max(1, Math.ceil(estimate.credits))} />
-        </>
+    <section className="flex flex-col gap-3">
+      <p className="text-sm text-muted-foreground">
+        {admin
+          ? "Every read of your company's memory: who or what read it, when, and which objects. "
+          : "Every read of facts memory learned from your own connections: who or what read them, when, and which objects. "}
+        It never shows what was read. Entries are kept for {String(ACCESS_LOG_RETENTION_DAYS)} days.
+      </p>
+      {entries.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No reads yet.</p>
       ) : (
-        <>
-          <p className="text-sm">
-            Started {day.format(started.startedAt)}. This month memory has spent{" "}
-            {credits.format(settings.spentThisMonth)} of its {credits.format(started.monthlyBudget)}{" "}
-            credits.
-            {settings.postponedItems > 0
-              ? ` The budget is spent: ${credits.format(settings.postponedItems)} emails wait for next month.`
-              : ""}
-          </p>
-          <BudgetForm started budget={started.monthlyBudget} />
-        </>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>When</TableHead>
+              <TableHead>Who or what</TableHead>
+              <TableHead>Read</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {entries.map((entry) => (
+              <TableRow key={entry.id} className="align-top">
+                <TableCell className="whitespace-nowrap">{when(entry.readAt)}</TableCell>
+                <TableCell className="whitespace-normal">
+                  <Reader reader={entry.reader} workflowNames={workflowNames} />
+                </TableCell>
+                <TableCell className="whitespace-normal">{whatWasRead(entry)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       )}
     </section>
   );
 }
 
-function Exclusions({ settings }: { settings: MemorySettings }) {
+function Reader({
+  reader,
+  workflowNames,
+}: {
+  reader: AccessLogEntry["reader"];
+  workflowNames: Map<string, string>;
+}) {
+  const name = reader.name ?? "someone no longer in the org";
+  switch (reader.kind) {
+    case "person":
+      return <>{name}</>;
+    case "builder":
+      return <>The builder chat, for {name}</>;
+    case "workflow_run": {
+      const workflow = workflowNames.get(reader.workflowId ?? "") ?? "A workflow";
+      return (
+        <>
+          {reader.workflowId === null ? (
+            workflow
+          ) : (
+            <Link href={`/workflows/${reader.workflowId}`} className="underline">
+              {workflow}
+            </Link>
+          )}{" "}
+          run, {reader.userId === null ? "company-wide" : `as ${name}`}
+        </>
+      );
+    }
+    case "staff":
+      return (
+        <span className="flex flex-col gap-1">
+          <span>
+            <Badge variant="outline">Mycel staff</Badge> {reader.staff?.email ?? ""}, under {name}
+            &apos;s consent
+          </span>
+          {reader.staff === null ? null : (
+            <span className="text-muted-foreground">Case: {reader.staff.reason}</span>
+          )}
+        </span>
+      );
+    case "system":
+      return <>Mycel</>;
+  }
+}
+
+function whatWasRead(entry: AccessLogEntry): string {
+  const named = entry.objects.flatMap((object) => object.name ?? []);
+  const unseen = entry.objects.length - named.length;
+  const objects = [
+    ...named,
+    ...(unseen === 0
+      ? []
+      : [`${String(unseen)} ${unseen === 1 ? "object" : "objects"} you can't see`]),
+  ];
+  const facts = `${String(entry.factCount)} ${entry.factCount === 1 ? "fact" : "facts"}`;
+  if (objects.length === 0) return `${OPERATIONS[entry.operation]}: found nothing`;
+  return `${OPERATIONS[entry.operation]} ${objects.join(", ")} (${facts})`;
+}
+
+/**
+ * The org's staff consents (admins only): give one for a case, and revoke one at once. Our
+ * staff read in the view of the admin who gave it.
+ */
+export function StaffConsents({ consents, now }: { consents: StaffConsent[]; now: Date }) {
   return (
-    <section className="flex flex-col gap-3" aria-labelledby="memory-exclusions">
-      <h2 id="memory-exclusions" className="text-lg font-medium">
-        Exclusions
-      </h2>
+    <section className="flex flex-col gap-3">
       <p className="text-sm text-muted-foreground">
-        Memory never learns from emails with an excluded label, or that an excluded address or
-        domain is on, in anyone&apos;s mailbox. Excluding something also deletes what memory already
-        learned from it. Drive folders apply once memory learns from Drive.
+        Our staff can read your company&apos;s memory only with your consent for one case, and see
+        only what you can see. Each read shows in the access log below.
       </p>
-      <AddExclusionForm />
-      {settings.exclusions.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Nothing is excluded.</p>
+      <GrantStaffConsentForm />
+      {consents.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No consents given.</p>
       ) : (
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Kind</TableHead>
-              <TableHead>Excluded</TableHead>
-              <TableHead className="sr-only">Remove</TableHead>
+              <TableHead>Mycel staff</TableHead>
+              <TableHead>Case</TableHead>
+              <TableHead>Given by</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead />
             </TableRow>
           </TableHeader>
           <TableBody>
-            {settings.exclusions.map((exclusion) => (
-              <TableRow key={exclusion.id}>
-                <TableCell>{EXCLUSION_KIND_NAMES[exclusion.kind]}</TableCell>
-                <TableCell className="font-medium">{exclusion.value}</TableCell>
-                <TableCell className="text-right">
-                  <RemoveExclusionButton id={exclusion.id} name={exclusion.value} />
-                </TableCell>
-              </TableRow>
-            ))}
+            {consents.map((consent) => {
+              const active = consent.revokedAt === null && consent.expiresAt > now;
+              return (
+                <TableRow key={consent.id} className="align-top">
+                  <TableCell>{consent.staffEmail}</TableCell>
+                  <TableCell className="whitespace-normal">{consent.reason}</TableCell>
+                  <TableCell>{consent.grantedBy.name}</TableCell>
+                  <TableCell className="whitespace-normal">
+                    {consent.revokedAt !== null
+                      ? `Revoked ${when(consent.revokedAt)}`
+                      : active
+                        ? `Until ${when(consent.expiresAt)}`
+                        : `Expired ${when(consent.expiresAt)}`}
+                  </TableCell>
+                  <TableCell>
+                    {active ? <RevokeStaffConsentButton consentId={consent.id} /> : null}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       )}

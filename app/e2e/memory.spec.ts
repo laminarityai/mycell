@@ -9,7 +9,7 @@ test("an admin sees memory's estimate before starting it; members have no memory
 }) => {
   await signInAs(orgA.admin);
   await page.goto("/org");
-  await page.getByRole("link", { name: "Memory" }).click();
+  await page.getByRole("link", { name: "Memory settings" }).click();
   await expect(page).toHaveURL("/memory");
   await expect(page.getByTestId("memory-estimate")).toContainText("hold 0 emails");
   await expect(page.getByRole("spinbutton", { name: "Monthly budget (credits)" })).toBeVisible();
@@ -19,7 +19,7 @@ test("an admin sees memory's estimate before starting it; members have no memory
   await page.context().clearCookies();
   await signInAs(orgA.member);
   await page.goto("/org");
-  await expect(page.getByRole("link", { name: "Memory" })).toBeHidden();
+  await expect(page.getByRole("link", { name: "Memory settings" })).toBeHidden();
   await page.goto("/memory");
   await expect(page).not.toHaveURL("/memory");
 });

@@ -11,6 +11,8 @@ import { learnStoredItems, scriptLearning, withCredits } from "./memory-helpers"
 
 const DANA = "dana@acme.example";
 const byEmail = { key: { kind: "email" as const, value: DANA } };
+const STAFF = "sam@mycel.example";
+const CONSENT = { staffEmail: STAFF, reason: "Ticket 4411", days: 7 };
 
 // Org B's member hears from Dana at Acme, and memory learns about her: org A must neither see
 // it nor change it.
@@ -202,5 +204,110 @@ export const isolationCases = defineIsolationCases(server, {
 
     expect(fakeInngest.sent("memory/item.queued")).toHaveLength(sent);
     expect((await server.getMemorySettings(orgB.admin.ctx)).postponedItems).toBe(1);
+  },
+
+  listAccessLog: async (orgs) => {
+    const { orgA, orgB } = orgs;
+    await seedOrgB(orgs);
+    const before = await server.listAccessLog(orgB.admin.ctx);
+    expect(before).toHaveLength(1);
+
+    for (const ctx of [orgA.admin.ctx, orgA.member.ctx]) {
+      expect(await server.listAccessLog(ctx)).toEqual([]);
+    }
+
+    expect(await server.listAccessLog(orgB.admin.ctx)).toEqual(before);
+  },
+
+  pruneAccessLog: async (orgs) => {
+    const { orgA, orgB } = orgs;
+    await seedOrgB(orgs);
+    const before = await server.listAccessLog(orgB.admin.ctx);
+
+    const farFuture = new Date(Date.now() + 1000 * 24 * 60 * 60 * 1000);
+    expect(await server.pruneAccessLog(systemCtx(orgA.id), farFuture)).toEqual({
+      entries: 0,
+      consents: 0,
+    });
+
+    expect(await server.listAccessLog(orgB.admin.ctx)).toEqual(before);
+  },
+
+  grantStaffConsent: async (orgs) => {
+    const { orgA, orgB } = orgs;
+    const consent = await server.grantStaffConsent(orgA.admin.ctx, CONSENT);
+
+    expect(await server.listStaffConsents(orgB.admin.ctx)).toEqual([]);
+    const access = { consentId: consent.id, staffEmail: STAFF };
+    await seedOrgB(orgs);
+    await expect(server.staffReadObject(systemCtx(orgB.id), access, byEmail)).rejects.toThrow(
+      ForbiddenError,
+    );
+  },
+
+  listStaffConsents: async ({ orgA, orgB }) => {
+    await server.grantStaffConsent(orgB.admin.ctx, CONSENT);
+
+    expect(await server.listStaffConsents(orgA.admin.ctx)).toEqual([]);
+  },
+
+  revokeStaffConsent: async ({ orgA, orgB }) => {
+    const consent = await server.grantStaffConsent(orgB.admin.ctx, CONSENT);
+
+    await expect(server.revokeStaffConsent(orgA.admin.ctx, consent.id)).rejects.toThrow(
+      NotFoundError,
+    );
+
+    expect(await server.listStaffConsents(orgB.admin.ctx)).toEqual([consent]);
+  },
+
+  staffReadObject: async (orgs) => {
+    const { orgA, orgB } = orgs;
+    const { object } = await seedOrgB(orgs);
+    const orgBConsent = await server.grantStaffConsent(orgB.admin.ctx, CONSENT);
+    const orgAConsent = await server.grantStaffConsent(orgA.admin.ctx, CONSENT);
+    const before = await server.listAccessLog(orgB.admin.ctx);
+
+    // Org B's consent opens nothing in org A, and org A's opens nothing of org B's.
+    await expect(
+      server.staffReadObject(
+        systemCtx(orgA.id),
+        { consentId: orgBConsent.id, staffEmail: STAFF },
+        byEmail,
+      ),
+    ).rejects.toThrow(ForbiddenError);
+    const orgAAccess = { consentId: orgAConsent.id, staffEmail: STAFF };
+    for (const lookup of [byEmail, { id: object.id }]) {
+      await expect(server.staffReadObject(systemCtx(orgA.id), orgAAccess, lookup)).rejects.toThrow(
+        NotFoundError,
+      );
+    }
+
+    expect(await server.listAccessLog(orgB.admin.ctx)).toEqual(before);
+  },
+
+  staffSearchMemory: async (orgs) => {
+    const { orgA, orgB } = orgs;
+    await seedOrgB(orgs);
+    const orgBConsent = await server.grantStaffConsent(orgB.admin.ctx, CONSENT);
+    const orgAConsent = await server.grantStaffConsent(orgA.admin.ctx, CONSENT);
+    const before = await server.listAccessLog(orgB.admin.ctx);
+
+    await expect(
+      server.staffSearchMemory(
+        systemCtx(orgA.id),
+        { consentId: orgBConsent.id, staffEmail: STAFF },
+        { text: "procurement" },
+      ),
+    ).rejects.toThrow(ForbiddenError);
+    const orgAAccess = { consentId: orgAConsent.id, staffEmail: STAFF };
+    for (const search of [{ text: "procurement" }, byEmail]) {
+      expect(await server.staffSearchMemory(systemCtx(orgA.id), orgAAccess, search)).toEqual({
+        objects: [],
+        facts: [],
+      });
+    }
+
+    expect(await server.listAccessLog(orgB.admin.ctx)).toEqual(before);
   },
 });

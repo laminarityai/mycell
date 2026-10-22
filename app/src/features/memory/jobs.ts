@@ -1,5 +1,5 @@
-// Memory's Inngest functions. Thin: each calls server.ts. They run as the org's system ctx
-// (ADR-0009).
+// Memory's Inngest functions. Thin: each calls server.ts, as the org's system ctx (ADR-0009).
+import { cron } from "inngest";
 import { listOrgIds } from "@/features/orgs/server";
 import { systemCtx } from "@/lib/ctx";
 import { itemStored } from "@/lib/events";
@@ -11,7 +11,13 @@ import {
   postponedDue,
   sendPostponedDue,
 } from "./lib/events";
-import { forgetExcluded, learnFromItem, queueStoredItems, resumePostponed } from "./server";
+import {
+  forgetExcluded,
+  learnFromItem,
+  pruneAccessLog,
+  queueStoredItems,
+  resumePostponed,
+} from "./server";
 
 // Step results are plain JSON already, so Inngest's serialized type is the same type.
 const stepRunner =
@@ -66,10 +72,30 @@ export const resumePostponedJob = inngest.createFunction(
 
 /** At the start of each month (UTC), every org's budget is new: postponed items are due. */
 export const newMonthCron = inngest.createFunction(
-  { id: "memory-new-month", triggers: [{ cron: "TZ=UTC 0 0 1 * *" }] },
+  { id: "memory-new-month", triggers: [cron("TZ=UTC 0 0 1 * *")] },
   async ({ step }) => {
     const orgIds = await step.run("list-orgs", () => listOrgIds());
     await step.run("fan-out", () => sendPostponedDue(orgIds));
+    return { orgs: orgIds.length };
+  },
+);
+
+/**
+ * Every night at 04:00 UTC, deletes each org's access log entries older than the log keeps
+ * them (ACCESS_LOG_RETENTION_DAYS), one step per org.
+ */
+export const pruneAccessLogJob = inngest.createFunction(
+  {
+    id: "memory-prune-access-log",
+    triggers: [cron("TZ=UTC 0 4 * * *")],
+    // One run at a time: a slow run must not overlap the next.
+    concurrency: [{ limit: 1 }],
+  },
+  async ({ step }) => {
+    const orgIds = await step.run("list-orgs", () => listOrgIds());
+    for (const orgId of orgIds) {
+      await step.run(`prune-${orgId}`, () => pruneAccessLog(systemCtx(orgId)));
+    }
     return { orgs: orgIds.length };
   },
 );

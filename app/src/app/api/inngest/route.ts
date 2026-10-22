@@ -5,6 +5,7 @@ import {
   forgetExcludedJob,
   learnJob,
   newMonthCron,
+  pruneAccessLogJob,
   resumePostponedJob,
   startJob,
 } from "@/features/memory/jobs";
@@ -32,5 +33,6 @@ export const { GET, POST, PUT } = serve({
     forgetExcludedJob,
     resumePostponedJob,
     newMonthCron,
+    pruneAccessLogJob,
   ],
 });

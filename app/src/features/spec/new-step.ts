@@ -3,6 +3,7 @@
 // the admin fills them in. Pure, so client code may import it.
 import type { InsertAt } from "./edit";
 import { eachStep, findStep, stepsAbove } from "./tree";
+import { triggers } from "./triggers";
 import type { Check, Path, Spec, Step } from "./types";
 
 /**
@@ -16,6 +17,7 @@ export type NewStepKind =
 /** A new step of `kind`, to insert at `at`. A branch's first path tests what's above `at`. */
 export function newStep(spec: Spec, at: InsertAt, kind: NewStepKind): Step {
   const ids = takenIds(spec);
+  const trigger = triggers[spec.trigger.type];
   switch (kind.type) {
     case "classify":
       return {
@@ -38,7 +40,7 @@ export function newStep(spec: Spec, at: InsertAt, kind: NewStepKind): Step {
         type: "draft",
         role: "smart",
         instructions: "Write a short, friendly reply.",
-        context: ["trigger.message"],
+        context: trigger.context.slice(0, 1),
         output: "google-mail.create-draft",
       };
     case "escalate":
@@ -48,11 +50,13 @@ export function newStep(spec: Spec, at: InsertAt, kind: NewStepKind): Step {
         id: freshId(ids, kind.action.split(".").at(-1) ?? "tool"),
         type: "tool",
         action: kind.action,
-        input: Object.fromEntries(kind.inputs.map((name) => [name, blankInput(name)])),
+        input: Object.fromEntries(
+          kind.inputs.map((name) => [name, blankInput(trigger.fields, name)]),
+        ),
       };
     case "branch": {
       const id = freshId(ids, "branch");
-      const path = blankPath(ids, 1, aboveAt(spec, at));
+      const path = blankPath(spec, ids, 1, aboveAt(spec, at));
       return {
         id,
         type: "branch",
@@ -68,25 +72,35 @@ export function newStep(spec: Spec, at: InsertAt, kind: NewStepKind): Step {
 export function newPath(spec: Spec, branchId: string): Path {
   const branch = findStep(spec, branchId);
   const count = branch?.type === "branch" ? branch.paths.length : 0;
-  return blankPath(takenIds(spec), count + 1, stepsAbove(spec, branchId));
+  return blankPath(spec, takenIds(spec), count + 1, stepsAbove(spec, branchId));
 }
 
-function blankPath(ids: Set<string>, number: number, above: readonly Step[]): Path {
+function blankPath(spec: Spec, ids: Set<string>, number: number, above: readonly Step[]): Path {
   return {
     id: freshId(ids, "path"),
     name: `Path ${String(number)}`,
-    condition: { combine: "all", checks: [firstCheck(above)] },
+    condition: { combine: "all", checks: [firstCheck(spec, above)] },
     steps: [],
   };
 }
 
-/** The nearest classify step's first answer above, or else the trigger's subject. */
-function firstCheck(above: readonly Step[]): Check {
+/**
+ * The nearest classify step's first answer above, or else a text fact of the trigger's: the
+ * message's subject, or the invite's organizer.
+ */
+function firstCheck(spec: Spec, above: readonly Step[]): Check {
   const classify = above.findLast((step) => step.type === "classify");
   if (classify?.type === "classify") {
     return { classify: classify.id, is: classify.labels[0] ?? "", minP: 0.8 };
   }
-  return { subject: { from: "trigger.subject" }, op: "contains", value: "" };
+  return { subject: { from: `trigger.${firstTextFact(spec)}` }, op: "contains", value: "" };
+}
+
+/** The fact a new check on the trigger tests: the subject, or else its first text fact. */
+export function firstTextFact(spec: Spec): string {
+  const facts = triggers[spec.trigger.type].facts;
+  const fact = facts.find((one) => one.name === "subject") ?? facts.find((f) => f.type === "text");
+  return fact?.name ?? "subject";
 }
 
 /** The steps a step inserted at `at` would have above it on its own path. */
@@ -104,9 +118,9 @@ function aboveAt(spec: Spec, at: InsertAt): Step[] {
   return [];
 }
 
-/** An input a run fills from the trigger when it names the message or its thread. */
-function blankInput(name: string): string | { from: string } {
-  return name === "messageId" || name === "threadId" ? { from: `trigger.${name}` } : "";
+/** An input a run fills from the trigger when it names one of the trigger's fields. */
+function blankInput(fields: readonly string[], name: string): string | { from: string } {
+  return fields.includes(name) ? { from: `trigger.${name}` } : "";
 }
 
 /** Every step and path ID in the spec: they share one namespace. */

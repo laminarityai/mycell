@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { TriggerType } from "@/features/spec/triggers";
 import type { ConditionField, Spec, SpecIssue } from "@/features/spec/types";
 
 /** Risk levels, least to most dangerous (docs/architecture.md, "Risk policy"). */
@@ -14,8 +15,8 @@ export type RiskLevel = z.infer<typeof riskLevelSchema>;
 /** One operation a workflow may call, with the risk level our team fixed for it. */
 export type CatalogAction = {
   readonly name: string;
-  /** The app it acts in, as admins name it. */
-  readonly app: "Gmail" | "Sheets";
+  /** The app it acts in, as admins name it (Calendar's actions come with M11). */
+  readonly app: "Gmail" | "Sheets" | "Calendar";
   /** What it does, in a sentence the builder chat reads. */
   readonly description: string;
   readonly risk: RiskLevel;
@@ -58,6 +59,8 @@ export type Requirements = {
   maxRisk: RiskLevel;
   /** The catalog actions the version calls. */
   requiredActions: readonly string[];
+  /** What starts its runs; a new Gmail message when left out. */
+  trigger?: TriggerType;
 };
 
 /**

@@ -54,6 +54,19 @@ describe("comparing a new version's requirements with the previous one's", () =>
     ).toBeNull();
   });
 
+  it("finds Calendar new when a version starts on new invites instead of new mail", () => {
+    expect(
+      requirementsGained(
+        { maxRisk: "internal_reversible", requiredActions: [LABEL] },
+        {
+          maxRisk: "internal_reversible",
+          requiredActions: [LABEL],
+          trigger: "calendar.invite_received",
+        },
+      ),
+    ).toEqual({ newApps: ["Calendar"] });
+  });
+
   it("finds nothing gained when the risk goes down or an app is dropped", () => {
     expect(
       requirementsGained(

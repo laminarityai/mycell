@@ -195,10 +195,10 @@ export type SwitchedOn = {
   switch: Switch;
   /** The latest version, which the run pins. */
   versionId: string;
-  /** Messages that occurred before this start nothing. */
+  /** Messages and invites that occurred before this start nothing. */
   since: Date;
-  /** The trigger's label filter: a message starts a run when it has one of them. */
-  labelIds: string[];
+  /** The latest version's trigger: a Gmail message with one of its labels, or a new invite. */
+  trigger: Spec["trigger"];
 };
 
 /** A spec that passed every validation stage, with what the policy engine made of it. */

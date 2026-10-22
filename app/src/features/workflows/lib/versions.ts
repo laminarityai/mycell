@@ -40,10 +40,7 @@ export async function publishWorkflow(
   const tags = await findTagsByName(ctx, validated.applied.visibility?.tags ?? []);
   const db = forOrg(ctx);
   const latest = (await latestVersions(ctx, [workflowId], db)).get(workflowId);
-  const gained = gainedForEnablements(latest, {
-    ...validated,
-    credentials: validated.applied.credentials,
-  });
+  const gained = gainedForEnablements(latest, validated);
   try {
     // The version, its tags, the removals and the pauses together: a version is never seen
     // without who it's for, nor runs for anyone who can't see it or hasn't agreed to it.

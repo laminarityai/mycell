@@ -1,10 +1,11 @@
 // The Google APIs the fake Nango's proxy serves, each by its host and path prefix, answering
-// from the connection's own fake (its Gmail mailbox, its Drive or its spreadsheets). Like
-// Google, an API answers 403 to a connection whose token holds none of the scopes it accepts
-// (for a write, none of the scopes its writes accept), and a host answers 404 for a path it
-// doesn't serve.
+// from the connection's own fake (its Gmail mailbox, its Drive, its spreadsheets or its
+// calendar). Like Google, an API answers 403 to a connection whose token holds none of the
+// scopes it accepts (for a write, none of the scopes its writes accept), and a host answers 404
+// for a path it doesn't serve.
 import { HttpResponse } from "msw";
 import { GOOGLE_APP_SCOPES } from "@/features/connections/types";
+import { calendarError, calendarResponse } from "./fake-calendar";
 import { driveError, driveResponse } from "./fake-drive";
 import { gmailError, gmailResponse, gmailWrite } from "./fake-gmail";
 import type { FakeConnection } from "./fake-nango";
@@ -42,6 +43,9 @@ const DRIVE_READONLY = GOOGLE_APP_SCOPES.drive;
 const DRIVE = "https://www.googleapis.com/auth/drive";
 const DRIVE_FILE = "https://www.googleapis.com/auth/drive.file";
 const SPREADSHEETS_READONLY = "https://www.googleapis.com/auth/spreadsheets.readonly";
+const CALENDAR_READS = ["calendar", "calendar.readonly", "calendar.events.readonly"].map(
+  (name) => `https://www.googleapis.com/auth/${name}`,
+);
 
 export const PROXIED_SOURCES: ProxiedSource[] = [
   {
@@ -63,6 +67,14 @@ export const PROXIED_SOURCES: ProxiedSource[] = [
     scopes: [DRIVE_READONLY, DRIVE],
     respond: (connection, path, params) => driveResponse(connection.drive, path, params),
     rateLimited: () => driveError(429),
+  },
+  {
+    host: "https://www.googleapis.com",
+    prefix: "/calendar/v3",
+    // Reading events takes any Calendar scope.
+    scopes: [GOOGLE_APP_SCOPES.calendar, ...CALENDAR_READS],
+    respond: (connection, path, params) => calendarResponse(connection.calendar, path, params),
+    rateLimited: () => calendarError(429, "rateLimitExceeded", "Rate Limit Exceeded"),
   },
   {
     host: "https://sheets.googleapis.com",

@@ -135,6 +135,7 @@ export const isolationCases = defineIsolationCases(server, {
   },
 
   gmailConnections: notTenantScoped("It narrows connection lists it is given, reading nothing."),
+  connectionsGranted: notTenantScoped("It narrows connection lists it is given, reading nothing."),
 
   getGrantedScopes: async (orgs) => {
     const { before, memberBefore } = await seedOrgBConnection(orgs);

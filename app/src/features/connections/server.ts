@@ -7,9 +7,11 @@ export { deleteMemberConnectionsOf, disconnect } from "./lib/disconnect";
 export { connectionAppsGranted, connectionRecorded } from "./lib/events";
 export { listConnections } from "./lib/list";
 // The one rule for which connections an admin may build on: their own and the org's, granted
-// Gmail. Used by the builder's read_examples and context, Try it, and spec validation.
+// the app the trigger watches (Gmail, or Calendar). Used by the builder's read_examples and
+// context, Try it, and spec validation.
 export {
   buildableConnections,
+  connectionsGranted,
   gmailConnections,
   requireBuildableConnection,
 } from "./lib/buildable";

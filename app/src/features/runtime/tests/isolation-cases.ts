@@ -2,11 +2,14 @@ import { expect } from "vitest";
 import { defineIsolationCases } from "@/db/testing/isolation";
 import type { TwoOrgs } from "@/db/testing/two-org-fixture";
 import { grantCredits, listLedger } from "@/features/credits/server";
-import { switchWorkflowOn } from "@/features/workflows/server";
+import { enable, switchWorkflowOn } from "@/features/workflows/server";
 import { systemCtx } from "@/lib/ctx";
-import { NotFoundError, OutOfCreditsError } from "@/lib/errors";
+import { ForbiddenError, NotFoundError, OutOfCreditsError } from "@/lib/errors";
+import { connectGoogle } from "@/testing/connect-helpers";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
+import { publishTo, tagUsers } from "@/testing/visibility-helpers";
 import * as server from "../server";
+import { inviteSpec } from "./calendar-helpers";
 import { connectInbox, pricingQuestion, publish, threadSpec } from "./run-helpers";
 
 // Org B points every role at its own models and has credits; org A has neither, so a call as
@@ -156,6 +159,17 @@ export const isolationCases = defineIsolationCases(server, {
     expect(listing).toHaveLength(1);
   },
 
+  recentInvites: async (orgs) => {
+    const orgB = await seedOrgBCalendar(orgs);
+    orgB.calendar.invite({ title: "Intro", organizer: "ada@customer.test" });
+    await connectGoogle(orgs.orgA.admin.ctx, orgs.orgA.admin.email);
+
+    const listing = await server.recentInvites(orgs.orgA.admin.ctx);
+
+    expect(listing.map((connection) => connection.connectionId)).not.toContain(orgB.connectionId);
+    expect(listing).toEqual([expect.objectContaining({ messages: [] })]);
+  },
+
   setModelRole: async (orgs) => {
     await seedOrgB(orgs);
 
@@ -195,4 +209,55 @@ export const isolationCases = defineIsolationCases(server, {
     ]);
     expect(await listLedger(orgs.orgB.admin.ctx)).toEqual(ledgerBefore);
   },
+
+  pollCalendar: async (orgs) => {
+    const orgB = await seedOrgBCalendar(orgs);
+    const { orgA } = orgs;
+    const asked = orgB.calendar.listRequests.length;
+
+    expect(await server.pollCalendar(systemCtx(orgA.id), orgB.connectionId)).toEqual({
+      outcome: "gone",
+    });
+    for (const ctx of [orgA.admin.ctx, orgA.member.ctx]) {
+      await expect(server.pollCalendar(ctx, orgB.connectionId)).rejects.toThrow(ForbiddenError);
+    }
+    expect(orgB.calendar.listRequests).toHaveLength(asked);
+  },
+
+  startInviteRuns: async (orgs) => {
+    // Org A's fan-out is handed org B's invite, as a forged or misrouted event would be.
+    const orgB = await seedOrgBCalendar(orgs);
+    const invite = orgB.calendar.invite({ title: "Intro", organizer: "ada@customer.test" });
+    const event = {
+      orgId: orgs.orgA.id,
+      connectionId: orgB.connectionId,
+      sourceRef: invite.id,
+      occurredAt: new Date(Date.now() + 1000).toISOString(),
+    };
+
+    expect(await server.startInviteRuns(systemCtx(orgs.orgA.id), event)).toEqual({ runIds: [] });
+    expect(await server.listRuns(orgs.orgB.admin.ctx, orgB.workflowId)).toEqual([]);
+  },
+
+  // Cross-org by design: it lists every org's calendars for the cron. What it must keep
+  // straight is which org each poll acts in: always the connection's own.
+  calendarsDue: async (orgs) => {
+    const orgB = await seedOrgBCalendar(orgs);
+
+    expect(await server.calendarsDue()).toEqual([
+      { orgId: orgs.orgB.id, connectionId: orgB.connectionId },
+    ]);
+  },
 });
+
+// Org B's admin has a Calendar-triggered workflow switched on for their own connection, whose
+// calendar has been synced once.
+async function seedOrgBCalendar({ orgB }: TwoOrgs) {
+  const { admin } = orgB;
+  const google = await connectGoogle(admin.ctx, admin.email);
+  await tagUsers(admin.ctx, "sales", [admin]);
+  const { workflowId } = await publishTo(admin.ctx, "Invites", inviteSpec(), ["sales"]);
+  await enable(admin.ctx, workflowId);
+  await server.pollCalendar(systemCtx(orgB.id), google.id);
+  return { connectionId: google.id, calendar: google.calendar, workflowId };
+}

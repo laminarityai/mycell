@@ -7,13 +7,14 @@ import { and, eq, inArray } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { listConnections } from "@/features/connections/server";
 import type { ConnectionSummary } from "@/features/connections/types";
+import { triggers } from "@/features/spec/triggers";
 import type { Spec, SpecIssue } from "@/features/spec/types";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError, SpecInvalidError, ValidationError } from "@/lib/errors";
 import type { Switch, SwitchedOn, WorkflowSwitch } from "../types";
 import { enablements, workflows } from "./schema";
 import { scopeIssues } from "./scope-check";
-import { reachesGmail } from "./validation";
+import { reachesTriggerApp } from "./validation";
 import { latestVersions } from "./latest-versions";
 import { findWorkflow } from "./access";
 import { deleteEnablement, switchOnEnablement } from "./enablement-rows";
@@ -96,7 +97,7 @@ export async function listSwitchedOn(ctx: Ctx, connectionId: string): Promise<Sw
         switch: by,
         versionId: version.id,
         since,
-        labelIds: version.spec.trigger.labelIds,
+        trigger: version.spec.trigger,
       },
     ];
   };
@@ -211,11 +212,12 @@ async function chosenConnection(
 
 // The setup checks, against the one chosen connection.
 function connectionIssues(spec: Spec, connection: ConnectionSummary): SpecIssue[] {
-  if (!reachesGmail(connection)) {
+  if (!reachesTriggerApp(spec, connection)) {
+    const app = triggers[spec.trigger.type].app;
     return [
       {
         path: ["credentials"],
-        message: `${connection.accountEmail} wasn't allowed Gmail. Reconnect it to allow Gmail.`,
+        message: `${connection.accountEmail} wasn't allowed ${app}. Reconnect it to allow ${app}.`,
       },
     ];
   }

@@ -4,21 +4,29 @@
 import { GOOGLE_APP_SCOPES, type GoogleApp } from "@/features/connections/types";
 import { appsUsed, findAction } from "@/features/policy/catalog";
 import type { CatalogAction } from "@/features/policy/types";
+import type { Spec } from "@/features/spec/types";
 import type { WorkflowVersion } from "../types";
 import { scopeName } from "./scope-check";
 
 /** Each catalog app as connections name it. */
-const GOOGLE_APPS: Record<CatalogAction["app"], GoogleApp> = { Gmail: "gmail", Sheets: "sheets" };
+const GOOGLE_APPS: Record<CatalogAction["app"], GoogleApp> = {
+  Gmail: "gmail",
+  Sheets: "sheets",
+  Calendar: "calendar",
+};
 
 /** What a connection is short of: apps as the catalog names them, scopes by short name. */
 export type MissingAccess = { apps: CatalogAction["app"][]; scopes: string[] };
 
+/** What a version's requirements are read from: the actions it calls, and its trigger. */
+type Needs = Pick<WorkflowVersion, "requiredActions"> & { spec: Pick<Spec, "trigger"> };
+
 /**
- * The apps the version uses, as the catalog names them: Gmail for the trigger, then each app a
- * catalog action it calls belongs to, each once.
+ * The apps the version uses, as the catalog names them: its trigger's (Gmail, or Calendar),
+ * then each app a catalog action it calls belongs to, each once.
  */
-export function requiredApps(version: Pick<WorkflowVersion, "requiredActions">) {
-  return appsUsed(version.requiredActions);
+export function requiredApps(version: Needs) {
+  return appsUsed(version.requiredActions, version.spec.trigger.type);
 }
 
 /**
@@ -27,7 +35,7 @@ export function requiredApps(version: Pick<WorkflowVersion, "requiredActions">) 
  * connection that lacks nothing gives empty lists; no connection lacks everything.
  */
 export function missingAccess(
-  version: Pick<WorkflowVersion, "requiredActions">,
+  version: Needs,
   granted: { apps: readonly GoogleApp[]; grantedScopes: readonly string[] } | null,
 ): MissingAccess {
   const apps = granted?.apps ?? [];

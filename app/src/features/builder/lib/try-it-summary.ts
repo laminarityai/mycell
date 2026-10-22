@@ -13,7 +13,7 @@ import { isRecord } from "@/lib/utils";
 
 const ENDINGS: Record<DryRunResult["ended"], string> = {
   succeeded: "It ran to the end.",
-  skipped: "It stopped at a branch: the workflow would do nothing more with this message.",
+  skipped: "It stopped at a branch: the workflow would do nothing more with it.",
   escalated: "It escalated: the workflow would hand this message to a person.",
   failed: "It failed at the step above.",
   partly_failed:
@@ -116,8 +116,8 @@ function specInput(spec: Spec, stepId: string, field: string): string {
 /** The summary as the agent reads it, in the admin's turn. */
 export function tryItText(summary: TryItSummary): string {
   return [
-    "[I tried the workflow's working spec on one real message (Try it). Nothing was written " +
-      "to any app. What each step did:]",
+    "[I tried the workflow's working spec on one real message or invite (Try it). Nothing was " +
+      "written to any app. What each step did:]",
     ...summary.lines.map((line) => `- ${line}`),
   ].join("\n");
 }

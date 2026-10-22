@@ -2,15 +2,17 @@
 // (ADR-0015): the trigger's facts and the result fields catalog actions declare, each with its
 // type. Static: it reads only the spec's and the catalog's declarations.
 import { catalog } from "@/features/policy/catalog";
-import { triggerFacts } from "@/features/spec/triggers";
+import { triggers, triggerTypes } from "@/features/spec/triggers";
 
 const type = (name: string, kind: string, label: string) => `${name} (${kind}): ${label}`;
 
 /** Lines for the condition-fields context section: trigger facts and declared action results. */
 export function declaredFieldLines(): string[] {
-  const facts = Object.entries(triggerFacts).flatMap(([trigger, declared]) => [
-    `- The ${trigger} trigger's facts about the message, as { "subject": { "from": "trigger.<fact>" }, ... }:`,
-    ...declared.map((fact) => `  - ${type(`trigger.${fact.name}`, fact.type, fact.label)}`),
+  const facts = triggerTypes.flatMap((trigger) => [
+    `- The ${trigger} trigger's facts about the ${triggers[trigger].item}, as { "subject": { "from": "trigger.<fact>" }, ... }:`,
+    ...triggers[trigger].facts.map(
+      (fact) => `  - ${type(`trigger.${fact.name}`, fact.type, fact.label)}`,
+    ),
   ]);
   const actions = Object.values(catalog).flatMap((action) =>
     (action.conditionFields ?? []).map(

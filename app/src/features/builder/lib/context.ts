@@ -16,6 +16,7 @@ import { getWorkflow, listWorkflows } from "@/features/workflows/server";
 import type { Ctx } from "@/lib/ctx";
 import type { ProposalStatus } from "../types";
 import { declaredFieldLines } from "./condition-fields-context";
+import { triggerLines } from "./triggers-context";
 import { listProposals } from "./proposals";
 import type { TurnInfo } from "./tools";
 
@@ -38,6 +39,10 @@ const actionCatalog: ContextProvider = () => {
   );
   return Promise.resolve({ title: "Action catalog", content: lines.join("\n") });
 };
+
+/** What can start a run, and what a run's steps may read from what started it. */
+const triggerSection: ContextProvider = () =>
+  Promise.resolve({ title: "Triggers", content: triggerLines().join("\n") });
 
 /** How an extract field's declared type reads, and the type of value a check sees. */
 const FIELD_TYPES: { reads: string; type: ValueType }[] = [
@@ -180,6 +185,7 @@ const proposals: ContextProvider = async (ctx, turn) => {
 
 export const contextProviders: ContextProvider[] = [
   orgSettings,
+  triggerSection,
   actionCatalog,
   conditionFields,
   workflows,

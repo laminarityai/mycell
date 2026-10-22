@@ -49,13 +49,27 @@ export function AddStepMenu({
   point,
   onPick,
   onClose,
+  repliable = true,
 }: {
   /** Where to open in the graph's frame: under the "+", kept inside the frame. */
   point: { left: number; top: number };
   onPick: (kind: NewStepKind) => void;
   onClose: () => void;
+  /**
+   * Whether the trigger starts runs on a Gmail message, which a draft replies to and an
+   * escalation hands over: not so for a new invite, which offers neither.
+   */
+  repliable?: boolean;
 }) {
   const first = useRef<HTMLButtonElement>(null);
+  const groups = repliable
+    ? GROUPS
+    : GROUPS.map((group) => ({
+        ...group,
+        items: group.items.filter(
+          (item) => item.kind.type !== "draft" && item.kind.type !== "escalate",
+        ),
+      }));
   useEffect(() => {
     first.current?.focus();
   }, []);
@@ -80,7 +94,7 @@ export function AddStepMenu({
           <X aria-hidden className="size-3" />
         </button>
       </div>
-      {GROUPS.map((group, g) => (
+      {groups.map((group, g) => (
         <div key={group.app} role="group" aria-label={group.app} className="border-t py-1">
           <p className="px-2 pt-1 pb-0.5 text-[11px] font-medium text-muted-foreground uppercase">
             {group.app}

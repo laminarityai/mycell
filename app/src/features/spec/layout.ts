@@ -23,7 +23,7 @@ type Box = { id: string; x: number; y: number; width: number; height: number };
 
 export type LayoutNode<Risk extends string = string> = Box &
   (
-    | { kind: "trigger"; run: LayoutRun }
+    | { kind: "trigger"; label: string; run: LayoutRun }
     | { kind: "step"; step: GraphStep<Risk> }
     | { kind: "path"; path: GraphPath<Risk>; mode: "first" | "every" }
     | { kind: "end"; label: "End" | "Stops here"; run: LayoutRun; removed: boolean }
@@ -171,6 +171,7 @@ export function layoutTree<Risk extends string>(view: GraphView<Risk>): GraphLay
   const width = Math.max(STEP_WIDTH, listWidth(view.steps));
   const trigger: LayoutNode<Risk> = {
     kind: "trigger",
+    label: view.trigger,
     id: "trigger",
     x: width / 2 - STEP_WIDTH / 2,
     y: 0,

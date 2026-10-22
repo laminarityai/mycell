@@ -25,6 +25,11 @@ process.env.MODEL_CLASSIFY = "typesafe-ai/jev-1.14.0";
 process.env.MODEL_FAST = "test/fast-default";
 process.env.MODEL_SMART = "test/smart-default";
 process.env.MODEL_JUDGE = "test/judge-default";
+// The key store reaches the fake KMS (src/testing/fake-kms.ts) at AWS's regional endpoint, and
+// the fake checks requests are signed with this access key.
+process.env.KMS_REGION = "us-east-1";
+process.env.KMS_ACCESS_KEY_ID = "test-kms-access-key-id";
+process.env.KMS_SECRET_ACCESS_KEY = "test-kms-secret-access-key";
 
 export default defineConfig({
   resolve: { tsconfigPaths: true },

@@ -2,7 +2,9 @@
 // use. Its plaintext never leaves KMS: the key store asks KMS for a fresh data key per
 // encryption and stores only that data key's encrypted form, which only the org's key opens.
 // Every data key is bound to its org by the encryption context, so KMS refuses to open one
-// under another org's name even if its ciphertext were copied across.
+// under another org's name even if its ciphertext were copied across. Each org also has an HMAC
+// key, made the same way under its own alias, that KMS computes keyed hashes with: its material
+// never leaves KMS either.
 import {
   AlreadyExistsException,
   CreateAliasCommand,
@@ -11,6 +13,7 @@ import {
   DeleteAliasCommand,
   DescribeKeyCommand,
   GenerateDataKeyCommand,
+  GenerateMacCommand,
   IncorrectKeyException,
   InvalidCiphertextException,
   KMSClient,
@@ -47,8 +50,17 @@ function kms(): KMSClient {
   return client;
 }
 
-function aliasOf(orgId: string): string {
-  return `alias/${env.KMS_ALIAS_PREFIX}/org/${orgId}`;
+// What each of an org's keys is for: encrypting data keys, or keyed hashes.
+type KeyPurpose = "encrypt" | "hash";
+
+const KEY_SPECS = {
+  encrypt: { KeySpec: "SYMMETRIC_DEFAULT", KeyUsage: "ENCRYPT_DECRYPT" },
+  hash: { KeySpec: "HMAC_256", KeyUsage: "GENERATE_VERIFY_MAC" },
+} as const;
+
+function aliasOf(orgId: string, purpose: KeyPurpose = "encrypt"): string {
+  const alias = `alias/${env.KMS_ALIAS_PREFIX}/org/${orgId}`;
+  return purpose === "encrypt" ? alias : `${alias}/${purpose}`;
 }
 
 function encryptionContext(orgId: string): Record<string, string> {
@@ -57,13 +69,36 @@ function encryptionContext(orgId: string): Record<string, string> {
 
 /** A new data key under the org's key, making the org's key first if it has none. */
 export async function generateDataKey(orgId: string): Promise<DataKey> {
+  return withOrgKey(orgId, "encrypt", () => generateUnder(orgId));
+}
+
+/**
+ * The HMAC-SHA-256 of `message` under the org's hashing key, making that key first if it has
+ * none: the same message gives the same MAC until the key is destroyed.
+ */
+export async function generateMac(orgId: string, message: Uint8Array): Promise<Uint8Array> {
+  return withOrgKey(orgId, "hash", async () => {
+    const { Mac } = await kms().send(
+      new GenerateMacCommand({
+        KeyId: aliasOf(orgId, "hash"),
+        Message: message,
+        MacAlgorithm: "HMAC_SHA_256",
+      }),
+    );
+    if (Mac === undefined) throw new Error("KMS returned no MAC.");
+    return Mac;
+  });
+}
+
+// Runs `work` with the org's key for the purpose, making the key first when KMS has none.
+async function withOrgKey<T>(orgId: string, purpose: KeyPurpose, work: () => Promise<T>) {
   try {
-    return await generateUnder(orgId);
+    return await work();
   } catch (error) {
     if (!(error instanceof NotFoundException)) throw error;
   }
-  await createOrgKey(orgId);
-  return generateUnder(orgId);
+  await createOrgKey(orgId, purpose);
+  return work();
 }
 
 async function generateUnder(orgId: string): Promise<DataKey> {
@@ -84,18 +119,19 @@ async function generateUnder(orgId: string): Promise<DataKey> {
  * Makes the org's key and names it with the org's alias. When another request made one at the
  * same moment, its alias wins and the key made here is scheduled for deletion unused.
  */
-async function createOrgKey(orgId: string): Promise<void> {
+async function createOrgKey(orgId: string, purpose: KeyPurpose): Promise<void> {
   const { KeyMetadata } = await kms().send(
     new CreateKeyCommand({
-      Description: `Mycel key store: org ${orgId}`,
-      KeySpec: "SYMMETRIC_DEFAULT",
-      KeyUsage: "ENCRYPT_DECRYPT",
+      Description: `Mycel key store: org ${orgId}${purpose === "hash" ? ", keyed hashes" : ""}`,
+      ...KEY_SPECS[purpose],
     }),
   );
   const keyId = KeyMetadata?.KeyId;
   if (keyId === undefined) throw new Error("KMS made a key with no ID.");
   try {
-    await kms().send(new CreateAliasCommand({ AliasName: aliasOf(orgId), TargetKeyId: keyId }));
+    await kms().send(
+      new CreateAliasCommand({ AliasName: aliasOf(orgId, purpose), TargetKeyId: keyId }),
+    );
   } catch (error) {
     if (!(error instanceof AlreadyExistsException)) throw error;
     await kms().send(
@@ -136,13 +172,19 @@ function unreadable(error: unknown): boolean {
 }
 
 /**
- * Destroys the org's key: KMS refuses it at once and deletes it after its waiting period, and
- * the alias goes, so nothing finds it again. Does nothing for an org that never had one.
+ * Destroys the org's keys, for encryption and for hashing: KMS refuses each at once and deletes
+ * it after its waiting period, and its alias goes, so nothing finds it again. Does nothing for
+ * a key the org never had.
  */
-export async function destroyKey(orgId: string): Promise<void> {
+export async function destroyKeys(orgId: string): Promise<void> {
+  await destroyKey(aliasOf(orgId, "encrypt"));
+  await destroyKey(aliasOf(orgId, "hash"));
+}
+
+async function destroyKey(alias: string): Promise<void> {
   let keyId: string | undefined;
   try {
-    const { KeyMetadata } = await kms().send(new DescribeKeyCommand({ KeyId: aliasOf(orgId) }));
+    const { KeyMetadata } = await kms().send(new DescribeKeyCommand({ KeyId: alias }));
     keyId = KeyMetadata?.KeyId;
   } catch (error) {
     if (error instanceof NotFoundException) return;
@@ -152,5 +194,5 @@ export async function destroyKey(orgId: string): Promise<void> {
   await kms().send(
     new ScheduleKeyDeletionCommand({ KeyId: keyId, PendingWindowInDays: DELETION_WINDOW_DAYS }),
   );
-  await kms().send(new DeleteAliasCommand({ AliasName: aliasOf(orgId) }));
+  await kms().send(new DeleteAliasCommand({ AliasName: alias }));
 }

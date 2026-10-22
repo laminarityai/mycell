@@ -6,7 +6,7 @@ import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { systemCtx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import { fakeKms } from "@/testing/fake-kms";
-import { decryptForOrg, destroyOrgKey, encryptForOrg } from "../server";
+import { decryptForOrg, destroyOrgKey, encryptForOrg, hashForOrg } from "../server";
 
 beforeEach(resetDatabase);
 afterEach(() => {
@@ -99,11 +99,13 @@ it("never puts key material in a table, a log, or what it returns", async () => 
   ];
   await decryptForOrg(orgA.member.ctx, encrypted[0] ?? "");
   await expect(decryptForOrg(orgB.member.ctx, encrypted[0] ?? "")).rejects.toThrow(NotFoundError);
+  const hashed = await hashForOrg(orgA.admin.ctx, "sam@client.example");
   await destroyOrgKey(orgA.admin.ctx);
 
+  // Two data keys and one hashing key, each in base64 and hex.
   const material = fakeKms.keyMaterial();
-  expect(material).toHaveLength(4);
-  const output = [...encrypted, ...logged.map((entry) => inspect(entry))].join("\n");
+  expect(material).toHaveLength(6);
+  const output = [...encrypted, hashed, ...logged.map((entry) => inspect(entry))].join("\n");
   for (const key of material) {
     expect(output).not.toContain(key);
     expect(await tablesHolding(key)).toEqual([]);

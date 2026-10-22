@@ -2,14 +2,23 @@
 // store runs the real AWS SDK without network or an AWS account. It answers only the operations
 // the key store makes, in the shapes AWS documents, with AWS's error types; anything else fails
 // the test. Data keys are random, and their "ciphertext" is a handle the fake looks up, bound to
-// its key and encryption context as KMS binds them.
-import { randomBytes, randomUUID } from "node:crypto";
+// its key and encryption context as KMS binds them. An HMAC key holds a random secret that
+// GenerateMac computes HMAC-SHA-256 with, and each key does only what its usage allows.
+import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { http, HttpResponse } from "msw";
 import { z } from "zod";
 import { env } from "@/env";
 
 type KeyState = "Enabled" | "PendingDeletion";
-type FakeKey = { keyId: string; arn: string; state: KeyState };
+type KeyUsage = "ENCRYPT_DECRYPT" | "GENERATE_VERIFY_MAC";
+type FakeKey = {
+  keyId: string;
+  arn: string;
+  state: KeyState;
+  usage: KeyUsage;
+  // An HMAC key's material: what GenerateMac computes with.
+  secret: Buffer | null;
+};
 type DataKey = { keyId: string; context: Record<string, string>; plaintext: Buffer };
 
 const ACCOUNT = "111122223333";
@@ -17,7 +26,16 @@ const KMS_URL = /^https:\/\/kms\.[a-z0-9-]+\.amazonaws\.com\/$/;
 
 const contextSchema = z.record(z.string(), z.string()).default({});
 const requestSchemas = {
-  CreateKey: z.object({ Description: z.string().optional(), KeySpec: z.string().optional() }),
+  CreateKey: z
+    .object({
+      Description: z.string().optional(),
+      KeySpec: z.enum(["SYMMETRIC_DEFAULT", "HMAC_256"]).default("SYMMETRIC_DEFAULT"),
+      KeyUsage: z.enum(["ENCRYPT_DECRYPT", "GENERATE_VERIFY_MAC"]).default("ENCRYPT_DECRYPT"),
+    })
+    .refine(
+      ({ KeySpec, KeyUsage }) => (KeySpec === "HMAC_256") === (KeyUsage === "GENERATE_VERIFY_MAC"),
+      "An HMAC key's usage is GENERATE_VERIFY_MAC, and only an HMAC key's.",
+    ),
   CreateAlias: z.object({ AliasName: z.string(), TargetKeyId: z.string() }),
   DeleteAlias: z.object({ AliasName: z.string() }),
   DescribeKey: z.object({ KeyId: z.string() }),
@@ -30,6 +48,11 @@ const requestSchemas = {
     CiphertextBlob: z.string(),
     KeyId: z.string().optional(),
     EncryptionContext: contextSchema,
+  }),
+  GenerateMac: z.object({
+    KeyId: z.string(),
+    Message: z.string(),
+    MacAlgorithm: z.literal("HMAC_SHA_256"),
   }),
   ScheduleKeyDeletion: z.object({
     KeyId: z.string(),
@@ -79,12 +102,15 @@ class FakeKms {
     return [...this.dataKeys.values()].map(({ keyId }) => keyId);
   }
 
-  /** Every plaintext data key handed out, base64 and hex, to scan tables and logs for. */
+  /**
+   * Every plaintext data key handed out, and every HMAC key's secret, base64 and hex, to scan
+   * tables and logs for.
+   */
   keyMaterial(): string[] {
-    return [...this.dataKeys.values()].flatMap(({ plaintext }) => [
-      plaintext.toString("base64"),
-      plaintext.toString("hex"),
-    ]);
+    const secrets = [...this.keys.values()].flatMap(({ secret }) => (secret ? [secret] : []));
+    return [...[...this.dataKeys.values()].map(({ plaintext }) => plaintext), ...secrets].flatMap(
+      (material) => [material.toString("base64"), material.toString("hex")],
+    );
   }
 
   readonly handlers = [
@@ -115,9 +141,15 @@ class FakeKms {
   private answer(op: Operation, body: unknown): object {
     switch (op) {
       case "CreateKey": {
-        requestSchemas.CreateKey.parse(body);
+        const { KeyUsage } = requestSchemas.CreateKey.parse(body);
         const keyId = randomUUID();
-        const key: FakeKey = { keyId, arn: arnOf(keyId), state: "Enabled" };
+        const key: FakeKey = {
+          keyId,
+          arn: arnOf(keyId),
+          state: "Enabled",
+          usage: KeyUsage,
+          secret: KeyUsage === "GENERATE_VERIFY_MAC" ? randomBytes(32) : null,
+        };
         this.keys.set(keyId, key);
         return { KeyMetadata: metadata(key) };
       }
@@ -142,7 +174,7 @@ class FakeKms {
       }
       case "GenerateDataKey": {
         const request = requestSchemas.GenerateDataKey.parse(body);
-        const key = this.usable(request.KeyId);
+        const key = this.usable(request.KeyId, "ENCRYPT_DECRYPT");
         const handle = randomBytes(48).toString("base64");
         const plaintext = randomBytes(32);
         this.dataKeys.set(handle, {
@@ -165,12 +197,21 @@ class FakeKms {
         if (request.KeyId !== undefined && this.find(request.KeyId).keyId !== dataKey.keyId) {
           throw new KmsError("IncorrectKeyException", "The key ID doesn't match the ciphertext.");
         }
-        const key = this.usable(dataKey.keyId);
+        const key = this.usable(dataKey.keyId, "ENCRYPT_DECRYPT");
         return {
           KeyId: key.arn,
           Plaintext: dataKey.plaintext.toString("base64"),
           EncryptionAlgorithm: "SYMMETRIC_DEFAULT",
         };
+      }
+      case "GenerateMac": {
+        const request = requestSchemas.GenerateMac.parse(body);
+        const key = this.usable(request.KeyId, "GENERATE_VERIFY_MAC");
+        if (key.secret === null) throw new Error("The fake's HMAC key has no secret.");
+        const mac = createHmac("sha256", key.secret)
+          .update(Buffer.from(request.Message, "base64"))
+          .digest();
+        return { KeyId: key.arn, Mac: mac.toString("base64"), MacAlgorithm: "HMAC_SHA_256" };
       }
       case "ScheduleKeyDeletion": {
         const { KeyId, PendingWindowInDays = 30 } = requestSchemas.ScheduleKeyDeletion.parse(body);
@@ -201,10 +242,13 @@ class FakeKms {
     return key;
   }
 
-  private usable(id: string): FakeKey {
+  private usable(id: string, usage: KeyUsage): FakeKey {
     const key = this.find(id);
     if (key.state !== "Enabled") {
       throw new KmsError("KMSInvalidStateException", `${key.arn} is pending deletion.`);
+    }
+    if (key.usage !== usage) {
+      throw new KmsError("InvalidKeyUsageException", `${key.arn}'s usage is ${key.usage}.`);
     }
     return key;
   }
@@ -221,8 +265,8 @@ function metadata(key: FakeKey): object {
     AWSAccountId: ACCOUNT,
     Enabled: key.state === "Enabled",
     KeyState: key.state,
-    KeyUsage: "ENCRYPT_DECRYPT",
-    KeySpec: "SYMMETRIC_DEFAULT",
+    KeyUsage: key.usage,
+    KeySpec: key.usage === "ENCRYPT_DECRYPT" ? "SYMMETRIC_DEFAULT" : "HMAC_256",
   };
 }
 

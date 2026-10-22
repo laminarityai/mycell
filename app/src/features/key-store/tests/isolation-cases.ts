@@ -17,6 +17,13 @@ export const isolationCases = defineIsolationCases(server, {
     await expect(server.decryptForOrg(orgA.admin.ctx, forB)).rejects.toThrow(NotFoundError);
   },
 
+  hashForOrg: async ({ orgA, orgB }) => {
+    const forA = await server.hashForOrg(orgA.admin.ctx, "sam@client.example");
+
+    expect(await server.hashForOrg(orgB.admin.ctx, "sam@client.example")).not.toBe(forA);
+    expect(await server.hashForOrg(orgA.member.ctx, "sam@client.example")).toBe(forA);
+  },
+
   destroyOrgKey: async ({ orgA, orgB }) => {
     const forA = await server.encryptForOrg(orgA.member.ctx, "Org A's text");
     const forB = await server.encryptForOrg(orgB.member.ctx, "Org B's text");

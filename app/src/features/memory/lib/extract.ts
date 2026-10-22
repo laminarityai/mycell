@@ -112,6 +112,8 @@ function instructions(domain: string): string {
     "  everyone else is outside the company.",
     "- predicate labels what the fact says (role, works_at, renewal_date); value is its value;",
     "  object is the ref of another listed object the fact links its subject to.",
+    "- Give a predicate only for something its subject has one value of at a time, since a newer",
+    "  fact with the same subject and predicate replaces an older one; otherwise leave it null.",
   ].join("\n");
 }
 

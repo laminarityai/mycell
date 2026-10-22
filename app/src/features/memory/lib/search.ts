@@ -9,9 +9,10 @@
 //   closest to the best few facts they found, so a fact that shares no word with the text but
 //   means the same as a match is found too.
 // Facts about an object named by its exact key come first. Only facts the caller can see (the
-// one visibility function) rank or seed anything, so a fact they can't see never pulls in, or
-// pushes down, one they can.
-import { and, cosineDistance, desc, eq, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
+// one visibility function), and of those only the ones current for them (the newest they can
+// see of each timeline), rank or seed anything, so a fact they can't see never pulls in, pushes
+// down or replaces one they can.
+import { and, cosineDistance, desc, eq, inArray, lte, ne, or, sql } from "drizzle-orm";
 import { forOrg, type OrgScopedDb } from "@/db/for-org";
 import type { Ctx } from "@/lib/ctx";
 import {
@@ -22,7 +23,7 @@ import {
   type ObjectKeyKind,
 } from "../types";
 import { facts, memoryObjects, objectKeys } from "./schema";
-import { describeFacts, type FactRow, type SeenFact, seenFacts } from "./visible-facts";
+import { describeFacts, type FactRow, overTime, type SeenFact, seenFacts } from "./visible-facts";
 import { viewerOf } from "./visibility";
 
 const DEFAULT_LIMIT = 20;
@@ -56,8 +57,10 @@ export async function searchMemory(ctx: Ctx, input: MemorySearch): Promise<Memor
   const linked = await linkedFacts(db, named);
   const candidates = unique([...keyword, ...linked]);
   const seen = new Map<string, SeenFact>();
+  // Only the facts current for the viewer: the newest of each timeline they can see.
   const see = async (rows: FactRow[]) => {
-    for (const found of await seenFacts(ctx, viewer, rows)) seen.set(found.fact.id, found);
+    const { current } = await overTime(ctx, viewer, await seenFacts(ctx, viewer, rows));
+    for (const found of current) seen.set(found.fact.id, found);
     return rows.filter((fact) => seen.has(fact.id));
   };
   await see(candidates);
@@ -127,27 +130,24 @@ async function namedObjects(db: OrgScopedDb, keys: Key[], words: string[]) {
   return { byKey, named: unique([...byKey, ...byName.map((object) => object.id)]) };
 }
 
-/** Current facts whose keyword index matches any of the words, best match first. */
+/** Facts whose keyword index matches any of the words, best match first. */
 async function keywordFacts(db: OrgScopedDb, words: string[]): Promise<FactRow[]> {
   if (words.length === 0) return [];
   return db.select(facts, {
-    where: and(isNull(facts.supersededAt), sql`${facts.keywords} @@ ${anyOf(words)}`),
+    where: sql`${facts.keywords} @@ ${anyOf(words)}`,
     orderBy: [desc(sql`ts_rank_cd(${facts.keywords}, ${anyOf(words)})`), desc(facts.recordedAt)],
     limit: CANDIDATES,
   });
 }
 
 /**
- * Current facts about the objects, then facts linking another object to them, in the objects'
+ * Facts about the objects, then facts linking another object to them, in the objects'
  * order, newest first.
  */
 async function linkedFacts(db: OrgScopedDb, objectIds: string[]): Promise<FactRow[]> {
   if (objectIds.length === 0) return [];
   const rows = await db.select(facts, {
-    where: and(
-      isNull(facts.supersededAt),
-      or(inArray(facts.subjectId, objectIds), inArray(facts.objectId, objectIds)),
-    ),
+    where: or(inArray(facts.subjectId, objectIds), inArray(facts.objectId, objectIds)),
     orderBy: [desc(facts.recordedAt), facts.id],
     limit: CANDIDATES,
   });
@@ -159,7 +159,7 @@ async function linkedFacts(db: OrgScopedDb, objectIds: string[]): Promise<FactRo
 }
 
 /**
- * Current facts, other than `known` ones, whose stored embeddings mean nearly the same as a
+ * Facts, other than `known` ones, whose stored embeddings mean nearly the same as a
  * seed's: every seed's closest first, then every seed's second closest, and so on.
  */
 async function neighbours(
@@ -171,11 +171,7 @@ async function neighbours(
     seeds.map((seed) => {
       const distance = cosineDistance(facts.embedding, seed.embedding);
       return db.select(facts, {
-        where: and(
-          isNull(facts.supersededAt),
-          ne(facts.id, seed.id),
-          lte(distance, 1 - MIN_SIMILARITY),
-        ),
+        where: and(ne(facts.id, seed.id), lte(distance, 1 - MIN_SIMILARITY)),
         orderBy: [distance, facts.id],
         limit: NEIGHBOURS,
       });

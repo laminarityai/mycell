@@ -1,10 +1,12 @@
 // Turning stored facts into what one reader sees: only the facts with a source that reader can
 // see (through the one visibility function), each with only those sources and its linked
-// object. Reading an object and searching both go through it.
+// object. Reading an object and searching both go through it. Superseding is the reader's own
+// too: a fact is history for them only when a newer fact in its timeline is one they can see,
+// so a fact replaced by something they can't see stays current for them and never hints at it.
 import { asc, inArray } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import type { Ctx } from "@/lib/ctx";
-import type { FactSource, MemoryFact } from "../types";
+import type { FactSource, HistoricFact, MemoryFact } from "../types";
 import { factSources, facts, memoryObjects, sourceRecords } from "./schema";
 import { type Viewer, visibleSourceRecords } from "./visibility";
 
@@ -46,6 +48,77 @@ export async function seenFacts(ctx: Ctx, viewer: Viewer, rows: FactRow[]): Prom
         occurredAt,
       }));
     return sources.length === 0 ? [] : [{ fact, sources }];
+  });
+}
+
+/** A seen fact a newer fact the viewer can also see replaced. */
+export type SeenHistory = SeenFact & { supersededAt: Date; supersededBy: FactRow };
+
+/**
+ * Splits seen facts into those current for the viewer and their history, each in the order
+ * given. A current fact replaced only by facts the viewer can't see ends at no time they know.
+ */
+export async function overTime(
+  ctx: Ctx,
+  viewer: Viewer,
+  seen: SeenFact[],
+): Promise<{ current: SeenFact[]; history: SeenHistory[] }> {
+  const rows = new Map(seen.map(({ fact }) => [fact.id, fact]));
+  const visible = new Set(rows.keys());
+  // Every newer fact in the seen facts' timelines, and which of them the viewer sees.
+  let frontier = newer([...rows.values()], rows);
+  while (frontier.length > 0) {
+    const loaded = await forOrg(ctx).select(facts, { where: inArray(facts.id, frontier) });
+    for (const row of loaded) rows.set(row.id, row);
+    for (const { fact } of await seenFacts(ctx, viewer, loaded)) visible.add(fact.id);
+    frontier = newer(loaded, rows);
+  }
+
+  const current: SeenFact[] = [];
+  const history: SeenHistory[] = [];
+  for (const found of seen) {
+    const { fact } = found;
+    let next = fact.supersededById;
+    const passed = new Set([fact.id]);
+    while (next !== null && !visible.has(next) && !passed.has(next)) {
+      passed.add(next);
+      next = rows.get(next)?.supersededById ?? null;
+    }
+    const replacement = next === null || next === fact.id ? undefined : rows.get(next);
+    if (replacement === undefined || !visible.has(replacement.id)) {
+      const ended = fact.supersededById === null;
+      current.push(ended ? found : { ...found, fact: { ...fact, validUntil: null } });
+      continue;
+    }
+    history.push({
+      ...found,
+      fact: { ...fact, validUntil: replacement.validFrom },
+      // When memory recorded the replacement it can see: the later of the two facts' records.
+      supersededAt:
+        replacement.id === fact.supersededById && fact.supersededAt !== null
+          ? fact.supersededAt
+          : new Date(Math.max(fact.recordedAt.getTime(), replacement.recordedAt.getTime())),
+      supersededBy: replacement,
+    });
+  }
+  return { current, history };
+}
+
+// The facts replacing `from` that aren't loaded yet.
+function newer(from: FactRow[], rows: Map<string, FactRow>): string[] {
+  return [
+    ...new Set(from.flatMap((row) => row.supersededById ?? []).filter((id) => !rows.has(id))),
+  ];
+}
+
+/** History as the reader gets it. */
+export async function describeHistory(ctx: Ctx, history: SeenHistory[]): Promise<HistoricFact[]> {
+  const described = await describeFacts(ctx, history);
+  return described.flatMap((fact, i) => {
+    const seen = history.at(i);
+    return seen === undefined
+      ? []
+      : [{ ...fact, supersededAt: seen.supersededAt, supersededBy: seen.supersededBy.id }];
   });
 }
 

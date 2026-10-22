@@ -1,8 +1,10 @@
 // Storing what an item taught memory, in one transaction: its source record with its access
 // list, its objects (each the existing object matching found, given any keys it lacked, or a new
-// one), and its facts linked to the record. A fact with the same subject and statement as a current one is that
-// fact, newly supported by this record. A copy of an item learned already, under the same item
-// key in another mailbox, takes the facts its first copy taught, with no model call.
+// one), and its facts linked to the record. A fact with the same subject and statement as a
+// current one is that fact, newly supported by this record; a new fact takes its place in its
+// subject's timeline for its predicate, superseding an older one (`supersede.ts`). A copy of an
+// item learned already, under the same item key in another mailbox, takes the facts its first
+// copy taught, with no model call.
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, isNull, ne } from "drizzle-orm";
 import { forOrg, type OrgScopedDb } from "@/db/for-org";
@@ -12,6 +14,7 @@ import type { MemoryApp } from "../types";
 import type { ExtractedFact, ExtractedObject } from "./extract";
 import type { EmailToLearn } from "./gmail";
 import type { Matches } from "./match";
+import { placeInTimeline } from "./supersede";
 import {
   accessListEntries,
   factSources,
@@ -94,7 +97,8 @@ export async function storeLearned(
       const embedding = embeddings.at(i);
       if (subjectId === undefined || embedding === undefined) continue;
       const objectId = fact.object === null ? null : (objectIds.get(fact.object) ?? null);
-      factIds.push(await storeFact(tx, { ...fact, subjectId, objectId, embedding }));
+      const stated = { ...fact, subjectId, objectId, embedding };
+      factIds.push(await storeFact(tx, stated, source.email.occurredAt));
     }
     await linkFacts(tx, source.connection.id, recordId, [...new Set(factIds)]);
     return { objects: new Set(objectIds.values()).size, facts: new Set(factIds).size };
@@ -173,7 +177,8 @@ type FactToStore = Omit<ExtractedFact, "about" | "object"> & {
   embedding: number[];
 };
 
-async function storeFact(tx: OrgScopedDb, fact: FactToStore): Promise<string> {
+// The current fact with the same subject and statement, or a new fact placed in its timeline.
+async function storeFact(tx: OrgScopedDb, fact: FactToStore, statedAt: Date): Promise<string> {
   const same = (
     await tx.select(facts, {
       where: and(
@@ -199,6 +204,7 @@ async function storeFact(tx: OrgScopedDb, fact: FactToStore): Promise<string> {
     })
   ).at(0);
   if (created === undefined) throw new Error("The fact wasn't stored.");
+  await placeInTimeline(tx, created, statedAt);
   return created.id;
 }
 

@@ -67,13 +67,24 @@ export type MemoryFact = {
   sources: FactSource[];
 };
 
-/** An object with the facts about it its reader can see. */
+/**
+ * A fact a newer one replaced, as one reader sees it: `supersededBy` is the newer fact they can
+ * see that replaced it, and `supersededAt` when memory recorded that.
+ */
+export type HistoricFact = MemoryFact & { supersededAt: Date; supersededBy: string };
+
+/**
+ * An object with the facts about it its reader can see: the current ones, and those a newer
+ * fact the reader can see replaced (`history`). A fact replaced only by facts the reader can't
+ * see is current for them.
+ */
 export type MemoryObject = {
   id: string;
   kind: ObjectKind;
   name: string;
   keys: { kind: ObjectKeyKind; value: string }[];
   facts: MemoryFact[];
+  history: HistoricFact[];
 };
 
 /** The most facts one search returns. */
@@ -98,7 +109,7 @@ export const memorySearchSchema = z.union([
 export type MemorySearch = z.input<typeof memorySearchSchema>;
 
 /** An object a search found, without its facts (`readObject` reads them). */
-export type FoundObject = Omit<MemoryObject, "facts">;
+export type FoundObject = Omit<MemoryObject, "facts" | "history">;
 
 /** A fact a search found, with the object it's about. */
 export type FoundFact = MemoryFact & { subject: { id: string; kind: ObjectKind; name: string } };

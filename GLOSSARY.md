@@ -215,11 +215,11 @@ A short statement about an object that a source states or a person told Mycel, l
 _Avoid_: Memory (for a single item), note, insight, inference
 
 **Source record**:
-Mycel's record of one item memory learned from, such as an email, as one connection holds it, with the item's access list and a pointer to re-fetch it, never its content.
+Mycel's record of one item memory learned from, such as an email or a version of a Drive doc, as one connection holds it, with the item's access list and a pointer to re-fetch it, never its content.
 _Avoid_: Document, source (the app), evidence
 
 **Item key**:
-What every copy of one item shares, such as an email's Message-ID, so copies in several mailboxes are known to be the same item.
+What every copy of one item shares, such as an email's Message-ID or a Drive file's ID, so copies in several mailboxes or Drives are known to be the same item.
 
 **Object key**:
 An exact identifier of an object, such as a person's email address or a company's domain, unique in an org; objects with the same key are one object.

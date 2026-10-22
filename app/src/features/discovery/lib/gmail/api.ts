@@ -10,13 +10,20 @@ export const messageListSchema = z.object({
   nextPageToken: z.string().optional(),
 });
 
-// Only the parts polling reads: which messages each record added.
+const historyMessage = z.object({ message: z.object({ id: z.string() }) });
+
+// Only the parts polling reads: which messages each record added, deleted for good, or gave
+// which labels.
 export const historyListSchema = z.object({
   history: z
     .array(
       z.object({
         id: z.string(),
-        messagesAdded: z.array(z.object({ message: z.object({ id: z.string() }) })).optional(),
+        messagesAdded: z.array(historyMessage).optional(),
+        messagesDeleted: z.array(historyMessage).optional(),
+        labelsAdded: z
+          .array(historyMessage.extend({ labelIds: z.array(z.string()).optional() }))
+          .optional(),
       }),
     )
     .optional(),

@@ -95,3 +95,56 @@ export class ModelCallError extends Error {
     this.status = status;
   }
 }
+
+/** An injection screen request: text fetched for a model, held in memory only. */
+export type ScreenRequest = CallAttribution & { text: string };
+
+/**
+ * What the injection screen found: `flagged` when the text tries to instruct a model, `clear`
+ * when it doesn't, and `unavailable` when no screen is configured, so nothing was screened and
+ * no model may read the text.
+ */
+export type ScreenVerdict = "clear" | "flagged" | "unavailable";
+
+export type ScreenResult = { verdict: ScreenVerdict; costUsd: number };
+
+/** A screening service behind the injection screen. Model Armor is the one Mycel uses. */
+export type InjectionScreen = {
+  /** What the ledger names as the call's model: `provider/service`. */
+  service: string;
+  /** What screening `text` costs, in US dollars, estimated before the call. */
+  costUsd(text: string): number;
+  /** Whether `text` tries to instruct a model. Throws InjectionScreenError when it can't say. */
+  isInjection(text: string): Promise<boolean>;
+};
+
+export const injectionScreenErrorCodes = [
+  // Mycel couldn't get an access token for the screening service.
+  "auth_error",
+  // The service answered with an error, or couldn't be reached.
+  "service_error",
+  // The service answered, but not with a prompt-injection verdict (its filter didn't run).
+  "no_verdict",
+] as const;
+export type InjectionScreenErrorCode = (typeof injectionScreenErrorCodes)[number];
+
+/**
+ * The injection screen failed, so the text wasn't screened and no model may read it. Built from
+ * codes only and with no `cause`, like ModelCallError (invariant 8).
+ */
+export class InjectionScreenError extends Error {
+  readonly code: InjectionScreenErrorCode;
+  readonly service: string;
+  readonly status: number | undefined;
+
+  constructor(code: InjectionScreenErrorCode, service: string, status?: number) {
+    super(
+      `The injection screen ${service} failed: ${code}` +
+        (status === undefined ? "." : ` (${String(status)}).`),
+    );
+    this.name = "InjectionScreenError";
+    this.code = code;
+    this.service = service;
+    this.status = status;
+  }
+}

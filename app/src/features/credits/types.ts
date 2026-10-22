@@ -1,11 +1,15 @@
 // The credit ledger's public types.
 import type { ModelRole } from "@/features/spec/types";
 
-/** One model call's usage, as the gateway client records it. */
+/** One model call's usage, as the gateway client (or the injection screen) records it. */
 export type Usage = {
-  role: ModelRole;
+  /** The role the call named; null for a fixed service that names none (the injection screen). */
+  role: ModelRole | null;
   modelId: string;
-  /** The gateway's reported cost in US dollars; 0 when the call failed without one. */
+  /**
+   * The gateway's reported cost in US dollars, or the injection screen's estimate at its list
+   * price; 0 when the call failed without one.
+   */
   costUsd: number;
   outcome: "succeeded" | "failed";
   generationId?: string;

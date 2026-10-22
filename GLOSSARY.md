@@ -224,6 +224,14 @@ What every copy of one item shares, such as an email's Message-ID, so copies in 
 **Object key**:
 An exact identifier of an object, such as a person's email address or a company's domain, unique in an org; objects with the same key are one object.
 
+**Match candidate**:
+An object that may be the same as one an item mentions, found by a similar name or facts that mean nearly the same; a model must confirm it before the two become one object.
+_Avoid_: Duplicate, alias
+
+**History** (of a fact):
+The older facts a newer one replaced (superseded): same object, same kind of fact (predicate), kept with when they stopped being true and what replaced them. Each reader's current fact is the newest one they can see.
+_Avoid_: Archive, old facts
+
 **Exclusion**:
 A Gmail label, Drive folder or similar that an admin keeps out of memory for the whole company.
 

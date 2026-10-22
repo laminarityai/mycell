@@ -2,9 +2,8 @@
 // The first reads the item and decides: learned already, a copy of an item another mailbox
 // taught (linked to its facts there and then), or else, once the injection screen has passed it
 // (an item it flags, or one nothing could screen, is skipped before any model reads it),
-// whether it's business (`classify`). The
-// second, for business mail, reads it again, extracts objects and facts, embeds the
-// statements and stores them. The item's content is fetched inside each step and never leaves
+// whether it's business (`classify`). The second, for business mail, reads it again, extracts
+// objects and facts, embeds the statements and stores them. The item's content is fetched inside each step and never leaves
 // it (invariant 8): a step returns only what it decided. A connection or item that's gone ends
 // learning quietly.
 import { isForeignKeyViolation } from "@/db/errors";

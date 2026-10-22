@@ -24,7 +24,8 @@
     "test": "pnpm --filter app test",
     "build": "pnpm --filter app build",
     "e2e": "pnpm --filter app e2e",
-    "prepare": "husky"
+    "prepare": "husky",
+    "prototype": "pnpm --filter app dev"
   },
   "devDependencies": {
     "husky": "9.1.7",

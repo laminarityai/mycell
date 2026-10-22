@@ -1,5 +1,6 @@
 "use client";
 
+import { FormError } from "@/components/form-error";
 import { Button } from "@/components/ui/button";
 import { startConnectAction } from "../actions";
 import type { ConnectionKind, RegisteredAppId } from "../types";
@@ -28,7 +29,7 @@ export function ConnectButton({
       <Button onClick={open} disabled={pending}>
         {label}
       </Button>
-      {error === undefined ? null : <p className="text-sm text-destructive">{error}</p>}
+      <FormError message={error} />
     </div>
   );
 }

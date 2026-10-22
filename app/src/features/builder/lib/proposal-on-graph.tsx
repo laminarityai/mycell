@@ -2,8 +2,9 @@
 
 // Which waiting proposal the builder page draws on its graph. The newest waiting proposal is
 // drawn when it arrives; its card shows or hides it, and can show an older one instead. A Try it
-// takes the graph over, and showing a proposal again puts the Try it away.
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+// takes the graph over, and showing a proposal again, or a new one arriving (the workspace's
+// GraphTraceProvider), puts the Try it away.
+import { createContext, useContext, useState, type ReactNode } from "react";
 import { useGraphTrace, useShowOnGraph } from "@/features/workflows/ui";
 import type { Proposal } from "../types";
 
@@ -37,12 +38,6 @@ export function ProposalOnGraphProvider({
     setSeen(newest?.id);
     setChoice(null);
   }
-  // A new proposal takes the graph over from a Try it.
-  const newestId = newest?.id;
-  useEffect(() => {
-    if (newestId !== undefined) showTrace?.(null);
-  }, [newestId, showTrace]);
-
   const chosen = choice?.shown ? waiting.find((p) => p.id === choice.proposalId) : undefined;
   const newestHidden = choice !== null && !choice.shown && choice.proposalId === newest?.id;
   const candidate = chosen ?? (newestHidden ? undefined : newest);

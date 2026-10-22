@@ -56,15 +56,17 @@ export function BranchFields({
             key={path.id}
             className="flex items-center gap-1 rounded-md border px-2 py-1 text-sm"
           >
-            <button
+            <Button
               type="button"
-              className="flex-1 truncate text-left hover:underline"
+              variant="link"
+              size="xs"
+              className="min-w-0 flex-1 justify-start truncate px-0 text-foreground"
               onClick={() => {
                 onSelect({ kind: "path", id: path.id });
               }}
             >
               {path.name}
-            </button>
+            </Button>
             <MoveButtons
               name={path.name}
               index={index}
@@ -75,15 +77,16 @@ export function BranchFields({
             />
           </div>
         ))}
-        <button
+        <Button
           type="button"
-          className="rounded-md border border-dashed px-2 py-1 text-left text-sm text-muted-foreground hover:underline"
+          variant="outline"
+          className="justify-start border-dashed font-normal text-muted-foreground"
           onClick={() => {
             onSelect({ kind: "path", id: branch.otherwise.id });
           }}
         >
           Otherwise ({stepCount(branch.otherwise.steps.length)})
-        </button>
+        </Button>
         <Button
           type="button"
           size="xs"

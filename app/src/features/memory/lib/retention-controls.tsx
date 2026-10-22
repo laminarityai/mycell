@@ -1,7 +1,9 @@
 "use client";
 
 import { useActionState } from "react";
+import { FormError } from "@/components/form-error";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   forgetPersonAction,
   markCompanyWideListAction,
@@ -10,7 +12,6 @@ import {
   type ForgetResult,
 } from "../actions";
 import { MAX_RETENTION_MONTHS } from "../types";
-import { ErrorMessage, fieldClass } from "./settings-controls";
 
 /** The retention window, in months. */
 export function RetentionForm({ months }: { months: number }) {
@@ -21,7 +22,7 @@ export function RetentionForm({ months }: { months: number }) {
         <label htmlFor="retention-months" className="text-sm">
           Keep for (months)
         </label>
-        <input
+        <Input
           id="retention-months"
           name="months"
           type="number"
@@ -30,13 +31,13 @@ export function RetentionForm({ months }: { months: number }) {
           step="1"
           required
           defaultValue={months}
-          className={`${fieldClass} w-20`}
+          className="w-20"
         />
         <Button type="submit" size="sm" disabled={saving}>
           Save window
         </Button>
       </div>
-      <ErrorMessage result={result} />
+      <FormError message={result.error} />
     </form>
   );
 }
@@ -47,20 +48,20 @@ export function MarkCompanyWideListForm({ domain }: { domain: string }) {
   return (
     <form action={mark} className="flex flex-col gap-1">
       <div className="flex flex-wrap gap-2">
-        <input
+        <Input
           name="address"
           type="email"
           required
           maxLength={320}
           placeholder={`all@${domain}`}
           aria-label="Group address"
-          className={`${fieldClass} w-64`}
+          className="w-64"
         />
         <Button type="submit" size="sm" disabled={marking}>
           Mark company-wide
         </Button>
       </div>
-      <ErrorMessage result={result} />
+      <FormError message={result.error} />
     </form>
   );
 }
@@ -79,7 +80,7 @@ export function UnmarkCompanyWideListButton({ address }: { address: string }) {
       >
         Remove
       </Button>
-      <ErrorMessage result={result} />
+      <FormError message={result.error} />
     </form>
   );
 }
@@ -93,14 +94,14 @@ export function ForgetPersonForm() {
   return (
     <form action={forget} className="flex flex-col gap-1">
       <div className="flex flex-wrap gap-2">
-        <input
+        <Input
           name="email"
           type="email"
           required
           maxLength={320}
           placeholder="name@example.com"
           aria-label="Email address of the person to forget"
-          className={`${fieldClass} w-64`}
+          className="w-64"
         />
         <Button type="submit" size="sm" variant="destructive" disabled={forgetting}>
           Forget this person
@@ -112,7 +113,7 @@ export function ForgetPersonForm() {
           won&apos;t learn about them again.
         </p>
       )}
-      <ErrorMessage result={result} />
+      <FormError message={result.error} />
     </form>
   );
 }

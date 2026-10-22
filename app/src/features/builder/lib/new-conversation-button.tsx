@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { FormError } from "@/components/form-error";
 import { Button } from "@/components/ui/button";
 import { startConversationAction } from "../actions";
 
@@ -17,11 +18,7 @@ export function NewConversationButton({ workflowId }: { workflowId?: string }) {
           New conversation
         </Button>
       </div>
-      {result.error === undefined ? null : (
-        <p role="alert" className="text-sm text-destructive">
-          {result.error}
-        </p>
-      )}
+      <FormError message={result.error} />
     </form>
   );
 }

@@ -141,7 +141,7 @@ export const WORKFLOWS: Workflow[] = [
     spentThisMonth: 241,
     paused: "failures",
     pausedSince: minutesAgo(95),
-    pausedByRunIds: ["r-1003", "r-1007", "r-1012"],
+    pausedByRunIds: ["r-1004", "r-1009", "r-1014"],
     tags: ["Ops"],
   },
 ];

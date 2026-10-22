@@ -1,5 +1,5 @@
 // What memory's isolation cases seed in org B: what org A must neither see nor change.
-import type { TwoOrgs } from "@/db/testing/two-org-fixture";
+import type { FixtureOrg, TwoOrgs } from "@/db/testing/two-org-fixture";
 import { backfillConnection } from "@/features/discovery/server";
 import { connectMailbox, daysAgo } from "@/testing/connect-helpers";
 import * as server from "../server";
@@ -35,4 +35,37 @@ export async function seedOrgB({ orgB }: TwoOrgs) {
   const message = (mailbox.mailbox.list(new URLSearchParams()).messages ?? []).at(0);
   const snapshot = () => server.readObject(orgB.member.ctx, byEmail);
   return { mailbox, sourceRef: message?.id ?? "", object: await snapshot(), snapshot };
+}
+
+/**
+ * Org B's sales inbox, an org connection, hears from Dana too, so memory learns a company-wide
+ * fact about her: one every reader in org B sees.
+ */
+export async function learnInOrgInbox(orgB: FixtureOrg) {
+  const inbox = `sales@${orgB.workspaceDomain}`;
+  const mailbox = await connectMailbox(
+    orgB.admin.ctx,
+    inbox,
+    [
+      {
+        from: `Dana Ruiz <${DANA}>`,
+        to: [inbox],
+        text: "I run procurement for our offices.",
+        at: daysAgo(1),
+      },
+    ],
+    "org",
+  );
+  await backfillConnection(orgB.admin.ctx, mailbox.id);
+  scriptLearning({
+    objects: [{ ref: "dana", kind: "person", name: "Dana Ruiz", email: DANA }],
+    facts: [
+      {
+        about: "dana",
+        statement: "Dana Ruiz runs procurement for Acme's offices.",
+        evidence: "I run procurement for our offices",
+      },
+    ],
+  });
+  await learnStoredItems(orgB.id);
 }

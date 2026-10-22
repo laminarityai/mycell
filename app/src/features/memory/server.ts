@@ -13,6 +13,9 @@ export { readObject } from "./lib/logged-reads";
 // Ranks what the caller can see by keywords, keys, links and stored embeddings, with no model
 // call: the query itself is never embedded.
 export { searchMemory } from "./lib/logged-reads";
+// The same search in the company-wide view only (what an org-credential run sees), whoever
+// reads: the builder chat's, since builder conversations are shared among admins.
+export { searchCompanyWideMemory } from "./lib/logged-reads";
 // A summary of one object, from only the facts the caller can see: one metered `fast` call, its
 // read logged as the reader named, and nothing stored.
 export { summarizeObject } from "./lib/summarize";

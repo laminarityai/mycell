@@ -4,7 +4,7 @@ import { systemCtx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import * as server from "../server";
-import { byEmail, DANA, seedOrgB } from "./isolation-seed";
+import { byEmail, DANA, learnInOrgInbox, seedOrgB } from "./isolation-seed";
 import { withCredits } from "./memory-helpers";
 import { retentionIsolationCases } from "./retention-isolation-cases";
 import { settingsIsolationCases } from "./settings-isolation-cases";
@@ -97,6 +97,34 @@ export const isolationCases = defineIsolationCases(server, {
       }
     }
 
+    expect(await snapshot()).toEqual(object);
+  },
+
+  // Org B's sales inbox (an org connection) makes Dana's fact company-wide there: org A's
+  // company-wide search still finds nothing, and logs nothing in org B.
+  searchCompanyWideMemory: async (orgs) => {
+    const { orgA, orgB } = orgs;
+    const { snapshot } = await seedOrgB(orgs);
+    await learnInOrgInbox(orgB);
+    const searches = [{ text: "procurement" }, { text: DANA }, byEmail];
+    for (const search of searches) {
+      const found = await server.searchCompanyWideMemory(orgB.admin.ctx, search);
+      expect(found.facts).toHaveLength(1);
+    }
+    // Reading it is logged, so before the log is.
+    const object = await snapshot();
+    const before = await server.listAccessLog(orgB.admin.ctx);
+
+    for (const ctx of [orgA.admin.ctx, orgA.member.ctx, systemCtx(orgA.id)]) {
+      for (const search of searches) {
+        expect(await server.searchCompanyWideMemory(ctx, search, { kind: "builder" })).toEqual({
+          objects: [],
+          facts: [],
+        });
+      }
+    }
+
+    expect(await server.listAccessLog(orgB.admin.ctx)).toEqual(before);
     expect(await snapshot()).toEqual(object);
   },
 

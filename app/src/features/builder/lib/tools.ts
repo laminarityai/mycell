@@ -1,7 +1,8 @@
 // The agent's tools. Each runs with the admin's ctx, so the agent reaches only what the admin
-// could (spec #43, story 39), and says what the conversation keeps of its result: the whole
-// result by default, or less (`read_examples` keeps only source refs, invariant 8, and
-// `search_memory` only the IDs of what it found, ADR-0023). A new tool
+// could (spec #43, story 39), and `search_memory` less: company-wide memory only (ADR-0023). Each
+// says what the conversation keeps of its result: the whole result by default, or less
+// (`read_examples` keeps only source refs, invariant 8, and `search_memory` only the IDs of what
+// it found). A new tool
 // is one more entry in `builderTools`; the turn loop doesn't change.
 import { tool, type Tool } from "ai";
 import { z } from "zod";

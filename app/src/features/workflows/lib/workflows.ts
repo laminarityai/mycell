@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { isUniqueViolation } from "@/db/errors";
 import { forOrg } from "@/db/for-org";
-import { actionSetWith } from "@/features/custom-actions/description";
+import { actionSetWith, checkedCustomActions } from "@/features/custom-actions/description";
 import {
   getActionSet,
   listCustomActions,
@@ -43,8 +43,11 @@ export async function saveWorkflow(ctx: Ctx, input: WorkflowInput): Promise<Save
   if (name === "") throw new ValidationError("Give the workflow a name.");
   const existing =
     input.workflowId === undefined ? undefined : await findWorkflow(ctx, input.workflowId);
+  // The custom actions it brings (a proposal's, stored as JSON) are checked again first, so the
+  // spec is validated against the levels the rule sets now, not the ones the proposal carried.
   const brought = input.newCustomActions;
-  const actions = actionSetWith([...(await listCustomActions(ctx)), ...(brought?.actions ?? [])]);
+  const bringing = checkedCustomActions(brought?.actions ?? []);
+  const actions = actionSetWith([...(await listCustomActions(ctx)), ...bringing]);
   const validated = await validateWorkflowSpec(ctx, input.spec, actions);
 
   const values = { name, specId: validated.working.id, workingSpec: validated.working };
@@ -53,7 +56,7 @@ export async function saveWorkflow(ctx: Ctx, input: WorkflowInput): Promise<Save
     // The custom actions it brings are stored first, and stay only if the spec saves too.
     return await forOrg(ctx).transaction(async (db) => {
       if (brought !== undefined) {
-        await storeCustomActions(ctx, brought.actions, { proposalId: brought.proposalId }, db);
+        await storeCustomActions(ctx, bringing, { proposalId: brought.proposalId }, db);
       }
       if (workflowId === undefined) {
         const id = randomUUID();

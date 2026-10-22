@@ -28,12 +28,13 @@ export async function decryptForOrg(ctx: Ctx, encrypted: string): Promise<string
 }
 
 /**
- * Destroys the ctx org's key, for a company leaving Mycel: everything encrypted for it becomes
+ * Destroys the ctx org's key, for an org leaving Mycel: everything encrypted for it becomes
  * unreadable at once, and KMS deletes the key after its 7-day waiting period. Encrypting again
- * makes a new key, which doesn't open what the old one encrypted. Admins and scheduled jobs
- * only.
+ * makes a new key, which doesn't open what the old one encrypted. Only the org's system ctx may
+ * (ADR-0009), as the offboarding that deletes the org would act: no admin can make the org's
+ * waiting held sends unreadable. Nothing offboards an org yet, so nothing calls it.
  */
 export async function destroyOrgKey(ctx: Ctx): Promise<void> {
-  if (ctx.role === "member") throw new ForbiddenError();
+  if (ctx.role !== "system") throw new ForbiddenError();
   await destroyKey(ctx.orgId);
 }

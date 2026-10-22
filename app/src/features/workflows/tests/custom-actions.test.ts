@@ -3,12 +3,15 @@
 // connection to that app of the kind the credentials name.
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  checkedCustomAction,
   readOutlookMessage,
   replyToOutlookMessage,
   storeCustomAction,
 } from "@/db/testing/custom-actions";
+import { heldReplySpec } from "@/db/testing/held-sends";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
+import { GOOGLE_APP_SCOPES } from "@/features/connections/types";
 import { ForbiddenError, ValidationError } from "@/lib/errors";
 import { connectApp, connectGoogle } from "@/testing/connect-helpers";
 import { publishTo, tagUsers } from "@/testing/visibility-helpers";
@@ -120,33 +123,144 @@ describe("a custom write in a workflow", () => {
 
   it("pauses members' enablements when a new version starts using it in an app they have", async () => {
     const { admin, member, workflowId } = await memberEnabled();
+    const publish = async (steps: unknown[]) => {
+      await saveWorkflow(admin.ctx, { workflowId, name: "Labels", spec: withSteps(steps) });
+      await publishWorkflow(admin.ctx, workflowId);
+    };
     await connectApp(member.ctx, "microsoft", member.email);
-    await saveWorkflow(admin.ctx, {
-      workflowId,
-      name: "Labels",
-      spec: withSteps([outlook, label]),
-    });
-    await publishWorkflow(admin.ctx, workflowId);
+    await publish([outlook, label]);
     expect(await enable(member.ctx, workflowId)).toEqual({ enabled: true });
     await storeCustomAction(admin.ctx, replyToOutlookMessage());
 
+    await publish([outlook, label, reply]);
+
+    const { switch: paused } = await getVisibleWorkflow(member.ctx, workflowId);
+    expect(paused?.status).toBe("paused");
+    // Only the level rose: Microsoft 365 was already in use.
+    expect(paused?.pausedChange).toEqual({
+      maxRiskRaised: { from: expect.any(String) as string, to: "external_send" },
+    });
+  });
+});
+
+describe("a custom Google read in a workflow", () => {
+  // Custom reads in Gmail and in Calendar, both through the run's own Google connection.
+  const googleRead = (name: string, path: string) => ({
+    name,
+    app: "google",
+    description: "Read one thing.",
+    call: { method: "GET", path },
+    inputs: { id: { type: "text", description: "Its ID." } },
+    outputs: { title: { type: "text", label: "Its title", path: "summary" } },
+  });
+  const step = (id: string, action: string) => ({
+    id,
+    type: "tool",
+    action,
+    input: { id: "x-1" },
+  });
+  const gmailRead = step("label-info", "google.read-label");
+  const calendarRead = step("event", "google.read-event");
+
+  it("isn't saved when the connection it would run on wasn't allowed its Google app", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const { admin } = orgA;
+    await connectGoogle(admin.ctx, admin.email, { scopes: [GOOGLE_APP_SCOPES.gmail] });
+    await storeCustomAction(
+      admin.ctx,
+      googleRead("google.read-event", "/calendar/v3/calendars/primary/events/{id}"),
+    );
+
+    await expect(
+      saveWorkflow(admin.ctx, { name: "Events", spec: labelSpec({ steps: [calendarRead] }) }),
+    ).rejects.toMatchObject({
+      issues: [
+        {
+          path: ["steps", 0, "action"],
+          message: `google.read-event needs the calendar.events scope, which ${admin.email} wasn't granted. Reconnect it to grant it.`,
+        },
+      ],
+    });
+  });
+
+  it("needs its Google app's permission: a version adding one pauses members, who reconnect", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const { admin, member } = orgA;
+    await connectGoogle(admin.ctx, admin.email);
+    await storeCustomAction(
+      admin.ctx,
+      googleRead("google.read-label", "/gmail/v1/users/me/labels/{id}"),
+    );
+    await storeCustomAction(
+      admin.ctx,
+      googleRead("google.read-event", "/calendar/v3/calendars/primary/events/{id}"),
+    );
+    // The member allowed Gmail only.
+    const own = await connectGoogle(member.ctx, member.email, {
+      scopes: [GOOGLE_APP_SCOPES.gmail],
+    });
+    await tagUsers(admin.ctx, "sales", [member]);
+    const { workflowId } = await publishTo(admin.ctx, "Labels", withSteps([label, gmailRead]), [
+      "sales",
+    ]);
+    expect(await enable(member.ctx, workflowId)).toEqual({ enabled: true });
+
     await saveWorkflow(admin.ctx, {
       workflowId,
       name: "Labels",
-      spec: withSteps([outlook, label, reply]),
+      spec: withSteps([label, gmailRead, calendarRead]),
     });
     await publishWorkflow(admin.ctx, workflowId);
 
-    expect((await listEnablements(admin.ctx, workflowId)).map((one) => one.status)).toEqual([
-      "paused",
-    ]);
     expect((await getVisibleWorkflow(member.ctx, workflowId)).switch).toMatchObject({
       status: "paused",
-      pausedChange: { maxRiskRaised: { to: "external_send" } },
+      pausedChange: { newScopes: ["calendar.events"] },
     });
-    expect(
-      (await getVisibleWorkflow(member.ctx, workflowId)).switch?.pausedChange?.newApps,
-    ).toBeUndefined();
+    expect(await enable(member.ctx, workflowId)).toEqual({
+      needs: "reconnect",
+      connectionId: own.id,
+      apps: ["Calendar"],
+      scopes: ["calendar.events"],
+    });
+  });
+});
+
+describe("custom actions a save brings, as accepting a proposal does", () => {
+  async function adminWithApps() {
+    const { orgA } = await seedTwoOrgs();
+    await connectGoogle(orgA.admin.ctx, orgA.admin.email);
+    await connectApp(orgA.admin.ctx, "microsoft", orgA.admin.email);
+    return orgA.admin.ctx;
+  }
+
+  it("are checked again, so the spec is validated at the level the rule sets now", async () => {
+    const admin = await adminWithApps();
+    // The proposal row's stored level, from before a rule change or simply wrong.
+    const stale = { ...checkedCustomAction(replyToOutlookMessage()), risk: "read" as const };
+
+    const saved = await saveWorkflow(admin, {
+      name: "Outlook replies",
+      spec: heldReplySpec(),
+      newCustomActions: { actions: [stale], proposalId: "proposal-1" },
+    });
+
+    expect(saved.maxRisk).toBe("external_send");
+    expect(saved.inserted).toEqual([
+      { stepId: "reply-approval", after: "reply", action: "microsoft.reply-to-message" },
+    ]);
+  });
+
+  it("are refused when the stored record isn't a custom action", async () => {
+    const admin = await adminWithApps();
+    const malformed = { name: "microsoft.reply-to-message", risk: "read" } as never;
+
+    await expect(
+      saveWorkflow(admin, {
+        name: "Outlook replies",
+        spec: heldReplySpec(),
+        newCustomActions: { actions: [malformed], proposalId: "proposal-1" },
+      }),
+    ).rejects.toThrow(ValidationError);
   });
 });
 

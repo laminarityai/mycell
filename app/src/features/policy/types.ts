@@ -46,10 +46,13 @@ export const httpMethodSchema = z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]
 export type HttpMethod = z.infer<typeof httpMethodSchema>;
 
 /**
- * The call a custom action makes, as far as its risk level goes (ADR-0018): an HTTP method and
- * a path on its app, or a GraphQL operation document sent to a path. It never names a host.
+ * The call a custom action makes, as far as its risk level goes (ADR-0018): an HTTP method, a
+ * path on its app and the body fields it fills, or a GraphQL operation document sent to a path.
+ * It never names a host.
  */
-export type CustomCall = { method: HttpMethod; path: string } | { graphql: string; path: string };
+export type CustomCall =
+  | { method: HttpMethod; path: string; body?: Readonly<Record<string, string>> }
+  | { graphql: string; path: string };
 
 /**
  * A custom action's call with where its inputs go and where its result fields come from: what
@@ -65,7 +68,7 @@ export type CustomRequest = CustomCall & {
 };
 
 /**
- * A company's custom action (ADR-0018): one call to a registered app that the builder chat
+ * An org's custom action (ADR-0018): one call to a registered app that the builder chat
  * described, with its risk level set by the fixed rule (`custom-risk.ts`). It is looked up and
  * checked like a catalog action.
  */
@@ -79,19 +82,25 @@ export type CustomAction = {
   readonly pendingForm?: undefined;
   /** The registered app's ID, as `connections` names it. */
   readonly registeredApp: string;
+  /**
+   * Granted OAuth scopes, any one of which allows it, on the connection it runs through: on
+   * Google, the run's own connection, so the scope of the Google app its path reaches; none for
+   * another app, which its own connection to that app allows.
+   */
+  readonly scopes: readonly string[];
   readonly input: z.ZodType;
   readonly output: z.ZodType;
   readonly conditionFields?: readonly ConditionField[];
   readonly request: CustomRequest;
 };
 
-/** Any action in an action set: our catalog's, or one of the company's custom actions. */
+/** Any action in an action set: our catalog's, or one of the org's custom actions. */
 export type Action = CatalogAction | CustomAction;
 
 /**
- * The actions one company's workflows may use, resolved once per company (ADR-0018) and handed
+ * The actions one org's workflows may use, resolved once per org (ADR-0018) and handed
  * to the policy engine and to everything else that looks an action up: the catalog, then the
- * company's custom actions.
+ * org's custom actions.
  */
 export type ActionSet = {
   /** Every action in the set, in order: the catalog's first. */

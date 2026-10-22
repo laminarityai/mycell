@@ -40,7 +40,12 @@ const outputSchema = z.strictObject({
     .regex(/^[A-Za-z0-9_@$-]+(\.[A-Za-z0-9_@$-]+)*$/, "Write a path like from.emailAddress.name."),
 });
 
-/** Where each input goes: query parameter or body field (GraphQL variable) to input name. */
+/**
+ * Where each input goes: query parameter, or body field (GraphQL variable), to input name. A
+ * body field is a dotted path of property names and list indexes
+ * (`message.toRecipients.0.emailAddress.address`), so a nested body is described one scalar at a
+ * time and a reviewer still reads each value; `description.ts` checks the paths make one body.
+ */
 const mapping = z.record(z.string().min(1), inputName).default({});
 
 const restCall = z.strictObject({

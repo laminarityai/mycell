@@ -2,9 +2,10 @@
 // on graph.microsoft.com. It records every request it receives, so a test can check exactly what
 // was sent and how often, and answers who the signed-in user is (`GET /v1.0/me`), the messages
 // of their Outlook mailbox that a test seeds (`GET /v1.0/me/messages/{id}`), and replies to them
-// (`POST /v1.0/me/messages/{id}/reply`, which a test reads back from `requests`). Any other path
-// is 404, as Graph answers a resource it doesn't have. A test may lose the answer to the next
-// write Graph carries out, as a gateway error or timeout on the way back would.
+// (`POST /v1.0/me/messages/{id}/reply`) and sending mail (`POST /v1.0/me/sendMail`), which a
+// test reads back from `requests`. Any other path is 404, as Graph answers a resource it doesn't
+// have. A test may lose the answer to the next write Graph carries out, as a gateway error or
+// timeout on the way back would.
 import { HttpResponse } from "msw";
 import type { ProxyMethod } from "./fake-proxied-sources";
 
@@ -74,6 +75,10 @@ export class FakeMicrosoft {
     // message.reply: 202 with no body, for a message the mailbox has.
     const replyTo = method === "POST" ? REPLY_PATH.exec(path)?.[1] : undefined;
     if (replyTo !== undefined && this.messages.has(decodeURI(replyTo))) {
+      return this.answer(new HttpResponse(null, { status: 202 }));
+    }
+    // user.sendMail: 202 with no body.
+    if (method === "POST" && path === "/v1.0/me/sendMail") {
       return this.answer(new HttpResponse(null, { status: 202 }));
     }
     return graphError(404, "Request_ResourceNotFound", "Resource not found.");

@@ -175,7 +175,7 @@ One action waiting for a person's decision, shown on their Reviews page, which p
 _Avoid_: Approval for the review itself (it's the step, and the kind of review that step makes), task (a Google Tasks item), notification
 
 **Held send**:
-A custom write's request, which Mycel holds, encrypted with the company's key, until a person approves or declines its review, or for 30 days, when it expires (ADR-0020). Approving sends it once, with any edits to its editable text; if its app never confirms the send, the review ends unconfirmed and it is never sent again.
+A custom write's request, which Mycel holds, encrypted with the org's key, until a person approves or declines its review, or for 30 days, when it expires (ADR-0020). Approving sends it once, with any edits to its editable text; if its app never confirms the send, the review ends unconfirmed and it is never sent again.
 _Avoid_: Queued message, outbox, staged send
 
 **Shared review**:
@@ -187,8 +187,12 @@ Giving one review to a colleague, who then sees it and acts on it from the revie
 _Avoid_: Delegation (that's connection access, ADR-0016), forwarding (that's sending the email on), reassign
 
 **Custom action**:
-An action one company's builder chat described as a single call to an app, usable only by that company, with its risk set by a fixed rule.
+An action one org's builder chat described as a single call to an app, usable only in that org, with its risk set by a fixed rule.
 _Avoid_: Builder-made action, integration, tool
+
+**Action set**:
+Every action one org's workflows may use: the catalog actions, then that org's custom actions. Where a catalog action and a custom action share a name, the catalog action is the one used.
+_Avoid_: Toolset, action registry
 
 **Capability request**:
 Code the builder chat drafts when a custom action can't do the job, sent to our team to review into the catalog.

@@ -19,6 +19,7 @@ jobs:
       INNGEST_EVENT_KEY: ci-placeholder
       INNGEST_SIGNING_KEY: signkey-ci-00000000000000000000000000000000
       INNGEST_ENCRYPTION_KEY: ci-placeholder-encryption-key-of-32-chars
+      KMS_REGION: us-east-1
       AI_GATEWAY_API_KEY: ci-placeholder
       MODEL_CLASSIFY: typesafe-ai/jev-1.14.0
       MODEL_FAST: ci/fast

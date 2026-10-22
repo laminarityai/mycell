@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { googleScope } from "@/lib/google";
+import { GOOGLE_APPS, googleScope } from "@/lib/google";
 
 /**
  * The apps our team has registered with their vendor and in Mycel (ADR-0018), each described
@@ -47,7 +47,7 @@ export type RegisteredApp = {
 };
 
 /** The Google apps a Google connection asks for, in the order the UI lists them. */
-export const googleAppSchema = z.enum(["gmail", "drive", "sheets", "calendar", "docs", "tasks"]);
+export const googleAppSchema = z.enum(GOOGLE_APPS);
 export type GoogleApp = z.infer<typeof googleAppSchema>;
 
 /**
@@ -61,6 +61,16 @@ export const GOOGLE_APP_SCOPES: Record<GoogleApp, string> = {
   calendar: googleScope("calendar.events"),
   docs: googleScope("documents"),
   tasks: googleScope("tasks"),
+};
+
+/** How the UI names each Google app. */
+export const GOOGLE_APP_NAMES: Record<GoogleApp, string> = {
+  gmail: "Gmail",
+  drive: "Drive",
+  sheets: "Sheets",
+  calendar: "Calendar",
+  docs: "Docs",
+  tasks: "Tasks",
 };
 
 /** The apps discovery ingests from. Each has its own backfill, cursor and poll. */

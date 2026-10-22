@@ -1,13 +1,16 @@
 // A custom action's description (ADR-0018): its checks, and the action it makes for an action
-// set. Pure: no IO and no ctx, so the browser builds the company's action set from the same plain
+// set. Pure: no IO and no ctx, so the browser builds the org's action set from the same plain
 // records the server stores (`ActionSetProvider` in `workflows`).
 import { z } from "zod";
-import { appUrl, REGISTERED_APPS } from "@/features/connections/registered-apps";
+import { appUrl, googleAppOf, REGISTERED_APPS } from "@/features/connections/registered-apps";
+import { GOOGLE_APP_SCOPES } from "@/features/connections/types";
 import { actionSetOf } from "@/features/policy/action-set";
 import { catalogActionSet } from "@/features/policy/catalog";
 import { customActionRisk } from "@/features/policy/custom-risk";
 import type { ActionSet, CustomAction, CustomRequest } from "@/features/policy/types";
 import type { ConditionField, ValueType } from "@/features/spec/types";
+import { ValidationError } from "@/lib/errors";
+import { bodyOf, bodyPathIssues } from "./lib/body-paths";
 import {
   customActionDescriptionSchema,
   type CustomActionDescription,
@@ -52,14 +55,41 @@ export function checkCustomAction(input: unknown): CustomActionCheck {
   return { ok: true, action: { ...description, risk: risk.risk } };
 }
 
+/**
+ * Each record checked again, as if the builder chat had just described it: parsed, and its
+ * level set by the rule as it is now, whatever level the record carries. A proposal's custom
+ * actions are stored as JSON, so accepting one checks them with this before anything uses them.
+ * ValidationError, with every issue, when one fails.
+ */
+export function checkedCustomActions(records: readonly unknown[]): CustomActionRecord[] {
+  return records.map((record) => {
+    const check = checkCustomAction(record);
+    if (!check.ok) throw new ValidationError(check.issues.join(" "));
+    return check.action;
+  });
+}
+
 const PLACEHOLDER = /\{([^{}]*)\}/g;
+
+/**
+ * The words before the dot in catalog actions' names (`google-mail`), kept for the catalog with
+ * every other `google-` word, so a custom action never takes the name of one the catalog adds.
+ */
+const CATALOG_WORDS = new Set(
+  catalogActionSet.actions.map((action) => action.name.split(".", 1)[0] ?? ""),
+);
 
 function descriptionIssues(description: CustomActionDescription): string[] {
   const { app: appId, call, inputs, editable } = description;
   const app = REGISTERED_APPS[appId];
   const issues: string[] = [];
+  const word = description.name.split(".", 1)[0] ?? "";
   if (catalogActionSet.find(description.name) !== undefined) {
     issues.push(`"${description.name}" is a catalog action's name. Choose another.`);
+  } else if (CATALOG_WORDS.has(word) || word.startsWith("google-")) {
+    issues.push(
+      `Names starting "${word}." are kept for catalog actions: name a custom action after its app's word, such as "microsoft.read-message".`,
+    );
   }
   const named = (where: string, input: string) => {
     if (!Object.hasOwn(inputs, input)) {
@@ -79,6 +109,7 @@ function descriptionIssues(description: CustomActionDescription): string[] {
     variables: "variables" in mappings ? mappings.variables : {},
   })) {
     for (const [key, input] of Object.entries(mapping)) named(`${field}.${key}`, input);
+    if (field !== "query") issues.push(...bodyPathIssues(field, Object.keys(mapping)));
   }
   if (call.path.includes("?")) {
     issues.push("Put query parameters in `query`, not in the path.");
@@ -114,11 +145,13 @@ export function customActionOf(record: CustomActionRecord): CustomAction {
     "graphql" in call
       ? { graphql: call.graphql, path: call.path, query: {}, body: call.variables, outputs: {} }
       : { method: call.method, path: call.path, query: call.query, body: call.body, outputs: {} };
+  const googleApp = record.app === "google" ? googleAppOf(call.path) : undefined;
   return {
     kind: "custom",
     name: record.name,
     app: REGISTERED_APPS[record.app].name,
     registeredApp: record.app,
+    scopes: googleApp === undefined ? [] : [GOOGLE_APP_SCOPES[googleApp]],
     description: record.description,
     risk: record.risk,
     input: z.strictObject(
@@ -180,7 +213,7 @@ export function customActionWords(record: CustomActionRecord): CustomActionWords
   };
 }
 
-/** The catalog, then the company's custom actions: an action set. */
+/** The catalog, then the org's custom actions: an action set. */
 export function actionSetWith(records: readonly CustomActionRecord[]): ActionSet {
   return actionSetOf([...catalogActionSet.actions, ...records.map(customActionOf)]);
 }
@@ -199,8 +232,9 @@ export type RenderedRequest = {
 };
 
 /**
- * Fills the action's path (each value URL-encoded), query and body from its checked input.
- * Undefined when the filled path would leave the app's hosts: it's never sent.
+ * Fills the action's path (each value URL-encoded), query and body from its checked input, the
+ * body nested as its dotted paths say. Undefined when the filled path would leave the app's
+ * hosts: it's never sent.
  */
 export function renderRequest(
   action: CustomAction,
@@ -222,11 +256,11 @@ export function renderRequest(
     input[name] === undefined ? [] : [[field, input[name]] as const],
   );
   if ("graphql" in request) {
-    const variables = Object.fromEntries(fields);
+    const variables = bodyOf(fields);
     return { method: "POST", path: withQuery, url, body: { query: request.graphql, variables } };
   }
   if (request.method === "DELETE") return undefined;
-  const body = request.method === "GET" ? undefined : Object.fromEntries(fields);
+  const body = request.method === "GET" ? undefined : bodyOf(fields);
   return { method: request.method, path: withQuery, url, body };
 }
 

@@ -245,8 +245,19 @@ export const CREDITS = {
   /** At the last 7 days' average daily usage. */
   runwayDays: 9,
   dailyAverage7d: 371,
-  /** This calendar month (UTC), by group. */
-  monthByGroup: { workflows: 2989, memory: 1210, builder: 640, try_it: 212, agent: 455 },
+  /**
+   * This calendar month (UTC), by group. With the 10,000 October grant on Oct 1 and nothing
+   * carried over, 10,000 − 6,580 spent = the 3,420 balance. Workflows is the sum of WORKFLOWS'
+   * spentThisMonth.
+   */
+  monthByGroup: {
+    workflows: 2989,
+    memory: 2050,
+    builder: 860,
+    try_it: 312,
+    agent: 331,
+    injection_screen: 38,
+  },
   lowThresholdDays: 7,
 };
 

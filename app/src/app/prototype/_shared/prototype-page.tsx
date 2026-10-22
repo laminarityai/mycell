@@ -1,8 +1,10 @@
 // PROTOTYPE, throwaway: builds a prototype route's page. It reads `?variant=` (and any toggles,
 // such as `?as=admin|member`), renders that variant, and floats the switcher over it. Each
 // variant owns its whole layout, header included (`PrototypeHeader`).
+import { notFound } from "next/navigation";
 import { Suspense, type ComponentType } from "react";
 import { PrototypeSwitcher, type SwitcherToggle } from "@/components/prototype-switcher";
+import { env } from "@/env";
 
 /** The current value of each toggle, by param ("as" → "member"), defaulting to its first option. */
 export type VariantProps = { params: Record<string, string> };
@@ -36,6 +38,8 @@ async function Body({
   variants: Variant[];
   toggles: SwitcherToggle[];
 }) {
+  // The layout 404s too, but Next renders a page beside its layout, so the page checks as well.
+  if (env.NODE_ENV === "production") notFound();
   const raw = await searchParams;
   const one = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
   const variant = variants.find((v) => v.key === one(raw.variant)) ?? variants[0];

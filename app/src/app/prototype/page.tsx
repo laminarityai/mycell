@@ -1,5 +1,7 @@
 // PROTOTYPE, throwaway: the index of every v1 prototype route and its variants.
 import Link from "next/link";
+import { notFound } from "next/navigation";
+import { env } from "@/env";
 import { PrototypeHeader, PrototypeMain } from "./_shared/header";
 
 const ROUTES = [
@@ -24,6 +26,7 @@ const ROUTES = [
 ] as const;
 
 export default function PrototypeIndex() {
+  if (env.NODE_ENV === "production") notFound();
   return (
     <PrototypeMain>
       <PrototypeHeader title="v1 prototypes" admin />

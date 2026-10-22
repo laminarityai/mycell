@@ -49,7 +49,7 @@ async function Workflows({ searchParams }: Pick<PageProps<"/workflows">, "search
   }
   const workflows = await listWorkflows(ctx);
   const published = workflows.filter((workflow) => workflow.latestVersion !== null);
-  const [enablements, orgConnections] = await Promise.all([
+  const [enablements, orgConnections, reviewCounts] = await Promise.all([
     Promise.all(
       workflows.map(
         async (workflow) => [workflow.id, await listEnablements(ctx, workflow.id)] as const,
@@ -70,6 +70,7 @@ async function Workflows({ searchParams }: Pick<PageProps<"/workflows">, "search
           ] as const;
         }),
     ),
+    reviewCountsByWorkflow(ctx, published, period),
   ]);
   return (
     <>
@@ -89,7 +90,7 @@ async function Workflows({ searchParams }: Pick<PageProps<"/workflows">, "search
         description="How each workflow's reviews ended, and each member's under it. Counts only."
         period={period}
         basePath="/workflows"
-        rows={await reviewCountsByWorkflow(ctx, published, period)}
+        rows={reviewCounts}
       />
     </>
   );

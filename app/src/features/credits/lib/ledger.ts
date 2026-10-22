@@ -11,9 +11,8 @@ import { creditLedger } from "./schema";
 
 /** The org's credits left. */
 export async function getBalance(ctx: Ctx): Promise<number> {
-  // forOrg has no aggregates; the ledger stays small until M7's budgets need a stored balance.
-  const rows = await forOrg(ctx).select(creditLedger);
-  return rows.reduce((sum, row) => sum + row.amount, 0);
+  // Summed in the database: every model call checks it, and the ledger grows by one row per call.
+  return forOrg(ctx).sum(creditLedger, creditLedger.amount);
 }
 
 /** Throws OutOfCreditsError unless the balance covers `estimate` credits. */

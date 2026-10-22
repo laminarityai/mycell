@@ -26,6 +26,7 @@ Every change keeps all eight true.
 - Each feature lives in one directory, `app/src/features/<name>/`. Import another feature only through its root entry files.
 - Server-side functions take `ctx` (org, user, role) as their first argument.
 - Reads: Server Components call `server.ts` functions. Writes: Server Actions. Route handlers serve only webhooks, Inngest, and streaming.
+- A list read makes the same number of queries for 1 row or 100: batch it, and pin hot reads with a query-budget test.
 - Parse every IO boundary with Zod.
 - Errors: throw the typed error classes, and turn them into messages at the Server Action or route boundary.
 - UI: Tailwind and shadcn/ui components.

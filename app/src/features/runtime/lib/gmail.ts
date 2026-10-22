@@ -25,7 +25,7 @@ const partSchema: z.ZodType<Part> = z.lazy(() =>
   }),
 );
 
-const messageRefSchema = z.object({
+export const messageRefSchema = z.object({
   id: z.string(),
   threadId: z.string(),
   labelIds: z.array(z.string()).default([]),

@@ -9,7 +9,7 @@ import { z } from "zod";
 import { getWorkflow } from "@/features/workflows/server";
 import type { Ctx } from "@/lib/ctx";
 import type { PromptText } from "@/lib/prompts";
-import type { CustomActionRecord } from "@/features/custom-actions/types";
+import type { CustomActionRecord, StoredCustomAction } from "@/features/custom-actions/types";
 import { lookUpAppApiTool } from "./api-lookup-tool";
 import { fileCapabilityRequestTool } from "./capability-request-tool";
 import { describeCustomActionTool } from "./custom-action-tool";
@@ -26,6 +26,8 @@ export type TurnInfo = {
   message: string;
   /** The `propose_spec` calls in this turn that failed validation so far. */
   failedProposals: number;
+  /** The org's custom actions, read once as the turn starts, for its context and proposals. */
+  storedCustomActions: StoredCustomAction[];
   /**
    * The custom actions `describe_custom_action` checked in this turn, which its proposals may
    * use and carry, to be stored only when one is accepted (ADR-0018).

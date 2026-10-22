@@ -31,6 +31,14 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await server.listCustomActions(systemCtx(orgA.id))).toEqual([]);
   },
 
+  findCustomAction: async ({ orgA, orgB }) => {
+    await storeCustomAction(orgB.admin.ctx);
+    const [theirs] = await server.listCustomActions(orgB.admin.ctx);
+
+    expect(await server.findCustomAction(orgA.admin.ctx, theirs.name)).toBeNull();
+    expect(await server.findCustomAction(orgB.admin.ctx, theirs.name)).toEqual(theirs);
+  },
+
   storeCustomActions: async ({ orgA, orgB }) => {
     await storeCustomAction(orgB.admin.ctx);
     const before = await server.listCustomActions(orgB.admin.ctx);

@@ -9,7 +9,7 @@ import { z } from "zod";
 import { getConnection } from "@/features/connections/server";
 import { searchMemory } from "@/features/memory/server";
 import type { MemoryReader, MemorySearch } from "@/features/memory/types";
-import { listUsers } from "@/features/orgs/server";
+import { findUser } from "@/features/orgs/server";
 import { systemCtx, type Ctx } from "@/lib/ctx";
 import { joinPrompts, type PromptText } from "@/lib/prompts";
 import type { Json } from "../types";
@@ -87,8 +87,8 @@ async function searchFor(
 async function viewerCtx(ctx: Ctx, connectionId: string): Promise<Ctx> {
   const connection = await getConnection(ctx, connectionId);
   if (connection.kind === "org") return systemCtx(ctx.orgId);
-  const owner = (await listUsers(ctx)).find((user) => user.id === connection.ownerUserId);
-  if (owner === undefined) {
+  const owner = await findUser(ctx, connection.ownerUserId);
+  if (owner === null) {
     throw new RunStepError("not_available", "The connection's owner is no longer in the org.");
   }
   return { orgId: ctx.orgId, userId: owner.id, role: owner.role };

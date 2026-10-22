@@ -10,7 +10,7 @@
     "boundaries": "depcruise src e2e scripts",
     "test": "vitest run",
     "e2e": "playwright test",
-    "db:generate": "node --env-file-if-exists=.env node_modules/drizzle-kit/bin.cjs generate",
+    "db:generate": "node --env-file-if-exists=.env --import ./prompt-hooks.cjs node_modules/drizzle-kit/bin.cjs generate",
     "db:migrate": "node --env-file-if-exists=.env node_modules/drizzle-kit/bin.cjs migrate",
     "credits:grant": "node --env-file-if-exists=.env --import tsx --import ./prompt-hooks.cjs scripts/grant-credits.ts",
     "capability-requests": "node --env-file-if-exists=.env --import tsx --import ./prompt-hooks.cjs scripts/capability-requests.ts",

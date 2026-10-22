@@ -3,7 +3,8 @@
 // naming the run and step that made it, and the action looks for that draft before writing, so
 // a retry whose first answer was lost leaves one draft and generates no second text.
 import { z } from "zod";
-import { proxyGet, proxyPost } from "@/features/connections/server";
+import { sourceClient } from "@/features/connections/server";
+import type { SourceClient } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
 import { RunStepError } from "./failures";
 import { GMAIL } from "./gmail";
@@ -43,19 +44,15 @@ export async function createReplyDraft(
   if (compose === undefined) {
     throw new RunStepError("not_available", "Only a draft step can make a draft.");
   }
-  const original = await originalOf(ctx, connectionId, input.messageId);
-  const earlier = await findMarkedDraft(ctx, connectionId, original.threadId, marker);
+  // Several calls, one connection read.
+  const source = await sourceClient(ctx, connectionId);
+  const original = await originalOf(source, input.messageId);
+  const earlier = await findMarkedDraft(source, original.threadId, marker);
   if (earlier !== undefined) return { draftId: earlier, threadId: original.threadId };
 
   const raw = replyMessage(original.payload.headers, await compose(), marker);
   const draft = await found(
-    proxyPost(
-      ctx,
-      connectionId,
-      `${GMAIL}/drafts`,
-      { message: { raw, threadId: original.threadId } },
-      createdDraft,
-    ),
+    source.post(`${GMAIL}/drafts`, { message: { raw, threadId: original.threadId } }, createdDraft),
   );
   return { draftId: draft.id, threadId: draft.message.threadId };
 }
@@ -69,17 +66,15 @@ export async function replyTarget(
   connectionId: string,
   messageId: string,
 ): Promise<{ threadId: string; to: string; subject: string }> {
-  const original = await originalOf(ctx, connectionId, messageId);
+  const original = await originalOf(await sourceClient(ctx, connectionId), messageId);
   return { threadId: original.threadId, ...addressOf(original.payload.headers) };
 }
 
-async function originalOf(ctx: Ctx, connectionId: string, messageId: string) {
+async function originalOf(source: SourceClient, messageId: string) {
   const query = new URLSearchParams({ format: "metadata" });
   for (const name of REPLY_HEADERS) query.append("metadataHeaders", name);
   return found(
-    proxyGet(
-      ctx,
-      connectionId,
+    source.get(
       `${GMAIL}/messages/${encodeURIComponent(messageId)}?${query.toString()}`,
       metadataSchema,
     ),
@@ -98,12 +93,10 @@ function addressOf(original: Header[]): { to: string; subject: string } {
 
 // The draft in the thread carrying the marker, by its draft ID. The thread names its drafts'
 // messages and their headers; drafts.list maps a message to its draft, but carries no headers.
-async function findMarkedDraft(ctx: Ctx, connectionId: string, threadId: string, marker: string) {
+async function findMarkedDraft(source: SourceClient, threadId: string, marker: string) {
   const query = new URLSearchParams({ format: "metadata", metadataHeaders: DRAFT_MARKER_HEADER });
   const thread = await found(
-    proxyGet(
-      ctx,
-      connectionId,
+    source.get(
       `${GMAIL}/threads/${encodeURIComponent(threadId)}?${query.toString()}`,
       threadSchema,
     ),
@@ -118,9 +111,7 @@ async function findMarkedDraft(ctx: Ctx, connectionId: string, threadId: string,
   do {
     const page = new URLSearchParams({ maxResults: "500" });
     if (pageToken !== undefined) page.set("pageToken", pageToken);
-    const drafts = await found(
-      proxyGet(ctx, connectionId, `${GMAIL}/drafts?${page.toString()}`, draftsPage),
-    );
+    const drafts = await found(source.get(`${GMAIL}/drafts?${page.toString()}`, draftsPage));
     const draft = drafts.drafts.find((d) => d.message.id === marked.id);
     if (draft !== undefined) return draft.id;
     pageToken = drafts.nextPageToken;

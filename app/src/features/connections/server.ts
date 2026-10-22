@@ -34,6 +34,7 @@ export {
   proxyPut,
   readableConnectionIds,
   recordIngestState,
+  sourceClient,
 } from "./lib/source-access";
 // Called only by the Nango webhook route and tests: it checks Nango's signature itself.
 export { handleNangoWebhook } from "./lib/webhook";

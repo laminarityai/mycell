@@ -4,14 +4,10 @@ import { getCtx } from "@/features/orgs/server";
 import { reviewCountsByWorkflow } from "@/features/reviews/server";
 import { reviewPeriodSchema } from "@/features/reviews/types";
 import { ReviewCountsSection } from "@/features/reviews/ui";
-import {
-  listEnablements,
-  listVisibleWorkflows,
-  listWorkflows,
-  runnableConnections,
-} from "@/features/workflows/server";
+import { listVisibleWorkflows } from "@/features/workflows/server";
 import { VisibleWorkflowsList, WorkflowsList } from "@/features/workflows/ui";
 import { AppNav } from "@/app/app-nav";
+import { adminWorkflows } from "./admin-workflows";
 
 export default function WorkflowsPage({ searchParams }: PageProps<"/workflows">) {
   return (
@@ -47,31 +43,10 @@ async function Workflows({ searchParams }: Pick<PageProps<"/workflows">, "search
       </>
     );
   }
-  const workflows = await listWorkflows(ctx);
-  const published = workflows.filter((workflow) => workflow.latestVersion !== null);
-  const [enablements, orgConnections, reviewCounts] = await Promise.all([
-    Promise.all(
-      workflows.map(
-        async (workflow) => [workflow.id, await listEnablements(ctx, workflow.id)] as const,
-      ),
-    ),
-    // The connections each published org workflow's switch may choose from.
-    Promise.all(
-      published
-        .filter((workflow) => workflow.credentials === "org")
-        .map(async (workflow) => {
-          const connections = await runnableConnections(ctx, workflow.id);
-          return [
-            workflow.id,
-            connections.map((connection) => ({
-              id: connection.id,
-              label: connection.accountEmail,
-            })),
-          ] as const;
-        }),
-    ),
-    reviewCountsByWorkflow(ctx, published, period),
-  ]);
+  const { workflows, enablements, orgConnections, reviewCounts } = await adminWorkflows(
+    ctx,
+    period,
+  );
   return (
     <>
       <Link
@@ -82,8 +57,8 @@ async function Workflows({ searchParams }: Pick<PageProps<"/workflows">, "search
       </Link>
       <WorkflowsList
         workflows={workflows}
-        enablements={new Map(enablements)}
-        orgConnections={new Map(orgConnections)}
+        enablements={enablements}
+        orgConnections={orgConnections}
       />
       <ReviewCountsSection
         title="Reviews"

@@ -5,11 +5,11 @@
 // connection deleted while this runs ends it quietly: a missing connection is NotFoundError,
 // and a write for it breaks its foreign key. Finishing sets only the app's ingest status, so a
 // `needs_reauth` Nango reported meanwhile (kept on the connection itself) stays.
-import { getConnection, recordIngestState } from "@/features/connections/server";
+import { getConnection, recordIngestState, sourceClient } from "@/features/connections/server";
 import { ingestedAppSchema, type IngestedApp } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
 import type { BackfillOutcome } from "../types";
-import { CONNECTORS, runInline, sourceClient, storeWindow, untilGone } from "./ingest-steps";
+import { CONNECTORS, runInline, storeWindow, untilGone } from "./ingest-steps";
 import type { RunStep } from "./ingest-steps";
 
 /** How far back a backfill reaches. */
@@ -59,9 +59,10 @@ export async function markBackfillFailed(ctx: Ctx, connectionId: string): Promis
 
 async function startBackfill(ctx: Ctx, connectionId: string) {
   const apps = await backfillingApps(ctx, connectionId);
+  const client = await sourceClient(ctx, connectionId);
   for (const app of apps) {
     // Read before listing, so whatever arrives during the backfill is polled after it.
-    const cursor = await CONNECTORS[app].readStartCursor(sourceClient(ctx, connectionId));
+    const cursor = await CONNECTORS[app].readStartCursor(client);
     await recordIngestState(ctx, connectionId, app, { backfilledItems: 0, cursor });
   }
   return { apps, since: new Date(Date.now() - BACKFILL_DAYS * DAY_MS).toISOString() };

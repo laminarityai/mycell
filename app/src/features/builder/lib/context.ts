@@ -7,15 +7,15 @@
 import { z } from "zod";
 import { registeredAppOf, registeredApps } from "@/features/connections/registered-apps";
 import { gmailConnections, listConnections } from "@/features/connections/server";
-import { getActionSet } from "@/features/custom-actions/server";
-import type { ConnectionSummary } from "@/features/connections/types";
+import { actionSetWith } from "@/features/custom-actions/description";
+import type { ConnectionsListing, ConnectionSummary } from "@/features/connections/types";
 import { getOrgSettings } from "@/features/orgs/server";
 import type { ActionSet } from "@/features/policy/types";
 import { operatorsFor, type ValueType } from "@/features/spec/conditions";
 import { formatSpec } from "@/features/spec/format";
 import type { Step } from "@/features/spec/types";
 import { listTags } from "@/features/tags/server";
-import { getWorkflow, listWorkflows } from "@/features/workflows/server";
+import { listWorkingSpecs } from "@/features/workflows/server";
 import type { Ctx } from "@/lib/ctx";
 import { joinPrompts, type PromptText } from "@/lib/prompts";
 import type { ProposalStatus } from "../types";
@@ -28,17 +28,20 @@ import type { TurnInfo } from "./tools";
 export type ContextSection = { title: PromptText; content: PromptText };
 
 /**
- * One section of context, from the admin's ctx, the turn and the company's action set, which
- * `gatherContext` resolves once for every provider.
+ * What several providers read, which `gatherContext` reads once per turn for all of them: the
+ * company's action set and the connections the admin sees.
  */
+export type TurnReads = { actions: ActionSet; connections: ConnectionsListing };
+
+/** One section of context, from the admin's ctx, the turn and the turn's shared reads. */
 export type ContextProvider = (
   ctx: Ctx,
   turn: TurnInfo,
-  actions: ActionSet,
+  reads: TurnReads,
 ) => Promise<ContextSection>;
 
 /** Every action a spec may use, catalog and custom: its app, what it does, its fixed risk and its pending form. */
-const actionCatalog: ContextProvider = (_ctx, _turn, actions) => {
+const actionCatalog: ContextProvider = (_ctx, _turn, { actions }) => {
   const lines = actions.actions.map((action) =>
     (action.kind === "custom" ? contextPrompts.customAction : contextPrompts.action)({
       name: action.name,
@@ -66,7 +69,7 @@ const checksFor = (type: ValueType) => operatorsFor(type).join(", ");
  * Every kind of value a path's condition may test, and the checks each allows: classify answers,
  * extract fields, the trigger's declared facts and catalog actions' declared result fields.
  */
-const conditionFields: ContextProvider = (_ctx, _turn, actions) => {
+const conditionFields: ContextProvider = (_ctx, _turn, { actions }) => {
   const checks = contextPrompts.conditionChecks({
     textChecks: checksFor("text"),
     numberChecks: checksFor("number"),
@@ -79,29 +82,25 @@ const conditionFields: ContextProvider = (_ctx, _turn, actions) => {
 };
 
 /** The org's workflows with a summary of each working spec; the whole one for this turn's. */
-const workflows: ContextProvider = async (ctx, turn, actions) => {
+const workflows: ContextProvider = async (ctx, turn) => {
   const title = contextPrompts.workflowsTitle();
-  const summaries = await listWorkflows(ctx);
-  if (summaries.length === 0) return { title, content: contextPrompts.noWorkflows() };
-  const lines: PromptText[] = [];
-  for (const summary of summaries) {
-    const workflow = await getWorkflow(ctx, summary.id, actions);
+  const all = await listWorkingSpecs(ctx);
+  if (all.length === 0) return { title, content: contextPrompts.noWorkflows() };
+  const lines = all.map((workflow) => {
     const line = {
       name: workflow.name,
       id: workflow.id,
       state:
-        summary.latestVersion === null
+        workflow.latestVersionNumber === null
           ? contextPrompts.notPublished()
-          : contextPrompts.published({ version: String(summary.latestVersion.number) }),
+          : contextPrompts.published({ version: String(workflow.latestVersionNumber) }),
       credentials: workflow.workingSpec.credentials,
       steps: listOf(workflow.workingSpec.steps),
     };
-    lines.push(
-      workflow.id === turn.workflowId
-        ? contextPrompts.conversationWorkflow({ ...line, spec: formatSpec(workflow.workingSpec) })
-        : contextPrompts.workflow(line),
-    );
-  }
+    return workflow.id === turn.workflowId
+      ? contextPrompts.conversationWorkflow({ ...line, spec: formatSpec(workflow.workingSpec) })
+      : contextPrompts.workflow(line);
+  });
   return { title, content: joinPrompts(lines, "\n") };
 };
 
@@ -131,8 +130,7 @@ function stepOf(step: Step): PromptText {
  * The connections the admin may build on: their own and the org's, with the apps each was
  * granted (ADR-0014). Other members' connections are only counted (ADR-0001).
  */
-const connections: ContextProvider = async (ctx) => {
-  const listing = await listConnections(ctx);
+const connections: ContextProvider = (_ctx, _turn, { connections: listing }) => {
   const line = (connection: ConnectionSummary) => ({
     email: connection.accountEmail,
     id: connection.id,
@@ -161,15 +159,17 @@ const connections: ContextProvider = async (ctx) => {
       ? contextPrompts.noSearchableMail()
       : contextPrompts.searchableMail({ connectionIds: searchable.join(", ") }),
   ];
-  return { title: contextPrompts.connectionsTitle(), content: joinPrompts(lines, "\n") };
+  return Promise.resolve({
+    title: contextPrompts.connectionsTitle(),
+    content: joinPrompts(lines, "\n"),
+  });
 };
 
 /**
  * The apps Mycel's team registered, which a custom action may call, each with the admin's own
  * and the org's connections to it. Other members' connections are never listed (ADR-0001).
  */
-const registeredAppsContext: ContextProvider = async (ctx) => {
-  const listing = await listConnections(ctx);
+const registeredAppsContext: ContextProvider = (_ctx, _turn, { connections: listing }) => {
   const lines = registeredApps.map((app) => {
     const to = (connection: ConnectionSummary) => registeredAppOf(connection.source) === app.id;
     const connected = [
@@ -192,10 +192,10 @@ const registeredAppsContext: ContextProvider = async (ctx) => {
           connections: joinPrompts(connected, "; "),
         });
   });
-  return {
+  return Promise.resolve({
     title: contextPrompts.registeredAppsTitle(),
     content: joinPrompts([contextPrompts.registeredApps(), ...lines], "\n"),
-  };
+  });
 };
 
 const tags: ContextProvider = async (ctx) => {
@@ -229,7 +229,7 @@ const PROPOSAL_STATES: Record<ProposalStatus, PromptText> = {
 
 /** What became of this conversation's proposals, so the agent knows what was saved. */
 const proposals: ContextProvider = async (ctx, turn) => {
-  const all = await listProposals(ctx, turn.conversationId);
+  const all = await listProposals(ctx, turn.conversationId, turn.storedCustomActions);
   const lines = all.map((p) =>
     contextPrompts.proposal({
       id: p.id,
@@ -258,6 +258,9 @@ export const contextProviders: ContextProvider[] = [
 
 /** Every provider's section, in order. */
 export async function gatherContext(ctx: Ctx, turn: TurnInfo): Promise<ContextSection[]> {
-  const actions = await getActionSet(ctx);
-  return Promise.all(contextProviders.map((provider) => provider(ctx, turn, actions)));
+  const reads: TurnReads = {
+    actions: actionSetWith(turn.storedCustomActions),
+    connections: await listConnections(ctx),
+  };
+  return Promise.all(contextProviders.map((provider) => provider(ctx, turn, reads)));
 }

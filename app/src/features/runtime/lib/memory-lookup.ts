@@ -12,7 +12,7 @@ import type { MemoryReader, MemorySearch } from "@/features/memory/types";
 import { findUser } from "@/features/orgs/server";
 import { systemCtx, type Ctx } from "@/lib/ctx";
 import { joinPrompts, type PromptText } from "@/lib/prompts";
-import type { Json } from "../types";
+import type { Json } from "@/lib/inngest";
 import { RunStepError } from "./failures";
 import { messageFacts } from "./gmail";
 import { memoryLookupPrompts } from "./prompts";

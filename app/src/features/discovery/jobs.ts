@@ -2,7 +2,7 @@
 // connected the source; polling, started by a cron, as the org's system ctx (ADR-0009).
 import { connectionAppsGranted, connectionRecorded } from "@/features/connections/server";
 import { systemCtx, type Ctx } from "@/lib/ctx";
-import { inngest } from "@/lib/inngest";
+import { inngest, stepRunner } from "@/lib/inngest";
 import { connectionPollDue } from "./lib/events";
 import {
   backfillConnection,
@@ -30,12 +30,6 @@ const ctxOf = (data: EventData): Ctx => ({
   userId: data.userId,
   role: data.role,
 });
-
-// Step results are plain JSON already, so Inngest's serialized type is the same type.
-const stepRunner =
-  (step: { run: (id: string, run: () => Promise<unknown>) => Promise<unknown> }) =>
-  <T>(id: string, run: () => Promise<T>) =>
-    step.run(id, run) as Promise<T>;
 
 /**
  * Backfills a connection's apps once it's recorded, and the apps a reconnect grants it or

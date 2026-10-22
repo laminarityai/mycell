@@ -10,7 +10,7 @@ import { catalog } from "@/features/policy/catalog";
 import { findStep, stepsAbove } from "@/features/spec/tree";
 import type { Step } from "@/features/spec/types";
 import { joinPrompts, type PromptText } from "@/lib/prompts";
-import type { Json } from "../types";
+import type { Json } from "@/lib/inngest";
 import { RunStepError } from "./failures";
 import { messageRef, messageText, threadText } from "./gmail";
 import { lookupText, MEMORY_LOOKUP } from "./memory-lookup";

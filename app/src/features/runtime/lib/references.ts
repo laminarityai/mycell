@@ -1,7 +1,7 @@
 // Resolving `{ from: "<step>.<field>" }` and `{ from: "trigger.<field>" }` in a tool's input,
 // inside the step that uses them. Trigger fields that need the message are fetched there.
 import type { Reference } from "@/features/spec/types";
-import type { Json } from "../types";
+import type { Json } from "@/lib/inngest";
 import { RunStepError } from "./failures";
 import { messageRef } from "./gmail";
 import type { StepContext } from "./step-context";

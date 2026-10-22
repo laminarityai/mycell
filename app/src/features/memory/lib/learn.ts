@@ -15,14 +15,14 @@
 // item that's gone ends learning quietly. An item learning can't pay for (the org is out of
 // credits), or can't screen on the job's last attempt (the injection screen keeps failing), is
 // postponed rather than lost, and learned again once credits are granted or the screen recovers.
-import { isForeignKeyViolation } from "@/db/errors";
 import { getConnection } from "@/features/connections/server";
 import type { ConnectionDetails } from "@/features/connections/types";
 import { embed, screenForInjection } from "@/features/models/server";
 import { InjectionScreenError } from "@/features/models/types";
 import { getWorkspaceDomain } from "@/features/orgs/server";
 import type { Ctx } from "@/lib/ctx";
-import { ForbiddenError, NotFoundError, OutOfCreditsError } from "@/lib/errors";
+import { ForbiddenError, OutOfCreditsError } from "@/lib/errors";
+import { runInline, untilGone, type RunStep } from "@/lib/inngest";
 import type { ItemToLearn, LearnOutcome, MemoryApp, PostponeReason } from "../types";
 import { gate, MEMORY_USAGE, postpone } from "./budget";
 import { readDoc } from "./drive";
@@ -33,14 +33,6 @@ import { readEmail } from "./gmail";
 import { matchObjects } from "./match";
 import type { SourceItem } from "./source-item";
 import { isKnown, retireOlderVersions, storeCopy, storeLearned, type Stored } from "./store";
-
-/** A step result: JSON, since Inngest stores it and replays it instead of re-running. */
-type StepResult = Record<string, string | number | boolean | null>;
-
-/** Runs one named step: Inngest's `step.run` in the job, called straight through elsewhere. */
-export type RunStep = <T extends StepResult>(id: string, run: () => Promise<T>) => Promise<T>;
-
-const runInline: RunStep = (_id, run) => run();
 
 const CONNECTION_FOREIGN_KEYS = [
   "source_records_connection_fk",
@@ -83,7 +75,9 @@ export async function learnFromItem(
 ): Promise<LearnOutcome> {
   if (ctx.role !== "system") throw new ForbiddenError();
   const guarded = <T extends { decision: string }>(work: () => Promise<T>) =>
-    untilGone(() => untilPostponed(ctx, item, options, work));
+    untilGone(CONNECTION_FOREIGN_KEYS, () => untilPostponed(ctx, item, options, work), {
+      decision: "gone" as const,
+    });
   const decided = await runStep("decide", () => guarded(() => decide(ctx, item)));
   switch (decided.decision) {
     case "gone":
@@ -223,21 +217,5 @@ async function untilPostponed<T extends { decision: string }>(
     if (reason === null) throw error;
     await postpone(ctx, item, reason);
     return { decision: "postponed" };
-  }
-}
-
-// "The connection is gone" as a decision rather than an error: a missing connection is
-// NotFoundError, and a write for a deleted one breaks its foreign key.
-async function untilGone<T extends { decision: string }>(
-  work: () => Promise<T>,
-): Promise<T | { decision: "gone" }> {
-  try {
-    return await work();
-  } catch (error) {
-    if (error instanceof NotFoundError) return { decision: "gone" };
-    if (CONNECTION_FOREIGN_KEYS.some((name) => isForeignKeyViolation(error, name))) {
-      return { decision: "gone" };
-    }
-    throw error;
   }
 }

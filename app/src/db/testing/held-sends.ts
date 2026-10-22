@@ -4,7 +4,7 @@
 import { grantCredits } from "@/features/credits/server";
 import { listReviews } from "@/features/reviews/server";
 import { executeRun, startRun, startTriggeredRuns } from "@/features/runtime/server";
-import type { RunStep } from "@/features/runtime/types";
+import type { RunStep } from "@/lib/inngest";
 import { enable } from "@/features/workflows/server";
 import { systemCtx, type Ctx } from "@/lib/ctx";
 import { connectApp, connectGoogle } from "@/testing/connect-helpers";

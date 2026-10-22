@@ -9,6 +9,7 @@ import { forOrg } from "@/db/for-org";
 import { listConnectionsForJobs } from "@/features/connections/server";
 import type { Ctx } from "@/lib/ctx";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
+import type { RunStep } from "@/lib/inngest";
 import { exclusionInputSchema, type Exclusion, type ExclusionInput } from "../types";
 import { sendExclusionAdded } from "./events";
 import { folderedRecords, inFolders, labelledRecords, labelNames } from "./excluded-items";
@@ -107,7 +108,7 @@ function inDomain(domain: string, excluded: string): boolean {
 export async function forgetExcluded(
   ctx: Ctx,
   exclusionId: string,
-  runStep: <T extends Record<string, number>>(id: string, run: () => Promise<T>) => Promise<T>,
+  runStep: RunStep,
 ): Promise<{ sourceRecords: number }> {
   if (ctx.role !== "system") throw new ForbiddenError();
   const exclusion = (await listExclusions(ctx)).find((e) => e.id === exclusionId);

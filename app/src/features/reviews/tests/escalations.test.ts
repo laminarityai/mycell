@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { dryRun } from "@/features/runtime/server";
-import type { RunStep } from "@/features/runtime/types";
+import type { RunStep } from "@/lib/inngest";
 import { AlreadyHandledError, NotFoundError, ValidationError } from "@/lib/errors";
 import { connectMailbox } from "@/testing/connect-helpers";
 import {

@@ -5,7 +5,7 @@ import { callModel, classify } from "@/features/models/server";
 import { checkWords } from "@/features/policy/condition-fields";
 import type { Step } from "@/features/spec/types";
 import { ItemGoneError } from "@/lib/errors";
-import type { Json } from "../types";
+import type { Json } from "@/lib/inngest";
 import { chooseEveryMatch, chooseFirstMatch } from "./conditions";
 import { escalationAdapter } from "./escalation-adapter";
 import { messageText } from "./gmail";

@@ -4,7 +4,7 @@ import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { systemCtx } from "@/lib/ctx";
 import { connectMailbox, daysAgo } from "@/testing/connect-helpers";
 import { fakeInngest } from "@/testing/fake-inngest";
-import type { RunStep } from "../lib/ingest-steps";
+import type { RunStep } from "@/lib/inngest";
 import { backfillConnection, pollConnection } from "../server";
 
 beforeEach(resetDatabase);

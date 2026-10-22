@@ -14,6 +14,7 @@
 // nothing.
 import type { IngestedApp } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
+import type { RunStep } from "@/lib/inngest";
 import {
   sendGmailMessagesReceived,
   sendGmailMessagesSent,
@@ -21,7 +22,6 @@ import {
   sendItemsStored,
 } from "@/lib/events";
 import type { NormalizedEvent } from "./connector";
-import type { RunStep } from "./ingest-steps";
 import type { NewEvent } from "./store";
 
 /** A newly stored inbound message, as a step hands it on: its ID, time and labels only. */

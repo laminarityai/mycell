@@ -3,7 +3,7 @@
 // each sees, and how the run ends from the way its paths ended; running a step (an Inngest step
 // and its record, or in memory) is the caller's.
 import type { BranchStep, Spec, Step } from "@/features/spec/types";
-import type { Json } from "../types";
+import type { Json } from "@/lib/inngest";
 import { isRecord } from "@/lib/utils";
 
 /** Where a step runs: its place in the order steps ran, and the outputs above it. */

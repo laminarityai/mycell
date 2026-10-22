@@ -1,10 +1,9 @@
 // What backfilling and polling share: the connectors, steps, storing a time window page by page,
 // and treating a connection that's gone as the end of the job rather than an error.
-import { isForeignKeyViolation } from "@/db/errors";
 import { recordIngestState, sourceClient } from "@/features/connections/server";
 import type { IngestedApp } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
-import { NotFoundError } from "@/lib/errors";
+import { untilGone, type RunStep } from "@/lib/inngest";
 import {
   announcedFor,
   sendAnnounced,
@@ -31,14 +30,6 @@ type StepValue =
 /** A step result: JSON, since Inngest stores it and replays it instead of re-running. */
 export type StepResult = Record<string, StepValue>;
 
-/**
- * Runs one named step. Inngest's `step.run` in the job; called straight through elsewhere.
- * A step's result must be JSON.
- */
-export type RunStep = <T extends StepResult>(id: string, run: () => Promise<T>) => Promise<T>;
-
-export const runInline: RunStep = (_id, run) => run();
-
 /** A step's result, or that the connection was gone. */
 export type Gone<T> = ({ gone: false } & T) | { gone: true };
 
@@ -48,20 +39,13 @@ const CONNECTION_FOREIGN_KEYS = [
   "object_refs_event_fk",
 ];
 
-/**
- * Runs `work`, turning "the connection is gone" into a result instead of an error: a missing
- * connection (or app on it) is NotFoundError, and a write for one breaks its foreign key.
- */
-export async function untilGone<T extends StepResult>(work: () => Promise<T>): Promise<Gone<T>> {
-  try {
-    return { gone: false, ...(await work()) };
-  } catch (error) {
-    if (error instanceof NotFoundError) return { gone: true };
-    if (CONNECTION_FOREIGN_KEYS.some((name) => isForeignKeyViolation(error, name))) {
-      return { gone: true };
-    }
-    throw error;
-  }
+/** Runs `work`, turning "the connection is gone" into a result instead of an error. */
+export function whileConnected<T extends StepResult>(work: () => Promise<T>): Promise<Gone<T>> {
+  return untilGone(
+    CONNECTION_FOREIGN_KEYS,
+    async (): Promise<Gone<T>> => ({ gone: false, ...(await work()) }),
+    { gone: true },
+  );
 }
 
 /**
@@ -85,7 +69,7 @@ export async function storeWindow(
     const from = progress;
     const result: Gone<StoredPage> = await runStep(
       `${options.stepPrefix}page-${String(page)}`,
-      () => untilGone(() => storePage(ctx, { connectionId, app, since, from }, options)),
+      () => whileConnected(() => storePage(ctx, { connectionId, app, since, from }, options)),
     );
     if (result.gone) return { gone: true };
     const announceId = `${options.stepPrefix}page-${String(page)}-announce`;

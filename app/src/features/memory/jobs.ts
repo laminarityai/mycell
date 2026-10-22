@@ -3,7 +3,7 @@ import { cron } from "inngest";
 import { listOrgIds } from "@/features/orgs/server";
 import { systemCtx } from "@/lib/ctx";
 import { creditsGranted, itemChanged, itemRemoved, itemStored } from "@/lib/events";
-import { inngest } from "@/lib/inngest";
+import { inngest, stepRunner } from "@/lib/inngest";
 import {
   exclusionAdded,
   itemQueued,
@@ -26,12 +26,6 @@ import {
   rereadDriveAccess,
   resumePostponed,
 } from "./server";
-
-// Step results are plain JSON already, so Inngest's serialized type is the same type.
-const stepRunner =
-  (step: { run: (id: string, run: () => Promise<unknown>) => Promise<unknown> }) =>
-  <T>(id: string, run: () => Promise<T>) =>
-    step.run(id, run) as Promise<T>;
 
 // One step of these jobs at a time per org, across them (scope "env"): learning, deletions,
 // sharing changes, an exclusion's forgetting, forgetting a person, retention and resuming

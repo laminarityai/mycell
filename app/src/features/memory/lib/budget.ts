@@ -10,6 +10,7 @@ import { countStoredItems, listStoredItems } from "@/features/discovery/server";
 import { CREDIT_ESTIMATES, estimateScreenCredits } from "@/features/models/server";
 import type { Ctx } from "@/lib/ctx";
 import { ConflictError, ForbiddenError, ValidationError } from "@/lib/errors";
+import type { RunStep } from "@/lib/inngest";
 import {
   memoryBudgetSchema,
   POSTPONE_REASONS,
@@ -128,13 +129,7 @@ const PAGE = 1000;
  * Queues every item discovery stored for learning, a page a step: what memory's start job
  * runs. Items learned already are skipped when they're learned.
  */
-export async function queueStoredItems(
-  ctx: Ctx,
-  runStep: <T extends Record<string, string | number | boolean | null>>(
-    id: string,
-    run: () => Promise<T>,
-  ) => Promise<T>,
-): Promise<{ queued: number }> {
+export async function queueStoredItems(ctx: Ctx, runStep: RunStep): Promise<{ queued: number }> {
   if (ctx.role !== "system") throw new ForbiddenError();
   let after: string | null = null;
   let queued = 0;

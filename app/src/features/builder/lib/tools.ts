@@ -6,6 +6,7 @@ import { tool, type Tool } from "ai";
 import { z } from "zod";
 import { getWorkflow } from "@/features/workflows/server";
 import type { Ctx } from "@/lib/ctx";
+import { fileCapabilityRequestTool } from "./capability-request-tool";
 import { proposeSpec } from "./proposals";
 import { readExamples } from "./read-examples";
 
@@ -78,6 +79,7 @@ const proposeSpecTool = builderTool({
 
 /** Every tool the agent may call, by the name the model calls it. */
 export const builderTools: Record<string, BuilderTool> = {
+  file_capability_request: builderTool(fileCapabilityRequestTool),
   get_workflow: getWorkflowTool,
   propose_spec: proposeSpecTool,
   read_examples: builderTool(readExamples),

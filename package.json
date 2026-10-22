@@ -13,6 +13,7 @@
     "db:generate": "pnpm --filter app db:generate",
     "db:migrate": "pnpm --filter app db:migrate",
     "credits:grant": "pnpm --filter app credits:grant",
+    "capability-requests": "pnpm --filter app capability-requests",
     "nango:preflight": "pnpm --filter app nango:preflight",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

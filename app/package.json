@@ -13,6 +13,7 @@
     "db:generate": "node --env-file-if-exists=.env node_modules/drizzle-kit/bin.cjs generate",
     "db:migrate": "node --env-file-if-exists=.env node_modules/drizzle-kit/bin.cjs migrate",
     "credits:grant": "node --env-file-if-exists=.env --import tsx scripts/grant-credits.ts",
+    "capability-requests": "node --env-file-if-exists=.env --import tsx scripts/capability-requests.ts",
     "nango:preflight": "node --env-file-if-exists=.env --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/nango-preflight.ts"
   },
   "dependencies": {

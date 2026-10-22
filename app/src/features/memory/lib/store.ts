@@ -2,15 +2,21 @@
 // list, its objects matched on exact keys (ADR-0022; fuzzy matching comes later), and its facts
 // linked to the record. A fact with the same subject and statement as a current one is that
 // fact, newly supported by this record. A copy of an item learned already, under the same item
-// key in another mailbox, takes the facts its first copy taught, with no model call.
+// key in another mailbox or Drive, takes the facts its first copy taught, with no model call.
+//
+// A Drive file changes: each version is its own source record, and a copy teaches the same facts
+// only at the same version, whose `source_ref` (`<file ID>@<modified time>`) every connection
+// shares. A connection keeps only the latest version it learned from: once a newer one is
+// decided, its older versions' records go, and with them the facts only they supported.
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray, isNull, ne } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lt, ne } from "drizzle-orm";
 import { forOrg, type OrgScopedDb } from "@/db/for-org";
 import type { ConnectionDetails } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
 import type { MemoryApp } from "../types";
+import { driveVersion } from "./drive";
 import type { ExtractedFact, ExtractedObject } from "./extract";
-import type { EmailToLearn } from "./gmail";
+import type { SourceItem } from "./source-item";
 import {
   accessListEntries,
   factSources,
@@ -23,19 +29,47 @@ import {
 /** How many objects and facts a stored item is linked to. */
 export type Stored = { objects: number; facts: number };
 
-type Source = { connection: ConnectionDetails; app: MemoryApp; email: EmailToLearn };
+type Source = { connection: ConnectionDetails; app: MemoryApp; item: SourceItem };
 
-/** Whether the connection's copy of the item is learned already. */
+/**
+ * Whether the connection's copy of the item is learned already: for a Drive file, this version
+ * or a newer one.
+ */
 export async function isKnown(ctx: Ctx, connectionId: string, app: MemoryApp, sourceRef: string) {
+  const sameItem =
+    app === "drive"
+      ? and(
+          eq(sourceRecords.itemKey, driveVersion(sourceRef).fileId),
+          gte(sourceRecords.occurredAt, driveVersion(sourceRef).modifiedAt),
+        )
+      : eq(sourceRecords.sourceRef, sourceRef);
   const rows = await forOrg(ctx).select(sourceRecords, {
-    where: and(
-      eq(sourceRecords.connectionId, connectionId),
-      eq(sourceRecords.app, app),
-      eq(sourceRecords.sourceRef, sourceRef),
-    ),
+    where: and(eq(sourceRecords.connectionId, connectionId), eq(sourceRecords.app, app), sameItem),
     limit: 1,
   });
   return rows.length > 0;
+}
+
+/**
+ * Deletes the connection's records of the item's older versions (a Drive file's), once a newer
+ * one is decided: the facts only they supported go with them (migration 0026's triggers).
+ * Nothing for an email, which never changes.
+ */
+export async function retireOlderVersions(ctx: Ctx, source: Source): Promise<void> {
+  await retire(forOrg(ctx), source);
+}
+
+async function retire(db: OrgScopedDb, { connection, app, item }: Source): Promise<void> {
+  if (app !== "drive") return;
+  await db.delete(
+    sourceRecords,
+    and(
+      eq(sourceRecords.connectionId, connection.id),
+      eq(sourceRecords.app, app),
+      eq(sourceRecords.itemKey, item.itemKey),
+      lt(sourceRecords.occurredAt, item.occurredAt),
+    ),
+  );
 }
 
 /**
@@ -46,9 +80,11 @@ export async function storeCopy(ctx: Ctx, source: Source): Promise<Stored | null
   const db = forOrg(ctx);
   const copies = await db.select(sourceRecords, {
     where: and(
-      eq(sourceRecords.itemKey, source.email.itemKey),
+      eq(sourceRecords.itemKey, source.item.itemKey),
       eq(sourceRecords.app, source.app),
       ne(sourceRecords.connectionId, source.connection.id),
+      // The same version of a Drive file.
+      source.app === "drive" ? eq(sourceRecords.sourceRef, source.item.sourceRef) : undefined,
     ),
   });
   if (copies.length === 0) return null;
@@ -65,6 +101,7 @@ export async function storeCopy(ctx: Ctx, source: Source): Promise<Stored | null
     const recordId = await insertRecord(tx, source);
     if (recordId === null) return null;
     await linkFacts(tx, source.connection.id, recordId, factIds);
+    await retire(tx, source);
     return { objects: objectCount(taught), facts: factIds.length };
   });
 }
@@ -92,12 +129,14 @@ export async function storeLearned(
       factIds.push(await storeFact(tx, { ...fact, subjectId, objectId, embedding }));
     }
     await linkFacts(tx, source.connection.id, recordId, [...new Set(factIds)]);
+    // After linking, so a fact the older version also taught keeps its ID.
+    await retire(tx, source);
     return { objects: objectIds.size, facts: new Set(factIds).size };
   });
 }
 
 // The new source record's ID, or null when the item was stored already (a retried step).
-async function insertRecord(tx: OrgScopedDb, { connection, app, email }: Source) {
+async function insertRecord(tx: OrgScopedDb, { connection, app, item }: Source) {
   const now = new Date();
   const record = (
     await tx.insert(
@@ -108,9 +147,9 @@ async function insertRecord(tx: OrgScopedDb, { connection, app, email }: Source)
         ownerScope: connection.kind,
         ownerUserId: connection.ownerUserId,
         app,
-        sourceRef: email.sourceRef,
-        itemKey: email.itemKey,
-        occurredAt: email.occurredAt,
+        sourceRef: item.sourceRef,
+        itemKey: item.itemKey,
+        occurredAt: item.occurredAt,
         accessCheckedAt: now,
       },
       { onConflictDoNothing: true },
@@ -119,10 +158,10 @@ async function insertRecord(tx: OrgScopedDb, { connection, app, email }: Source)
   if (record === undefined) return null;
   await tx.insert(
     accessListEntries,
-    email.addresses.map((value) => ({
+    item.access.map(({ kind, value }) => ({
       connectionId: connection.id,
       sourceRecordId: record.id,
-      kind: "address" as const,
+      kind,
       value,
     })),
     { onConflictDoNothing: true },

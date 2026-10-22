@@ -6,9 +6,8 @@ import type { IngestedApp } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
 import {
-  announcedOf,
+  announcedFor,
   sendAnnounced,
-  NOTHING,
   type Announced,
   type Received,
   type Sent,
@@ -70,8 +69,8 @@ export function sourceClient(ctx: Ctx, connectionId: string): SourceClient {
 /**
  * Stores everything that occurred in one app since `since`, one page per step named
  * `<stepPrefix>page-<n>`. With `recordProgress`, the app's ingest state shows the running
- * count (the backfill's progress). Each page's new Gmail messages are sent on as
- * discovery/item.stored, and with `announce` (a recovery's) also as
+ * count (the backfill's progress). Each page's new Gmail messages and Drive file versions are
+ * sent on as discovery/item.stored, and with `announce` (a recovery's) also as
  * discovery/gmail.message_received (inbound) and discovery/gmail.message_sent (sent), in a step
  * after the page's (`<stepPrefix>page-<n>-announce`). Returns how many items it stored.
  */
@@ -92,7 +91,7 @@ export async function storeWindow(
     );
     if (result.gone) return { gone: true };
     const announceId = `${options.stepPrefix}page-${String(page)}-announce`;
-    await sendAnnounced(ctx, connectionId, result, runStep, announceId);
+    await sendAnnounced(ctx, connectionId, app, result, runStep, announceId);
     progress = { pageToken: result.pageToken, items: result.items };
   }
   return { gone: false, items: progress.items };
@@ -121,7 +120,7 @@ async function storePage(
     from.pageToken,
   );
   const created = await storeEvents(ctx, connection, app, page.events);
-  const announced = app === "gmail" ? announcedOf(created, { newMail: announce }) : NOTHING;
+  const announced = announcedFor(app, created, { newMail: announce });
   const items = from.items + page.events.length;
   if (recordProgress) {
     await recordIngestState(ctx, connectionId, app, { backfilledItems: items });

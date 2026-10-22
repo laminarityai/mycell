@@ -26,6 +26,7 @@ export {
   listConnectionsForJobs,
   proxyDelete,
   proxyGet,
+  proxyGetText,
   proxyPost,
   proxyPut,
   readableConnectionIds,

@@ -12,6 +12,7 @@ import type { Step } from "@/features/spec/types";
 import type { Json } from "../types";
 import { RunStepError } from "./failures";
 import { messageRef, messageText, threadText } from "./gmail";
+import { lookupText, MEMORY_LOOKUP } from "./memory-lookup";
 import { resolveInput } from "./references";
 import { runAction } from "./run-action";
 import { rangeText } from "./sheets";
@@ -64,10 +65,17 @@ async function contextText(step: StepOf<"draft">, context: StepContext): Promise
         throw new RunStepError("bad_reference", `The step ${name} has no output.`);
       }
       const sheet = await sheetText(name, context);
-      parts.push(sheet ?? `What the step "${name}" found: ${JSON.stringify(output)}`);
+      const lookup = isLookup(name, context) ? lookupText(name, output) : undefined;
+      parts.push(sheet ?? lookup ?? `What the step "${name}" found: ${JSON.stringify(output)}`);
     }
   }
   return parts.join("\n\n");
+}
+
+/** Whether the step `name` is a memory lookup, whose facts read as a list. */
+function isLookup(name: string, context: StepContext): boolean {
+  const step = findStep(context.spec, name);
+  return step?.type === "tool" && step.action === MEMORY_LOOKUP;
 }
 
 const RANGE_READ = findAction("google-sheet.read-range");

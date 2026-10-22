@@ -166,6 +166,7 @@ describe("executorCoverage", () => {
         "google-mail.create-draft": "ready",
         "google-sheet.read-range": "ready",
         "google-sheet.append-row": "ready",
+        "memory.lookup": "ready",
       },
       steps: {
         classify: "ready",

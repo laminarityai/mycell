@@ -1,7 +1,8 @@
 // Reading one Drive file version to learn from, through the Nango proxy: its metadata with its
 // sharing list (files.get), then, for a Google Doc, its text (files.export as text/plain). Only
 // Google Docs are read: other files (Sheets, Slides, PDFs, images, uploaded text) aren't. The
-// text is held in memory only (invariant 8), and Drive is never asked for the file's name.
+// text is held in memory only (invariant 8), and Drive is never asked for the file's name. A
+// file's sharing list is also read on its own, when it may have changed.
 //
 // Drive shows a file's sharing list only to an account that may share it (an owner, or someone
 // it's shared with as a writer). Read by anyone else, a doc has an empty access list, so only
@@ -58,14 +59,9 @@ export async function readDoc(
   sourceRef: string,
 ): Promise<SourceItem | "gone" | "unsupported" | "outdated"> {
   const { fileId, modifiedAt } = driveVersion(sourceRef);
-  const path = `${FILES}/${encodeURIComponent(fileId)}`;
-  const file = await proxyGet(
-    ctx,
-    connectionId,
-    `${path}?${new URLSearchParams({ fields: FIELDS }).toString()}`,
-    fileSchema,
-  );
-  if (file === null || file.trashed === true) return "gone";
+  const path = filePath(fileId);
+  const file = await readFile(ctx, connectionId, fileId);
+  if (file === "gone") return "gone";
   if (file.mimeType !== GOOGLE_DOC) return "unsupported";
   if (Date.parse(file.modifiedTime) !== modifiedAt.getTime()) return "outdated";
   let text: string | null;
@@ -86,6 +82,35 @@ export async function readDoc(
     addresses: [],
     text: text.slice(0, MAX_DOC_CHARS),
   };
+}
+
+/**
+ * The file's sharing list as an access list, as the connection's account sees it now (empty
+ * when it may not share the file), or `gone` when the file is deleted, trashed or no longer the
+ * account's.
+ */
+export async function readAccess(
+  ctx: Ctx,
+  connectionId: string,
+  fileId: string,
+): Promise<AccessEntry[] | "gone"> {
+  const file = await readFile(ctx, connectionId, fileId);
+  return file === "gone" ? "gone" : accessList(file.permissions ?? []);
+}
+
+function filePath(fileId: string): string {
+  return `${FILES}/${encodeURIComponent(fileId)}`;
+}
+
+// The file's metadata and sharing list, never its name.
+async function readFile(ctx: Ctx, connectionId: string, fileId: string) {
+  const file = await proxyGet(
+    ctx,
+    connectionId,
+    `${filePath(fileId)}?${new URLSearchParams({ fields: FIELDS }).toString()}`,
+    fileSchema,
+  );
+  return file === null || file.trashed === true ? "gone" : file;
 }
 
 // The sharing list as an access list: people and groups by address, domains, and anyone.

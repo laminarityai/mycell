@@ -4,10 +4,16 @@ import { grantCredits } from "@/features/credits/server";
 import { systemCtx } from "@/lib/ctx";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import { fakeInngest } from "@/testing/fake-inngest";
-import { learnFromItem } from "../server";
-import { itemToLearnSchema, type LearnOutcome } from "../types";
+import { deleteRemovedItem, learnFromItem, rereadAccess } from "../server";
+import {
+  changedItemSchema,
+  itemToLearnSchema,
+  removedItemSchema,
+  type LearnOutcome,
+} from "../types";
 
-// Event IDs name their connection, a fresh one in every test, so one set serves every test.
+// Event IDs name their connection, a fresh one in every test, so one set serves every test:
+// the events learned from, and those followed.
 const learned = new Set<string>();
 
 /**
@@ -23,6 +29,24 @@ export async function learnStoredItems(orgId: string): Promise<LearnOutcome[]> {
     outcomes.push(await learnFromItem(systemCtx(orgId), itemToLearnSchema.parse(event.data)));
   }
   return outcomes;
+}
+
+/**
+ * Follows every item discovery found removed or changed since the last call, in order, as
+ * memory's jobs do: as the org's system ctx.
+ */
+export async function followAppChanges(orgId: string): Promise<void> {
+  for (const event of fakeInngest.sent()) {
+    const key = event.id ?? JSON.stringify(event.data);
+    if (learned.has(key) || event.data.orgId !== orgId) continue;
+    if (event.name === "discovery/item.removed") {
+      learned.add(key);
+      await deleteRemovedItem(systemCtx(orgId), removedItemSchema.parse(event.data));
+    } else if (event.name === "discovery/item.changed") {
+      learned.add(key);
+      await rereadAccess(systemCtx(orgId), changedItemSchema.parse(event.data));
+    }
+  }
 }
 
 export async function withCredits(orgId: string): Promise<void> {

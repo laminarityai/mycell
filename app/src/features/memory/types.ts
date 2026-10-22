@@ -26,6 +26,35 @@ export const itemToLearnSchema = z.object({
 export type ItemToLearn = z.infer<typeof itemToLearnSchema>;
 
 /**
+ * An item gone from a connection's app: what discovery's `discovery/item.removed` points at.
+ * `itemId` is a Gmail message ID, or a Drive file ID (every version of the file).
+ */
+export const removedItemSchema = z.object({
+  connectionId: z.string().min(1),
+  app: z.enum(MEMORY_APPS),
+  itemId: z.string().min(1),
+});
+export type RemovedItem = z.infer<typeof removedItemSchema>;
+
+/**
+ * A Drive file changed in place, its sharing perhaps: what discovery's `discovery/item.changed`
+ * points at. `sourceRef` is the version it's at.
+ */
+export const changedItemSchema = z.object({
+  connectionId: z.string().min(1),
+  app: z.literal("drive"),
+  sourceRef: z.string().min(1),
+});
+export type ChangedItem = z.infer<typeof changedItemSchema>;
+
+/**
+ * What reading a file's sharing list again did: rewrote its access lists, deleted what memory
+ * learned from it (Drive no longer gives the account the file), found nothing memory learned
+ * from it, or couldn't reach it (its connection needs reconnecting).
+ */
+export type AccessReread = { outcome: "rewritten" | "removed" | "unknown" | "unreachable" };
+
+/**
  * Why learning skipped an item: learned already (for a Drive file, this version or a newer one);
  * not a kind of item memory reads (a Drive file that isn't a Google Doc); changed since (a Drive
  * file's newer version is learned on its own); the injection screen flagged it, or no screen is

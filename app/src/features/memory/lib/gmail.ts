@@ -46,7 +46,10 @@ export type EmailToLearn = SourceItem & { kind: "email"; labelIds: string[] };
 
 const SHOWN_HEADERS = ["From", "To", "Cc", "Date", "Subject"];
 
-/** The message, or null when Gmail no longer has it. */
+/**
+ * The message, or null when Gmail no longer has it or it's in the trash: deleting a message in
+ * Gmail moves it there, and memory forgets what a deleted message taught.
+ */
 export async function readEmail(
   ctx: Ctx,
   connectionId: string,
@@ -58,7 +61,7 @@ export async function readEmail(
     `${GMAIL}/messages/${encodeURIComponent(messageId)}?format=full`,
     messageSchema,
   );
-  if (message === null) return null;
+  if (message === null || message.labelIds.includes("TRASH")) return null;
   const headers = message.payload?.headers ?? [];
   const header = (name: string) =>
     headers

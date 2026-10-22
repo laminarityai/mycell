@@ -1,5 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 import { checkoutIsolation } from "./checkout-isolation";
+// The features the tests seed through load prompt files, which Node can't on its own. The config
+// loads in every worker, so each gets the hooks.
+import "./prompt-hooks.cjs";
 
 // End-to-end tests drive the production build (`pnpm build` first; `pnpm verify` builds before
 // it runs them) against their own database, never the one in .env or Vitest's: mycel_e2e_<suffix>,

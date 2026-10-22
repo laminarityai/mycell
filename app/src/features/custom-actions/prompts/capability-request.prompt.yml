@@ -1,0 +1,23 @@
+# A capability request the builder chat files: what each field of it holds (the input schema in
+# custom-actions/types.ts), and what filing tells the chat (custom-actions/lib/capability-requests.ts).
+
+app: |-
+  A registered app's ID, or the name of an app that isn't registered.
+operation: |-
+  What Mycel would need to do there, in a few plain words: 'Merge two contacts'.
+inputs: |-
+  What it would take, each with a description.
+outputs: |-
+  What it would give back to later steps.
+reason: |-
+  Why a catalog action or one call can't do it, in plain words.
+codeDraft: |-
+  The call sequence or code it would need, as a starting point for our team.
+
+# The first ask.
+filed: |-
+  Filed: our team will see it. Tell the admin plainly what you can't do yet.
+
+# A later ask for the same app and operation. `status` is open, building, shipped or declined.
+askedAgain: |-
+  This was asked for {{count}} times now, and its status is {{status}}. Tell the admin plainly what you can't do yet.

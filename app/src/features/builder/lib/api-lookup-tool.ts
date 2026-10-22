@@ -9,23 +9,17 @@ import {
   type ApiLookupInput,
   type ApiLookupResult,
 } from "@/features/custom-actions/types";
+import { joinPrompts } from "@/lib/prompts";
+import { toolPrompts } from "./prompts";
 import type { ToolDefinition } from "./tools";
 
-const appIds = registeredApps.map((app) => `"${app.id}" (${app.name})`).join(", ");
+const apps = joinPrompts(
+  registeredApps.map((app) => toolPrompts.app({ id: app.id, name: app.name })),
+  ", ",
+);
 
 export const lookUpAppApiTool: ToolDefinition<ApiLookupInput, ApiLookupResult> = {
-  description:
-    `Search a registered app's published API description: app is one of ${appIds}. Pass ` +
-    'search, a few plain words for what the call does ("outlook message", "append rows ' +
-    'spreadsheet"), and optionally method ("GET" for reads) to get the best matching ' +
-    "operations: each one's method and path (the path a custom action calls, its " +
-    "{placeholders} already named as inputs), summary, path and query parameters, the fields " +
-    "of its request body and response, and what Mycel's fixed rule makes of it (a read, a " +
-    "write that waits for approval every time, or refused). Query parameters starting with $ " +
-    "are Microsoft Graph's OData options ($select, $filter, $top, …). A field whose type names " +
-    "another type is described by passing type (its name) instead of search. Use it before " +
-    "describe_custom_action, so the call you describe is real. It reads only the vendor's " +
-    "public description, never anyone's data.",
+  description: toolPrompts.lookUpAppApi({ apps }),
   inputSchema: apiLookupInputSchema,
   execute: (ctx, input) => lookUpAppApi(ctx, input),
   stored: (result) =>

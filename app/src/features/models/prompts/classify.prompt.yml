@@ -1,0 +1,17 @@
+# The classify role's fallback (models/lib/classify.ts): when Jev can't answer, a structured
+# output on `fast` picks the label instead.
+
+system: |-
+  Classify the input. Answer with the one label that fits best, and your confidence in it.
+
+prompt: |-
+  {{question}}
+
+  Labels: {{labels}}
+
+  Input:
+  {{input}}
+
+# What the answer's `p` field holds.
+confidence: |-
+  Your confidence that the label is right, 0 to 1.

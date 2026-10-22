@@ -8,10 +8,12 @@ import { tool, type Tool } from "ai";
 import { z } from "zod";
 import { getWorkflow } from "@/features/workflows/server";
 import type { Ctx } from "@/lib/ctx";
+import type { PromptText } from "@/lib/prompts";
 import type { CustomActionRecord } from "@/features/custom-actions/types";
 import { lookUpAppApiTool } from "./api-lookup-tool";
 import { fileCapabilityRequestTool } from "./capability-request-tool";
 import { describeCustomActionTool } from "./custom-action-tool";
+import { toolPrompts } from "./prompts";
 import { proposeSpec } from "./proposals";
 import { readExamples } from "./read-examples";
 import { searchMemoryTool } from "./search-memory";
@@ -32,7 +34,8 @@ export type TurnInfo = {
 };
 
 export type ToolDefinition<I, O> = {
-  description: string;
+  /** What the agent is told the tool does, from builder/prompts/tools.prompt.yml. */
+  description: PromptText;
   inputSchema: z.ZodType<I>;
   execute(ctx: Ctx, input: I, turn: TurnInfo): Promise<O>;
   /** What the conversation stores of the result; the result itself when left out. */
@@ -60,9 +63,7 @@ export function builderTool<I, O>(definition: ToolDefinition<I, O>): BuilderTool
 }
 
 const getWorkflowTool = builderTool({
-  description:
-    "Read one of the org's workflows: its name, whether it is published, and its current " +
-    "working spec, including edits an admin made by hand since you last looked.",
+  description: toolPrompts.getWorkflow(),
   inputSchema: z.object({ workflowId: z.string().min(1) }),
   async execute(ctx, { workflowId }) {
     const workflow = await getWorkflow(ctx, workflowId);
@@ -76,16 +77,11 @@ const getWorkflowTool = builderTool({
 });
 
 const proposeSpecTool = builderTool({
-  description:
-    "Propose a whole workflow spec for the admin to accept or reject: for a new workflow, or a " +
-    "change to an existing one (the conversation's workflow unless you pass another's " +
-    "workflowId). Send the complete spec (specVersion 2), not a patch. It is validated as saving would; when " +
-    "it fails you get every issue to fix and call again. Nothing is saved until an admin " +
-    "accepts it, and nothing is ever published by you.",
+  description: toolPrompts.proposeSpec(),
   inputSchema: z.object({
     workflowId: z.string().min(1).optional(),
     spec: z.record(z.string(), z.unknown()),
-    summary: z.string().min(1).describe("One or two plain sentences on what it does or changes."),
+    summary: z.string().min(1).describe(toolPrompts.proposeSpecSummary()),
   }),
   execute: (ctx, input, turn) => proposeSpec(ctx, input, turn),
 });

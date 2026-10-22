@@ -9,6 +9,7 @@ import type { Json } from "../types";
 import { chooseEveryMatch, chooseFirstMatch } from "./conditions";
 import { escalationAdapter } from "./escalation-adapter";
 import { messageText } from "./gmail";
+import { stepPrompts } from "./prompts";
 import type { StepContext, StepExecution } from "./step-context";
 import { withTriggerFacts } from "./trigger-facts";
 
@@ -21,7 +22,7 @@ export async function classifyStep(
   const { ctx, run } = context;
   const state = await messageText(ctx, run.connectionId, run.sourceRef);
   const result = await classify(ctx, {
-    question: step.question,
+    question: stepPrompts.classifyQuestion({ question: step.question }),
     labels: step.labels,
     state,
     ...context.attribution,
@@ -60,8 +61,8 @@ export async function extractStep(
     ),
   );
   const result = await callModel(ctx, step.role, {
-    system: "Extract the fields from the message. Use null for a field the message doesn't give.",
-    prompt: text,
+    system: stepPrompts.extractSystem(),
+    prompt: stepPrompts.extractPrompt({ message: text }),
     schema,
     ...context.attribution,
   });

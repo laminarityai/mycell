@@ -6,6 +6,7 @@ import { systemCtx } from "@/lib/ctx";
 import { OutOfCreditsError } from "@/lib/errors";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import * as server from "../server";
+import { testPrompts } from "./requests";
 
 // Org B points every role at its own models and has credits; org A has neither, so a call as
 // org A that read org B's rows would use org B's model or pass on org B's balance.
@@ -17,7 +18,7 @@ async function seedOrgB({ orgB }: TwoOrgs) {
   return { ledgerBefore: await listLedger(orgB.admin.ctx) };
 }
 
-const question = { question: "Which?", labels: ["a", "b"], state: "text" };
+const question = { question: testPrompts.which(), labels: ["a", "b"], state: "text" };
 
 export const isolationCases = defineIsolationCases(server, {
   estimateScreenCredits: notTenantScoped(
@@ -56,12 +57,12 @@ export const isolationCases = defineIsolationCases(server, {
     const { ledgerBefore } = await seedOrgB(orgs);
     const ctxA = systemCtx(orgs.orgA.id);
 
-    await expect(server.callModel(ctxA, "fast", { prompt: "Hi" })).rejects.toThrow(
+    await expect(server.callModel(ctxA, "fast", { prompt: testPrompts.hi() })).rejects.toThrow(
       OutOfCreditsError,
     );
     await grantCredits(ctxA, 100);
     fakeAiGateway.text("ok", { costUsd: 0.001 });
-    await server.callModel(ctxA, "fast", { prompt: "Hi" });
+    await server.callModel(ctxA, "fast", { prompt: testPrompts.hi() });
 
     expect(fakeAiGateway.requests().map((request) => request.modelId)).toEqual([
       "test/fast-default",

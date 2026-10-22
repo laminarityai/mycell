@@ -14,6 +14,11 @@ const nextConfig: NextConfig = {
         loaders: ["@tailwindcss/turbopack"],
         as: "*.css",
       },
+      // Prompts are parsed at build time and bundled, never read from disk (src/lib/prompts.ts).
+      "*.prompt.yml": {
+        loaders: ["./prompt-loader.cjs"],
+        as: "*.js",
+      },
     },
   },
 };

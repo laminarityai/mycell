@@ -20,6 +20,7 @@ import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { ConflictError, NotFoundError } from "@/lib/errors";
 import type { Proposal, ProposalStatus, ProposeSpecResult } from "../types";
 import { findConversation } from "./conversations";
+import { toolResultPrompts } from "./prompts";
 import { toProposal } from "./proposal-view";
 import { builderConversations, builderProposals } from "./schema";
 import type { TurnInfo } from "./tools";
@@ -54,7 +55,7 @@ export async function proposeSpec(
       ok: false,
       gaveUp: false,
       issues: all,
-      message: "The spec wasn't stored. Fix every issue and call propose_spec again.",
+      message: toolResultPrompts.proposalNotStored(),
     };
   }
 
@@ -78,9 +79,7 @@ export async function proposeSpec(
   return {
     ok: true,
     proposalId: id,
-    message:
-      "Stored as a proposal. The admin sees it as a before/after and accepts or rejects it; " +
-      "nothing is saved until they accept.",
+    message: toolResultPrompts.proposalStored(),
   };
 }
 
@@ -89,9 +88,7 @@ function gaveUp(issues: SpecIssue[]): ProposeSpecResult {
     ok: false,
     gaveUp: true,
     issues,
-    message:
-      "Stop proposing in this turn: the admin now sees these issues. Tell them in plain words " +
-      "what you couldn't resolve.",
+    message: toolResultPrompts.proposalsGaveUp(),
   };
 }
 

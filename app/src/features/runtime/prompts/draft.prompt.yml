@@ -1,0 +1,30 @@
+# The draft step (runtime/lib/draft-step.ts): the reply's instructions, and each piece of the
+# context the step names, a blank line apart.
+
+# `instructions` are the spec's own.
+system: |-
+  You write the body of an email reply on behalf of the mailbox's owner. Write only the reply's text: no subject line, no headers, no placeholders. Follow these instructions:
+
+  {{instructions}}
+
+# The message's sender, subject and text.
+triggerMessage: |-
+  The message you're replying to:
+
+  {{message}}
+
+# The thread's messages, oldest first, each as the message above, set apart by `---` lines.
+triggerThread: |-
+  The thread so far:
+
+  {{thread}}
+
+# An earlier read-range step's values, read again.
+sheetRange: |-
+  What the sheet range {{range}} holds, one row per line, cells separated by tabs:
+
+  {{values}}
+
+# Any other earlier step's output, as JSON.
+stepOutput: |-
+  What the step "{{step}}" found: {{output}}

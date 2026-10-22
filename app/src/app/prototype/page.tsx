@@ -25,8 +25,8 @@ const ROUTES: Route[] = [
     route: "credits",
     milestone: "M7",
     what: "Credits page: balance, runway, spending by group and workflow, ledger",
-    variants: ["D", "E", "A", "B", "C"],
-    verdict: "Round 1: none. Round 2 (D, E): B's breakdown with C's time series.",
+    variants: ["E2", "D", "E", "A", "B", "C"],
+    verdict: "E, one chart with lenses, plus a date range selector (E2).",
   },
   {
     route: "workflow-status",
@@ -61,7 +61,7 @@ const ROUTES: Route[] = [
     milestone: "M8",
     what: "Alerts page and count",
     variants: ["D", "E", "A", "B", "C"],
-    verdict: "Round 1: none. Round 2 (D, E): a sidebar tab, full-width table or cards.",
+    verdict: "D, a sidebar tab with a full-width table grouped by urgency.",
   },
   {
     route: "ask",

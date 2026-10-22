@@ -29,7 +29,8 @@ const PURPOSE: Record<NonNullable<LedgerEntry["purpose"]>, string> = {
   injection_screen: "Mail screening",
 };
 
-export function LedgerTable() {
+/** The latest entries, or the ones given (variant E2 passes a range's). */
+export function LedgerTable({ entries = LEDGER }: { entries?: LedgerEntry[] }) {
   return (
     <Table>
       <TableHeader>
@@ -43,7 +44,7 @@ export function LedgerTable() {
         </TableRow>
       </TableHeader>
       <TableBody>
-        {LEDGER.map((entry) => (
+        {entries.map((entry) => (
           <TableRow key={entry.id} className={cn(entry.kind === "grant" && "bg-muted/40")}>
             <TableCell className="text-muted-foreground">
               <DateTime value={entry.at} />

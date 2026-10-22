@@ -22,6 +22,7 @@ import {
   ConflictError,
   ForbiddenError,
   ItemGoneError,
+  SendUnconfirmedError,
   ValidationError,
 } from "@/lib/errors";
 import {
@@ -202,7 +203,9 @@ type Ending = (typeof ENDINGS)[ReviewAction] | "expired";
  * out through its adapter, delegated the review's connection. ValidationError when the review's
  * kind doesn't offer the action, and AlreadyHandledError (naming who handled it) when it isn't
  * waiting any more, each with nothing carried out. If carrying
- * it out fails, the claim is undone: the review waits again, or ends `gone` with its item.
+ * it out fails, the claim is undone: the review waits again, or ends `gone` with its item. A
+ * send its app may have carried out without confirming it ends `unconfirmed` instead, so nobody
+ * can send it again (ADR-0020).
  */
 async function act(
   ctx: Ctx,
@@ -221,6 +224,12 @@ async function act(
   try {
     await carryOut(adapters[row.kind], itemOf(row), delegatedCtx(ctx, row.connectionId));
   } catch (error) {
+    if (error instanceof SendUnconfirmedError) {
+      await endUnconfirmed(ctx, row, ending);
+      throw new ConflictError(
+        "It was approved, but its app didn't confirm it was sent, so it may have gone. Check there before sending it again yourself; the review has ended.",
+      );
+    }
     const gone = error instanceof ItemGoneError;
     await undoClaim(ctx, row, ending, gone);
     if (gone)
@@ -235,6 +244,15 @@ const ACTION_WORDS: Record<ReviewAction, string> = {
   decline: "declined",
   done: "marked done",
 };
+
+// Ends a claimed review `unconfirmed`, still by whoever approved it.
+async function endUnconfirmed(ctx: Ctx, row: ReviewRow, ending: Ending) {
+  await forOrg(ctx).update(
+    reviews,
+    { status: "unconfirmed", endedAt: new Date() },
+    and(eq(reviews.id, row.id), eq(reviews.status, ending)),
+  );
+}
 
 async function undoClaim(ctx: Ctx, row: ReviewRow, ending: Ending, gone: boolean) {
   await forOrg(ctx).update(

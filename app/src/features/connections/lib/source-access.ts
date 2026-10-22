@@ -27,6 +27,12 @@ import { connections, ingestStates } from "./schema";
 type Connection = typeof connections.$inferSelect;
 
 /**
+ * What a proxied call says about itself: a custom call's path `template`, which its errors name
+ * it by, since the rendered path and query hold input values (content, an address, a search).
+ */
+export type ProxyCall = { template?: string };
+
+/**
  * Whether the caller may read what a connection reaches: a member connection is its owner's
  * alone (ADR-0001), and an org connection is any admin's. The system ctx, which scheduled jobs
  * act as, may read every connection in its org (ADR-0009): it ingests for their owners.
@@ -100,16 +106,22 @@ function details(
  * `/v4/spreadsheets/...`) and decides which API host the call reaches; any other app's goes to
  * the host Nango keeps for the connection (Microsoft Graph's `/v1.0/...`, say). Nango retries the
  * source's 429s and 5xx. Null means the source has no such item; a connection gone here or at
- * Nango is NotFoundError.
+ * Nango is NotFoundError. A custom call passes its path template in `call`, for its errors to
+ * name it by.
  */
 export async function proxyGet<T>(
   ctx: Ctx,
   connectionId: string,
   path: string,
   schema: z.ZodType<T>,
+  call: ProxyCall = {},
 ): Promise<T | null> {
-  return proxied(ctx, connectionId, path, (connection, target) =>
-    nangoProxyGet(connection, target, schema),
+  return proxied(
+    ctx,
+    connectionId,
+    path,
+    (connection, target) => nangoProxyGet(connection, target, schema),
+    call,
   );
 }
 
@@ -140,9 +152,14 @@ export async function proxyPost<T>(
   path: string,
   body: unknown,
   schema: z.ZodType<T>,
+  call: ProxyCall = {},
 ): Promise<T | null> {
-  return proxied(ctx, connectionId, path, (connection, target) =>
-    nangoProxyPost(connection, target, body, schema),
+  return proxied(
+    ctx,
+    connectionId,
+    path,
+    (connection, target) => nangoProxyPost(connection, target, body, schema),
+    call,
   );
 }
 
@@ -153,9 +170,14 @@ export async function proxyPut<T>(
   path: string,
   body: unknown,
   schema: z.ZodType<T>,
+  call: ProxyCall = {},
 ): Promise<T | null> {
-  return proxied(ctx, connectionId, path, (connection, target) =>
-    nangoProxyPut(connection, target, body, schema),
+  return proxied(
+    ctx,
+    connectionId,
+    path,
+    (connection, target) => nangoProxyPut(connection, target, body, schema),
+    call,
   );
 }
 
@@ -166,9 +188,14 @@ export async function proxyPatch<T>(
   path: string,
   body: unknown,
   schema: z.ZodType<T>,
+  call: ProxyCall = {},
 ): Promise<T | null> {
-  return proxied(ctx, connectionId, path, (connection, target) =>
-    nangoProxyPatch(connection, target, body, schema),
+  return proxied(
+    ctx,
+    connectionId,
+    path,
+    (connection, target) => nangoProxyPatch(connection, target, body, schema),
+    call,
   );
 }
 
@@ -186,16 +213,20 @@ async function proxied<T>(
   ctx: Ctx,
   connectionId: string,
   path: string,
-  call: (
+  send: (
     connection: { connectionId: string; integration: string },
     target: ProxyTarget,
   ) => Promise<T>,
+  { template }: ProxyCall = {},
 ): Promise<T> {
   const connection = await readable(ctx, connectionId, { delegated: true });
   try {
-    return await call(
+    return await send(
       { connectionId: connection.nangoConnectionId, integration: integrationOf(connection.source) },
-      proxyTargetFor(connection.source, path),
+      {
+        ...proxyTargetFor(connection.source, path),
+        ...(template === undefined ? {} : { template }),
+      },
     );
   } catch (error) {
     if (error instanceof NangoConnectionGoneError) throw new NotFoundError("connection");

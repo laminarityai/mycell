@@ -12,17 +12,22 @@ export const GOOGLE_HOSTS = {
   tasks: "https://tasks.googleapis.com",
 } as const;
 
+/** The Google apps a Google connection asks for, in the order the UI lists them. */
+export const GOOGLE_APPS = ["gmail", "drive", "sheets", "calendar", "docs", "tasks"] as const;
+export type GoogleApp = (typeof GOOGLE_APPS)[number];
+
 /**
- * Each Google API's host, by the prefix its paths start with. Every proxied call names its host
- * with Nango's Base-Url-Override, since one integration reaches them all.
+ * Each Google API's host, and the Google app whose permission its calls need, by the prefix its
+ * paths start with. Every proxied call names its host with Nango's Base-Url-Override, since one
+ * integration reaches them all.
  */
-export const GOOGLE_API_PREFIXES: readonly { prefix: string; host: string }[] = [
-  { prefix: "/gmail/", host: GOOGLE_HOSTS.gmail },
-  { prefix: "/drive/", host: GOOGLE_HOSTS.www },
-  { prefix: "/v4/spreadsheets", host: GOOGLE_HOSTS.sheets },
-  { prefix: "/calendar/", host: GOOGLE_HOSTS.www },
-  { prefix: "/v1/documents", host: GOOGLE_HOSTS.docs },
-  { prefix: "/tasks/", host: GOOGLE_HOSTS.tasks },
+export const GOOGLE_API_PREFIXES: readonly { prefix: string; host: string; app: GoogleApp }[] = [
+  { prefix: "/gmail/", host: GOOGLE_HOSTS.gmail, app: "gmail" },
+  { prefix: "/drive/", host: GOOGLE_HOSTS.www, app: "drive" },
+  { prefix: "/v4/spreadsheets", host: GOOGLE_HOSTS.sheets, app: "sheets" },
+  { prefix: "/calendar/", host: GOOGLE_HOSTS.www, app: "calendar" },
+  { prefix: "/v1/documents", host: GOOGLE_HOSTS.docs, app: "docs" },
+  { prefix: "/tasks/", host: GOOGLE_HOSTS.tasks, app: "tasks" },
 ];
 
 /** What every Google OAuth scope URL starts with. */

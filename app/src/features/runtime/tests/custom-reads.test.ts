@@ -139,7 +139,7 @@ describe("another company's custom action", () => {
       issues: [
         {
           path: ["steps", 0, "action"],
-          message: `"microsoft.read-message" isn't a catalog action or one of the company's custom actions.`,
+          message: `"microsoft.read-message" isn't a catalog action or one of the org's custom actions.`,
         },
       ],
     });

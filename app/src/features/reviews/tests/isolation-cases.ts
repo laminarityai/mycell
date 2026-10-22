@@ -150,6 +150,7 @@ export const isolationCases = defineIsolationCases(server, {
       done_in_app: 0,
       gone: 0,
       expired: 0,
+      unconfirmed: 0,
     };
     const nothing = {
       approvals: none,

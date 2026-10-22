@@ -1,15 +1,5 @@
 import { REGISTERED_APPS } from "../registered-apps";
-import type { ConnectionKind, GoogleApp, Source } from "../types";
-
-/** How the UI names each Google app. */
-export const APP_NAMES: Record<GoogleApp, string> = {
-  gmail: "Gmail",
-  drive: "Drive",
-  sheets: "Sheets",
-  calendar: "Calendar",
-  docs: "Docs",
-  tasks: "Tasks",
-};
+import { GOOGLE_APP_NAMES, type ConnectionKind, type GoogleApp, type Source } from "../types";
 
 /** How the UI names each source: its registered app, or a one-app connection's app. */
 export const SOURCE_NAMES: Record<Source, string> = {
@@ -21,7 +11,7 @@ export const SOURCE_NAMES: Record<Source, string> = {
 
 /** Names apps as a list: "Gmail", "Gmail and Drive", "Gmail, Drive and Sheets". */
 export function appList(apps: readonly GoogleApp[]): string {
-  const names = apps.map((app) => APP_NAMES[app]);
+  const names = apps.map((app) => GOOGLE_APP_NAMES[app]);
   if (names.length <= 1) return names.join("");
   return `${names.slice(0, -1).join(", ")} and ${names.at(-1) ?? ""}`;
 }

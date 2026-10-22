@@ -41,6 +41,7 @@ const ENDINGS: Record<Exclude<ReviewStatus, "waiting">, string> = {
   done_in_app: "It was sent from Gmail",
   gone: "Its draft is no longer in Gmail",
   expired: "It expired",
+  unconfirmed: "It was approved, but its app didn't confirm it was sent",
 };
 
 // A held send's own words where they differ: Mycel held the request, not Gmail.
@@ -48,6 +49,7 @@ const HELD_SEND_ENDINGS: Partial<Record<ReviewStatus, string>> = {
   declined: "It was declined, and its request deleted",
   gone: "Its request is no longer held",
   expired: "Nobody acted on it within 30 days, so it expired and its request was deleted",
+  unconfirmed: "It was approved, but its app didn't confirm it was sent, so it may have gone",
 };
 
 /**

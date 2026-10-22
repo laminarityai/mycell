@@ -14,9 +14,9 @@ export default function CustomActionsPage() {
         <AppNav />
       </header>
       <p className="text-sm text-muted-foreground">
-        The actions the builder chat described for your company when no catalog action fit: each
-        makes one call to an app, at the level Mycel&apos;s fixed rule set. A custom action never
-        changes once accepted.
+        The actions the builder chat described for your org when no catalog action fit: each makes
+        one call to an app, at the level Mycel&apos;s fixed rule set. A custom action never changes
+        once accepted.
       </p>
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading actions…</p>}>
         <Actions />

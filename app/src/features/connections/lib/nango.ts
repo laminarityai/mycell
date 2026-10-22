@@ -180,7 +180,15 @@ const nangoError = z.object({ error: z.object({ code: z.string() }) });
  * A call through the Nango proxy: the path, and the API host it reaches when that isn't the
  * integration's own (Google's APIs are each on their own host).
  */
-export type ProxyTarget = { baseUrl?: string; path: string };
+export type ProxyTarget = {
+  baseUrl?: string;
+  path: string;
+  /**
+   * How an error names the call, when not by its path: a custom call's path template, since
+   * its rendered path and query hold input values (content, an address, a search).
+   */
+  template?: string;
+};
 
 type ProxiedConnection = { connectionId: string; integration: string };
 
@@ -271,7 +279,7 @@ function json<T>(schema: z.ZodType<T>): (text: string) => T {
 
 async function nangoProxy<T>(
   connection: ProxiedConnection,
-  { baseUrl, path }: ProxyTarget,
+  { baseUrl, path, template }: ProxyTarget,
   parse: (text: string) => T,
   init: { method?: string; body?: string; headers?: Record<string, string> },
 ): Promise<T | null> {
@@ -295,7 +303,7 @@ async function nangoProxy<T>(
     throw new NangoConnectionGoneError();
   }
   if (response.status === 404 || response.status === 410) return null;
-  throw new SourceRequestError(response.status, raw, path);
+  throw new SourceRequestError(response.status, raw, template ?? path);
 }
 
 /** Whether a webhook body really came from Nango: a hex HMAC-SHA256 of the raw body. */

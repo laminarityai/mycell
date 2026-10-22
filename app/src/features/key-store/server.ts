@@ -41,12 +41,14 @@ export async function hashForOrg(ctx: Ctx, text: string): Promise<string> {
 }
 
 /**
- * Destroys the ctx org's keys, for a company leaving Mycel: everything encrypted for it becomes
+ * Destroys the ctx org's keys, for an org leaving Mycel: everything encrypted for it becomes
  * unreadable at once, nothing hashes as before, and KMS deletes the keys after its 7-day
  * waiting period. Encrypting or hashing again makes a new key, which doesn't open what the old
- * one encrypted or match what it hashed. Admins and scheduled jobs only.
+ * one encrypted or match what it hashed. Only the org's system ctx may (ADR-0009), as the
+ * offboarding that deletes the org would act: no admin can make the org's waiting held sends
+ * unreadable. Nothing offboards an org yet, so nothing calls it.
  */
 export async function destroyOrgKey(ctx: Ctx): Promise<void> {
-  if (ctx.role === "member") throw new ForbiddenError();
+  if (ctx.role !== "system") throw new ForbiddenError();
   await destroyKeys(ctx.orgId);
 }

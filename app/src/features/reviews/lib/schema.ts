@@ -1,6 +1,6 @@
 // Reviews: one row per item a run left waiting for a person in its app's pending form
 // (ADR-0013). Pointers only: never the message, the draft or an edit (invariant 8). A review
-// goes with its connection (invariant 3) and with its owner's membership.
+// goes with its connection and its run's (invariant 3), and with its owner's membership.
 import { foreignKey, index, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
 import { member } from "@/db/auth-schema";
 import { connections } from "@/features/connections/lib/schema";
@@ -12,8 +12,11 @@ export const reviews = pgTable(
     id: text("id").primaryKey(),
     orgId: text("org_id").notNull(),
     connectionId: text("connection_id").notNull(),
+    // The run's own connection, which source_ref came from: connection_id itself, but for a
+    // held send, whose review is on the run owner's connection to the custom action's app.
+    runConnectionId: text("run_connection_id").notNull(),
     // The run that prepared the item, and the workflow version it ran. Plain IDs: a review
-    // outlives nothing it points at except its connection and its owner.
+    // outlives nothing it points at except its connections and its owner.
     runId: text("run_id").notNull(),
     workflowId: text("workflow_id").notNull(),
     workflowVersionId: text("workflow_version_id").notNull(),
@@ -52,6 +55,11 @@ export const reviews = pgTable(
     foreignKey({
       name: "reviews_connection_fk",
       columns: [table.orgId, table.connectionId],
+      foreignColumns: [connections.orgId, connections.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "reviews_run_connection_fk",
+      columns: [table.orgId, table.runConnectionId],
       foreignColumns: [connections.orgId, connections.id],
     }).onDelete("cascade"),
     foreignKey({

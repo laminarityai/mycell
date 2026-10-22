@@ -57,7 +57,7 @@ it("destroying a company's keys destroys its hashing key too: nothing hashes the
   const before = await hashForOrg(orgA.admin.ctx, ADDRESS);
   const forB = await hashForOrg(orgB.admin.ctx, ADDRESS);
 
-  await destroyOrgKey(orgA.admin.ctx);
+  await destroyOrgKey(systemCtx(orgA.id));
 
   expect(fakeKms.listKeys().map(({ state, aliases }) => ({ state, aliases }))).toEqual([
     { state: "PendingDeletion", aliases: [] },

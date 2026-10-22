@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { googleScope } from "@/lib/google";
+import { GOOGLE_APPS, googleScope } from "@/lib/google";
 
 /**
  * The apps our team has registered with their vendor and in Mycel (ADR-0018), each described
@@ -47,7 +47,7 @@ export type RegisteredApp = {
 };
 
 /** The Google apps a Google connection asks for, in the order the UI lists them. */
-export const googleAppSchema = z.enum(["gmail", "drive", "sheets", "calendar", "docs", "tasks"]);
+export const googleAppSchema = z.enum(GOOGLE_APPS);
 export type GoogleApp = z.infer<typeof googleAppSchema>;
 
 /**
@@ -61,6 +61,16 @@ export const GOOGLE_APP_SCOPES: Record<GoogleApp, string> = {
   calendar: googleScope("calendar.events"),
   docs: googleScope("documents"),
   tasks: googleScope("tasks"),
+};
+
+/** How the UI names each Google app. */
+export const GOOGLE_APP_NAMES: Record<GoogleApp, string> = {
+  gmail: "Gmail",
+  drive: "Drive",
+  sheets: "Sheets",
+  calendar: "Calendar",
+  docs: "Docs",
+  tasks: "Tasks",
 };
 
 /** The apps discovery ingests from. Each has its own backfill, cursor and poll. */
@@ -206,15 +216,16 @@ export type ReconciliationSummary = {
 /**
  * The source refused a proxied request (anything but a 404 or 410, which read as "no such
  * item"). It carries the source's status and parsed error body, so a connector can tell a
- * refusal it recovers from (Drive's invalid page token) from a failure.
+ * refusal it recovers from (Drive's invalid page token) from a failure. Its message names the
+ * call by its path, or a custom call by its path template, never the input values in it.
  */
 export class SourceRequestError extends Error {
   constructor(
     readonly status: number,
     readonly body: unknown,
-    path: string,
+    call: string,
   ) {
-    super(`Nango proxy ${path} failed: ${String(status)}`);
+    super(`Nango proxy ${call} failed: ${String(status)}`);
     this.name = "SourceRequestError";
   }
 }

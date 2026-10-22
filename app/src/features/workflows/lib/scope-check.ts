@@ -20,7 +20,7 @@ type ActionUse = {
  * The issues of running `spec` on one of `connections`: none when some connection was granted a
  * scope for every action the spec uses, or else each action the closest one lacks, naming its
  * scope. No connections at all is the connection check's issue, not this one's. `actions` is
- * the company's action set.
+ * the org's action set.
  */
 export function scopeIssues(
   spec: Spec,
@@ -49,8 +49,9 @@ function actionUses(spec: Spec, actions: ActionSet): ActionUse[] {
           : undefined;
     const action = named === undefined ? undefined : actions.find(named.action);
     if (named === undefined || action === undefined) return [];
-    // An action on what Mycel holds needs no scope, and a custom action runs through a
-    // connection to its own app, not this one (requirements.ts).
+    // An action on what Mycel holds needs no scope, and a custom action in another app runs
+    // through a connection to that app, not this one (requirements.ts); a custom Google action
+    // names its Google app's.
     return scopesOf(action).map((scopes) => ({
       path: [...location, named.field],
       action: action.name,

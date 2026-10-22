@@ -31,7 +31,8 @@ export const describeCustomActionTool: ToolDefinition<
     "path, query, body } where path is " +
     'the path on the app with no host, such as "/v1.0/me/messages/{messageId}", with each ' +
     "{placeholder} an input, and query and body map each query parameter or body field to an " +
-    "input), inputs (each " +
+    "input; a nested body field is a dotted path of property names and list indexes, such as " +
+    '"message.toRecipients.0.emailAddress.address"), inputs (each ' +
     'name to { type: "text" | "number" | "yes_no" | "choice", description, choices for a ' +
     'choice, optional }), outputs (for a read, each result field\'s name to { type: "text" | ' +
     '"number" | "yes_no", label, path }, path being property names and list indexes joined by ' +
@@ -56,7 +57,7 @@ export const describeCustomActionTool: ToolDefinition<
         return {
           ok: false,
           issues: [
-            `The company already has a custom action named "${name}" that does something else, and a stored custom action never changes. Give the changed one a new name, such as "${name}-v2".`,
+            `This org already has a custom action named "${name}" that does something else, and a stored custom action never changes. Give the changed one a new name, such as "${name}-v2".`,
           ],
           message: NOT_ADDED,
         };
@@ -65,7 +66,7 @@ export const describeCustomActionTool: ToolDefinition<
         ok: true,
         name,
         risk,
-        message: "The company already has this custom action: use it by name in propose_spec.",
+        message: "This org already has this custom action: use it by name in propose_spec.",
       };
     }
     turn.customActions = [...turn.customActions.filter((each) => each.name !== name), check.action];

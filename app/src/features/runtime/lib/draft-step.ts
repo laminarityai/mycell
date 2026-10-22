@@ -98,6 +98,13 @@ async function sheetText(name: string, context: StepContext): Promise<string | u
   return `What the sheet range ${range.range} holds, one row per line, cells separated by tabs:\n\n${values}`;
 }
 
+// Whether the step is a tool step calling a custom write, whose output is its held send.
+function isCustomWrite(step: Step, context: StepContext): boolean {
+  if (step.type !== "tool") return false;
+  const action = context.actionSet.find(step.action);
+  return action?.kind === "custom" && action.risk !== "read";
+}
+
 const draftOutput = z.object({ draftId: z.string(), threadId: z.string() });
 const heldSendOutput = z.object({ heldSendId: z.string(), connectionId: z.string() });
 
@@ -112,10 +119,14 @@ export async function approvalStep(
   step: StepOf<"approval">,
   context: StepContext,
 ): Promise<StepExecution> {
-  const above = stepsAbove(context.spec, step.id).map((earlier) => context.outputs[earlier.id]);
+  const stepsAboveIt = stepsAbove(context.spec, step.id);
+  const above = stepsAboveIt.map((earlier) => context.outputs[earlier.id]);
   if (step.channel === "held_send") {
-    const sends = above.flatMap((output) => {
-      const parsed = heldSendOutput.safeParse(output);
+    // Only a custom write's step holds a send: a read's result, filled from the app's answer,
+    // may look like one.
+    const sends = stepsAboveIt.flatMap((earlier) => {
+      if (!isCustomWrite(earlier, context)) return [];
+      const parsed = heldSendOutput.safeParse(context.outputs[earlier.id]);
       return parsed.success ? [parsed.data] : [];
     });
     for (const { heldSendId, connectionId } of sends) {

@@ -15,6 +15,8 @@ import {
 // Runs reference the connection they act on and the version they run: derived data cascades
 // from its connection (docs/conventions.md).
 import { connections } from "@/features/connections/lib/schema";
+// A held send names its review, which it goes with.
+import { reviews } from "@/features/reviews/lib/schema";
 // A held send names the custom action it calls.
 import { customActions } from "@/features/custom-actions/lib/schema";
 import { modelRoleSchema, stepTypes, type ModelRole, type StepType } from "@/features/spec/types";
@@ -127,7 +129,8 @@ export const runSteps = pgTable(
  * and its inputs, encrypted with the company's own key (ADR-0024): nothing else from it is
  * stored. It goes the moment its review ends, whatever the outcome, and after 30 days at most;
  * with the connection it would be sent through (invariant 3), and with its run, so with the
- * run's own connection too. Its review points at it by its ID (the review's item ref).
+ * run's own connection too, and with its review. Its review points at it by its ID (the review's
+ * item ref), and it at its review once its approval step has recorded one.
  */
 export const heldSends = pgTable(
   "held_sends",
@@ -141,6 +144,13 @@ export const heldSends = pgTable(
     stepId: text("step_id").notNull(),
     // The custom action it calls, which never changes once accepted.
     customAction: text("custom_action").notNull(),
+    // The run's provenance (invariant 2): the message that started it, and whether it was a
+    // member connection's run or an org connection's.
+    sourceRef: text("source_ref").notNull(),
+    ownerScope: text("owner_scope", { enum: ["member", "org"] }).notNull(),
+    // The review that waits on it; null until the run's approval step records one, and for one
+    // whose run stopped before then.
+    reviewId: text("review_id"),
     // `v1.<encrypted data key>.<iv>.<tag>.<ciphertext>` (key-store's envelope).
     request: text("request").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -157,6 +167,11 @@ export const heldSends = pgTable(
       name: "held_sends_run_fk",
       columns: [table.orgId, table.runId],
       foreignColumns: [runs.orgId, runs.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "held_sends_review_fk",
+      columns: [table.orgId, table.reviewId],
+      foreignColumns: [reviews.orgId, reviews.id],
     }).onDelete("cascade"),
     foreignKey({
       name: "held_sends_custom_action_fk",

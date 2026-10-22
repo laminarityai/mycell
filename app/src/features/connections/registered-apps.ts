@@ -11,6 +11,7 @@ import { GOOGLE_API_PREFIXES, GOOGLE_HOSTS } from "@/lib/google";
 import {
   GOOGLE_APP_SCOPES,
   registeredAppIdSchema,
+  type GoogleApp,
   type RegisteredApp,
   type RegisteredAppId,
   type Source,
@@ -100,6 +101,14 @@ export const registeredApps: readonly RegisteredApp[] = registeredAppIdSchema.op
 /** The registered app a connection reaches: a one-app connection from before ADR-0014, Google. */
 export function registeredAppOf(source: Source): RegisteredAppId {
   return source === "gmail" || source === "drive" ? "google" : source;
+}
+
+/**
+ * The Google app a path on Google reaches, whose permission a call to it needs (ADR-0014): the
+ * one its API's prefix names. Undefined for a path no Google API serves.
+ */
+export function googleAppOf(path: string): GoogleApp | undefined {
+  return GOOGLE_API_PREFIXES.find(({ prefix }) => path.startsWith(prefix))?.app;
 }
 
 /**

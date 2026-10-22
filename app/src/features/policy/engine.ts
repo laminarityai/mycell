@@ -1,5 +1,5 @@
 // The policy engine (invariant 4): a spec's risk comes only from the fixed levels of the actions
-// in the company's action set, which the caller resolves and hands in (ADR-0018).
+// in the org's action set, which the caller resolves and hands in (ADR-0018).
 // Pure: no IO, no ctx.
 import { z } from "zod";
 import { eachStep, mapStepLists, type PlacedStep } from "@/features/spec/tree";
@@ -37,7 +37,7 @@ export function maxRisk(spec: Spec, actions: ActionSet): RiskLevel {
       throw new SpecInvalidError([
         {
           path,
-          message: `"${used.name}" isn't a catalog action or one of the company's custom actions.`,
+          message: `"${used.name}" isn't a catalog action or one of the org's custom actions.`,
         },
       ]);
     }
@@ -101,9 +101,10 @@ export function requirementsGained(
   return Object.keys(gained).length === 0 ? null : gained;
 }
 
-// Each action's scopes, any one of which allows it. A custom action needs no scope on the run's
-// own connection: it reaches its app through a connection to that app, a new app. An action on
-// what Mycel holds (memory) needs none either.
+// Each action's scopes, any one of which allows it: a catalog action's, or a custom Google
+// action's Google app's. A custom action in another app needs none on the run's own connection:
+// it reaches its app through a connection to that app, a new app. An action on what Mycel holds
+// (memory) needs none either.
 function scopeSets(actionNames: readonly string[], actions: ActionSet): (readonly string[])[] {
   return actionNames.flatMap((name) => {
     const action = actions.find(name);
@@ -171,7 +172,7 @@ function actionIssues(spec: Spec, actions: ActionSet): SpecIssue[] {
     if (action === undefined) {
       issues.push({
         path,
-        message: `"${name}" isn't a catalog action or one of the company's custom actions.`,
+        message: `"${name}" isn't a catalog action or one of the org's custom actions.`,
       });
     } else if (
       step.type === "tool" &&

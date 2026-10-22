@@ -9,9 +9,10 @@ import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { disconnect } from "@/features/connections/server";
 import { getRun } from "@/features/runtime/server";
-import type { Ctx } from "@/lib/ctx";
+import { systemCtx, type Ctx } from "@/lib/ctx";
 import { AlreadyHandledError, ConflictError, ValidationError } from "@/lib/errors";
 import type { FakeAppRequest } from "@/testing/fake-microsoft";
+import { fakeNango } from "@/testing/fake-nango";
 import {
   approveEditedReview,
   approveReview,
@@ -155,6 +156,59 @@ describe("a held send's review", () => {
   });
 });
 
+describe("a held send whose app doesn't confirm it was sent", () => {
+  it.each(["error", "dropped"] as const)(
+    "ends unconfirmed when the app took it but its answer was lost (%s), and is never sent again",
+    async (how) => {
+      const orgs = await seedTwoOrgs();
+      const { owner, reviewId, outlook, runId } = await heldSend(orgs);
+      const heldSendId = await heldSendIdOf(owner, runId);
+      outlook.loseNextAnswer(how);
+
+      await expect(approveReview(owner, reviewId)).rejects.toThrow(
+        "its app didn't confirm it was sent",
+      );
+      await expect(approveReview(owner, reviewId)).rejects.toThrow(AlreadyHandledError);
+      await checkWaitingReviews(systemCtx(orgs.orgA.id));
+
+      expect(writes(outlook.requests)).toHaveLength(1);
+      expect(await openReview(owner, reviewId)).toMatchObject({
+        review: { status: "unconfirmed", endedByUserId: orgs.orgA.admin.id },
+        view: null,
+      });
+      expect(await tablesHolding(heldSendId)).not.toContain("held_sends");
+    },
+  );
+
+  it("ends unconfirmed when the proxy answers 500, which may have reached the app", async () => {
+    const orgs = await seedTwoOrgs();
+    const { owner, reviewId, outlook } = await heldSend(orgs);
+    fakeNango.failWrites(1);
+
+    await expect(approveReview(owner, reviewId)).rejects.toThrow(ConflictError);
+    await expect(approveReview(owner, reviewId)).rejects.toThrow(AlreadyHandledError);
+
+    expect(writes(outlook.requests)).toEqual([]);
+    expect((await openReview(owner, reviewId)).review.status).toBe("unconfirmed");
+  });
+
+  it("waits on, still held, when Nango refused it before it reached the app", async () => {
+    const orgs = await seedTwoOrgs();
+    const { owner, reviewId, outlook, microsoftNangoId, runId } = await heldSend(orgs);
+    const heldSendId = await heldSendIdOf(owner, runId);
+    fakeNango.revokeAccess(microsoftNangoId);
+
+    const refused = await approveReview(owner, reviewId).catch((error: unknown) => error);
+
+    // The error names the call by its path template, never the input values filled into it.
+    expect(String(refused)).toContain("/v1.0/me/messages/{messageId}/reply");
+    expect(String(refused)).not.toContain(OUTLOOK_MESSAGE);
+    expect(writes(outlook.requests)).toEqual([]);
+    expect((await openReview(owner, reviewId)).review.status).toBe("waiting");
+    expect(await tablesHolding(heldSendId)).toContain("held_sends");
+  });
+});
+
 describe("a held send nobody acts on", () => {
   it("expires after 30 days, its request deleted, and is counted expired", async () => {
     const orgs = await seedTwoOrgs();
@@ -221,6 +275,16 @@ describe("who sees a held send", () => {
   });
 });
 
+describe("what a held send records", () => {
+  it("names the message that started its run, and its review", async () => {
+    const orgs = await seedTwoOrgs();
+    const { reviewId, message } = await heldSend(orgs);
+
+    expect(await tablesHolding(message.id)).toContain("held_sends");
+    expect(await tablesHolding(reviewId)).toContain("held_sends");
+  });
+});
+
 describe("disconnecting", () => {
   it("the app's connection deletes its held sends and their reviews", async () => {
     const orgs = await seedTwoOrgs();
@@ -234,15 +298,17 @@ describe("disconnecting", () => {
     expect(await tablesHolding(heldSendId)).not.toContain("held_sends");
   });
 
-  it("the run's own connection deletes its held sends too", async () => {
+  it("the run's own connection deletes its held sends and their reviews too", async () => {
     const orgs = await seedTwoOrgs();
     const { owner, reviewId, google, runId } = await heldSend(orgs);
     const heldSendId = await heldSendIdOf(owner, runId);
 
     await disconnect(owner, google.id);
 
-    expect(await tablesHolding(heldSendId)).toEqual(["reviews"]);
-    expect((await openReview(owner, reviewId)).review.status).toBe("gone");
+    expect(await listReviews(owner)).toEqual([]);
+    await expect(openReview(owner, reviewId)).rejects.toThrow("That review doesn't exist.");
+    expect(await tablesHolding(heldSendId)).toEqual([]);
+    expect(await tablesHolding(runId)).toEqual([]);
   });
 });
 

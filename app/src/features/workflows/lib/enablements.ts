@@ -7,8 +7,8 @@ import { forOrg } from "@/db/for-org";
 import { listConnections } from "@/features/connections/server";
 import { getActionSet } from "@/features/custom-actions/server";
 import { userNames } from "@/features/orgs/server";
-import { requireAdmin, type Ctx } from "@/lib/ctx";
-import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
+import { type Ctx, requireAdmin } from "@/lib/ctx";
+import { NotFoundError, ValidationError } from "@/lib/errors";
 import type { EnablementSummary, EnableResult } from "../types";
 import { findWorkflow } from "./access";
 import { deleteEnablement, switchOnEnablement } from "./enablement-rows";
@@ -26,7 +26,7 @@ import { getVisibleWorkflow } from "./visibility";
 export async function enable(ctx: Ctx, workflowId: string): Promise<EnableResult> {
   const visible = await getVisibleWorkflow(ctx, workflowId);
   if (visible.credentials === "org") {
-    if (ctx.role !== "admin") throw new ForbiddenError();
+    requireAdmin(ctx);
     throw new ValidationError(
       "This workflow runs on an org connection: switch it on from its page.",
     );

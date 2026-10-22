@@ -4,6 +4,7 @@ import { listCustomActions } from "@/features/custom-actions/server";
 import { getCtx } from "@/features/orgs/server";
 import { ActionSetProvider, NewWorkflowEditor } from "@/features/workflows/ui";
 import { AppNav } from "@/app/app-nav";
+import { isAdmin } from "@/lib/ctx";
 
 export default function NewWorkflowPage() {
   return (
@@ -21,7 +22,7 @@ export default function NewWorkflowPage() {
 
 async function NewWorkflow() {
   const ctx = await getCtx();
-  if (ctx.role !== "admin") redirect("/");
+  if (!isAdmin(ctx)) redirect("/");
   return (
     <ActionSetProvider customActions={await listCustomActions(ctx)}>
       <NewWorkflowEditor />

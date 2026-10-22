@@ -4,6 +4,7 @@ import { AppNav } from "@/app/app-nav";
 import { getMemorySettings } from "@/features/memory/server";
 import { MemorySettingsPanel } from "@/features/memory/ui";
 import { getCtx } from "@/features/orgs/server";
+import { isAdmin } from "@/lib/ctx";
 
 export default function MemoryPage() {
   return (
@@ -22,6 +23,6 @@ export default function MemoryPage() {
 async function Settings() {
   const ctx = await getCtx();
   // Memory's settings are admin-only; members have no view of memory (ADR-0023).
-  if (ctx.role !== "admin") redirect("/");
+  if (!isAdmin(ctx)) redirect("/");
   return <MemorySettingsPanel settings={await getMemorySettings(ctx)} />;
 }

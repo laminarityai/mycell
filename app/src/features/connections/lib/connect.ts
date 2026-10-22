@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { listUsers } from "@/features/orgs/server";
 import { forOrg } from "@/db/for-org";
-import type { Ctx } from "@/lib/ctx";
+import { type Ctx, isAdmin } from "@/lib/ctx";
 import { ForbiddenError, InvariantError } from "@/lib/errors";
 import type { ConnectionKind, Source } from "../types";
 import { createConnectSession } from "./nango";
@@ -31,7 +31,7 @@ export async function startConnect(
   source: Source,
   kind: ConnectionKind = "member",
 ): Promise<{ token: string }> {
-  if (kind === "org" && ctx.role !== "admin") throw new ForbiddenError();
+  if (kind === "org" && !isAdmin(ctx)) throw new ForbiddenError();
   const users = await listUsers(ctx);
   const me = users.find((user) => user.id === ctx.userId);
   if (me === undefined) throw new InvariantError("The caller isn't a user of their own org");

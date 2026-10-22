@@ -3,8 +3,7 @@
 // its estimate, and learns from them when an admin starts it.
 import { and, asc, eq, gt, not, or, sql, type SQL } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
-import type { Ctx } from "@/lib/ctx";
-import { ForbiddenError } from "@/lib/errors";
+import { type Ctx, requireRole } from "@/lib/ctx";
 import type { StoredItem, StoredItemsPage, StoredItemsQuery } from "../types";
 import { events } from "./schema";
 
@@ -21,7 +20,7 @@ function announced(query: StoredItemsQuery): SQL | undefined {
 
 /** How many items discovery has stored in the org. Admins (and jobs) only. */
 export async function countStoredItems(ctx: Ctx, query: StoredItemsQuery = {}): Promise<number> {
-  if (ctx.role === "member") throw new ForbiddenError();
+  requireRole(ctx, "admin", "system");
   return forOrg(ctx).count(events, announced(query));
 }
 
@@ -33,7 +32,7 @@ export async function listStoredItems(
   ctx: Ctx,
   page: StoredItemsQuery & { after?: string; limit: number },
 ): Promise<StoredItemsPage> {
-  if (ctx.role === "member") throw new ForbiddenError();
+  requireRole(ctx, "admin", "system");
   const rows = await forOrg(ctx).select(events, {
     where: and(announced(page), page.after === undefined ? undefined : gt(events.id, page.after)),
     orderBy: [asc(events.id)],

@@ -27,6 +27,15 @@ export async function findUser(ctx: Ctx, userId: string): Promise<OrgUser | null
 }
 
 /**
+ * The ctx of the org's user with this ID, their role read fresh: how a job acts as a person,
+ * such as a connection's owner. Null for someone not in the caller's org. Any role may ask.
+ */
+export async function userCtx(ctx: Ctx, userId: string): Promise<Ctx | null> {
+  const found = await findUser(ctx, userId);
+  return found === null ? null : { orgId: ctx.orgId, userId: found.id, role: found.role };
+}
+
+/**
  * The org's users' names, as a lookup by user ID. Someone not in the caller's org (a user who
  * has left, or another org's) is "someone no longer in the org". Any role may ask, as for
  * listUsers.

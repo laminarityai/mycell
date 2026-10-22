@@ -47,6 +47,11 @@ export const isolationCases = defineIsolationCases(server, {
     );
   },
 
+  userCtx: async ({ orgA, orgB }) => {
+    expect(await server.userCtx(orgA.member.ctx, orgB.admin.id)).toBeNull();
+    expect(await server.userCtx(orgA.member.ctx, orgA.admin.id)).toEqual(orgA.admin.ctx);
+  },
+
   userNames: async ({ orgA, orgB }) => {
     const nameOf = await server.userNames(orgA.member.ctx);
 

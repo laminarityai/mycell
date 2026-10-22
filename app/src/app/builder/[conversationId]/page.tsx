@@ -12,6 +12,7 @@ import { listCustomActions } from "@/features/custom-actions/server";
 import { getCtx } from "@/features/orgs/server";
 import { recentMessages } from "@/features/runtime/server";
 import { getWorkflow } from "@/features/workflows/server";
+import { isAdmin } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
 import { AppNav } from "@/app/app-nav";
 
@@ -49,7 +50,7 @@ export default function ConversationPage({
 
 async function ConversationView({ params, searchParams }: PageProps<"/builder/[conversationId]">) {
   const ctx = await getCtx();
-  if (ctx.role !== "admin") redirect("/");
+  if (!isAdmin(ctx)) redirect("/");
   const { conversationId } = await params;
   const [conversation, conversations] = await Promise.all([
     getConversation(ctx, conversationId).catch((error: unknown) => {

@@ -7,7 +7,7 @@ import type { ActionSet, RiskLevel } from "@/features/policy/types";
 import { describeSpec, type ActionInfo } from "@/features/spec/describe";
 import { listUsers } from "@/features/orgs/server";
 import { listMyTags, listTagIdsByUser, listTags } from "@/features/tags/server";
-import type { Ctx, Role } from "@/lib/ctx";
+import { type Ctx, isAdmin, type Role } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
 import type { Audience, VisibleWorkflow, WorkflowVersion } from "../types";
 import { requiredApps } from "./requirements";
@@ -112,7 +112,7 @@ async function visible(ctx: Ctx, rows: Workflow[]): Promise<VisibleWorkflow[]> {
     ctx,
     rows.map((row) => row.id),
   );
-  const admin = ctx.role === "admin";
+  const admin = isAdmin(ctx);
   const published = rows.flatMap((row) => {
     const version = latest.get(row.id);
     // An archived workflow is hidden from everyone but admins.

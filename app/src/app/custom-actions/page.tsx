@@ -5,6 +5,7 @@ import { CustomActionList } from "@/features/custom-actions/ui";
 import { getCtx, userNames } from "@/features/orgs/server";
 import { workflowsUsingActions } from "@/features/workflows/server";
 import { AppNav } from "@/app/app-nav";
+import { isAdmin } from "@/lib/ctx";
 
 export default function CustomActionsPage() {
   return (
@@ -28,7 +29,7 @@ export default function CustomActionsPage() {
 async function Actions() {
   const ctx = await getCtx();
   // Custom actions come from the builder chat, which is admin-only, and so is this page.
-  if (ctx.role !== "admin") redirect("/");
+  if (!isAdmin(ctx)) redirect("/");
   const [actions, nameOf] = await Promise.all([listCustomActions(ctx), userNames(ctx)]);
   const uses = await workflowsUsingActions(
     ctx,

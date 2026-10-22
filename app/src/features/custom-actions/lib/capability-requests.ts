@@ -9,8 +9,8 @@ import { isForeignKeyViolation } from "@/db/errors";
 import { forOrg } from "@/db/for-org";
 import { REGISTERED_APPS, registeredApps } from "@/features/connections/registered-apps";
 import { registeredAppIdSchema } from "@/features/connections/types";
-import { requireAdmin, type Ctx } from "@/lib/ctx";
-import { ForbiddenError, InvariantError, NotFoundError, ValidationError } from "@/lib/errors";
+import { type Ctx, requireAdmin, requireRole, requireSystem } from "@/lib/ctx";
+import { InvariantError, NotFoundError, ValidationError } from "@/lib/errors";
 import type { PromptText } from "@/lib/prompts";
 import {
   capabilityRequestInputSchema,
@@ -93,7 +93,7 @@ export async function fileCapabilityRequest(
 
 /** The org's capability requests, most recently changed first. Admins, and our team's script. */
 export async function listCapabilityRequests(ctx: Ctx): Promise<CapabilityRequest[]> {
-  if (ctx.role !== "system") requireAdmin(ctx);
+  requireRole(ctx, "admin", "system");
   const rows = await forOrg(ctx).select(capabilityRequests, {
     orderBy: [desc(capabilityRequests.updatedAt), desc(capabilityRequests.id)],
   });
@@ -137,7 +137,7 @@ export async function setCapabilityRequestStatus(
   requestId: string,
   change: { status: CapabilityRequestStatus; note?: string },
 ): Promise<void> {
-  if (ctx.role !== "system") throw new ForbiddenError();
+  requireSystem(ctx);
   const note = change.note?.trim();
   const updated = await forOrg(ctx).update(
     capabilityRequests,

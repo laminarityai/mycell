@@ -7,8 +7,8 @@
 // its sources. A fact a person told Mycel (`told_by`, M9) has no source, and stays.
 import { and, eq, lt, sql } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
-import { requireAdmin, type Ctx } from "@/lib/ctx";
-import { ConflictError, ForbiddenError, ValidationError } from "@/lib/errors";
+import { type Ctx, requireAdmin, requireSystem } from "@/lib/ctx";
+import { ConflictError, ValidationError } from "@/lib/errors";
 import {
   MAX_RETENTION_MONTHS,
   retentionWindowSchema,
@@ -60,7 +60,7 @@ export function retentionCutoff(months: number, now = new Date()): Date {
  * leave unsupported. Returns how many of each went. The org's system ctx only.
  */
 export async function applyRetention(ctx: Ctx): Promise<RetentionApplied> {
-  if (ctx.role !== "system") throw new ForbiddenError();
+  requireSystem(ctx);
   const db = forOrg(ctx);
   const months = (await settingsOf(ctx))?.retentionMonths ?? MAX_RETENTION_MONTHS;
   const before = { facts: await db.count(facts), objects: await db.count(memoryObjects) };

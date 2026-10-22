@@ -20,8 +20,8 @@ import type { ConnectionDetails } from "@/features/connections/types";
 import { embed, screenForInjection } from "@/features/models/server";
 import { InjectionScreenError } from "@/features/models/types";
 import { getWorkspaceDomain } from "@/features/orgs/server";
-import type { Ctx } from "@/lib/ctx";
-import { ForbiddenError, OutOfCreditsError } from "@/lib/errors";
+import { type Ctx, requireSystem } from "@/lib/ctx";
+import { OutOfCreditsError } from "@/lib/errors";
 import { runInline, untilGone, type RunStep } from "@/lib/inngest";
 import type { ItemToLearn, LearnOutcome, MemoryApp, PostponeReason } from "../types";
 import { gate, MEMORY_USAGE, postpone } from "./budget";
@@ -73,7 +73,7 @@ export async function learnFromItem(
   runStep: RunStep = runInline,
   options: LearnOptions = {},
 ): Promise<LearnOutcome> {
-  if (ctx.role !== "system") throw new ForbiddenError();
+  requireSystem(ctx);
   const guarded = <T extends { decision: string }>(work: () => Promise<T>) =>
     untilGone(CONNECTION_FOREIGN_KEYS, () => untilPostponed(ctx, item, options, work), {
       decision: "gone" as const,

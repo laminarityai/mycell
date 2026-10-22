@@ -10,8 +10,7 @@
 import { and, asc, eq, gt, inArray, lte } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { getConnection } from "@/features/connections/server";
-import type { Ctx } from "@/lib/ctx";
-import { ForbiddenError } from "@/lib/errors";
+import { type Ctx, requireSystem } from "@/lib/ctx";
 import { runInline, untilGone, type RunStep } from "@/lib/inngest";
 import type { AccessReread, ChangedItem, RemovedItem } from "../types";
 import { driveVersion, readAccess } from "./drive";
@@ -26,7 +25,7 @@ const REREAD_BATCH = 100;
  * Returns how many records went.
  */
 export async function deleteRemovedItem(ctx: Ctx, item: RemovedItem): Promise<{ records: number }> {
-  if (ctx.role !== "system") throw new ForbiddenError();
+  requireSystem(ctx);
   const deleted = await forOrg(ctx).delete(
     sourceRecords,
     and(
@@ -42,7 +41,7 @@ export async function deleteRemovedItem(ctx: Ctx, item: RemovedItem): Promise<{ 
 
 /** Reads again who may see a Drive file changed in place, and rewrites what memory keeps. */
 export async function rereadAccess(ctx: Ctx, item: ChangedItem): Promise<AccessReread> {
-  if (ctx.role !== "system") throw new ForbiddenError();
+  requireSystem(ctx);
   return reread(ctx, item.connectionId, driveVersion(item.sourceRef).fileId);
 }
 
@@ -55,7 +54,7 @@ export async function rereadDriveAccess(
   ctx: Ctx,
   runStep: RunStep = runInline,
 ): Promise<{ files: number; removed: number }> {
-  if (ctx.role !== "system") throw new ForbiddenError();
+  requireSystem(ctx);
   const { startedAt } = await runStep("start", () =>
     Promise.resolve({ startedAt: new Date().toISOString() }),
   );

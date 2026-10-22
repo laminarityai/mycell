@@ -6,8 +6,8 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
-import { findUser, userNames } from "@/features/orgs/server";
-import { type Ctx, requireAdmin } from "@/lib/ctx";
+import { userCtx, userNames } from "@/features/orgs/server";
+import { type Ctx, requireAdmin, requireSystem } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import {
   MAX_STAFF_CONSENT_DAYS,
@@ -97,7 +97,7 @@ export async function staffSearchMemory(
  * Mycel, neither revoked nor expired, from an admin still in the org. Anything else is refused.
  */
 async function consented(ctx: Ctx, access: StaffAccess) {
-  if (ctx.role !== "system") throw new ForbiddenError();
+  requireSystem(ctx);
   const consent = (
     await forOrg(ctx).select(staffConsents, { where: eq(staffConsents.id, access.consentId) })
   ).at(0);
@@ -110,9 +110,9 @@ async function consented(ctx: Ctx, access: StaffAccess) {
   ) {
     throw new ForbiddenError();
   }
-  const admin = await findUser(ctx, consent.grantedByUserId);
-  if (admin?.role !== "admin") throw new ForbiddenError();
-  const granter: Ctx = { orgId: ctx.orgId, userId: admin.id, role: admin.role };
+  const granter = await userCtx(ctx, consent.grantedByUserId);
+  if (granter === null) throw new ForbiddenError();
+  requireAdmin(granter);
   return { granter, consentId: consent.id };
 }
 

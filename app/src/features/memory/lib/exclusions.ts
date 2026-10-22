@@ -7,8 +7,8 @@ import { randomUUID } from "node:crypto";
 import { and, asc, eq, inArray, like, or, type SQL } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { listConnectionsForJobs } from "@/features/connections/server";
-import type { Ctx } from "@/lib/ctx";
-import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
+import { type Ctx, requireRole, requireSystem } from "@/lib/ctx";
+import { ConflictError, NotFoundError, ValidationError } from "@/lib/errors";
 import type { RunStep } from "@/lib/inngest";
 import { exclusionInputSchema, type Exclusion, type ExclusionInput } from "../types";
 import { sendExclusionAdded } from "./events";
@@ -18,7 +18,7 @@ import type { SourceItem } from "./source-item";
 
 /** The org's exclusions, oldest first. Admins (and jobs) only. */
 export async function listExclusions(ctx: Ctx): Promise<Exclusion[]> {
-  if (ctx.role === "member") throw new ForbiddenError();
+  requireRole(ctx, "admin", "system");
   const rows = await forOrg(ctx).select(exclusions, {
     orderBy: [asc(exclusions.createdAt), asc(exclusions.id)],
   });
@@ -27,7 +27,7 @@ export async function listExclusions(ctx: Ctx): Promise<Exclusion[]> {
 
 /** Adds an exclusion, and starts forgetting what memory learned from the items it covers. */
 export async function addExclusion(ctx: Ctx, input: ExclusionInput): Promise<Exclusion> {
-  if (ctx.role === "member") throw new ForbiddenError();
+  requireRole(ctx, "admin", "system");
   const parsed = exclusionInputSchema.safeParse(input);
   if (!parsed.success) {
     throw new ValidationError(parsed.error.issues[0]?.message ?? "That can't be excluded.");
@@ -54,7 +54,7 @@ export async function addExclusion(ctx: Ctx, input: ExclusionInput): Promise<Exc
  * stays unlearned.
  */
 export async function removeExclusion(ctx: Ctx, exclusionId: string): Promise<void> {
-  if (ctx.role === "member") throw new ForbiddenError();
+  requireRole(ctx, "admin", "system");
   const deleted = await forOrg(ctx).delete(exclusions, eq(exclusions.id, exclusionId));
   if (deleted.length === 0) throw new NotFoundError("exclusion");
 }
@@ -110,7 +110,7 @@ export async function forgetExcluded(
   exclusionId: string,
   runStep: RunStep,
 ): Promise<{ sourceRecords: number }> {
-  if (ctx.role !== "system") throw new ForbiddenError();
+  requireSystem(ctx);
   const exclusion = (await listExclusions(ctx)).find((e) => e.id === exclusionId);
   if (exclusion === undefined) return { sourceRecords: 0 };
   if (exclusion.kind === "address" || exclusion.kind === "domain") {

@@ -10,8 +10,8 @@ import { getActionSet } from "@/features/custom-actions/server";
 import type { ConnectionSummary } from "@/features/connections/types";
 import type { ActionSet } from "@/features/policy/types";
 import type { Spec, SpecIssue } from "@/features/spec/types";
-import { requireAdmin, type Ctx } from "@/lib/ctx";
-import { ForbiddenError, NotFoundError, SpecInvalidError, ValidationError } from "@/lib/errors";
+import { type Ctx, requireAdmin, requireSystem } from "@/lib/ctx";
+import { NotFoundError, SpecInvalidError, ValidationError } from "@/lib/errors";
 import type { Switch, SwitchedOn, WorkflowSwitch } from "../types";
 import { enablements, workflows } from "./schema";
 import { scopeIssues } from "./scope-check";
@@ -75,7 +75,7 @@ export async function switchWorkflowOff(ctx: Ctx, workflowId: string): Promise<v
  * credentials (republished from member to org, say) is left out until switched on again.
  */
 export async function listSwitchedOn(ctx: Ctx, connectionId: string): Promise<SwitchedOn[]> {
-  if (ctx.role !== "system") throw new ForbiddenError();
+  requireSystem(ctx);
   const db = forOrg(ctx);
   const [enabled, orgSwitched] = await Promise.all([
     db.select(enablements, {

@@ -4,6 +4,7 @@ import { listConversations } from "@/features/builder/server";
 import { ConversationList, NewConversationButton } from "@/features/builder/ui";
 import { getCtx } from "@/features/orgs/server";
 import { AppNav } from "@/app/app-nav";
+import { isAdmin } from "@/lib/ctx";
 
 export default function BuilderPage() {
   return (
@@ -22,7 +23,7 @@ export default function BuilderPage() {
 async function Conversations() {
   const ctx = await getCtx();
   // The builder chat is admin-only.
-  if (ctx.role !== "admin") redirect("/");
+  if (!isAdmin(ctx)) redirect("/");
   return (
     <div className="flex flex-col gap-4">
       <NewConversationButton />

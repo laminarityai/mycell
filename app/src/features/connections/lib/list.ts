@@ -1,7 +1,7 @@
 import { and, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { listUsers } from "@/features/orgs/server";
-import type { Ctx } from "@/lib/ctx";
+import { type Ctx, isAdmin } from "@/lib/ctx";
 import type { ConnectionOwner, ConnectionSummary, ConnectionsListing } from "../types";
 import { grantedApps, missingApps } from "./apps";
 import { backfilledItems, ingestStatesOf, lastPolledAt, overallStatus } from "./ingest-states";
@@ -21,9 +21,9 @@ type IngestState = typeof ingestStates.$inferSelect;
  */
 export async function listConnections(ctx: Ctx): Promise<ConnectionsListing> {
   const db = forOrg(ctx);
-  const isAdmin = ctx.role === "admin";
+  const admin = isAdmin(ctx);
   const rows = await db.select(connections, {
-    where: isAdmin
+    where: admin
       ? undefined
       : and(eq(connections.ownerUserId, ctx.userId), eq(connections.kind, "member")),
     orderBy: [connections.accountEmail, connections.source],

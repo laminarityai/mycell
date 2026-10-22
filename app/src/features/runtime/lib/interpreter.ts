@@ -13,8 +13,8 @@ import type { ActionSet } from "@/features/policy/types";
 import { createReview } from "@/features/reviews/server";
 import type { Spec, Step } from "@/features/spec/types";
 import { getWorkflowVersion, listSwitchedOn } from "@/features/workflows/server";
-import type { Ctx } from "@/lib/ctx";
-import { ForbiddenError, NotFoundError } from "@/lib/errors";
+import { type Ctx, requireSystem } from "@/lib/ctx";
+import { NotFoundError } from "@/lib/errors";
 import type { RetryPolicy, RunOutcome } from "../types";
 import { runInline, type RunStep } from "@/lib/inngest";
 import { actionExecutors } from "./actions";
@@ -51,7 +51,7 @@ export async function executeRun(
   runStep: RunStep = runInline,
   retry: RetryPolicy = defaultRetryPolicy,
 ): Promise<RunOutcome> {
-  if (ctx.role !== "system") throw new ForbiddenError();
+  requireSystem(ctx);
   const run = await findRun(ctx, runId);
   if (run === undefined) return { status: "cancelled" };
   if (run.status !== "running") return { status: run.status };

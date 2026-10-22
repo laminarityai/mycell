@@ -50,7 +50,8 @@ test("admins see their company's custom actions and the workflows that use them"
   await page.getByRole("link", { name: "Custom actions" }).click();
 
   await expect(page).toHaveURL("/custom-actions");
-  const actions = page.getByRole("list", { name: "Custom actions" }).getByRole("listitem");
+  // Each action's own item, not the items of the workflows listed inside it.
+  const actions = page.getByRole("list", { name: "Custom actions" }).locator(":scope > li");
   await expect(actions).toHaveCount(1);
   const action = actions.first();
   await expect(action).toContainText("Microsoft 365");

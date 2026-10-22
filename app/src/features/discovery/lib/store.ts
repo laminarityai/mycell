@@ -24,7 +24,7 @@ export type NewEvent = Pick<
  */
 export async function storeEvents(
   ctx: Ctx,
-  connection: ConnectionDetails,
+  connection: Pick<ConnectionDetails, "id" | "kind" | "ownerUserId">,
   app: IngestedApp,
   normalized: NormalizedEvent[],
 ): Promise<NewEvent[]> {

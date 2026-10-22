@@ -148,6 +148,28 @@ export type ConnectionDetails = {
   ingest: Partial<Record<IngestedApp, AppIngestState>>;
 };
 
+/**
+ * What a proxied call says about itself: a custom call's path `template`, which its errors name
+ * it by, since the rendered path and query hold input values (content, an address, a search).
+ */
+export type ProxyCall = { template?: string };
+
+/**
+ * One connection's source, with the caller's access to it checked once: the connection, and
+ * calls to its app through the Nango proxy, each answered as `proxyGet`, `proxyPost` and the
+ * rest answer theirs. A job step making several calls opens one, rather than having each call
+ * read the connection again. A connection gone at Nango is still NotFoundError on the call.
+ */
+export type SourceClient = {
+  connection: Omit<ConnectionDetails, "ingest">;
+  get<T>(path: string, schema: z.ZodType<T>, call?: ProxyCall): Promise<T | null>;
+  getText(path: string): Promise<string | null>;
+  post<T>(path: string, body: unknown, schema: z.ZodType<T>, call?: ProxyCall): Promise<T | null>;
+  put<T>(path: string, body: unknown, schema: z.ZodType<T>, call?: ProxyCall): Promise<T | null>;
+  patch<T>(path: string, body: unknown, schema: z.ZodType<T>, call?: ProxyCall): Promise<T | null>;
+  delete(path: string): Promise<boolean>;
+};
+
 /** A change to one app's ingest state; fields left out stay as they are. */
 export type IngestStateUpdate = {
   status?: IngestStatus;

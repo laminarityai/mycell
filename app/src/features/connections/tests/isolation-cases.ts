@@ -182,6 +182,15 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await server.listConnections(orgs.orgB.admin.ctx)).toEqual(before);
   },
 
+  sourceClient: async (orgs) => {
+    const { before, memberBefore } = await seedOrgBConnection(orgs);
+
+    for (const id of orgBIds(before, memberBefore)) {
+      await expect(server.sourceClient(orgs.orgA.admin.ctx, id)).rejects.toThrow(NotFoundError);
+    }
+    expect(await server.listConnections(orgs.orgB.admin.ctx)).toEqual(before);
+  },
+
   proxyGetText: async (orgs) => {
     const { before, memberBefore } = await seedOrgBConnection(orgs);
 

@@ -2,7 +2,7 @@
 // try a spec on, their own and the org's, granted Gmail. Subjects and senders are fetched
 // through the proxy for display only, every time, and never stored (invariant 8).
 import { z } from "zod";
-import { buildableConnections, proxyGet } from "@/features/connections/server";
+import { buildableConnections, sourceClient } from "@/features/connections/server";
 import { SourceRequestError } from "@/features/connections/types";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { NangoRequestError, NotFoundError } from "@/lib/errors";
@@ -93,14 +93,14 @@ function isUnavailable(error: unknown): boolean {
 
 async function newest(ctx: Ctx, connectionId: string): Promise<Recent[]> {
   const params = new URLSearchParams({ labelIds: "INBOX", maxResults: String(RECENT_LIMIT) });
-  const found = await proxyGet(ctx, connectionId, `${GMAIL}/messages?${params}`, listSchema);
+  // One connection read for the listing and every message on it.
+  const source = await sourceClient(ctx, connectionId);
+  const found = await source.get(`${GMAIL}/messages?${params}`, listSchema);
   const query = new URLSearchParams({ format: "metadata" });
   for (const name of HEADERS) query.append("metadataHeaders", name);
   const messages = await Promise.all(
     (found?.messages ?? []).map((ref) =>
-      proxyGet(
-        ctx,
-        connectionId,
+      source.get(
         `${GMAIL}/messages/${encodeURIComponent(ref.id)}?${query.toString()}`,
         metadataSchema,
       ),

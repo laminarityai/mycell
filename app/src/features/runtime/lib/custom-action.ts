@@ -5,7 +5,7 @@
 // sent by a run: its request is held until a person approves it (ADR-0020), or, in Try it,
 // reported as it would be sent.
 import { z } from "zod";
-import { connectionToApp, proxyGet } from "@/features/connections/server";
+import { connectionToApp, proxyGet, proxyPost } from "@/features/connections/server";
 import { registeredAppIdSchema } from "@/features/connections/types";
 import {
   pickOutputs,
@@ -46,7 +46,12 @@ export async function runCustomAction(
   const { connectionId, request } = await renderCustomCall(ctx, runConnectionId, action, input);
   let response: unknown;
   try {
-    response = await proxyGet(ctx, connectionId, request.path, z.unknown());
+    // A read is a GET, or a GraphQL query, which is POSTed with its document and variables. No
+    // registered app has a GraphQL API yet, so the description check refuses GraphQL for now.
+    response =
+      request.method === "POST"
+        ? await proxyPost(ctx, connectionId, request.path, request.body, z.unknown())
+        : await proxyGet(ctx, connectionId, request.path, z.unknown());
   } catch (error) {
     // The app's connection went, not the run's.
     if (error instanceof NotFoundError && connectionId !== runConnectionId) {

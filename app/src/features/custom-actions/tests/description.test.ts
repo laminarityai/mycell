@@ -151,6 +151,22 @@ describe("checking a custom action's description", () => {
     });
   });
 
+  it("refuses a GraphQL call in an app with no GraphQL API, which is every registered app yet", () => {
+    for (const app of ["google", "microsoft"]) {
+      const check = checkCustomAction(
+        readOutlookMessage({
+          app,
+          call: { graphql: "query { viewer { name } }", path: "/gmail/v1/graphql" },
+          inputs: {},
+          outputs: { name: { type: "text", label: "Your name", path: "data.viewer.name" } },
+        }),
+      );
+      expect(!check.ok && check.issues.some((issue) => issue.includes("has no GraphQL API"))).toBe(
+        true,
+      );
+    }
+  });
+
   it("refuses a catalog action's name", () => {
     expect(checkCustomAction(readOutlookMessage({ name: "google-mail.read-message" }))).toEqual({
       ok: false,

@@ -2,9 +2,9 @@
 
 Build order for the v1 full loop, dogfooded on our own Google Workspace. Every milestone ends with something we can actually use ourselves. `docs/architecture.md` holds the architecture and invariants. This file only covers sequencing.
 
-The builder chat is primary (ADR-0007), so it comes before mining. Milestones keep their numbers as stable names and are listed in build order: **M0 → M1 → M3 → M6 → M12 → M5 → M11 → M13 → M14 → M2 → M4 → M7 → M8 → M9 → M10.**
+The builder chat is primary (ADR-0007), so it comes before mining. Milestones keep their numbers as stable names and are listed in build order: **M0 → M1 → M3 → M6 → M12 → M5 → M11 → M13 → M14 → M7 → M8 → M9 → M2 → M4 → M10.**
 
-## Status (2026-10-20)
+## Status (2026-10-21)
 
 | Milestone | State       | Spec | Notes                                                                                                                                                                       |
 | --------- | ----------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -13,11 +13,11 @@ The builder chat is primary (ADR-0007), so it comes before mining. Milestones ke
 | M3        | Ready       | #33  | Grilled; tickets ready for agents. Decisions in ADR-0010 (credits slice), ADR-0011 (write access up front), ADR-0012 (what runs keep) and ADR-0014 (one Google connection). |
 | M6        | Ready       | #43  | Grilled; tickets ready for agents. Capability requests moved to M10.                                                                                                        |
 | M12       | Grilling    |      | Branches and the workflow graph. Decisions in ADR-0015 (paths that never join); research in `docs/research/workflow-builders.md`.                                           |
-| M5        | Ready       | #51  | Grilled; tickets ready for agents. Adds the Reviews page (ADR-0013), whose outcomes measure the builder ship bar in `docs/intent.md`.                                       |
+| M5        | Done        | #51  | Publish, tags, member toggles and the Reviews page (PR #89). Open: dogfood check #57.                                                                                       |
 | M11       | Ready       | #67  | Calendar, Docs and Tasks, each through its pending form (ADR-0013); tickets ready for agents.                                                                               |
 | M13       | Grilled     |      | Custom actions made by the builder chat. Decisions in ADR-0017 to ADR-0020; research in `docs/research/integrations/`.                                                      |
 | M14       | Grilled     |      | Memory foundation. Decisions in ADR-0021 to ADR-0024; research in `docs/research/memory-layer.md`.                                                                          |
-| M2 onward | Not started |      |                                                                                                                                                                             |
+| M7 onward | Not started |      | Build order after M14: M7, M8, M9 (the agent), then M2 (discovery) and M4, then M10.                                                                                        |
 
 ## M0: Scaffold and tenancy
 
@@ -105,19 +105,6 @@ Planned in this order, each its own milestone or part of one, after M12:
 - Memory feeds workflows and the builder chat's context.
 - **Done when:** a workflow on one of our inboxes uses a fact about a customer drawn from another source its member can see, a member never sees a fact from a source they can't, and forgetting a person removes every trace of them from memory.
 
-## M2: Mining and suggestions
-
-- **Entry task:** the eval-grade synthetic company generator (planted workflows and decoys), to measure discovery's recall and precision.
-- Embeddings, clustering, cluster labeling, template detection, request→response pairs, built on M14's objects (ADR-0021).
-- Ranking, rung mapping, a suggestions UI with evidence (re-fetched via the proxy; visibility per ADR-0001). Suggestions and mined patterns feed the builder chat's context.
-- **Done when:** at least 3 of the top 5 suggestions on our own data are rated real and worth automating.
-
-## M4: Shadow eval
-
-- Replay specs on held-out past cases; judge plus edit distance; show the results on suggestions.
-- Compare `classify` models on our own mail, e.g. Jev against Laya (`convaiinnovations/laya`), before changing an org's role table.
-- **Done when:** every suggestion shows "would have handled X of Y correctly".
-
 ## M7: Credits and budgets
 
 - Hard stop, per-workflow budgets, discovery cost estimate, real pricing. The ledger and pre-flight check already arrive in M3 (ADR-0010).
@@ -126,11 +113,24 @@ Planned in this order, each its own milestone or part of one, after M12:
 
 - Admin runs/traces view, retries, auto-pause after 3 consecutive failures, admin email, member "paused" badge.
 
-## M9: Continuous discovery and memory
+## M9: The agent
 
+- A Mycel agent in each person's own view of memory (ADR-0022): it reads memory, acts only through workflows and the Reviews page, and turns "remember this" into a fact owned by that person. **To grill when scoping M9.**
+
+## M2: Mining and suggestions
+
+- **Entry task:** the eval-grade synthetic company generator (planted workflows and decoys), to measure discovery's recall and precision.
+- Embeddings, clustering, cluster labeling, template detection, request→response pairs, built on M14's objects (ADR-0021).
+- Ranking, rung mapping, a suggestions UI with evidence (re-fetched via the proxy; visibility per ADR-0001). Suggestions and mined patterns feed the builder chat's context.
 - Nightly incremental mining; the dismissed-suggestion resurfacing rule.
 - Mine our own run logs (runs, approvals, edits, overrides) as a discovery source.
-- A Mycel agent in each person's own view of memory (ADR-0022): it reads memory, acts only through workflows and the Reviews page, and turns "remember this" into a fact owned by that person. **To grill when scoping M9.**
+- **Done when:** at least 3 of the top 5 suggestions on our own data are rated real and worth automating.
+
+## M4: Shadow eval
+
+- Replay specs on held-out past cases; judge plus edit distance; show the results on suggestions.
+- Compare `classify` models on our own mail, e.g. Jev against Laya (`convaiinnovations/laya`), before changing an org's role table.
+- **Done when:** every suggestion shows "would have handled X of Y correctly".
 
 ## M10: External readiness (first outside customer)
 

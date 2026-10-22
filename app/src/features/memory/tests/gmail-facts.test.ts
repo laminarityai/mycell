@@ -269,7 +269,7 @@ describe("learning from a Gmail message", () => {
 });
 
 describe("reading an object", () => {
-  it("shows an email's facts to the people on it, and to no one else", async () => {
+  it("shows an email's facts to the mailboxes holding it, not to whoever its sender named", async () => {
     const { orgA, lee, danaEmail } = await setup();
     const mailbox = await connectMailbox(orgA.member.ctx, orgA.member.email, [danaEmail()]);
     await backfillConnection(orgA.member.ctx, mailbox.id);
@@ -277,8 +277,8 @@ describe("reading an object", () => {
     await learnStoredItems(orgA.id);
 
     const dana = await readObject(orgA.member.ctx, byEmail(DANA));
-    // Copied on the email, though it's in the member's mailbox.
-    expect(await readObject(orgA.admin.ctx, byEmail(DANA))).toEqual(dana);
+    // Dana copied the admin, but only the member's mailbox is known to hold it.
+    await expect(readObject(orgA.admin.ctx, byEmail(DANA))).rejects.toThrow(NotFoundError);
     await expect(readObject(lee.ctx, byEmail(DANA))).rejects.toThrow(NotFoundError);
     await expect(readObject(lee.ctx, { id: dana.id })).rejects.toThrow(NotFoundError);
     await expect(readObject(systemCtx(orgA.id), { id: dana.id })).rejects.toThrow(NotFoundError);

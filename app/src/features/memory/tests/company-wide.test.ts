@@ -55,6 +55,14 @@ async function setup() {
   return { ...orgs, lee, danaEmail };
 }
 
+// The email as a colleague sent it, copying Dana: its copy in their own mailbox is a sent one.
+const sentBy = (from: string, email: FakeMessageInput): FakeMessageInput => ({
+  ...email,
+  from,
+  cc: [DANA],
+  sent: true,
+});
+
 const statements = async (ctx: Parameters<typeof readObject>[0]) =>
   (await readObject(ctx, byDana)).facts.map((fact) => fact.statement);
 
@@ -102,14 +110,16 @@ describe("a group that isn't marked company-wide", () => {
 });
 
 describe("a list an admin marked company-wide", () => {
-  it("makes email sent to it visible to every member, until it's unmarked", async () => {
+  it("makes email a colleague sent to it visible to every member, until it's unmarked", async () => {
     const { orgA, lee, danaEmail } = await setup();
     const all = `all@${orgA.workspaceDomain}`;
     await markCompanyWideList(orgA.admin.ctx, ` ${all.toUpperCase()} `);
     expect(await listCompanyWideLists(orgA.admin.ctx)).toEqual([
       { address: all, markedAt: expect.any(Date) as Date },
     ]);
-    const mailbox = await connectMailbox(orgA.member.ctx, orgA.member.email, [danaEmail([all])]);
+    const mailbox = await connectMailbox(orgA.member.ctx, orgA.member.email, [
+      sentBy(orgA.member.email, danaEmail([all])),
+    ]);
     await backfillConnection(orgA.member.ctx, mailbox.id);
     scriptLearning(DANA_ROLE);
     await learnStoredItems(orgA.id);
@@ -148,11 +158,29 @@ describe("a list an admin marked company-wide", () => {
     expect(lists.map((list) => list.address)).toEqual([all]);
   });
 
+  it("doesn't let an email from outside count as sent to it", async () => {
+    const { orgA, lee, danaEmail } = await setup();
+    const all = `all@${orgA.workspaceDomain}`;
+    await markCompanyWideList(orgA.admin.ctx, all);
+    // Dana wrote all@ on it; only the member's mailbox is known to hold it.
+    const mailbox = await connectMailbox(orgA.member.ctx, orgA.member.email, [danaEmail([all])]);
+    await backfillConnection(orgA.member.ctx, mailbox.id);
+    scriptLearning(DANA_ROLE);
+    await learnStoredItems(orgA.id);
+
+    expect(await statements(orgA.member.ctx)).toEqual([ROLE]);
+    for (const ctx of [orgA.admin.ctx, lee.ctx, systemCtx(orgA.id)]) {
+      await expect(readObject(ctx, byDana)).rejects.toThrow(NotFoundError);
+    }
+  });
+
   it("stops counting as a list once it's a person's own address", async () => {
     const { orgA, lee, danaEmail } = await setup();
     const kim = `kim@${orgA.workspaceDomain}`;
     await markCompanyWideList(orgA.admin.ctx, kim);
-    const mailbox = await connectMailbox(orgA.member.ctx, orgA.member.email, [danaEmail([kim])]);
+    const mailbox = await connectMailbox(orgA.member.ctx, orgA.member.email, [
+      sentBy(orgA.member.email, danaEmail([kim])),
+    ]);
     await backfillConnection(orgA.member.ctx, mailbox.id);
     scriptLearning(DANA_ROLE);
     await learnStoredItems(orgA.id);
@@ -211,9 +239,9 @@ describe("searching memory", () => {
     );
     await backfillConnection(orgA.admin.ctx, inbox.id);
     await learn(ROLE, "I lead procurement at Acme");
-    // To all@, which is marked.
+    // To all@, which is marked, from the member.
     const mailbox = await connectMailbox(orgA.member.ctx, orgA.member.email, [
-      said("I'm moving to the Leeds office.", [all]),
+      sentBy(orgA.member.email, said("I'm moving to the Leeds office.", [all])),
     ]);
     await backfillConnection(orgA.member.ctx, mailbox.id);
     await learn(MOVING, "I'm moving to the Leeds office");

@@ -32,16 +32,19 @@ async function setup() {
   const { orgA } = orgs;
   await withCredits(orgA.id);
   const otherAdmin = await seedUser(orgA.id, `kim@${orgA.workspaceDomain}`, "admin");
-  const mailbox = await connectMailbox(orgA.member.ctx, orgA.member.email, [
-    {
-      from: `Dana Ruiz <${DANA}>`,
-      to: [orgA.member.email],
-      cc: [orgA.admin.email],
-      text: "I lead procurement at Acme.",
-      at: daysAgo(2),
-    },
-  ]);
+  // Dana copied the admin: a copy is in the admin's mailbox too.
+  const email = {
+    from: `Dana Ruiz <${DANA}>`,
+    to: [orgA.member.email],
+    cc: [orgA.admin.email],
+    text: "I lead procurement at Acme.",
+    at: daysAgo(2),
+    headers: { "Message-ID": "<procurement-1@acme.example>" },
+  };
+  const mailbox = await connectMailbox(orgA.member.ctx, orgA.member.email, [email]);
+  const adminBox = await connectMailbox(orgA.admin.ctx, orgA.admin.email, [email]);
   await backfillConnection(orgA.member.ctx, mailbox.id);
+  await backfillConnection(orgA.admin.ctx, adminBox.id);
   scriptLearning({
     objects: [{ ref: "dana", kind: "person", name: "Dana Ruiz", email: DANA }],
     facts: [

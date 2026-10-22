@@ -42,9 +42,17 @@ const messageSchema = z.object({
 
 /**
  * One email, read to learn from. Its item key is the Message-ID header, lowercased without its
- * angle brackets: the same in every copy. Its access list and `addresses` are everyone on it
- * (From, To, Cc, and Bcc as this copy shows it), `senders` its From, and `text` its headers and
- * body.
+ * angle brackets: the same in every copy. `addresses` are everyone on it (From, To, Cc, and Bcc
+ * as this copy shows it), `senders` its From, and `text` its headers and body.
+ *
+ * Its access list is only what Mycel saw (ADR-0023), never what its headers claim, since anyone
+ * can write any address there: an outsider who mails one member and puts all@ on Cc reached
+ * only that member. So it's the mailbox holding the copy and, for a copy that mailbox sent
+ * (Gmail's SENT label, which only the mailbox's owner can cause), everyone on it too: the
+ * company's own sender chose them. Anyone else on an inbound email counts once their own
+ * connected mailbox holds a copy (the visibility rule for held copies), and a company-wide list
+ * once a mailbox at its address holds one. A sent copy is also what makes an email come from
+ * inside the company.
  */
 export type EmailToLearn = SourceItem & { kind: "email"; labelIds: string[] };
 
@@ -56,9 +64,10 @@ const SHOWN_HEADERS = ["From", "To", "Cc", "Date", "Subject"];
  */
 export async function readEmail(
   ctx: Ctx,
-  connectionId: string,
+  connection: { id: string; accountEmail: string },
   messageId: string,
 ): Promise<EmailToLearn | null> {
+  const connectionId = connection.id;
   const message = await proxyGet(
     ctx,
     connectionId,
@@ -81,6 +90,9 @@ export async function readEmail(
   const addresses = [
     ...new Set(["From", "To", "Cc", "Bcc"].flatMap((name) => addressesIn(header(name)))),
   ];
+  const sent = message.labelIds.includes("SENT");
+  const holder = connection.accountEmail.trim().toLowerCase();
+  const confirmed = [...new Set([holder, ...(sent ? addresses : [])])];
   return {
     kind: "email",
     sourceRef: message.id,
@@ -92,8 +104,9 @@ export async function readEmail(
         : messageIdHeader.replace(/^<|>$/g, "").toLowerCase(),
     occurredAt: new Date(Number(message.internalDate)),
     labelIds: message.labelIds,
-    access: addresses.map((value) => ({ kind: "address", value })),
+    access: confirmed.map((value) => ({ kind: "address", value })),
     addresses,
+    fromInside: sent,
     senders: [...new Set(addressesIn(header("From")))],
     text: `${shown.join("\n")}\n\n${body}`,
   };

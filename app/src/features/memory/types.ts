@@ -113,6 +113,9 @@ export type MemoryFact = {
   // When memory recorded it.
   recordedAt: Date;
   sources: FactSource[];
+  // For a fact stated only from outside the company: the fact from inside, or company-wide,
+  // that it contradicts and couldn't replace, so both are current. Only one the reader can see.
+  conflictsWith: string | null;
 };
 
 /**

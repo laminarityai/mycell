@@ -47,7 +47,7 @@ _Avoid_: Shared connection
 Whether a piece of data belongs to one member or to the whole org.
 
 **Access list**:
-Who the source app says can see an item, kept on Mycel's record of it; a fact is visible to anyone who can see one of its sources.
+Who Mycel saw can see an item, kept on Mycel's record of it: a doc's sharing list as the app gives it, or for an email the mailboxes holding it and, on one the company sent, everyone on it (never just the addresses its sender wrote). A fact is visible to anyone who can see one of its sources.
 _Avoid_: Promotion (replaced), ACL, permissions
 
 **Event**:

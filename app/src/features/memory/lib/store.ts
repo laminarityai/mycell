@@ -20,7 +20,8 @@ import { driveVersion } from "./drive";
 import type { ExtractedFact, ExtractedObject } from "./extract";
 import type { Matches } from "./match";
 import type { SourceItem } from "./source-item";
-import { placeInTimeline } from "./supersede";
+import { placeInTimelines } from "./supersede";
+import { companyWideOf } from "./visibility";
 import {
   accessListEntries,
   factSources,
@@ -101,10 +102,13 @@ export async function storeCopy(ctx: Ctx, source: Source): Promise<Stored | null
   const factIds = [...new Set(links.map((link) => link.factId))];
   if (factIds.length === 0) return null;
   const taught = await db.select(facts, { where: inArray(facts.id, factIds) });
+  const companyWide = await companyWideOf(ctx);
   return db.transaction(async (tx) => {
     const recordId = await insertRecord(tx, source);
     if (recordId === null) return null;
     await linkFacts(tx, source.connection.id, recordId, factIds);
+    // This copy may come from inside, or be company-wide, where the first wasn't.
+    await placeInTimelines(tx, ctx.orgId, companyWide, factIds);
     await retire(tx, source);
     return { objects: objectCount(taught), facts: factIds.length };
   });
@@ -121,6 +125,7 @@ export async function storeLearned(
   embeddings: number[][],
   matches: Matches,
 ): Promise<Stored | null> {
+  const companyWide = await companyWideOf(ctx);
   return forOrg(ctx).transaction(async (tx) => {
     const recordId = await insertRecord(tx, source);
     if (recordId === null) return null;
@@ -129,18 +134,23 @@ export async function storeLearned(
       objectIds.set(object.ref, await storeObject(tx, object, matches.get(object.ref)));
     }
     const factIds: string[] = [];
+    const added = new Set<string>();
     for (const [i, fact] of extracted.facts.entries()) {
       const subjectId = objectIds.get(fact.about);
       const embedding = embeddings.at(i);
       if (subjectId === undefined || embedding === undefined) continue;
       const objectId = fact.object === null ? null : (objectIds.get(fact.object) ?? null);
-      const stated = { ...fact, subjectId, objectId, embedding };
-      factIds.push(await storeFact(tx, stated, source.item.occurredAt));
+      const stored = await storeFact(tx, { ...fact, subjectId, objectId, embedding });
+      factIds.push(stored.id);
+      if (stored.added) added.add(stored.id);
     }
-    await linkFacts(tx, source.connection.id, recordId, [...new Set(factIds)]);
+    const ids = [...new Set(factIds)];
+    await linkFacts(tx, source.connection.id, recordId, ids);
+    // Once linked, so who stated each fact, and when, is known.
+    await placeInTimelines(tx, ctx.orgId, companyWide, ids, added);
     // After linking, so a fact the older version also taught keeps its ID.
     await retire(tx, source);
-    return { objects: new Set(objectIds.values()).size, facts: new Set(factIds).size };
+    return { objects: new Set(objectIds.values()).size, facts: ids.length };
   });
 }
 
@@ -160,19 +170,28 @@ async function insertRecord(tx: OrgScopedDb, { connection, app, item }: Source) 
         itemKey: item.itemKey,
         occurredAt: item.occurredAt,
         accessCheckedAt: now,
+        fromInside: item.fromInside,
       },
       { onConflictDoNothing: true },
     )
   ).at(0);
   if (record === undefined) return null;
+  const confirmed = new Set(item.access.map((entry) => `${entry.kind}:${entry.value}`));
+  // The addresses its sender wrote that Mycel didn't see reach anyone: for exclusions only.
+  const unconfirmed = item.addresses
+    .filter((value) => !confirmed.has(`address:${value}`))
+    .map((value) => ({ kind: "address" as const, value, confirmed: false }));
   await tx.insert(
     accessListEntries,
-    item.access.map(({ kind, value }) => ({
-      connectionId: connection.id,
-      sourceRecordId: record.id,
-      kind,
-      value,
-    })),
+    [...item.access.map((entry) => ({ ...entry, confirmed: true })), ...unconfirmed].map(
+      ({ kind, value, confirmed }) => ({
+        connectionId: connection.id,
+        sourceRecordId: record.id,
+        kind,
+        value,
+        confirmed,
+      }),
+    ),
     { onConflictDoNothing: true },
   );
   return record.id;
@@ -211,8 +230,12 @@ type FactToStore = Omit<ExtractedFact, "about" | "object"> & {
   embedding: number[];
 };
 
-// The current fact with the same subject and statement, or a new fact placed in its timeline.
-async function storeFact(tx: OrgScopedDb, fact: FactToStore, statedAt: Date): Promise<string> {
+// The current fact with the same subject and statement, or a new fact (`added`), placed in its
+// timeline once linked to its source.
+async function storeFact(
+  tx: OrgScopedDb,
+  fact: FactToStore,
+): Promise<{ id: string; added: boolean }> {
   const same = (
     await tx.select(facts, {
       where: and(
@@ -223,7 +246,7 @@ async function storeFact(tx: OrgScopedDb, fact: FactToStore, statedAt: Date): Pr
       limit: 1,
     })
   ).at(0);
-  if (same !== undefined) return same.id;
+  if (same !== undefined) return { id: same.id, added: false };
   const id = randomUUID();
   await tx.insert(facts, {
     id,
@@ -236,8 +259,7 @@ async function storeFact(tx: OrgScopedDb, fact: FactToStore, statedAt: Date): Pr
     validFrom: fact.validFrom,
     embedding: fact.embedding,
   });
-  await placeInTimeline(tx, { id, subjectId: fact.subjectId, predicate: fact.predicate }, statedAt);
-  return id;
+  return { id, added: true };
 }
 
 function objectCount(rows: { subjectId: string; objectId: string | null }[]): number {

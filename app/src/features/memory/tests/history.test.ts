@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
-import { disconnect } from "@/features/connections/server";
 import { backfillConnection, pollConnection } from "@/features/discovery/server";
 import { systemCtx } from "@/lib/ctx";
 import { connectMailbox, daysAgo } from "@/testing/connect-helpers";
 import type { FakeMessageInput } from "@/testing/fake-gmail";
 import { readObject, searchMemory } from "../server";
 import {
+  followAppChanges,
   learnStoredItems,
   meaning,
   scriptDocLearning,
@@ -42,7 +42,10 @@ async function setup() {
     at: daysAgo(10),
     ...overrides,
   });
-  const march = email({ text: "Our renewal at acme.example is due in March. We have 40 seats." });
+  const march = email({
+    text: "Our renewal at acme.example is due in March. We have 40 seats.",
+    headers: { "Message-ID": "<march@acme.example>" },
+  });
   const may = email({
     to: [orgA.admin.email],
     cc: [],
@@ -93,28 +96,47 @@ async function setup() {
       [meaning(1, 2, 0.1)],
     );
   };
+  const delivered = new Map<FakeMessageInput, string>();
   const memberBox = await connectMailbox(orgA.member.ctx, orgA.member.email, []);
   const adminBox = await connectMailbox(orgA.admin.ctx, orgA.admin.email, []);
-  // Delivers the email to the mailbox and learns it.
-  const learn = async (box: typeof memberBox, message: FakeMessageInput, script: () => void) => {
-    box.mailbox.add(message);
-    await pollConnection(systemCtx(orgA.id), box.id);
+  // Delivers the email to the mailboxes and learns it: a copy in each mailbox, the first
+  // learned and the others linked to what it taught.
+  const learn = async (
+    boxes: (typeof memberBox)[],
+    message: FakeMessageInput,
+    script: () => void,
+  ) => {
+    for (const box of boxes) {
+      delivered.set(message, box.mailbox.add(message).id);
+      await pollConnection(systemCtx(orgA.id), box.id);
+    }
     script();
     return learnStoredItems(orgA.id);
   };
   await backfillConnection(orgA.member.ctx, memberBox.id);
   await backfillConnection(orgA.admin.ctx, adminBox.id);
+  // The admin deletes May's email in Gmail, and memory follows.
+  const deleteMay = async () => {
+    adminBox.mailbox.delete(delivered.get(may) ?? "");
+    await pollConnection(systemCtx(orgA.id), adminBox.id);
+    await followAppChanges(orgA.id);
+  };
   return {
     ...orgs,
     memberBox,
     adminBox,
-    learnMarch: () => learn(memberBox, march, scriptMarch),
-    learnMay: () => learn(adminBox, may, scriptMay),
+    deleteMay,
+    learnMarch: () => learn([memberBox, adminBox], march, scriptMarch),
+    learnMay: () => learn([adminBox], may, scriptMay),
     // A day after May, to the member, copying the admin: the renewal is now in June.
     learnJune: () =>
       learn(
-        memberBox,
-        email({ text: "Our renewal at acme.example is now in June.", at: daysAgo(1) }),
+        [memberBox, adminBox],
+        email({
+          text: "Our renewal at acme.example is now in June.",
+          at: daysAgo(1),
+          headers: { "Message-ID": "<june@acme.example>" },
+        }),
         () => {
           scriptLearning(
             {
@@ -189,11 +211,11 @@ describe("a fact that changes", () => {
   });
 
   it("makes the older fact current again when the newer one's source goes", async () => {
-    const { orgA, adminBox, learnMarch, learnMay } = await setup();
+    const { orgA, deleteMay, learnMarch, learnMay } = await setup();
     await learnMarch();
     await learnMay();
 
-    await disconnect(orgA.admin.ctx, adminBox.id);
+    await deleteMay();
 
     const seen = await readObject(orgA.admin.ctx, byDomain);
     expect(statements(seen.facts)).toEqual([SEATS, MARCH]);
@@ -202,12 +224,12 @@ describe("a fact that changes", () => {
   });
 
   it("keeps the history whole when a fact in the middle of it goes", async () => {
-    const { orgA, adminBox, learnMarch, learnMay, learnJune } = await setup();
+    const { orgA, deleteMay, learnMarch, learnMay, learnJune } = await setup();
     await learnMarch();
     await learnMay();
     await learnJune();
 
-    await disconnect(orgA.admin.ctx, adminBox.id);
+    await deleteMay();
 
     const seen = await readObject(orgA.admin.ctx, byDomain);
     expect(statements(seen.facts)).toEqual([SEATS, JUNE]);

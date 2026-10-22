@@ -8,7 +8,7 @@ import { forOrg } from "@/db/for-org";
 import type { Ctx } from "@/lib/ctx";
 import type { FactSource, HistoricFact, MemoryFact } from "../types";
 import { factSources, facts, memoryObjects, sourceRecords } from "./schema";
-import { type Viewer, visibleSourceRecords } from "./visibility";
+import { type Viewer, viewerOf, visibleSourceRecords } from "./visibility";
 
 export type FactRow = typeof facts.$inferSelect;
 
@@ -122,7 +122,10 @@ export async function describeHistory(ctx: Ctx, history: SeenHistory[]): Promise
   });
 }
 
-/** Seen facts as the reader gets them, each with the object it links its subject to. */
+/**
+ * Seen facts as the reader gets them, each with the object it links its subject to, and the
+ * fact it contradicts when the reader can see that one.
+ */
 export async function describeFacts(ctx: Ctx, seen: SeenFact[]): Promise<MemoryFact[]> {
   const linkedIds = [...new Set(seen.flatMap(({ fact }) => fact.objectId ?? []))];
   const linked =
@@ -131,6 +134,10 @@ export async function describeFacts(ctx: Ctx, seen: SeenFact[]): Promise<MemoryF
       : await forOrg(ctx).select(memoryObjects, {
           where: inArray(memoryObjects.id, linkedIds),
         });
+  const conflicting = await visibleFacts(
+    ctx,
+    seen.flatMap(({ fact }) => fact.conflictsWithId ?? []),
+  );
   return seen.map(({ fact, sources }) => {
     const other = linked.find((candidate) => candidate.id === fact.objectId);
     return {
@@ -144,6 +151,18 @@ export async function describeFacts(ctx: Ctx, seen: SeenFact[]): Promise<MemoryF
       validUntil: fact.validUntil,
       recordedAt: fact.recordedAt,
       sources,
+      conflictsWith:
+        fact.conflictsWithId !== null && conflicting.has(fact.conflictsWithId)
+          ? fact.conflictsWithId
+          : null,
     };
   });
+}
+
+// Which of the facts `ids` the reader can see.
+async function visibleFacts(ctx: Ctx, ids: string[]): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+  const rows = await forOrg(ctx).select(facts, { where: inArray(facts.id, [...new Set(ids)]) });
+  const seen = await seenFacts(ctx, await viewerOf(ctx), rows);
+  return new Set(seen.map(({ fact }) => fact.id));
 }

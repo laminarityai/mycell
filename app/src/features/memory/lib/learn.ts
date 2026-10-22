@@ -188,7 +188,7 @@ async function read(ctx: Ctx, item: ItemToLearn): Promise<Source | Unread> {
   const read =
     item.app === "drive"
       ? await readDoc(ctx, connection.id, item.sourceRef)
-      : ((await readEmail(ctx, connection.id, item.sourceRef)) ?? "gone");
+      : ((await readEmail(ctx, connection, item.sourceRef)) ?? "gone");
   return typeof read === "string" ? read : { connection, app: item.app, item: read };
 }
 

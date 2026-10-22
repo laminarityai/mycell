@@ -10,6 +10,7 @@
 import { z } from "zod";
 import { proxyGet, proxyGetText } from "@/features/connections/server";
 import { SourceRequestError } from "@/features/connections/types";
+import { getWorkspaceDomain } from "@/features/orgs/server";
 import type { Ctx } from "@/lib/ctx";
 import type { AccessEntry, SourceItem } from "./source-item";
 
@@ -22,7 +23,8 @@ export const GOOGLE_DOC = "application/vnd.google-apps.document";
 export const MAX_DOC_CHARS = 24_000;
 
 const FIELDS =
-  "id, mimeType, modifiedTime, trashed, parents, permissions(type, emailAddress, domain, deleted)";
+  "id, mimeType, modifiedTime, trashed, parents, owners(emailAddress), " +
+  "permissions(type, emailAddress, domain, deleted)";
 
 const fileSchema = z.object({
   id: z.string(),
@@ -30,6 +32,7 @@ const fileSchema = z.object({
   modifiedTime: z.string(),
   trashed: z.boolean().optional(),
   parents: z.array(z.string()).optional(),
+  owners: z.array(z.object({ emailAddress: z.string().optional() })).optional(),
   permissions: z
     .array(
       z.object({
@@ -74,6 +77,7 @@ export async function readDoc(
     throw error;
   }
   if (text === null) return "gone";
+  const domain = (await getWorkspaceDomain(ctx)).toLowerCase();
   return {
     kind: "document",
     sourceRef,
@@ -82,6 +86,10 @@ export async function readDoc(
     access: accessList(file.permissions ?? []),
     parentIds: file.parents ?? [],
     addresses: [],
+    // A doc a colleague owns; one in a shared drive has no owner, and counts as from outside.
+    fromInside: (file.owners ?? []).some(
+      (owner) => owner.emailAddress?.toLowerCase().endsWith(`@${domain}`) === true,
+    ),
     senders: [],
     text: text.slice(0, MAX_DOC_CHARS),
   };

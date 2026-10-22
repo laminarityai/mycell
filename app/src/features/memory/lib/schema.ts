@@ -8,6 +8,7 @@
 // transaction. No table holds source text (invariant 8): statements are short derived facts.
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   customType,
   foreignKey,
   index,
@@ -61,6 +62,10 @@ export const sourceRecords = pgTable(
     occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
     // When its access list was last read from the app.
     accessCheckedAt: timestamp("access_checked_at", { withTimezone: true }).notNull(),
+    // Whether it came from inside the company, as Mycel saw: an email one of the company's
+    // connected mailboxes sent, or a doc a colleague owns. A fact stated only from outside never
+    // supersedes one from inside or a company-wide one (`supersede.ts`).
+    fromInside: boolean("from_inside").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
@@ -81,8 +86,11 @@ export const sourceRecords = pgTable(
 );
 
 /**
- * A source record's access list, one principal a row, copied from the app (ADR-0023): an
- * address (a person's or a group's), a domain, or anyone. An email's is everyone on it.
+ * A source record's access list, one principal a row (ADR-0023): an address (a person's or a
+ * group's), a domain, or anyone. Only confirmed entries widen who sees the record: a doc's
+ * sharing list as Drive gives it, the mailbox that holds an email, and everyone on an email
+ * that mailbox sent. The rest of an email's addresses are what its sender wrote in its headers,
+ * kept unconfirmed for exclusions only: anyone can write any address there.
  */
 export const accessListEntries = pgTable(
   "access_list_entries",
@@ -93,6 +101,8 @@ export const accessListEntries = pgTable(
     kind: text("kind", { enum: ["address", "domain", "anyone"] }).notNull(),
     // A lowercased address or domain; empty for anyone.
     value: text("value").notNull(),
+    // Whether Mycel saw that the principal may see the item, rather than its sender saying so.
+    confirmed: boolean("confirmed").notNull().default(true),
   },
   (table) => [
     primaryKey({ columns: [table.sourceRecordId, table.kind, table.value] }),
@@ -189,6 +199,10 @@ export const facts = pgTable(
     // Set when a newer fact replaced it; it stays as history meanwhile.
     supersededAt: timestamp("superseded_at", { withTimezone: true }),
     supersededById: text("superseded_by_id"),
+    // For a fact stated only from outside the company: the fact from inside, or company-wide,
+    // that it contradicts but couldn't supersede, so both stay current. No foreign key: a fact
+    // it names that's gone is no conflict.
+    conflictsWithId: text("conflicts_with_id"),
     embedding: vector("embedding", { dimensions: EMBEDDING_DIMENSIONS }).notNull(),
     // The keyword index's document, derived from the statement by Postgres.
     keywords: tsvector("keywords")

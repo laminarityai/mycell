@@ -15,10 +15,15 @@ export type SourceItem = {
   // The same for every copy of the item: an email's Message-ID, or a Drive file's ID.
   itemKey: string;
   occurredAt: Date;
-  // Who the app says may see it, lowercased: everyone on an email, a doc's sharing list.
+  // Who Mycel saw may see it, lowercased (its confirmed access list): a doc's sharing list; the
+  // mailbox holding an email, and everyone on an email that mailbox sent.
   access: AccessEntry[];
-  // The addresses the item shows besides those in its text, lowercased: everyone on an email.
+  // The addresses the item shows besides those in its text, lowercased: everyone on an email,
+  // as its headers say. Those not in `access` are kept unconfirmed, for exclusions only.
   addresses: string[];
+  // Whether it came from inside the company: an email the mailbox holding it sent, or a doc a
+  // colleague owns.
+  fromInside: boolean;
   // Who sent it, lowercased: an email's From. None for a doc.
   senders: string[];
   // As a model reads it. In memory only.

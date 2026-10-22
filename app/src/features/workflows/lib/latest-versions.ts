@@ -1,6 +1,6 @@
 // Reading published versions: a version's row in the current spec's shape, and each workflow's
 // latest one, which is what everything switched on follows.
-import { desc, inArray } from "drizzle-orm";
+import { asc, desc, inArray } from "drizzle-orm";
 import { forOrg, type OrgScopedDb } from "@/db/for-org";
 import { readStoredSpec } from "@/features/spec/stored";
 import type { Ctx } from "@/lib/ctx";
@@ -32,14 +32,12 @@ export async function latestVersions(
   workflowIds: string[],
   db: OrgScopedDb = forOrg(ctx),
 ): Promise<Map<string, WorkflowVersion>> {
-  const latest = new Map<string, WorkflowVersion>();
-  if (workflowIds.length === 0) return latest;
+  if (workflowIds.length === 0) return new Map();
+  // One row per workflow, its highest number: older versions, specs and all, stay in Postgres.
   const rows = await db.select(workflowVersions, {
     where: inArray(workflowVersions.workflowId, workflowIds),
-    orderBy: [desc(workflowVersions.number)],
+    distinctOn: [workflowVersions.workflowId],
+    orderBy: [asc(workflowVersions.workflowId), desc(workflowVersions.number)],
   });
-  for (const row of rows) {
-    if (!latest.has(row.workflowId)) latest.set(row.workflowId, version(row));
-  }
-  return latest;
+  return new Map(rows.map((row) => [row.workflowId, version(row)]));
 }

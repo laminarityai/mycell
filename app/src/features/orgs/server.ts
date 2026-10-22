@@ -3,6 +3,7 @@
 // Auth's tables.
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 import type { Ctx } from "@/lib/ctx";
 import { getAuth } from "./lib/auth";
 import { findCtx } from "./lib/find-ctx";
@@ -21,13 +22,15 @@ export { findCtx } from "./lib/find-ctx";
 
 /**
  * The signed-in user's ctx, read fresh from their membership on every request. Pages and Server
- * Actions get ctx from here only. With no session or no org, it redirects to sign-in.
+ * Actions get ctx from here only. With no session or no org, it redirects to sign-in. React's
+ * cache makes it one read per page render, however many of the page's components ask; a Server
+ * Action isn't a render, so each call there reads afresh.
  */
-export async function getCtx(): Promise<Ctx> {
+export const getCtx = cache(async (): Promise<Ctx> => {
   const ctx = await findSessionCtx();
   if (ctx === undefined) redirect("/sign-in");
   return ctx;
-}
+});
 
 /**
  * The signed-in user's ctx, or undefined with no session or no org. For route handlers, which

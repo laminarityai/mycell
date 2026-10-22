@@ -11,6 +11,7 @@ import { creditLedger } from "./schema";
 
 /** The org's credits left. */
 export async function getBalance(ctx: Ctx): Promise<number> {
+  // Summed in the database: every model call checks it, and the ledger grows by one row per call.
   return forOrg(ctx).sum(creditLedger, creditLedger.amount);
 }
 

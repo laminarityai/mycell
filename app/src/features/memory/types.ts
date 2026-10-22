@@ -1,0 +1,71 @@
+// Memory's public types: what it learns from, what learning did, and an object as a reader sees
+// it (ADR-0022).
+import { z } from "zod";
+
+/** The apps memory learns from. Drive and Calendar join with their tickets. */
+export const MEMORY_APPS = ["gmail"] as const;
+export type MemoryApp = (typeof MEMORY_APPS)[number];
+
+/** The kinds of object memory holds. */
+export const OBJECT_KINDS = ["person", "company", "deal", "project", "document"] as const;
+export type ObjectKind = (typeof OBJECT_KINDS)[number];
+
+/**
+ * Exact identifiers an object is matched on, each unique in an org: a person's email address, a
+ * company's domain. Drive file IDs and CRM IDs join later.
+ */
+export const OBJECT_KEY_KINDS = ["email", "domain"] as const;
+export type ObjectKeyKind = (typeof OBJECT_KEY_KINDS)[number];
+
+/** One item to learn from: what discovery's `discovery/item.stored` points at. */
+export const itemToLearnSchema = z.object({
+  connectionId: z.string().min(1),
+  app: z.enum(MEMORY_APPS),
+  sourceRef: z.string().min(1),
+});
+export type ItemToLearn = z.infer<typeof itemToLearnSchema>;
+
+/**
+ * What learning from one item did: stored facts about objects (a copy of an item learned
+ * already reuses its facts), skipped it, or found its connection or the item gone.
+ */
+export type LearnOutcome =
+  | { outcome: "learned"; objects: number; facts: number }
+  | { outcome: "skipped"; reason: "known" | "not_business" | "nothing_stated" }
+  | { outcome: "gone" };
+
+/** How a reader names an object: by its ID, or by one of its exact keys. */
+export type ObjectLookup = { id: string } | { key: { kind: ObjectKeyKind; value: string } };
+
+/** Where a fact came from: a pointer to re-fetch the item, never its content. */
+export type FactSource = {
+  app: MemoryApp;
+  connectionId: string;
+  sourceRef: string;
+  occurredAt: Date;
+};
+
+/** A fact as one reader sees it: with only the sources that reader can see. */
+export type MemoryFact = {
+  id: string;
+  statement: string;
+  predicate: string | null;
+  value: string | null;
+  // The other object the fact links its subject to ("Dana works at Acme").
+  linkedObject: { id: string; kind: ObjectKind; name: string } | null;
+  // When it became true and stopped being true, as far as its sources say.
+  validFrom: Date | null;
+  validUntil: Date | null;
+  // When memory recorded it.
+  recordedAt: Date;
+  sources: FactSource[];
+};
+
+/** An object with the facts about it its reader can see. */
+export type MemoryObject = {
+  id: string;
+  kind: ObjectKind;
+  name: string;
+  keys: { kind: ObjectKeyKind; value: string }[];
+  facts: MemoryFact[];
+};

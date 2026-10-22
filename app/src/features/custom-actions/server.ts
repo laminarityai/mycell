@@ -1,3 +1,4 @@
 // The custom-actions feature (ADR-0018): a company's own actions and its action set, the
 // catalog plus those actions, which `workflows`, `builder` and `runtime` resolve per company.
-export { getActionSet } from "./lib/action-set";
+// Workflows store the custom actions an accepted proposal brings, with its spec.
+export { getActionSet, listCustomActions, storeCustomActions } from "./lib/action-set";

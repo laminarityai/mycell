@@ -2,7 +2,9 @@
 // setup. Every failing stage's issues come back together in one SpecInvalidError.
 import { gmailConnections, listConnections } from "@/features/connections/server";
 import type { ConnectionSummary } from "@/features/connections/types";
-import { getActionSet } from "@/features/custom-actions/server";
+import { actionSetWith } from "@/features/custom-actions/description";
+import { listCustomActions } from "@/features/custom-actions/server";
+import type { CustomActionRecord } from "@/features/custom-actions/types";
 import { applyPolicy } from "@/features/policy/engine";
 import type { ActionSet } from "@/features/policy/types";
 import { eachStep } from "@/features/spec/tree";
@@ -12,6 +14,7 @@ import { validateSpec } from "@/features/spec/validate";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { SpecInvalidError } from "@/lib/errors";
 import type { SpecCheck, ValidatedSpec } from "../types";
+import { unconnectedApps } from "./requirements";
 import { scopeIssues } from "./scope-check";
 
 export type { ValidatedSpec };
@@ -70,12 +73,18 @@ export function checkedByPolicy(input: unknown, actions: ActionSet): ValidatedSp
 
 /**
  * Validates `input` for the caller as saving would, returning every issue instead of throwing
- * them: for the builder's proposals and the editor's live validation.
+ * them: for the builder's proposals and the editor's live validation. A proposal checks its spec
+ * with the custom actions it brings, `newCustomActions`, as if they were stored.
  */
-export async function checkWorkflowSpec(ctx: Ctx, input: unknown): Promise<SpecCheck> {
+export async function checkWorkflowSpec(
+  ctx: Ctx,
+  input: unknown,
+  newCustomActions: readonly CustomActionRecord[] = [],
+): Promise<SpecCheck> {
   requireAdmin(ctx);
+  const actions = actionSetWith([...(await listCustomActions(ctx)), ...newCustomActions]);
   try {
-    return { ok: true, ...(await validateWorkflowSpec(ctx, input, await getActionSet(ctx))) };
+    return { ok: true, ...(await validateWorkflowSpec(ctx, input, actions)) };
   } catch (error) {
     if (error instanceof SpecInvalidError) return { ok: false, issues: error.issues };
     throw error;
@@ -112,7 +121,22 @@ const connectionCheck: SetupCheck = (spec, setup) => {
 const scopeCheck: SetupCheck = (spec, setup, actions) =>
   scopeIssues(spec, candidateConnections(spec, setup), actions);
 
-const SETUP_CHECKS: SetupCheck[] = [connectionCheck, scopeCheck];
+/**
+ * A custom action in a registered app other than Google runs through a connection to that app
+ * of the kind the credentials name: the runner's own, or the org's (ADR-0018).
+ */
+const appConnectionCheck: SetupCheck = (spec, setup, actions) => {
+  const member = spec.credentials === "member";
+  const connections = member ? setup.ownConnections : setup.orgConnections;
+  return unconnectedApps(requiredActions(spec), connections, actions).map((app) => ({
+    path: ["credentials"],
+    message: member
+      ? `This workflow uses ${app}, so it needs your own ${app} connection. Connect ${app} first.`
+      : `This workflow uses ${app}, so it needs an org ${app} connection. Connect a shared ${app} account first.`,
+  }));
+};
+
+const SETUP_CHECKS: SetupCheck[] = [connectionCheck, scopeCheck, appConnectionCheck];
 
 // A Google connection reaches Gmail when it was granted Gmail (ADR-0014).
 export function reachesGmail(connection: ConnectionSummary): boolean {

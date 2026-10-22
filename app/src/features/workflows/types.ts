@@ -1,3 +1,4 @@
+import type { CustomActionRecord } from "@/features/custom-actions/types";
 import type { InsertedApproval, RequirementsGained, RiskLevel } from "@/features/policy/types";
 import type { Spec, SpecIssue } from "@/features/spec/types";
 import type { Tag } from "@/features/tags/types";
@@ -13,6 +14,12 @@ export type WorkflowInput = {
    * ConflictError if the working spec has moved on since.
    */
   baseRevision?: number;
+  /**
+   * Custom actions the spec brings with it, as accepted from the builder proposal `proposalId`
+   * (ADR-0018): stored in the same transaction as the spec, so neither is stored without the
+   * other.
+   */
+  newCustomActions?: { actions: readonly CustomActionRecord[]; proposalId: string };
 };
 
 /** What saving showed: the working spec's max risk and the approvals the policy inserted. */

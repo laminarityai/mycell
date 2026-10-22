@@ -1,23 +1,12 @@
 // What a Google connection needs beyond Nango itself: the API host each Google API path is on,
 // which apps its granted scopes allow, and how to read which account it reached.
 import { z } from "zod";
-import { GOOGLE_HOSTS } from "@/lib/google";
+import { GOOGLE_API_PREFIXES } from "@/lib/google";
 import { GOOGLE_APP_SCOPES, googleAppSchema, type GoogleApp } from "../types";
 import { NangoConnectionGoneError, nangoProxyGet, type ProxyTarget } from "./nango";
 
 /** The sources that reach Google: one Google connection, or a one-app one from before it. */
 export type GoogleSource = "google" | "gmail" | "drive";
-
-// Each Google API's host, by the prefix its paths start with. Every proxied call names its
-// host with Nango's Base-Url-Override, since one integration reaches them all.
-const API_HOSTS: { prefix: string; host: string }[] = [
-  { prefix: "/gmail/", host: GOOGLE_HOSTS.gmail },
-  { prefix: "/drive/", host: GOOGLE_HOSTS.www },
-  { prefix: "/v4/spreadsheets", host: GOOGLE_HOSTS.sheets },
-  { prefix: "/calendar/", host: GOOGLE_HOSTS.www },
-  { prefix: "/v1/documents", host: GOOGLE_HOSTS.docs },
-  { prefix: "/tasks/", host: GOOGLE_HOSTS.tasks },
-];
 
 /**
  * Where a Google API path is served: its host, found from the path's prefix. Our own code
@@ -25,7 +14,7 @@ const API_HOSTS: { prefix: string; host: string }[] = [
  * which the action boundary rethrows (src/lib/errors.ts, actionError).
  */
 export function proxyTarget(path: string): ProxyTarget {
-  const api = API_HOSTS.find(({ prefix }) => path.startsWith(prefix));
+  const api = GOOGLE_API_PREFIXES.find(({ prefix }) => path.startsWith(prefix));
   if (api === undefined) throw new Error(`No Google API serves ${path}`);
   return { baseUrl: api.host, path };
 }

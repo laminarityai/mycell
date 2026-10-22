@@ -27,6 +27,7 @@ const sheetRange = z.string().regex(/^.+![^!]+$/, "Name the sheet in the range, 
 
 const actions = [
   {
+    kind: "catalog",
     name: "google-mail.read-message",
     app: "Gmail",
     description: "Read one message: its IDs, labels, sender, subject and plain-text body.",
@@ -46,6 +47,7 @@ const actions = [
     }),
   },
   {
+    kind: "catalog",
     name: "google-mail.read-thread",
     app: "Gmail",
     description: "Read the thread a message belongs to.",
@@ -60,6 +62,7 @@ const actions = [
     ],
   },
   {
+    kind: "catalog",
     name: "google-mail.add-label",
     app: "Gmail",
     description: "Add a label to a message, creating the label if it doesn't exist.",
@@ -71,6 +74,7 @@ const actions = [
     output: z.object({ messageId: id, labelId: id }),
   },
   {
+    kind: "catalog",
     name: "google-mail.create-draft",
     app: "Gmail",
     description: "Write a reply to the triggering message as a draft in its thread.",
@@ -84,6 +88,7 @@ const actions = [
     output: z.object({ draftId: id, threadId: id }),
   },
   {
+    kind: "catalog",
     name: "google-sheet.read-range",
     app: "Sheets",
     description: "Read a range of cells from a spreadsheet.",
@@ -102,6 +107,7 @@ const actions = [
     conditionFields: [{ name: "rowCount", type: "number", label: "The number of rows read" }],
   },
   {
+    kind: "catalog",
     name: "google-sheet.append-row",
     app: "Sheets",
     description: "Add a row after the last row of a range's table.",

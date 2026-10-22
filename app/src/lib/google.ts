@@ -12,6 +12,19 @@ export const GOOGLE_HOSTS = {
   tasks: "https://tasks.googleapis.com",
 } as const;
 
+/**
+ * Each Google API's host, by the prefix its paths start with. Every proxied call names its host
+ * with Nango's Base-Url-Override, since one integration reaches them all.
+ */
+export const GOOGLE_API_PREFIXES: readonly { prefix: string; host: string }[] = [
+  { prefix: "/gmail/", host: GOOGLE_HOSTS.gmail },
+  { prefix: "/drive/", host: GOOGLE_HOSTS.www },
+  { prefix: "/v4/spreadsheets", host: GOOGLE_HOSTS.sheets },
+  { prefix: "/calendar/", host: GOOGLE_HOSTS.www },
+  { prefix: "/v1/documents", host: GOOGLE_HOSTS.docs },
+  { prefix: "/tasks/", host: GOOGLE_HOSTS.tasks },
+];
+
 /** What every Google OAuth scope URL starts with. */
 export const GOOGLE_SCOPE_PREFIX = "https://www.googleapis.com/auth/";
 

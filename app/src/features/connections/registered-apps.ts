@@ -6,7 +6,7 @@
 // Registering an app: add its ID to `registeredAppIdSchema` (types.ts), its entry below, its API
 // description under `app/api-descriptions/`, how to read which account it reached
 // (lib/apps.ts), its integration to `pnpm nango:preflight`, and a fake of it to the fake Nango.
-import { GOOGLE_HOSTS } from "@/lib/google";
+import { GOOGLE_API_PREFIXES, GOOGLE_HOSTS } from "@/lib/google";
 import {
   GOOGLE_APP_SCOPES,
   registeredAppIdSchema,
@@ -94,6 +94,25 @@ export const REGISTERED_APPS: Record<RegisteredAppId, RegisteredApp> = {
 export const registeredApps: readonly RegisteredApp[] = registeredAppIdSchema.options.map(
   (id) => REGISTERED_APPS[id],
 );
+
+/**
+ * The URL a path reaches on the app: on Google, the host of the API its prefix names; on any
+ * other app, its first host, which its Nango integration proxies to. Undefined when the path
+ * would leave the app's hosts or isn't plainly a path: it must start with one `/`, and name no
+ * host, no `.` or `..` segment, no backslash and no fragment, so the URL is the path as written.
+ */
+export function appUrl(app: RegisteredApp, path: string): string | undefined {
+  if (!path.startsWith("/") || path.startsWith("//") || /[\\#\s]/.test(path)) return undefined;
+  const pathname = path.split("?", 1)[0] ?? "";
+  if (pathname.split("/").some((segment) => /^(\.|%2e){1,2}$/i.test(segment))) return undefined;
+  const host =
+    app.id === "google"
+      ? GOOGLE_API_PREFIXES.find(({ prefix }) => path.startsWith(prefix))?.host
+      : app.hosts.at(0);
+  if (host === undefined) return undefined;
+  const url = new URL(path, host);
+  return isAppHost(app, url.href) && url.pathname === pathname ? url.href : undefined;
+}
 
 /** Whether a URL is on one of the app's hosts: its origin is exactly one of them. */
 export function isAppHost(app: RegisteredApp, url: string): boolean {

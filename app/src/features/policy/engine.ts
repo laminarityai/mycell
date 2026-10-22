@@ -11,7 +11,7 @@ import { conditionIssues } from "./condition-fields";
 import {
   riskLevelSchema,
   type ActionSet,
-  type CatalogAction,
+  type Action,
   type InsertedApproval,
   type PolicyResult,
   type Requirements,
@@ -34,7 +34,7 @@ export function maxRisk(spec: Spec, actions: ActionSet): RiskLevel {
     const action = actions.find(used.name);
     if (action === undefined) {
       const path = [...location, used.field];
-      throw new SpecInvalidError([{ path, message: `"${used.name}" isn't a catalog action.` }]);
+      throw new SpecInvalidError([{ path, message: `"${used.name}" isn't a catalog action or one of the company's custom actions.` }]);
     }
     if (ORDER.indexOf(action.risk) > ORDER.indexOf(highest)) highest = action.risk;
   }
@@ -95,11 +95,12 @@ export function requirementsGained(
   return Object.keys(gained).length === 0 ? null : gained;
 }
 
-// Each action's scopes, any one of which allows it.
+// Each catalog action's scopes, any one of which allows it. A custom action needs no scope on
+// the run's own connection: it reaches its app through a connection to that app, a new app.
 function scopeSets(actionNames: readonly string[], actions: ActionSet): (readonly string[])[] {
   return actionNames.flatMap((name) => {
     const action = actions.find(name);
-    return action === undefined ? [] : [action.scopes];
+    return action?.kind === "catalog" ? [action.scopes] : [];
   });
 }
 
@@ -141,7 +142,7 @@ function actionIssues(spec: Spec, actions: ActionSet): SpecIssue[] {
     const path = [...location, field];
     const action = actions.find(name);
     if (action === undefined) {
-      issues.push({ path, message: `"${name}" isn't a catalog action.` });
+      issues.push({ path, message: `"${name}" isn't a catalog action or one of the company's custom actions.` });
     } else if (step.type === "tool" && action.risk === "external_send") {
       issues.push({
         path,
@@ -163,7 +164,7 @@ function actionIssues(spec: Spec, actions: ActionSet): SpecIssue[] {
 function literalInputIssues(
   step: Extract<Step, { type: "tool" }>,
   location: SpecIssue["path"],
-  action: CatalogAction,
+  action: Action,
 ): SpecIssue[] {
   if (!(action.input instanceof z.ZodObject)) return [];
   const shape = action.input.shape as Record<string, z.ZodType | undefined>;

@@ -47,7 +47,8 @@ function actionUses(spec: Spec, actions: ActionSet): ActionUse[] {
           ? { field: "output", action: step.output }
           : undefined;
     const action = named === undefined ? undefined : actions.find(named.action);
-    if (named === undefined || action === undefined) return [];
+    // A custom action runs through a connection to its own app, not this one (requirements.ts).
+    if (named === undefined || action?.kind !== "catalog") return [];
     return [
       {
         path: [...location, named.field],

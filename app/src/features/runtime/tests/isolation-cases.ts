@@ -159,6 +159,17 @@ export const isolationCases = defineIsolationCases(server, {
     expect(listing).toHaveLength(1);
   },
 
+  recentInvites: async (orgs) => {
+    const orgB = await seedOrgBCalendar(orgs);
+    orgB.calendar.invite({ title: "Intro", organizer: "ada@customer.test" });
+    await connectGoogle(orgs.orgA.admin.ctx, orgs.orgA.admin.email);
+
+    const listing = await server.recentInvites(orgs.orgA.admin.ctx);
+
+    expect(listing.map((connection) => connection.connectionId)).not.toContain(orgB.connectionId);
+    expect(listing).toEqual([expect.objectContaining({ messages: [] })]);
+  },
+
   setModelRole: async (orgs) => {
     await seedOrgB(orgs);
 

@@ -235,9 +235,16 @@ export class FakeCalendar {
       return { ids, incremental: true, params: signature, end: this.change };
     }
     const showDeleted = params.get("showDeleted") === "true";
-    const ids = [...this.events.values()]
-      .filter((event) => showDeleted || event.status !== "cancelled")
-      .map((event) => event.id);
+    const updatedMin = Date.parse(params.get("updatedMin") ?? "") || Number.NEGATIVE_INFINITY;
+    const listed = [...this.events.values()].filter(
+      (event) =>
+        (showDeleted || event.status !== "cancelled") && Date.parse(event.updated) >= updatedMin,
+    );
+    // Ordered by when each last changed, oldest first, when asked; Google's order otherwise.
+    if (params.get("orderBy") === "updated") {
+      listed.sort((a, b) => Date.parse(a.updated) - Date.parse(b.updated));
+    }
+    const ids = listed.map((event) => event.id);
     return { ids, incremental: false, params: signature, end: this.change };
   }
 

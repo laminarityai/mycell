@@ -22,8 +22,8 @@ type RunStepRow = typeof runSteps.$inferSelect;
 const RECENT_RUNS = 20;
 
 /**
- * Runs the workflow's latest version on one message of a connection, as a debugging aid: the
- * manual twin of the trigger. The connection must suit the spec's credentials (the admin's own
+ * Runs the workflow's latest version on one message of a connection, or one calendar event
+ * when its trigger is a new invite, as a debugging aid: the manual twin of the trigger. The connection must suit the spec's credentials (the admin's own
  * member connection, or an org connection) and be the admin's to read.
  */
 export async function startRun(
@@ -34,7 +34,9 @@ export async function startRun(
 ): Promise<{ runId: string }> {
   requireAdmin(ctx);
   const messageId = sourceRef.trim();
-  if (messageId === "") throw new ValidationError("Give the ID of a Gmail message.");
+  if (messageId === "") {
+    throw new ValidationError("Give the ID of a Gmail message, or of a calendar event.");
+  }
   const workflow = await getWorkflow(ctx, workflowId);
   const latest = workflow.versions.at(0);
   if (latest === undefined) throw new ValidationError("Publish the workflow before running it.");

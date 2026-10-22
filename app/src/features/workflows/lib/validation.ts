@@ -11,7 +11,6 @@ import { validateSpec } from "@/features/spec/validate";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { SpecInvalidError } from "@/lib/errors";
 import type { SpecCheck, ValidatedSpec } from "../types";
-import { GOOGLE_APPS } from "./requirements";
 import { scopeIssues } from "./scope-check";
 
 export type { ValidatedSpec };
@@ -111,7 +110,7 @@ const SETUP_CHECKS: SetupCheck[] = [connectionCheck, scopeCheck];
 
 /** The Google app the spec's trigger watches, as connections name it. */
 export function triggerApp(spec: Pick<Spec, "trigger">): GoogleApp {
-  return GOOGLE_APPS[triggers[spec.trigger.type].app];
+  return triggers[spec.trigger.type].googleApp;
 }
 
 // A Google connection reaches the trigger's app when it was granted it (ADR-0014).

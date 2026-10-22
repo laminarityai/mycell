@@ -17,10 +17,12 @@ export const triggerTypes: readonly TriggerType[] = [
 export type TriggerInfo = {
   /** The app it watches, as admins name it; a connection must be granted it. */
   app: "Gmail" | "Calendar";
+  /** That app as connections name it (a Google app). */
+  googleApp: "gmail" | "calendar";
   /** What starts a run, in an admin's words. */
   words: string;
   /** The item a run starts on, as a step's words name it: "message" or "invite". */
-  item: string;
+  item: "message" | "invite";
   /** The facts a check may test, as `{ from: "trigger.<name>" }`. */
   facts: readonly ConditionField[];
   /** The fields a tool's input may read, as `{ from: "trigger.<name>" }`. */
@@ -37,6 +39,7 @@ export type TriggerInfo = {
 export const triggers: Readonly<Record<TriggerType, TriggerInfo>> = {
   "gmail.message_received": {
     app: "Gmail",
+    googleApp: "gmail",
     words: "When a message arrives in Gmail",
     item: "message",
     facts: [
@@ -52,6 +55,7 @@ export const triggers: Readonly<Record<TriggerType, TriggerInfo>> = {
   },
   "calendar.invite_received": {
     app: "Calendar",
+    googleApp: "calendar",
     words: "When a new invite lands on the calendar",
     item: "invite",
     facts: [

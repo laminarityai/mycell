@@ -4,6 +4,7 @@ import { listConversations } from "@/features/builder/server";
 import { ConversationList, NewConversationButton } from "@/features/builder/ui";
 import { getCtx } from "@/features/orgs/server";
 import { listRuns } from "@/features/runtime/server";
+import { triggers } from "@/features/spec/triggers";
 import { listTags } from "@/features/tags/server";
 import { RecentRuns, RunOnMessageForm } from "@/features/runtime/ui";
 import { getWorkflow, previewPublish, runnableConnections } from "@/features/workflows/server";
@@ -86,7 +87,11 @@ async function Workflow({ params }: Pick<PageProps<"/workflows/[workflowId]">, "
       </section>
       <section className="flex flex-col gap-3" aria-label="Runs">
         <h2 className="text-lg font-semibold">Runs</h2>
-        <RunOnMessageForm workflowId={workflow.id} connections={connections} />
+        <RunOnMessageForm
+          workflowId={workflow.id}
+          connections={connections}
+          item={triggers[workflow.workingSpec.trigger.type].item}
+        />
         <RecentRuns runs={runs} />
       </section>
     </div>

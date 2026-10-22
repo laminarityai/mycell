@@ -9,7 +9,7 @@ import type { WorkflowVersion } from "../types";
 import { scopeName } from "./scope-check";
 
 /** Each catalog app as connections name it. */
-export const GOOGLE_APPS: Record<CatalogAction["app"], GoogleApp> = {
+const GOOGLE_APPS: Record<CatalogAction["app"], GoogleApp> = {
   Gmail: "gmail",
   Sheets: "sheets",
   Calendar: "calendar",

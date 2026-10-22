@@ -40,6 +40,13 @@ export const isolationCases = defineIsolationCases(server, {
     expect(users.map((u) => u.id).sort()).toEqual([orgA.admin.id, orgA.member.id].sort());
   },
 
+  findUser: async ({ orgA, orgB }) => {
+    expect(await server.findUser(orgA.member.ctx, orgB.admin.id)).toBeNull();
+    expect(await server.findUser(orgA.member.ctx, orgA.admin.id)).toEqual(
+      expect.objectContaining({ id: orgA.admin.id, role: "admin" }),
+    );
+  },
+
   userNames: async ({ orgA, orgB }) => {
     const nameOf = await server.userNames(orgA.member.ctx);
 

@@ -19,8 +19,10 @@ export async function openMeteredStream(
   role: ModelRole,
   attribution: CallAttribution = {},
 ): Promise<MeteredStream> {
-  const modelId = await resolveModel(ctx, role);
-  await checkCredits(ctx, CREDIT_ESTIMATES[role]);
+  const [modelId] = await Promise.all([
+    resolveModel(ctx, role),
+    checkCredits(ctx, CREDIT_ESTIMATES[role]),
+  ]);
 
   // A plain gateway provider: the metering fetch of `meteredGateway` reads JSON bodies, which
   // would hold back a stream. A streamed step reports its cost on its finish part instead.

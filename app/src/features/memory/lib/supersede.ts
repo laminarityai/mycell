@@ -36,7 +36,10 @@ export async function placeInTimelines(
   added: Set<string> = new Set(),
 ): Promise<void> {
   if (factIds.length === 0) return;
-  const placed = await tx.select(facts, { where: inArray(facts.id, factIds) });
+  const placed = await tx.select(facts, {
+    columns: ["subjectId", "predicate"],
+    where: inArray(facts.id, factIds),
+  });
   const timelines = new Map<string, SQL>();
   for (const fact of placed) {
     if (fact.predicate === null) continue;

@@ -7,13 +7,14 @@ import { and, asc, eq, isNull } from "drizzle-orm";
 import { forOrg, type OrgScopedDb } from "@/db/for-org";
 import { actionSetWith } from "@/features/custom-actions/description";
 import { listCustomActions } from "@/features/custom-actions/server";
+import type { StoredCustomAction } from "@/features/custom-actions/types";
 import { readStoredSpec } from "@/features/spec/stored";
 import type { SpecIssue } from "@/features/spec/types";
 import {
   checkWorkflowSave,
   checkWorkflowSpec,
   getWorkflow,
-  listWorkflows,
+  findWorkflowBySpecId,
   saveWorkflowIn,
 } from "@/features/workflows/server";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
@@ -42,10 +43,14 @@ export async function proposeSpec(
 ): Promise<ProposeSpecResult> {
   if (turn.failedProposals >= MAX_FAILED_PROPOSALS) return gaveUp([]);
   const workflowId = input.workflowId ?? turn.workflowId ?? undefined;
+  const stored = turn.storedCustomActions;
   // NotFoundError, for the model, when it names another org's workflow or none at all.
-  const base = workflowId === undefined ? undefined : await getWorkflow(ctx, workflowId);
+  const base =
+    workflowId === undefined
+      ? undefined
+      : await getWorkflow(ctx, workflowId, actionSetWith(stored));
   // With the custom actions this turn described, as if they were stored.
-  const check = await checkWorkflowSpec(ctx, input.spec, turn.customActions);
+  const check = await checkWorkflowSpec(ctx, input.spec, turn.customActions, stored);
   const issues: SpecIssue[] = check.ok ? await specIdIssues(ctx, check.working.id, base?.id) : [];
   if (!check.ok || issues.length > 0) {
     turn.failedProposals += 1;
@@ -94,10 +99,8 @@ function gaveUp(issues: SpecIssue[]): ProposeSpecResult {
 
 // A spec ID is unique in the org: one another workflow has can't be saved.
 async function specIdIssues(ctx: Ctx, specId: string, workflowId?: string): Promise<SpecIssue[]> {
-  const taken = (await listWorkflows(ctx)).find(
-    (workflow) => workflow.specId === specId && workflow.id !== workflowId,
-  );
-  if (taken === undefined) return [];
+  const taken = await findWorkflowBySpecId(ctx, specId);
+  if (taken === null || taken.id === workflowId) return [];
   return [
     {
       path: ["id"],
@@ -112,16 +115,25 @@ function nameFor(specId: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-/** The conversation's proposals, oldest first. */
-export async function listProposals(ctx: Ctx, conversationId: string): Promise<Proposal[]> {
+/**
+ * The conversation's proposals, oldest first. A caller that already read the org's custom
+ * actions (a builder turn) passes them as `storedActions`.
+ */
+export async function listProposals(
+  ctx: Ctx,
+  conversationId: string,
+  storedActions?: readonly StoredCustomAction[],
+): Promise<Proposal[]> {
   requireAdmin(ctx);
   const conversation = await findConversation(ctx, conversationId);
-  const rows = await forOrg(ctx).select(builderProposals, {
-    where: eq(builderProposals.conversationId, conversation.id),
-    orderBy: [asc(builderProposals.createdAt), asc(builderProposals.id)],
-  });
-  // Each proposal is drawn with the custom actions it brings, which aren't stored until accepted.
-  const stored = await listCustomActions(ctx);
+  const [rows, stored] = await Promise.all([
+    forOrg(ctx).select(builderProposals, {
+      where: eq(builderProposals.conversationId, conversation.id),
+      orderBy: [asc(builderProposals.createdAt), asc(builderProposals.id)],
+    }),
+    // Each proposal is drawn with the custom actions it brings, not stored until accepted.
+    storedActions ?? listCustomActions(ctx),
+  ]);
   return rows.map((row) => toProposal(row, actionSetWith([...stored, ...row.customActions])));
 }
 

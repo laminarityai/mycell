@@ -52,15 +52,20 @@ export async function validateWorkflowSpec(
 /**
  * Validates `input` for the caller as saving would, returning every issue instead of throwing
  * them: for the builder's proposals and the editor's live validation. A proposal checks its spec
- * with the custom actions it brings, `newCustomActions`, as if they were stored.
+ * with the custom actions it brings, `newCustomActions`, as if they were stored. A caller that
+ * already read the org's custom actions (a builder turn) passes them as `stored`.
  */
 export async function checkWorkflowSpec(
   ctx: Ctx,
   input: unknown,
   newCustomActions: readonly CustomActionRecord[] = [],
+  stored?: readonly CustomActionRecord[],
 ): Promise<SpecCheck> {
   requireAdmin(ctx);
-  const actions = actionSetWith([...(await listCustomActions(ctx)), ...newCustomActions]);
+  const actions = actionSetWith([
+    ...(stored ?? (await listCustomActions(ctx))),
+    ...newCustomActions,
+  ]);
   try {
     return { ok: true, ...(await validateWorkflowSpec(ctx, input, actions)) };
   } catch (error) {

@@ -21,6 +21,8 @@ import { findWorkflow } from "./access";
 import { deleteEnablement, switchOnEnablement } from "./enablement-rows";
 
 type Workflow = typeof workflows.$inferSelect;
+/** What a workflow's switch is read from: its ID and its org switch. */
+type SwitchedWorkflow = Pick<Workflow, "id" | "orgConnectionId" | "orgSwitchedOnAt">;
 
 /**
  * Switches the workflow on for `connectionId`, from now on: messages that arrived earlier start
@@ -75,14 +77,18 @@ export async function switchWorkflowOff(ctx: Ctx, workflowId: string): Promise<v
 export async function listSwitchedOn(ctx: Ctx, connectionId: string): Promise<SwitchedOn[]> {
   if (ctx.role !== "system") throw new ForbiddenError();
   const db = forOrg(ctx);
-  const enabled = await db.select(enablements, {
-    where: eq(enablements.connectionId, connectionId),
-    orderBy: [enablements.enabledAt],
-  });
-  const orgSwitched = await db.select(workflows, {
-    where: eq(workflows.orgConnectionId, connectionId),
-    orderBy: [workflows.orgSwitchedOnAt],
-  });
+  const [enabled, orgSwitched] = await Promise.all([
+    db.select(enablements, {
+      columns: ["id", "workflowId", "enabledAt"],
+      where: eq(enablements.connectionId, connectionId),
+      orderBy: [enablements.enabledAt],
+    }),
+    db.select(workflows, {
+      columns: ["id", "orgSwitchedOnAt"],
+      where: eq(workflows.orgConnectionId, connectionId),
+      orderBy: [workflows.orgSwitchedOnAt],
+    }),
+  ]);
   const latest = await latestVersions(ctx, [
     ...enabled.map((row) => row.workflowId),
     ...orgSwitched.map((row) => row.id),
@@ -113,14 +119,17 @@ export async function listSwitchedOn(ctx: Ctx, connectionId: string): Promise<Sw
 }
 
 /** The workflow's switch as the caller sees it: their own enablement, or the org switch. */
-export async function switchOf(ctx: Ctx, workflow: Workflow): Promise<WorkflowSwitch | null> {
+export async function switchOf(
+  ctx: Ctx,
+  workflow: SwitchedWorkflow,
+): Promise<WorkflowSwitch | null> {
   return (await switchesOf(ctx, [workflow])).get(workflow.id) ?? null;
 }
 
 /** Each workflow's switch as the caller sees it, by workflow ID, in one read. */
 export async function switchesOf(
   ctx: Ctx,
-  rows: Workflow[],
+  rows: SwitchedWorkflow[],
 ): Promise<Map<string, WorkflowSwitch | null>> {
   const own =
     rows.length === 0
@@ -151,7 +160,7 @@ export async function switchesOf(
 type Found = Omit<WorkflowSwitch, "needsReconnect">;
 
 function switchFrom(
-  workflow: Workflow,
+  workflow: SwitchedWorkflow,
   own: typeof enablements.$inferSelect | undefined,
 ): Found | null {
   if (own !== undefined) {

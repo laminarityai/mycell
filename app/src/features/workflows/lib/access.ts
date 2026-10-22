@@ -9,7 +9,7 @@ import { NotFoundError } from "@/lib/errors";
 import { workflows } from "./schema";
 
 /** A workflow's row, its working spec read in the current version's shape. */
-type Workflow = Omit<typeof workflows.$inferSelect, "workingSpec"> & { workingSpec: Spec };
+export type Workflow = Omit<typeof workflows.$inferSelect, "workingSpec"> & { workingSpec: Spec };
 
 export async function findWorkflow(ctx: Ctx, workflowId: string): Promise<Workflow> {
   const rows = await forOrg(ctx).select(workflows, {

@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { countQueries } from "@/db/testing/count-queries";
 import { failQueries } from "@/db/testing/fail-queries";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
+import { listConnections } from "@/features/connections/server";
 import { getBalance, grantCredits, listLedger } from "@/features/credits/server";
 import { saveWorkflow } from "@/features/workflows/server";
 import { systemCtx } from "@/lib/ctx";
@@ -160,11 +162,9 @@ describe("recentMessages", () => {
 
   it("lets a database error through rather than reading it as Gmail unavailable", async () => {
     const { admin } = await tryItSetup();
-    // The database goes once Gmail has listed the inbox, before each message is read.
-    let restore: (() => void) | undefined;
-    fakeNango.beforeProxy(() => {
-      restore ??= failQueries();
-    });
+    // The database goes once the connections are listed, as their inboxes are read.
+    const listing = await countQueries(() => listConnections(admin));
+    const restore = failQueries({ after: listing.queries });
 
     try {
       await expect(recentMessages(admin)).rejects.toHaveProperty(
@@ -172,7 +172,7 @@ describe("recentMessages", () => {
         "The database is unavailable.",
       );
     } finally {
-      restore?.();
+      restore();
     }
   });
 });

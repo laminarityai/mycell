@@ -5,6 +5,7 @@ import "server-only";
 import {
   bigserial,
   foreignKey,
+  index,
   integer,
   pgTable,
   text,
@@ -35,6 +36,7 @@ export const builderConversations = pgTable(
   },
   (table) => [
     unique("builder_conversations_org_id_id_unique").on(table.orgId, table.id),
+    index("builder_conversations_org_id_workflow_id_idx").on(table.orgId, table.workflowId),
     foreignKey({
       name: "builder_conversations_workflow_fk",
       columns: [table.orgId, table.workflowId],
@@ -84,11 +86,13 @@ export const builderProposals = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
+    index("builder_proposals_org_id_conversation_id_idx").on(table.orgId, table.conversationId),
     foreignKey({
       name: "builder_proposals_conversation_fk",
       columns: [table.orgId, table.conversationId],
       foreignColumns: [builderConversations.orgId, builderConversations.id],
     }).onDelete("cascade"),
+    index("builder_proposals_org_id_workflow_id_idx").on(table.orgId, table.workflowId),
     foreignKey({
       name: "builder_proposals_workflow_fk",
       columns: [table.orgId, table.workflowId],
@@ -112,6 +116,7 @@ export const builderMessages = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
+    index("builder_messages_org_id_conversation_id_idx").on(table.orgId, table.conversationId),
     foreignKey({
       name: "builder_messages_conversation_fk",
       columns: [table.orgId, table.conversationId],

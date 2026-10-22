@@ -14,6 +14,9 @@ export { switchWorkflowOff, switchWorkflowOn } from "./lib/switches";
 export { archiveWorkflow, restoreWorkflow } from "./lib/archiving";
 // Members switching a workflow they can see on and off for their own Google connection.
 export { disable, enable, listEnablements } from "./lib/enablements";
+// For the Workflows page: every workflow's enablements and runnable connections, read together.
+export { listEnablementsFor } from "./lib/enablements";
+export { runnableConnectionsFor } from "./lib/runnable-connections";
 // Deleting the enablements of users who can no longer see a workflow: a job calls it as the
 // system ctx when someone loses a tag.
 export { removeInvisibleEnablements } from "./lib/lost-visibility";
@@ -37,3 +40,6 @@ export { reviewSharing } from "./lib/review-sharing";
 // For admins: which workflows use each action, in their working spec or latest version, for the
 // custom actions page.
 export { workflowsUsingActions } from "./lib/action-uses";
+// For the builder chat: every workflow's working spec for a turn's context, in the same queries
+// however many there are, and which workflow has a spec ID.
+export { findWorkflowBySpecId, listWorkingSpecs } from "./lib/working-specs";

@@ -2,7 +2,12 @@
 // catalog plus those actions, which `workflows`, `builder` and `runtime` resolve per company.
 // Workflows store the custom actions an accepted proposal brings, with its spec.
 import "server-only";
-export { getActionSet, listCustomActions, storeCustomActions } from "./lib/action-set";
+export {
+  findCustomAction,
+  getActionSet,
+  listCustomActions,
+  storeCustomActions,
+} from "./lib/action-set";
 // The builder chat's lookup in a registered app's published API description, through the
 // operation index `pnpm api-index` builds. It reads no org data.
 export { lookUpAppApi } from "./lib/api-lookup";

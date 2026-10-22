@@ -6,6 +6,7 @@ import {
   and,
   count,
   eq,
+  getTableColumns,
   sql,
   type Column,
   type GetColumnData,
@@ -24,6 +25,9 @@ export type TenantTable = PgTable & { orgId: AnyPgColumn<{ notNull: true }> };
 /** A row to insert or a change to apply, without `orgId`: that always comes from ctx. */
 export type TenantValues<T extends TenantTable> = Omit<InferInsertModel<T>, "orgId">;
 
+/** A column's name on `table`, as its rows hold it. */
+export type ColumnName<T extends TenantTable> = keyof InferSelectModel<T> & string;
+
 /** One of `table`'s columns. */
 type ColumnOf<T extends TenantTable> = T["_"]["columns"][keyof T["_"]["columns"]];
 
@@ -41,7 +45,12 @@ export type GroupCount<G> = {
   [K in keyof G]: G[K] extends Column ? GetColumnData<G[K]> : never;
 } & { count: number };
 
-export type SelectOptions = {
+export type SelectOptions<K extends string = string> = {
+  /**
+   * Only these columns, by their names on the table: the rows hold just them. Read what a
+   * caller uses, not a whole row it only counts or maps (a fact's embedding, a spec).
+   */
+  columns?: readonly K[];
   where?: SQL;
   orderBy?: (PgColumn | SQL)[];
   limit?: number;
@@ -59,7 +68,10 @@ export type InsertOptions = {
 };
 
 export type OrgScopedDb = {
-  select<T extends TenantTable>(table: T, options?: SelectOptions): Promise<InferSelectModel<T>[]>;
+  select<T extends TenantTable, K extends ColumnName<T> = ColumnName<T>>(
+    table: T,
+    options?: SelectOptions<K>,
+  ): Promise<Pick<InferSelectModel<T>, K>[]>;
   /** How many of the org's rows match `where`, counted in the database. */
   count(table: TenantTable, where?: SQL): Promise<number>;
   /** The total of `column` over the org's rows matching `where`; 0 when none do. */
@@ -108,15 +120,23 @@ function scoped(ctx: Ctx, db: Executor): OrgScopedDb {
   return {
     async select(table, options = {}) {
       const source: PgTable = table;
+      const fields = options.columns === undefined ? undefined : named(table, options.columns);
       const query = (
-        options.distinctOn === undefined ? db.select() : db.selectDistinctOn(options.distinctOn)
+        options.distinctOn === undefined
+          ? fields === undefined
+            ? db.select()
+            : db.select(fields)
+          : fields === undefined
+            ? db.selectDistinctOn(options.distinctOn)
+            : db.selectDistinctOn(options.distinctOn, fields)
       )
         .from(source)
         .where(inOrg(table, options.where))
         .orderBy(...(options.orderBy ?? []))
         .$dynamic();
       const rows = options.limit === undefined ? await query : await query.limit(options.limit);
-      return rows as InferSelectModel<typeof table>[];
+      // The rows hold the named columns, or every column when none are named.
+      return rows as never;
     },
 
     async count(table, where) {
@@ -178,6 +198,12 @@ function scoped(ctx: Ctx, db: Executor): OrgScopedDb {
       return db.transaction((tx) => fn(scoped(ctx, tx)));
     },
   };
+}
+
+// The table's columns with these names, as a select's fields.
+function named(table: TenantTable, names: readonly string[]): Record<string, PgColumn> {
+  const columns: Record<string, PgColumn> = getTableColumns(table);
+  return Object.fromEntries(names.map((name) => [name, columns[name]]));
 }
 
 // Types already forbid orgId; this also drops one smuggled in at runtime (e.g. a parsed form).

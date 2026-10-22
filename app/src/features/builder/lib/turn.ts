@@ -14,7 +14,7 @@ import {
   type ToolSet,
 } from "ai";
 import { openMeteredStream } from "@/features/models/server";
-import type { MeteredStream } from "@/features/models/types";
+import { listCustomActions } from "@/features/custom-actions/server";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { OutOfCreditsError, typedErrorMessage, ValidationError } from "@/lib/errors";
 import type { BuilderUIMessage, Notice, StoredPart } from "../types";
@@ -49,22 +49,33 @@ export async function streamTurn(
   const text = message.trim();
   if (text === "") throw new ValidationError("Write a message first.");
   const conversation = await findConversation(ctx, conversationId);
-  const history = await messagesOf(ctx, conversation.id);
-  await appendMessage(ctx, conversation, { role: "user", parts: [{ type: "text", text }] });
+  // The history is read before the admin's message is stored, so it holds only earlier ones.
+  const [history, storedCustomActions] = await Promise.all([
+    messagesOf(ctx, conversation.id),
+    listCustomActions(ctx),
+  ]);
 
   const turn: TurnInfo = {
     conversationId: conversation.id,
     workflowId: conversation.workflowId,
     message: text,
     failedProposals: 0,
+    storedCustomActions,
     customActions: [],
   };
-  const instructions = instructionsWith(await gatherContext(ctx, turn));
+  // The context and the credit check don't wait on each other, or on storing the message.
+  const [, context, opened] = await Promise.all([
+    appendMessage(ctx, conversation, { role: "user", parts: [{ type: "text", text }] }),
+    gatherContext(ctx, turn),
+    openMeteredStream(ctx, "smart").then(
+      (stream) => ({ ok: true as const, stream }),
+      (error: unknown) => ({ ok: false as const, error }),
+    ),
+  ]);
+  const instructions = instructionsWith(context);
   const assistantId = randomUUID();
-  let metered: MeteredStream;
-  try {
-    metered = await openMeteredStream(ctx, "smart");
-  } catch (error) {
+  if (!opened.ok) {
+    const { error } = opened;
     if (!(error instanceof OutOfCreditsError)) throw error;
     const notice: Notice = { kind: "out_of_credits", text: error.message };
     await appendMessage(ctx, conversation, {
@@ -74,6 +85,7 @@ export async function streamTurn(
     });
     return noticeResponse(assistantId, notice);
   }
+  const metered = opened.stream;
 
   const tools = Object.fromEntries(
     Object.entries(builderTools).map(([name, builderTool]) => [name, builderTool.bind(ctx, turn)]),

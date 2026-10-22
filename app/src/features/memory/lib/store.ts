@@ -101,7 +101,11 @@ export async function storeCopy(ctx: Ctx, source: Source): Promise<Stored | null
   });
   const factIds = [...new Set(links.map((link) => link.factId))];
   if (factIds.length === 0) return null;
-  const taught = await db.select(facts, { where: inArray(facts.id, factIds) });
+  // Only what's counted: a fact's embedding alone is 1536 numbers.
+  const taught = await db.select(facts, {
+    columns: ["subjectId", "objectId"],
+    where: inArray(facts.id, factIds),
+  });
   const companyWide = await companyWideOf(ctx);
   return db.transaction(async (tx) => {
     const recordId = await insertRecord(tx, source);

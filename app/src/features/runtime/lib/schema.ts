@@ -60,6 +60,7 @@ export const runs = pgTable(
     unique("runs_org_id_id_unique").on(table.orgId, table.id),
     unique("runs_org_id_trigger_key_unique").on(table.orgId, table.triggerKey),
     index("runs_org_id_workflow_id_idx").on(table.orgId, table.workflowId),
+    index("runs_enablement_id_idx").on(table.enablementId),
     // On the enablement's ID alone, so switching off nulls it and the run's row stays: the run
     // then ends `cancelled` before its next step.
     foreignKey({
@@ -67,11 +68,13 @@ export const runs = pgTable(
       columns: [table.enablementId],
       foreignColumns: [enablements.id],
     }).onDelete("set null"),
+    index("runs_org_id_connection_id_idx").on(table.orgId, table.connectionId),
     foreignKey({
       name: "runs_connection_fk",
       columns: [table.orgId, table.connectionId],
       foreignColumns: [connections.orgId, connections.id],
     }).onDelete("cascade"),
+    index("runs_org_id_workflow_version_id_idx").on(table.orgId, table.workflowVersionId),
     foreignKey({
       name: "runs_workflow_version_fk",
       columns: [table.orgId, table.workflowVersionId],
@@ -117,6 +120,7 @@ export const runSteps = pgTable(
       columns: [table.orgId, table.runId],
       foreignColumns: [runs.orgId, runs.id],
     }).onDelete("cascade"),
+    index("run_steps_org_id_connection_id_idx").on(table.orgId, table.connectionId),
     foreignKey({
       name: "run_steps_connection_fk",
       columns: [table.orgId, table.connectionId],
@@ -160,6 +164,7 @@ export const heldSends = pgTable(
   (table) => [
     unique("held_sends_org_id_run_id_step_id_unique").on(table.orgId, table.runId, table.stepId),
     index("held_sends_org_id_created_at_idx").on(table.orgId, table.createdAt),
+    index("held_sends_org_id_connection_id_idx").on(table.orgId, table.connectionId),
     foreignKey({
       name: "held_sends_connection_fk",
       columns: [table.orgId, table.connectionId],
@@ -170,11 +175,13 @@ export const heldSends = pgTable(
       columns: [table.orgId, table.runId],
       foreignColumns: [runs.orgId, runs.id],
     }).onDelete("cascade"),
+    index("held_sends_org_id_review_id_idx").on(table.orgId, table.reviewId),
     foreignKey({
       name: "held_sends_review_fk",
       columns: [table.orgId, table.reviewId],
       foreignColumns: [reviews.orgId, reviews.id],
     }).onDelete("cascade"),
+    index("held_sends_org_id_custom_action_idx").on(table.orgId, table.customAction),
     foreignKey({
       name: "held_sends_custom_action_fk",
       columns: [table.orgId, table.customAction],

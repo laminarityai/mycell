@@ -67,16 +67,21 @@ export async function callModel<T>(
 
 /**
  * Runs one gateway call for the role, between the credit check and the usage entry. `call` may
- * throw a ModelCallError of its own when an answer arrived but can't be used.
+ * throw a ModelCallError of its own when an answer arrived but can't be used. A caller that
+ * already resolved the role's model passes it as `resolved`.
  */
 export async function meteredCall<R>(
   ctx: Ctx,
   role: ModelRole,
   attribution: CallAttribution,
   call: (gateway: MeteredGateway, modelId: string) => Promise<R>,
+  resolved?: string,
 ): Promise<ModelResult<R>> {
-  const modelId = await resolveModel(ctx, role);
-  await checkCredits(ctx, CREDIT_ESTIMATES[role]);
+  // Both come before anything is sent, and neither waits on the other.
+  const [modelId] = await Promise.all([
+    resolved ?? resolveModel(ctx, role),
+    checkCredits(ctx, CREDIT_ESTIMATES[role]),
+  ]);
 
   const gateway = meteredGateway();
   const usage = {

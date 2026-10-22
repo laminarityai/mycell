@@ -11,13 +11,13 @@
 // needs no second event or trigger for the backfill job, leaves the app `active` instead of
 // showing a fresh 90-day backfill, and a recovery that fails part-way leaves the expired cursor
 // in place, so the next poll simply recovers again.
-import { getConnection, recordIngestState } from "@/features/connections/server";
+import { getConnection, recordIngestState, sourceClient } from "@/features/connections/server";
 import { ingestedAppSchema, type IngestedApp } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
 import type { PollOutcome } from "../types";
 import { announcedFor, changesOf, sendAnnounced, NOTHING, type Announced } from "./announce";
 import { BACKFILL_DAYS, DAY_MS } from "./backfill";
-import { CONNECTORS, runInline, sourceClient, storeWindow, untilGone } from "./ingest-steps";
+import { CONNECTORS, runInline, storeWindow, untilGone } from "./ingest-steps";
 import type { RunStep } from "./ingest-steps";
 import { latestEventTime, storeEvents } from "./store";
 
@@ -81,7 +81,7 @@ async function pollOnce(ctx: Ctx, connectionId: string, app: IngestedApp): Promi
     return { result: "skipped", items: 0, ...NOTHING };
   }
   if (state.cursor === null) return { result: "expired", items: 0, ...NOTHING };
-  const found = await CONNECTORS[app].poll(sourceClient(ctx, connectionId), state.cursor);
+  const found = await CONNECTORS[app].poll(await sourceClient(ctx, connectionId), state.cursor);
   if ("cursorExpired" in found) return { result: "expired", items: 0, ...NOTHING };
   const created = await storeEvents(ctx, connection, app, found.events);
   await recordIngestState(ctx, connectionId, app, {
@@ -104,7 +104,7 @@ async function recover(
   const start = await runStep(`${app}-recover-start`, () =>
     untilGone(async () => {
       // Read before listing, like the backfill, so nothing arriving meanwhile is missed.
-      const cursor = await CONNECTORS[app].readStartCursor(sourceClient(ctx, connectionId));
+      const cursor = await CONNECTORS[app].readStartCursor(await sourceClient(ctx, connectionId));
       const since = recoverySince(await latestEventTime(ctx, connectionId, app));
       return { cursor, since: since.toISOString() };
     }),

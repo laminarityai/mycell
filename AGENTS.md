@@ -17,7 +17,7 @@ Every change keeps all eight true.
 3. **Deletion.** Deleting a connection deletes everything with its `connection_id`, embeddings and facts included, whether the deletion comes from the user, Nango's webhook, or the nightly reconciliation. Content a run passed between steps ages out of Inngest instead (ADR-0021).
 4. **Deterministic risk.** The policy engine sets approval requirements from the action catalog's fixed risk levels. A model may propose a risk level; only the catalog decides one, or, for a custom action, a fixed rule over the call it makes (ADR-0018).
 5. **Specs, not code.** The builder agent outputs specs that validate against `features/spec` and use catalog actions or the org's custom actions, which describe one call and contain no code. Code the builder drafts runs only after our team reviews it into the catalog (ADR-0018).
-6. **Model roles.** Code and specs name roles (`classify`, `fast`, `smart`, `judge`). Model IDs live in config and resolve per org at runtime.
+6. **Model roles.** Code and specs name roles (`classify`, `fast`, `smart`, `judge`, `embed`). Model IDs live in config and resolve per org at runtime.
 7. **Credits first.** Every model call and discovery job passes a pre-flight credit check and records its usage in the ledger.
 8. **Pointers, not content.** Our database keeps derived data plus `source_ref`, never raw email or file content, and re-fetches content through the Nango proxy. Memory holds facts and pointers, never source text (ADR-0022). Two exceptions: a run may pass content between its steps, which Inngest stores encrypted until its retention ends (ADR-0021), and Mycel holds a waiting send that its app can't hold, encrypted, until its review ends (ADR-0020).
 

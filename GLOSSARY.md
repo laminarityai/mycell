@@ -141,7 +141,7 @@ Running a working spec on one recent message to see what it would do, with every
 _Avoid_: Test run, preview, simulation (a replay of past cases is a shadow eval)
 
 **Model role**:
-The kind of model a step asks for (`classify`, `fast`, `smart` or `judge`), which each org maps to a concrete model.
+The kind of model a step or a model call asks for (`classify`, `fast`, `smart`, `judge` or `embed`), which each org maps to a concrete model. `embed` turns text into vectors for memory, and no step names it.
 _Avoid_: Model, model tier
 
 **Paused**:

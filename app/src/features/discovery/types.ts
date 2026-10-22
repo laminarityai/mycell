@@ -6,12 +6,13 @@ export const objectRefKindSchema = z.enum(["email", "drive_file"]);
 export type ObjectRefKind = z.infer<typeof objectRefKindSchema>;
 
 /** What Mycel keeps about an attachment: never its name or content. */
-export type AttachmentMeta = {
-  mimeType: string;
-  size: number;
+export const attachmentMetaSchema = z.object({
+  mimeType: z.string(),
+  size: z.number(),
   // The Drive file behind it, when the source says which.
-  driveFileId: string | null;
-};
+  driveFileId: z.string().nullable(),
+});
+export type AttachmentMeta = z.infer<typeof attachmentMetaSchema>;
 
 export const EVENT_TYPES = [
   "email.received",

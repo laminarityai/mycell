@@ -2,14 +2,16 @@
 // asked for one. All are tenant-owned and hold no connection_id: a custom action describes a
 // call and outlives the connections it runs through, and a request holds the agent's words and
 // code draft; none holds source content (invariant 8), so disconnecting leaves them alone.
-import { foreignKey, jsonb, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { foreignKey, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { z } from "zod";
+import { zodJsonb } from "@/db/columns";
 // An ask names the builder conversation it was filed from, which never leaves its org.
 import { builderConversations } from "@/features/builder/lib/schema";
 import type { RiskLevel } from "@/features/policy/types";
-import type {
-  CapabilityRequestField,
-  CapabilityRequestStatus,
-  CustomActionDescription,
+import {
+  capabilityRequestFieldSchema,
+  customActionDescriptionSchema,
+  type CapabilityRequestStatus,
 } from "../types";
 
 /**
@@ -26,7 +28,7 @@ export const customActions = pgTable(
     // The registered app it calls.
     app: text("app").notNull(),
     // The checked description, without any level the builder proposed.
-    description: jsonb("description").$type<CustomActionDescription>().notNull(),
+    description: zodJsonb("description", customActionDescriptionSchema).notNull(),
     // The level the fixed rule set when it was accepted.
     risk: text("risk", {
       enum: ["read", "internal_reversible", "external_send", "financial", "destructive"],
@@ -56,8 +58,8 @@ export const capabilityRequests = pgTable(
     operation: text("operation").notNull(),
     // The app and operation, lowercased with spaces collapsed: what makes two asks one request.
     key: text("key").notNull(),
-    inputs: jsonb("inputs").$type<CapabilityRequestField[]>().notNull(),
-    outputs: jsonb("outputs").$type<CapabilityRequestField[]>().notNull(),
+    inputs: zodJsonb("inputs", z.array(capabilityRequestFieldSchema)).notNull(),
+    outputs: zodJsonb("outputs", z.array(capabilityRequestFieldSchema)).notNull(),
     reason: text("reason").notNull(),
     codeDraft: text("code_draft"),
     status: text("status", { enum: ["open", "building", "shipped", "declined"] })

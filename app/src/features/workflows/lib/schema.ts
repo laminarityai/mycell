@@ -5,19 +5,20 @@ import {
   check,
   foreignKey,
   integer,
-  jsonb,
   pgTable,
   primaryKey,
   text,
   timestamp,
   unique,
 } from "drizzle-orm/pg-core";
+import { z } from "zod";
 import { member } from "@/db/auth-schema";
+import { zodJsonb } from "@/db/columns";
 // A switch names the connection it runs on, and goes when the connection does (invariant 3).
 import { connections } from "@/features/connections/lib/schema";
-import type { RiskLevel } from "@/features/policy/types";
-import type { StoredSpec } from "@/features/spec/stored";
-import type { EnablementStatus, PausedChange, PausedReason } from "../types";
+import { requirementsGainedSchema, type RiskLevel } from "@/features/policy/types";
+import { storedSpecSchema } from "@/features/spec/stored";
+import type { EnablementStatus, PausedReason } from "../types";
 // A version's tags reference the tag itself, so renaming a tag keeps who sees the workflow.
 import { tags } from "@/features/tags/lib/schema";
 
@@ -30,7 +31,7 @@ export const workflows = pgTable(
     // The spec's own `id`, unique in the org.
     specId: text("spec_id").notNull(),
     // The working spec, as `validateSpec` parsed it: before the policy engine runs.
-    workingSpec: jsonb("working_spec").$type<StoredSpec>().notNull(),
+    workingSpec: zodJsonb("working_spec", storedSpecSchema).notNull(),
     // Counts the working spec's saves, so a save made from an older one can be refused.
     revision: integer("revision").notNull().default(1),
     // Plain user IDs: a workflow outlives the admin who made it.
@@ -79,7 +80,7 @@ export const enablements = pgTable(
     // Set exactly while paused.
     pausedReason: text("paused_reason", { enum: ["needs_reenable"] }).$type<PausedReason>(),
     // What a `needs_reenable` pause is about: what the new version needs that the old didn't.
-    pausedChange: jsonb("paused_change").$type<PausedChange>(),
+    pausedChange: zodJsonb("paused_change", requirementsGainedSchema),
     // Written from JS, like the message times it's compared with (no default: the column has
     // no time zone, and the database's now() would be read back hours off).
     enabledAt: timestamp("enabled_at", { withTimezone: true }).notNull(),
@@ -117,13 +118,13 @@ export const workflowVersions = pgTable(
     workflowId: text("workflow_id").notNull(),
     number: integer("number").notNull(),
     // The spec after `applyPolicy`: inserted approvals included.
-    spec: jsonb("spec").$type<StoredSpec>().notNull(),
+    spec: zodJsonb("spec", storedSpecSchema).notNull(),
     maxRisk: text("max_risk", {
       enum: ["read", "internal_reversible", "external_send", "financial", "destructive"],
     })
       .$type<RiskLevel>()
       .notNull(),
-    requiredActions: jsonb("required_actions").$type<string[]>().notNull(),
+    requiredActions: zodJsonb("required_actions", z.array(z.string())).notNull(),
     publishedBy: text("published_by").notNull(),
     publishedAt: timestamp("published_at", { withTimezone: true }).defaultNow().notNull(),
   },

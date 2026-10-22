@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { eachStep, findStep } from "@/features/spec/tree";
 import { upgradeSpec } from "@/features/spec/upgrade";
-import { actionsAllowedBy, catalog } from "../catalog";
+import { actionsAllowedBy, appsUsed, catalog } from "../catalog";
 import { googleScope } from "@/lib/google";
 import { applyPolicy, maxRisk } from "../engine";
 import { exampleSteps, labelOnlySpec, specWithSteps } from "./specs";
@@ -32,12 +32,13 @@ describe("this suite's v1 fixtures", () => {
 });
 
 describe("the catalog", () => {
-  it("lists the actions a connection's granted scopes allow", () => {
+  it("lists the actions a connection's granted scopes allow, memory's needing none", () => {
     const names = (scopes: string[]) => actionsAllowedBy(scopes).map((action) => action.name);
 
     expect(names([googleScope("gmail.readonly")])).toEqual([
       "google-mail.read-message",
       "google-mail.read-thread",
+      "memory.lookup",
     ]);
     expect(names([googleScope("gmail.modify"), googleScope("spreadsheets.readonly")])).toEqual([
       "google-mail.read-message",
@@ -45,11 +46,17 @@ describe("the catalog", () => {
       "google-mail.add-label",
       "google-mail.create-draft",
       "google-sheet.read-range",
+      "memory.lookup",
     ]);
-    expect(names([])).toEqual([]);
+    expect(names([])).toEqual(["memory.lookup"]);
   });
 
-  it("holds v1's six actions at their fixed risk levels", () => {
+  it("reads memory at read risk, needing no app of the connection", () => {
+    expect(catalog["memory.lookup"]).toMatchObject({ app: "Memory", risk: "read" });
+    expect(appsUsed(["memory.lookup", "google-sheet.read-range"])).toEqual(["Gmail", "Sheets"]);
+  });
+
+  it("holds every action at its fixed risk level", () => {
     const levels = Object.fromEntries(
       Object.values(catalog).map((action) => [action.name, action.risk]),
     );
@@ -61,6 +68,7 @@ describe("the catalog", () => {
       "google-mail.create-draft": "external_send",
       "google-sheet.read-range": "read",
       "google-sheet.append-row": "internal_reversible",
+      "memory.lookup": "read",
     });
   });
 

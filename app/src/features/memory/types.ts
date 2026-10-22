@@ -130,6 +130,12 @@ export type FoundFact = MemoryFact & { subject: { id: string; kind: ObjectKind; 
 export type MemorySearchResult = { objects: FoundObject[]; facts: FoundFact[] };
 
 /**
+ * A summary of one object, built when asked from only the facts its caller can see, and never
+ * stored: the object, the model's few sentences, and how many facts they were built from.
+ */
+export type ObjectSummary = { object: FoundObject; summary: string; factCount: number };
+
+/**
  * Who or what is reading memory, which every read logs (ADR-0024). The ctx says whose view it
  * reads in; this says on whose behalf: the person acting directly (the default), the builder
  * chat for the admin using it, or a workflow run, as its enablement's member (member

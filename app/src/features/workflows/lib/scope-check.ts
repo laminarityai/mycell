@@ -2,7 +2,7 @@
 // connection the spec would run on. A connection made before write access was asked for
 // (ADR-0011) holds only gmail.readonly, and its owner reconnects it to grant write access.
 import type { ConnectionSummary } from "@/features/connections/types";
-import { findAction } from "@/features/policy/catalog";
+import { findAction, scopesOf } from "@/features/policy/catalog";
 import { eachStep } from "@/features/spec/tree";
 import type { Spec, SpecIssue } from "@/features/spec/types";
 import { GOOGLE_SCOPE_PREFIX as SCOPE_PREFIX } from "@/lib/google";
@@ -43,14 +43,13 @@ function actionUses(spec: Spec): ActionUse[] {
           : undefined;
     const action = named === undefined ? undefined : findAction(named.action);
     if (named === undefined || action === undefined) return [];
-    return [
-      {
-        path: [...location, named.field],
-        action: action.name,
-        scopes: action.scopes,
-        writes: action.risk !== "read",
-      },
-    ];
+    // An action on what Mycel holds needs no scope.
+    return scopesOf(action).map((scopes) => ({
+      path: [...location, named.field],
+      action: action.name,
+      scopes,
+      writes: action.risk !== "read",
+    }));
   });
 }
 

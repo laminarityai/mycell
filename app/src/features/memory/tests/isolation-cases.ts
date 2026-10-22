@@ -5,6 +5,7 @@ import { backfillConnection } from "@/features/discovery/server";
 import { systemCtx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import { connectMailbox, daysAgo } from "@/testing/connect-helpers";
+import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import * as server from "../server";
 import { learnStoredItems, scriptLearning, withCredits } from "./memory-helpers";
 
@@ -84,6 +85,20 @@ export const isolationCases = defineIsolationCases(server, {
       }
     }
 
+    expect(await snapshot()).toEqual(object);
+  },
+
+  summarizeObject: async (orgs) => {
+    const { object, snapshot } = await seedOrgB(orgs);
+    const { orgA } = orgs;
+    const calls = fakeAiGateway.requests("language").length;
+
+    for (const ctx of [orgA.admin.ctx, orgA.member.ctx, systemCtx(orgA.id)]) {
+      await expect(server.summarizeObject(ctx, { id: object.id })).rejects.toThrow(NotFoundError);
+      await expect(server.summarizeObject(ctx, byEmail)).rejects.toThrow(NotFoundError);
+    }
+
+    expect(fakeAiGateway.requests("language")).toHaveLength(calls);
     expect(await snapshot()).toEqual(object);
   },
 

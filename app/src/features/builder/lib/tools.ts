@@ -7,6 +7,7 @@ import { z } from "zod";
 import { getWorkflow } from "@/features/workflows/server";
 import type { Ctx } from "@/lib/ctx";
 import type { CustomActionRecord } from "@/features/custom-actions/types";
+import { lookUpAppApiTool } from "./api-lookup-tool";
 import { fileCapabilityRequestTool } from "./capability-request-tool";
 import { describeCustomActionTool } from "./custom-action-tool";
 import { proposeSpec } from "./proposals";
@@ -89,6 +90,7 @@ export const builderTools: Record<string, BuilderTool> = {
   describe_custom_action: builderTool(describeCustomActionTool),
   file_capability_request: builderTool(fileCapabilityRequestTool),
   get_workflow: getWorkflowTool,
+  look_up_app_api: builderTool(lookUpAppApiTool),
   propose_spec: proposeSpecTool,
   read_examples: builderTool(readExamples),
 };

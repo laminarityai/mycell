@@ -15,7 +15,7 @@ import { sheetsError } from "./fake-sheets";
 type Respond = (connection: FakeConnection, path: string, params: URLSearchParams) => Response;
 
 /** The verbs the proxy forwards: a GET reads, and the rest write. */
-export type ProxyMethod = "GET" | "POST" | "PUT" | "DELETE";
+export type ProxyMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 export type WriteMethod = Exclude<ProxyMethod, "GET">;
 
 type RespondToWrite = (
@@ -32,7 +32,7 @@ export type ProxiedSource = {
   // Any one of these lets a token call the API.
   scopes: readonly string[];
   respond: Respond;
-  // How the API answers a write (POST, PUT or DELETE), and the scopes that let a token write;
+  // How the API answers a write (POST, PUT, PATCH or DELETE), and the scopes that let a token write;
   // none for a read-only API.
   write?: { scopes: readonly string[]; respond: RespondToWrite };
   rateLimited: () => Response;
@@ -59,8 +59,10 @@ export const PROXIED_SOURCES: ProxiedSource[] = [
     write: {
       // Labels, messages.modify and drafts all take gmail.modify; drafts take compose too.
       scopes: [GOOGLE_APP_SCOPES.gmail, GMAIL_COMPOSE, "https://mail.google.com/"],
-      respond: (connection, path, _params, body, method) =>
-        gmailWrite(connection.mailbox, path, body, method),
+      respond: (connection, path, _params, body, method) => {
+        if (method === "PATCH") throw new Error("The fake Gmail takes no PATCHes");
+        return gmailWrite(connection.mailbox, path, body, method);
+      },
     },
     rateLimited: () => gmailError(429, "RESOURCE_EXHAUSTED"),
   },

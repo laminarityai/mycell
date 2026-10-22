@@ -132,6 +132,22 @@ function Effect({ effect }: { effect: DryRunEffect }) {
   switch (effect.kind) {
     case "review":
       return <p>Would wait for a review.</p>;
+    case "request":
+      return (
+        <div className="flex flex-col gap-1">
+          <p className="text-muted-foreground">
+            Would hold this request to {effect.app} ({effect.action}) for a review, and send it once
+            approved:
+          </p>
+          <pre
+            aria-label="Request"
+            className="rounded bg-muted p-2 font-mono text-xs break-all whitespace-pre-wrap"
+          >
+            {`${effect.method} ${effect.url}`}
+            {effect.body === null ? "" : `\n\n${JSON.stringify(effect.body, null, 2)}`}
+          </pre>
+        </div>
+      );
     case "label":
       return (
         <p>

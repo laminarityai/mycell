@@ -4,12 +4,14 @@ import type { ActionSet } from "@/features/policy/types";
 import type { ModelRole, Spec, Step } from "@/features/spec/types";
 import type { Ctx } from "@/lib/ctx";
 import type { BranchPath, CallAttribution, Json } from "../types";
+import type { HoldSend } from "./custom-action";
 
 /**
  * What a step sees: the run it's in, the version's spec (so a draft can re-read a range an
  * earlier step read), the outputs of the steps before it, what its model calls are recorded
  * against, the company's action set it looks actions up in, the action executors it runs (the
- * live ones, or a dry run's stubs), and where it records a review.
+ * live ones, or a dry run's stubs), what it does with a custom write, and where it records a
+ * review.
  */
 export type StepContext = {
   ctx: Ctx;
@@ -19,6 +21,8 @@ export type StepContext = {
   outputs: Readonly<Record<string, Json>>;
   actionSet: ActionSet;
   actions: ActionExecutors;
+  /** Holds a custom write rather than sending it: for its review in a run, as a report in Try it. */
+  holdSend: HoldSend;
   /**
    * Records that an item the run left in its app's pending form waits for a person's review,
    * once however often the step is retried. A dry run records nothing.
@@ -32,7 +36,9 @@ export type StepContext = {
  */
 export type AwaitedItem =
   | { kind: "approval"; itemRef: string; threadRef: string }
-  | { kind: "escalation"; itemRef: string; threadRef: string; reason: string };
+  | { kind: "escalation"; itemRef: string; threadRef: string; reason: string }
+  /** A held send waits on the connection it would be sent through, not the run's. */
+  | { kind: "held_send"; itemRef: string; threadRef: string; connectionId: string };
 
 /** What a step did. */
 export type StepExecution = {

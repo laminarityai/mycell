@@ -20,7 +20,7 @@ export {
 export { reconcileConnections } from "./lib/reconcile";
 export { startReconnect } from "./lib/reconnect";
 // How other features use a connection, without touching Nango or the table: what it is and
-// was granted, which ones the caller may read, GETs, POSTs, PUTs and DELETEs to its Google APIs,
+// was granted, which ones the caller may read, GETs, POSTs, PUTs, PATCHes and DELETEs to its app,
 // and where each ingested app stands.
 export {
   getConnection,
@@ -28,6 +28,7 @@ export {
   listConnectionsForJobs,
   proxyDelete,
   proxyGet,
+  proxyPatch,
   proxyPost,
   proxyPut,
   readableConnectionIds,

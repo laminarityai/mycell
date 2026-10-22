@@ -91,19 +91,42 @@ async function sheetText(name: string, context: StepContext): Promise<string | u
 }
 
 const draftOutput = z.object({ draftId: z.string(), threadId: z.string() });
+const heldSendOutput = z.object({ heldSendId: z.string(), connectionId: z.string() });
 
 /**
- * Records that the drafts above it on its own path await a person: every one, those an approval
+ * Records that what its channel reviews above it on its own path awaits a person: every Gmail
+ * draft (`gmail_drafts`) or every held send of a custom write (`held_send`), those an approval
  * above it recorded too, as a v1 approval recorded every draft before it. Each gets a review on
- * its owner's Reviews page (one per draft, however often the step or the run is retried). It
- * holds nothing back: a Gmail draft is never sent by a run, so the steps after it still run.
+ * its owner's Reviews page (one per item, however often the step or the run is retried). It
+ * holds nothing back: a run never sends either, so the steps after it still run.
  */
 export async function approvalStep(
   step: StepOf<"approval">,
   context: StepContext,
 ): Promise<StepExecution> {
-  const drafts = stepsAbove(context.spec, step.id).flatMap((earlier) => {
-    const parsed = draftOutput.safeParse(context.outputs[earlier.id]);
+  const above = stepsAbove(context.spec, step.id).map((earlier) => context.outputs[earlier.id]);
+  if (step.channel === "held_send") {
+    const sends = above.flatMap((output) => {
+      const parsed = heldSendOutput.safeParse(output);
+      return parsed.success ? [parsed.data] : [];
+    });
+    for (const { heldSendId, connectionId } of sends) {
+      await context.awaitReview({
+        kind: "held_send",
+        itemRef: heldSendId,
+        threadRef: heldSendId,
+        connectionId,
+      });
+    }
+    const record = {
+      awaiting: "human",
+      channel: step.channel,
+      heldSendIds: sends.map((send) => send.heldSendId),
+    };
+    return { next: "continue", output: record, record };
+  }
+  const drafts = above.flatMap((output) => {
+    const parsed = draftOutput.safeParse(output);
     return parsed.success ? [parsed.data] : [];
   });
   for (const { draftId, threadId } of drafts) {

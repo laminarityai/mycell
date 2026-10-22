@@ -1,9 +1,11 @@
 // A dry run's action executors: the read actions run for real, and every action that would
 // change an app (internal_reversible and external_send) is a stub that reads what it needs and
-// reports what it would have done, writing nothing. Each one reports to `report`, and returns an
+// reports what it would have done, writing nothing. A custom write reports the exact request it
+// would send, and holds nothing. Each one reports to `report`, and returns an
 // output that passes the catalog's schema, so later steps run as they would.
 import type { DryRunEffect } from "../types";
 import { actionExecutors } from "./actions";
+import { renderCustomCall, type HoldSend } from "./custom-action";
 import { RunStepError } from "./failures";
 import { messageRef } from "./gmail";
 import { replyTarget } from "./gmail-drafts";
@@ -55,5 +57,21 @@ export function dryRunActions(report: (effect: DryRunEffect) => void): ActionExe
         return Promise.resolve({ updatedRange: input.range });
       },
     },
+  };
+}
+
+/** A custom write in Try it: the exact request it would send, reported, and nothing held. */
+export function dryRunHoldSend(report: (effect: DryRunEffect) => void): HoldSend {
+  return async (ctx, run, _stepId, action, input) => {
+    const { connectionId, request } = await renderCustomCall(ctx, run.connectionId, action, input);
+    report({
+      kind: "request",
+      app: action.app,
+      action: action.name,
+      method: request.method,
+      url: request.url,
+      body: request.body ?? null,
+    });
+    return { heldSendId: DRY_RUN_ID, connectionId };
   };
 }

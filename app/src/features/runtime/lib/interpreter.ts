@@ -17,6 +17,7 @@ import type { Ctx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import type { RetryPolicy, RunOutcome, RunStep } from "../types";
 import { actionExecutors } from "./actions";
+import { holdCustomWrite } from "./custom-action";
 import { attemptStep } from "./executors";
 import { isConnectionGone, type Failure } from "./failures";
 import { defaultRetryPolicy, runInline, withRetries } from "./run-step";
@@ -77,11 +78,15 @@ async function executeStep(ctx: Ctx, run: Run, step: Step, place: RunPlace): Pro
     outputs: place.outputs,
     actionSet: place.actionSet,
     actions: actionExecutors,
-    awaitReview: (item) =>
+    holdSend: holdCustomWrite,
+    awaitReview: ({ kind, itemRef, threadRef, ...item }) =>
       createReview(ctx, {
-        ...item,
+        kind,
+        itemRef,
+        threadRef,
+        ...("reason" in item ? { reason: item.reason } : {}),
         runId: run.id,
-        connectionId: run.connectionId,
+        connectionId: "connectionId" in item ? item.connectionId : run.connectionId,
         workflowId: run.workflowId,
         workflowVersionId: run.workflowVersionId,
         sourceRef: run.sourceRef,

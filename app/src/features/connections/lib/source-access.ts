@@ -16,6 +16,7 @@ import {
   NangoConnectionGoneError,
   nangoProxyDelete,
   nangoProxyGet,
+  nangoProxyPatch,
   nangoProxyPost,
   nangoProxyPut,
   type ProxyTarget,
@@ -139,6 +140,19 @@ export async function proxyPut<T>(
 ): Promise<T | null> {
   return proxied(ctx, connectionId, path, (connection, target) =>
     nangoProxyPut(connection, target, body, schema),
+  );
+}
+
+/** A PATCH with a JSON body (a custom write's), checked and answered like proxyPost. */
+export async function proxyPatch<T>(
+  ctx: Ctx,
+  connectionId: string,
+  path: string,
+  body: unknown,
+  schema: z.ZodType<T>,
+): Promise<T | null> {
+  return proxied(ctx, connectionId, path, (connection, target) =>
+    nangoProxyPatch(connection, target, body, schema),
   );
 }
 

@@ -4,7 +4,7 @@
 // returned. Messages name the action and the fields, never their values.
 import type { ActionName } from "@/features/policy/catalog";
 import type { Json } from "../types";
-import { runCustomAction } from "./custom-action";
+import { runCustomAction, type CustomInput } from "./custom-action";
 import { RunStepError } from "./failures";
 import type { Compose, StepContext } from "./step-context";
 
@@ -36,7 +36,12 @@ export async function runAction(
   }
   const { ctx, run } = context;
   let result: unknown;
-  if (action.kind === "custom") {
+  if (action.kind === "custom" && action.risk !== "read") {
+    // A custom write is never sent by a step: it's held for its review (ADR-0020), and its
+    // result fields never reach the run.
+    const input = parsed.data as CustomInput;
+    return context.holdSend(ctx, run, stepId, action, input);
+  } else if (action.kind === "custom") {
     // A custom read runs for real in a run and in Try it alike.
     result = await runCustomAction(ctx, run.connectionId, action, parsed.data as never);
   } else if (executor === undefined) {

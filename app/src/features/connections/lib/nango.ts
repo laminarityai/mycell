@@ -223,6 +223,16 @@ export async function nangoProxyPut<T>(
   return nangoProxy(connection, target, schema, { method: "PUT", body: JSON.stringify(body) });
 }
 
+/** A PATCH through the Nango proxy with a JSON body, answered and not retried like a POST. */
+export async function nangoProxyPatch<T>(
+  connection: ProxiedConnection,
+  target: ProxyTarget,
+  body: unknown,
+  schema: z.ZodType<T>,
+): Promise<T | null> {
+  return nangoProxy(connection, target, schema, { method: "PATCH", body: JSON.stringify(body) });
+}
+
 /**
  * A DELETE through the Nango proxy, not retried. True when the source deleted the item, false
  * when it had no such item (404 or 410); refusals throw as for the other verbs.

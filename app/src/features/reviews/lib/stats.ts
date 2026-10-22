@@ -76,6 +76,7 @@ function tally(rows: ReviewRow[]): ReviewTally {
   return {
     approvals,
     escalations: countsOf(rows.filter((row) => row.kind === "escalation")),
+    heldSends: countsOf(rows.filter((row) => row.kind === "held_send")),
     approvedWithoutEdits: ended === 0 ? null : approved / ended,
   };
 }

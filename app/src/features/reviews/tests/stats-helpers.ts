@@ -86,6 +86,7 @@ export function counts(
     declined: 0,
     done_in_app: 0,
     gone: 0,
+    expired: 0,
     ...counted,
   };
 }

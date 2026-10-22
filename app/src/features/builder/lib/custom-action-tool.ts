@@ -24,17 +24,22 @@ export const describeCustomActionTool: ToolDefinition<
 > = {
   description:
     "Describe a custom action: one call to a registered app, for when no catalog action does " +
-    "what the admin needs. Only a call that reads can be one for now. `action` holds: name " +
+    "what the admin needs. `action` holds: name " +
     '(like "microsoft.read-message"), app (one of ' +
     appIds +
-    '), description (one plain sentence), call ({ method: "GET", path, query } where path is ' +
+    '), description (one plain sentence), call ({ method: "GET" | "POST" | "PUT" | "PATCH", ' +
+    "path, query, body } where path is " +
     'the path on the app with no host, such as "/v1.0/me/messages/{messageId}", with each ' +
-    "{placeholder} an input, and query maps each query parameter to an input), inputs (each " +
+    "{placeholder} an input, and query and body map each query parameter or body field to an " +
+    "input), inputs (each " +
     'name to { type: "text" | "number" | "yes_no" | "choice", description, choices for a ' +
-    'choice, optional }) and outputs (each result field\'s name to { type: "text" | "number" ' +
-    '| "yes_no", label, path }, path being property names and list indexes joined by dots ' +
-    "into the response, such as from.emailAddress.address). Mycel sets its risk level by a " +
-    "fixed rule; you may not choose one. On success, use it by name in a tool step of the spec " +
+    'choice, optional }), outputs (for a read, each result field\'s name to { type: "text" | ' +
+    '"number" | "yes_no", label, path }, path being property names and list indexes joined by ' +
+    "dots into the response, such as from.emailAddress.address) and, for a write, editable " +
+    "(the text inputs a person may edit before it's sent). Mycel sets its risk level by a " +
+    "fixed rule; you may not choose one. A read runs on its own; any other call is a write, " +
+    "which waits for a person to approve it every time it runs. On success, use it by name in " +
+    "a tool step of the spec " +
     "you send to propose_spec in this turn. It is stored only if the admin accepts that " +
     "proposal, and a stored custom action never changes: a changed one needs a new name.",
   inputSchema: z.object({ action: z.record(z.string(), z.unknown()) }),

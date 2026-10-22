@@ -195,7 +195,16 @@ export type DryRunEffect =
   | { kind: "draft"; to: string; subject: string; text: string }
   | { kind: "label"; label: string }
   | { kind: "row"; range: string; values: (string | number | boolean | null)[] }
-  | { kind: "review"; channel: string };
+  | { kind: "review"; channel: string }
+  /** A custom write's request, exactly as it would be sent once approved (nothing is sent). */
+  | {
+      kind: "request";
+      app: string;
+      action: string;
+      method: string;
+      url: string;
+      body: Record<string, unknown> | null;
+    };
 
 /**
  * How one check of a path's condition went. `reason` may quote the value it tested, which can

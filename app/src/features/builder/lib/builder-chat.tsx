@@ -15,6 +15,7 @@ import { ConversationTryItPanel, TryItSummaryPart, type ConversationTryIt } from
 
 const TOOL_LABELS: Record<string, string> = {
   get_workflow: "Read a workflow",
+  look_up_app_api: "Look up an app's API",
   read_examples: "Read example messages",
 };
 

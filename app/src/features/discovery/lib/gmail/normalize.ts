@@ -87,10 +87,17 @@ function htmlToText(html: string): string {
 
 function decodeEntities(text: string): string {
   return text
-    .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, code: string) => String.fromCodePoint(parseInt(code, 16)))
+    .replace(/&#(\d+);/g, (_, code: string) => character(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code: string) => character(parseInt(code, 16)))
     .replace(/&(lt|gt|quot|apos|nbsp);/g, (_, name: string) => ENTITIES[name] ?? " ")
     .replace(/&amp;/g, "&");
 }
 
 const ENTITIES: Record<string, string> = { lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
+
+// A character code anyone can write into an email, so one no character has (past U+10FFFF)
+// reads as U+FFFD, the replacement character, rather than throwing and failing the mailbox's
+// ingest on every retry.
+function character(code: number): string {
+  return code <= 0x10ffff ? String.fromCodePoint(code) : "\uFFFD";
+}

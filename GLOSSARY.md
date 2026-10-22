@@ -175,7 +175,7 @@ One action waiting for a person's decision, shown on their Reviews page, which p
 _Avoid_: Approval for the review itself (it's the step, and the kind of review that step makes), task (a Google Tasks item), notification
 
 **Held send**:
-A custom write's request, which Mycel holds, encrypted with the company's key, until a person approves or declines its review, or for 30 days, when it expires (ADR-0020). Approving sends it once, with any edits to its editable text.
+A custom write's request, which Mycel holds, encrypted with the company's key, until a person approves or declines its review, or for 30 days, when it expires (ADR-0020). Approving sends it once, with any edits to its editable text; if its app never confirms the send, the review ends unconfirmed and it is never sent again.
 _Avoid_: Queued message, outbox, staged send
 
 **Shared review**:

@@ -51,6 +51,9 @@ function NavLinks({ waiting, admin }: { waiting: number; admin: boolean }) {
           <Link href="/builder" className={LINK}>
             Builder chat
           </Link>
+          <Link href="/memory" className={LINK}>
+            Memory
+          </Link>
         </>
       ) : null}
     </>

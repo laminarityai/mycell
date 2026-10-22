@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { findStep } from "@/features/spec/tree";
+import { catalogActionSet } from "../catalog";
 import { applyPolicy, maxRisk } from "../engine";
 import { parsedSpec } from "./specs";
 
@@ -61,7 +62,10 @@ const stepIdsOn = (spec: ReturnType<typeof branching>, pathId: string) => {
 
 describe("applyPolicy on a branch with several paths", () => {
   it("inserts the review on the draft's own path, where a sibling path's approval doesn't count", () => {
-    const result = applyPolicy(branching([reply("reply")], [approval("approve")]));
+    const result = applyPolicy(
+      branching([reply("reply")], [approval("approve")]),
+      catalogActionSet,
+    );
     if (!result.ok) throw new Error("expected the spec to pass");
 
     expect(result.inserted).toEqual([
@@ -72,29 +76,41 @@ describe("applyPolicy on a branch with several paths", () => {
   });
 
   it("counts only an approval after the draft in its own list", () => {
-    const after = applyPolicy(branching([reply("reply"), label, approval("approve")], []));
+    const after = applyPolicy(
+      branching([reply("reply"), label, approval("approve")], []),
+      catalogActionSet,
+    );
 
     expect(after).toMatchObject({ ok: true, inserted: [] });
   });
 
   it("doesn't count an approval above the draft, which ran before the draft was made", () => {
-    const above = applyPolicy(branching([reply("reply")], [], [approval("approve")]));
-    const earlierInList = applyPolicy(branching([approval("approve"), reply("reply")], []));
+    const above = applyPolicy(
+      branching([reply("reply")], [], [approval("approve")]),
+      catalogActionSet,
+    );
+    const earlierInList = applyPolicy(
+      branching([approval("approve"), reply("reply")], []),
+      catalogActionSet,
+    );
 
     expect(above).toMatchObject({ ok: true, inserted: [{ stepId: "reply-approval" }] });
     expect(earlierInList).toMatchObject({ ok: true, inserted: [{ stepId: "reply-approval" }] });
   });
 
   it("doesn't count an approval nested deeper than the draft, which a run may not reach", () => {
-    const result = applyPolicy(branching([], [], [reply("reply")]));
-    const nested = applyPolicy(branching([approval("approve")], [], [reply("reply")]));
+    const result = applyPolicy(branching([], [], [reply("reply")]), catalogActionSet);
+    const nested = applyPolicy(
+      branching([approval("approve")], [], [reply("reply")]),
+      catalogActionSet,
+    );
 
     expect(result).toMatchObject({ ok: true, inserted: [{ stepId: "reply-approval" }] });
     expect(nested).toMatchObject({ ok: true, inserted: [{ stepId: "reply-approval" }] });
   });
 
   it("takes the highest risk across every path", () => {
-    expect(maxRisk(branching([], [label]))).toBe("internal_reversible");
-    expect(maxRisk(branching([label], [reply("reply")]))).toBe("external_send");
+    expect(maxRisk(branching([], [label]), catalogActionSet)).toBe("internal_reversible");
+    expect(maxRisk(branching([label], [reply("reply")]), catalogActionSet)).toBe("external_send");
   });
 });

@@ -2,8 +2,8 @@
 // them, unless it's archived; an admin sees every one. What the Workflows page shows is read here.
 import { eq, inArray } from "drizzle-orm";
 import { forOrg, type OrgScopedDb } from "@/db/for-org";
-import { findAction } from "@/features/policy/catalog";
-import type { RiskLevel } from "@/features/policy/types";
+import { getActionSet } from "@/features/custom-actions/server";
+import type { ActionSet, RiskLevel } from "@/features/policy/types";
 import { describeSpec, type ActionInfo } from "@/features/spec/describe";
 import { listUsers } from "@/features/orgs/server";
 import { listMyTags, listTagIdsByUser, listTags } from "@/features/tags/server";
@@ -106,11 +106,12 @@ async function visible(ctx: Ctx, rows: Workflow[]): Promise<VisibleWorkflow[]> {
   );
   // Members don't learn who else a workflow reaches.
   const audiences = admin ? await audiencesOf(ctx, versionIds) : new Map<string, Audience>();
+  const actions = await getActionSet(ctx);
   return seen.map(({ row, version }) => ({
     id: row.id,
     name: row.name,
-    description: describe(version),
-    requiredApps: requiredApps(version),
+    description: describe(version, actions),
+    requiredApps: requiredApps(version, actions),
     maxRisk: version.maxRisk,
     credentials: version.spec.credentials,
     versionNumber: version.number,
@@ -154,12 +155,13 @@ export async function tagIdsOf(
 }
 
 // What the version does, a sentence per step.
-function describe(version: WorkflowVersion): string[] {
-  return describeSpec(version.spec, { action: actionInfo }).map((step) => step.text);
+function describe(version: WorkflowVersion, actions: ActionSet): string[] {
+  const action = (name: string) => actionInfo(name, actions);
+  return describeSpec(version.spec, { action }).map((step) => step.text);
 }
 
-function actionInfo(name: string): ActionInfo<RiskLevel> | undefined {
-  const action = findAction(name);
+function actionInfo(name: string, actions: ActionSet): ActionInfo<RiskLevel> | undefined {
+  const action = actions.find(name);
   if (action === undefined) return undefined;
   const { risk, description, conditionFields } = action;
   return { risk, description, conditionFields };

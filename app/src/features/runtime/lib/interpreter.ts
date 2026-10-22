@@ -8,6 +8,8 @@
 import { and, eq } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { getConnection } from "@/features/connections/server";
+import { getActionSet } from "@/features/custom-actions/server";
+import type { ActionSet } from "@/features/policy/types";
 import { createReview } from "@/features/reviews/server";
 import type { Spec, Step } from "@/features/spec/types";
 import { getWorkflowVersion, listSwitchedOn } from "@/features/workflows/server";
@@ -51,9 +53,10 @@ export async function executeRun(
   if (run === undefined) return { status: "cancelled" };
   if (run.status !== "running") return { status: run.status };
   const { spec } = await getWorkflowVersion(ctx, run.workflowVersionId);
+  const actionSet = await getActionSet(ctx);
 
   const status = await walkSteps(spec, (step, place) =>
-    runStep(step.id, () => executeStep(ctx, run, step, { ...place, spec, retry })),
+    runStep(step.id, () => executeStep(ctx, run, step, { ...place, spec, actionSet, retry })),
   );
   // The one place a run's status is written, once the walk has ended. It's outside any step,
   // so it writes only a run still running: a retry that replays the walk changes nothing.
@@ -61,7 +64,7 @@ export async function executeRun(
   return { status };
 }
 
-type RunPlace = StepPlace & { spec: Spec; retry: RetryPolicy };
+type RunPlace = StepPlace & { spec: Spec; actionSet: ActionSet; retry: RetryPolicy };
 
 async function executeStep(ctx: Ctx, run: Run, step: Step, place: RunPlace): Promise<StepResult> {
   const startedAt = new Date();
@@ -72,6 +75,7 @@ async function executeStep(ctx: Ctx, run: Run, step: Step, place: RunPlace): Pro
     attribution: { workflowId: run.workflowId, runId: run.id },
     spec: place.spec,
     outputs: place.outputs,
+    actionSet: place.actionSet,
     actions: actionExecutors,
     awaitReview: (item) =>
       createReview(ctx, {

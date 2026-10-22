@@ -2,7 +2,9 @@
 // setup. Every failing stage's issues come back together in one SpecInvalidError.
 import { gmailConnections, listConnections } from "@/features/connections/server";
 import type { ConnectionSummary } from "@/features/connections/types";
+import { getActionSet } from "@/features/custom-actions/server";
 import { applyPolicy } from "@/features/policy/engine";
+import type { ActionSet } from "@/features/policy/types";
 import { eachStep } from "@/features/spec/tree";
 import type { Spec, SpecIssue } from "@/features/spec/types";
 import { issuesAsWritten } from "@/features/spec/upgrade";
@@ -24,31 +26,38 @@ export type OrgSetup = {
 /**
  * One check of a spec that passed the policy engine against the org's setup; each returns its
  * issues and never throws for a bad spec. It gets the working spec, so its issues' paths are
- * where the admin wrote them: the approvals the engine inserts use no actions.
+ * where the admin wrote them: the approvals the engine inserts use no actions. `actions` is the
+ * company's action set.
  */
-export type SetupCheck = (spec: Spec, setup: OrgSetup) => SpecIssue[];
+export type SetupCheck = (spec: Spec, setup: OrgSetup, actions: ActionSet) => SpecIssue[];
 
 /**
  * Validates `input` for the caller, or throws SpecInvalidError with every issue. The schema
- * and the policy engine run first: the setup checks need a spec they can read.
+ * and the policy engine run first, against the company's action set `actions`: the setup checks
+ * need a spec they can read.
  */
-export async function validateWorkflowSpec(ctx: Ctx, input: unknown): Promise<ValidatedSpec> {
-  const validated = checkedByPolicy(input);
+export async function validateWorkflowSpec(
+  ctx: Ctx,
+  input: unknown,
+  actions: ActionSet,
+): Promise<ValidatedSpec> {
+  const validated = checkedByPolicy(input, actions);
   const setup = await readSetup(ctx);
-  const issues = SETUP_CHECKS.flatMap((check) => check(validated.working, setup));
+  const issues = SETUP_CHECKS.flatMap((check) => check(validated.working, setup, actions));
   if (issues.length > 0) throw new SpecInvalidError(issuesAsWritten(input, issues));
   return validated;
 }
 
 /**
  * The spec schema and the policy engine on `input`, without the org-setup checks: what a version
- * of it would hold and need. Throws SpecInvalidError with every issue.
+ * of it would hold and need, against the company's action set. Throws SpecInvalidError with
+ * every issue.
  */
-export function checkedByPolicy(input: unknown): ValidatedSpec {
+export function checkedByPolicy(input: unknown, actions: ActionSet): ValidatedSpec {
   const parsed = validateSpec(input);
   if (!parsed.ok) throw new SpecInvalidError(parsed.issues);
   // The spec past here is v2; issues about it point where the input wrote the field.
-  const policy = applyPolicy(parsed.spec);
+  const policy = applyPolicy(parsed.spec, actions);
   if (!policy.ok) throw new SpecInvalidError(issuesAsWritten(input, policy.issues));
   return {
     working: parsed.spec,
@@ -66,7 +75,7 @@ export function checkedByPolicy(input: unknown): ValidatedSpec {
 export async function checkWorkflowSpec(ctx: Ctx, input: unknown): Promise<SpecCheck> {
   requireAdmin(ctx);
   try {
-    return { ok: true, ...(await validateWorkflowSpec(ctx, input)) };
+    return { ok: true, ...(await validateWorkflowSpec(ctx, input, await getActionSet(ctx))) };
   } catch (error) {
     if (error instanceof SpecInvalidError) return { ok: false, issues: error.issues };
     throw error;
@@ -100,8 +109,8 @@ const connectionCheck: SetupCheck = (spec, setup) => {
 };
 
 /** Every action the spec uses needs its scope granted to a connection it could run on. */
-const scopeCheck: SetupCheck = (spec, setup) =>
-  scopeIssues(spec, candidateConnections(spec, setup));
+const scopeCheck: SetupCheck = (spec, setup, actions) =>
+  scopeIssues(spec, candidateConnections(spec, setup), actions);
 
 const SETUP_CHECKS: SetupCheck[] = [connectionCheck, scopeCheck];
 

@@ -1,5 +1,6 @@
 // What executors take and give back.
 import type { ActionName } from "@/features/policy/catalog";
+import type { ActionSet } from "@/features/policy/types";
 import type { ModelRole, Spec, Step } from "@/features/spec/types";
 import type { Ctx } from "@/lib/ctx";
 import type { BranchPath, CallAttribution, Json } from "../types";
@@ -7,8 +8,8 @@ import type { BranchPath, CallAttribution, Json } from "../types";
 /**
  * What a step sees: the run it's in, the version's spec (so a draft can re-read a range an
  * earlier step read), the outputs of the steps before it, what its model calls are recorded
- * against, the action executors it runs (the live ones, or a dry run's stubs), and where it
- * records a review.
+ * against, the company's action set it looks actions up in, the action executors it runs (the
+ * live ones, or a dry run's stubs), and where it records a review.
  */
 export type StepContext = {
   ctx: Ctx;
@@ -16,6 +17,7 @@ export type StepContext = {
   attribution: CallAttribution;
   spec: Spec;
   outputs: Readonly<Record<string, Json>>;
+  actionSet: ActionSet;
   actions: ActionExecutors;
   /**
    * Records that an item the run left in its app's pending form waits for a person's review,

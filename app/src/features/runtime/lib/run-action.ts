@@ -1,7 +1,7 @@
-// Running one catalog action for a step, as the tool and draft steps both do: find the action
-// and its executor, check the input against the catalog's schema, run it, and check what it
-// returned. Messages name the action and the fields, never their values.
-import { findAction, type ActionName } from "@/features/policy/catalog";
+// Running one action for a step, as the tool and draft steps both do: find the action in the
+// company's action set and its executor, check the input against the action's schema, run it,
+// and check what it returned. Messages name the action and the fields, never their values.
+import type { ActionName } from "@/features/policy/catalog";
 import type { Json } from "../types";
 import { RunStepError } from "./failures";
 import type { Compose, StepContext } from "./step-context";
@@ -17,8 +17,8 @@ export async function runAction(
   context: StepContext,
   compose?: Compose,
 ): Promise<Json> {
-  const action = findAction(name);
-  // findAction found it, so it's a catalog action's name.
+  const action = context.actionSet.find(name);
+  // Executors are by catalog action name; a name with none isn't available.
   const executor = action === undefined ? undefined : context.actions[action.name as ActionName];
   if (action === undefined || executor === undefined || executor.status === "pending") {
     throw new RunStepError("not_available", `The action ${name} isn't available yet.`);

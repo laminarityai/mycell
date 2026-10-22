@@ -11,11 +11,12 @@ export const riskLevelSchema = z.enum([
 ]);
 export type RiskLevel = z.infer<typeof riskLevelSchema>;
 
-/** One operation a workflow may call, with the risk level our team fixed for it. */
-export type CatalogAction = {
+/** The connection apps a catalog action may act in, as admins name them. */
+export type ConnectionApp = "Gmail" | "Sheets";
+
+/** What every catalog action has, whatever it acts on. */
+type CatalogActionBase = {
   readonly name: string;
-  /** The app it acts in, as admins name it. */
-  readonly app: "Gmail" | "Sheets";
   /** What it does, in a sentence the builder chat reads. */
   readonly description: string;
   readonly risk: RiskLevel;
@@ -24,14 +25,9 @@ export type CatalogAction = {
    * such as "a Gmail draft". Every external send has one; other actions have none.
    */
   readonly pendingForm?: string;
-  readonly integration: "google";
-  /** The API host the Nango proxy reaches, set with its base-URL override (ADR-0014). */
-  readonly host: string;
-  /** Granted OAuth scopes, any one of which allows the action. */
-  readonly scopes: readonly string[];
   /** The action's input once references are resolved. */
   readonly input: z.ZodType;
-  /** What the action hands on: derived data and IDs only, never content (ADR-0012). */
+  /** What the action hands on to later steps. */
   readonly output: z.ZodType;
   /**
    * The fields of `output` a branch's condition may test (ADR-0015), each with its type, as
@@ -39,6 +35,29 @@ export type CatalogAction = {
    */
   readonly conditionFields?: readonly ConditionField[];
 };
+
+/** An action in one of the connection's Google apps, through the Nango proxy. */
+export type GoogleCatalogAction = CatalogActionBase & {
+  /** The app it acts in, as admins name it. */
+  readonly app: ConnectionApp;
+  readonly integration: "google";
+  /** The API host the Nango proxy reaches, set with its base-URL override (ADR-0014). */
+  readonly host: string;
+  /** Granted OAuth scopes, any one of which allows the action. */
+  readonly scopes: readonly string[];
+};
+
+/**
+ * An action on what Mycel itself holds, such as reading memory: it calls no app, so it needs
+ * no app or scope of the connection a run is on.
+ */
+export type MycelCatalogAction = CatalogActionBase & {
+  readonly app: "Memory";
+  readonly integration: "mycel";
+};
+
+/** One operation a workflow may call, with the risk level our team fixed for it. */
+export type CatalogAction = GoogleCatalogAction | MycelCatalogAction;
 
 /** An approval step the policy engine added because the spec was missing it. */
 export type InsertedApproval = {
@@ -67,6 +86,6 @@ export type Requirements = {
  */
 export type RequirementsGained = {
   maxRiskRaised?: { from: RiskLevel; to: RiskLevel };
-  newApps?: CatalogAction["app"][];
+  newApps?: ConnectionApp[];
   newScopes?: string[];
 };

@@ -55,17 +55,22 @@ export type StepExecution = {
  */
 export type Compose = () => Promise<string>;
 
+/** The run an action runs in: its ID, its workflow's (none in Try it), and its message. */
+export type ActionRunOf = { id: string; workflowId: string | undefined; sourceRef: string };
+
 /**
- * One catalog action: a Nango proxy call with the action's validated input. `marker` names the
- * run and step (`<runId>/<stepId>`), for a write to find what an earlier try already did.
- * `compose` is given by a draft step, for the action that writes its draft.
+ * One catalog action: a Nango proxy call with the action's validated input, or a read of what
+ * Mycel holds. `marker` names the run and step (`<runId>/<stepId>`), for a write to find what
+ * an earlier try already did. `compose` is given by a draft step, for the action that writes its
+ * draft. `run` is the run it's in.
  */
 export type ActionRun = (
   ctx: Ctx,
   connectionId: string,
   input: never,
   marker: string,
-  compose?: Compose,
+  compose: Compose | undefined,
+  run: ActionRunOf,
 ) => Promise<Json>;
 
 export type StepRun<S extends Step> = (step: S, context: StepContext) => Promise<StepExecution>;

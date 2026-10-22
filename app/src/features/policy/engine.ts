@@ -5,7 +5,7 @@ import { eachStep, mapStepLists, type PlacedStep } from "@/features/spec/tree";
 import type { Spec, SpecIssue, Step } from "@/features/spec/types";
 import { SpecInvalidError } from "@/lib/errors";
 import { GOOGLE_SCOPE_PREFIX } from "@/lib/google";
-import { appsUsed, findAction } from "./catalog";
+import { appsUsed, findAction, scopesOf } from "./catalog";
 import { conditionIssues } from "./condition-fields";
 import {
   riskLevelSchema,
@@ -96,7 +96,7 @@ export function requirementsGained(
 function scopeSets(actionNames: readonly string[]): (readonly string[])[] {
   return actionNames.flatMap((name) => {
     const action = findAction(name);
-    return action === undefined ? [] : [action.scopes];
+    return action === undefined ? [] : scopesOf(action);
   });
 }
 

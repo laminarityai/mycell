@@ -1,9 +1,9 @@
 // The action catalog, as code (invariant 4): every catalog action's risk level is fixed here
 // by our team, and nothing a spec or a model says changes it. v1 has six Gmail and Sheets
-// actions; no action is `financial` or `destructive`.
+// actions and one that reads memory; no action is `financial` or `destructive`.
 import { z } from "zod";
 import { GOOGLE_HOSTS, googleScope as scope } from "@/lib/google";
-import type { CatalogAction } from "./types";
+import type { CatalogAction, ConnectionApp } from "./types";
 
 const GMAIL_HOST = GOOGLE_HOSTS.gmail;
 const SHEETS_HOST = GOOGLE_HOSTS.sheets;
@@ -102,6 +102,33 @@ const actions = [
     input: z.object({ spreadsheetId: id, range: sheetRange, values: z.array(cell).min(1) }),
     output: z.object({ updatedRange: z.string() }),
   },
+  {
+    name: "memory.lookup",
+    app: "Memory",
+    description:
+      "Look up what the company's memory knows about the message's sender, the sender's " +
+      "company, or a topic: short facts, in the view of whoever the run acts for (the enabling " +
+      "member on member credentials; company-wide facts only on org credentials).",
+    risk: "read",
+    integration: "mycel",
+    input: z
+      .object({
+        about: z.enum(["sender", "sender_company", "topic"]),
+        // The words to look up, for `about: "topic"` only.
+        topic: z.string().trim().min(1).max(500).optional(),
+      })
+      .refine((input) => (input.about === "topic") === (input.topic !== undefined), {
+        message: 'Give a topic exactly when about is "topic".',
+        path: ["topic"],
+      }),
+    // The facts found, best match first, each with what it's about. A draft step that names
+    // this step in its context reads them.
+    output: z.object({
+      factCount: z.number().int().nonnegative(),
+      facts: z.array(z.object({ id, about: z.string(), statement: z.string() })),
+    }),
+    conditionFields: [{ name: "factCount", type: "number", label: "The number of facts found" }],
+  },
 ] as const satisfies readonly CatalogAction[];
 
 export type ActionName = (typeof actions)[number]["name"];
@@ -119,10 +146,21 @@ export const actionNames = actions.map((action) => action.name);
 
 /**
  * The catalog actions a connection granted `grantedScopes` may run, in catalog order: those
- * with any one of their scopes granted, the same rule as save-time validation's scope check.
+ * that need no scope, and those with any one of their scopes granted, the same rule as
+ * save-time validation's scope check.
  */
 export function actionsAllowedBy(grantedScopes: readonly string[]): CatalogAction[] {
-  return actions.filter((action) => action.scopes.some((s) => grantedScopes.includes(s)));
+  return actions.filter((action) =>
+    scopesOf(action).every((anyOf) => anyOf.some((s) => grantedScopes.includes(s))),
+  );
+}
+
+/**
+ * The scopes the action needs of the connection a run is on, as lists any one scope of which
+ * allows it: one list for a Google action, none for one on what Mycel holds.
+ */
+export function scopesOf(action: CatalogAction): (readonly string[])[] {
+  return action.integration === "google" ? [action.scopes] : [];
 }
 
 /** The catalog action with this name, or undefined when there is none. */
@@ -131,10 +169,14 @@ export function findAction(name: string): CatalogAction | undefined {
 }
 
 /**
- * The apps a workflow calling `actionNames` uses, as admins name them: Gmail, whose new mail
- * every workflow's trigger watches, then each action's app, each once.
+ * The connection apps a workflow calling `actionNames` uses, as admins name them: Gmail, whose
+ * new mail every workflow's trigger watches, then each Google action's app, each once. Memory
+ * is Mycel's own, so it's no app of the connection.
  */
-export function appsUsed(actionNames: readonly string[]): CatalogAction["app"][] {
-  const apps = actionNames.flatMap((name) => findAction(name)?.app ?? []);
-  return [...new Set<CatalogAction["app"]>(["Gmail", ...apps])];
+export function appsUsed(actionNames: readonly string[]): ConnectionApp[] {
+  const apps = actionNames.flatMap((name) => {
+    const action = findAction(name);
+    return action?.integration === "google" ? [action.app] : [];
+  });
+  return [...new Set<ConnectionApp>(["Gmail", ...apps])];
 }

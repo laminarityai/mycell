@@ -7,6 +7,7 @@ import { actionExecutors } from "./actions";
 import { RunStepError } from "./failures";
 import { messageRef } from "./gmail";
 import { replyTarget } from "./gmail-drafts";
+import { lookUp, type LookupInput } from "./memory-lookup";
 import { rangeRows, readRange } from "./sheets";
 import type { ActionExecutors } from "./step-context";
 
@@ -47,6 +48,13 @@ export function dryRunActions(report: (effect: DryRunEffect) => void): ActionExe
         report({ kind: "draft", to: target.to, subject: target.subject, text });
         return { draftId: DRY_RUN_ID, threadId: target.threadId };
       },
+    },
+    // A read, so it runs for real, in the view a run on the connection would have. Try it is
+    // part of building, so its read is logged as the builder's.
+    "memory.lookup": {
+      status: "ready",
+      run: (ctx, connectionId, input: LookupInput, _marker, _compose, run) =>
+        lookUp(ctx, { connectionId, sourceRef: run.sourceRef }, input, { kind: "builder" }),
     },
     "google-sheet.append-row": {
       status: "ready",

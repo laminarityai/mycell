@@ -7,8 +7,7 @@
 import type { CustomCall, RiskLevel } from "./types";
 
 export type CustomRisk =
-  | { ok: true; risk: Extract<RiskLevel, "read" | "external_send"> }
-  | { ok: false; reason: string };
+  { ok: true; risk: Extract<RiskLevel, "read" | "external_send"> } | { ok: false; reason: string };
 
 /** The words a refused path or operation name says, matched at the start of each word. */
 const REFUSED_WORDS = ["delete", "remove", "void", "refund", "cancel", "archive", "purge"];
@@ -30,7 +29,9 @@ export function customActionRisk(
     reads = call.method === "GET";
     names = [call.path];
   }
-  const refused = names.flatMap(words).find((word) => REFUSED_WORDS.some((w) => word.startsWith(w)));
+  const refused = names
+    .flatMap(words)
+    .find((word) => REFUSED_WORDS.some((w) => word.startsWith(w)));
   if (refused !== undefined) {
     return {
       ok: false,
@@ -53,8 +54,7 @@ function words(name: string): string[] {
 }
 
 type Operation =
-  | { ok: true; type: "query" | "mutation"; names: string[] }
-  | { ok: false; reason: string };
+  { ok: true; type: "query" | "mutation"; names: string[] } | { ok: false; reason: string };
 
 /**
  * The one operation a GraphQL document holds, by its type, with every name in it (its own, its

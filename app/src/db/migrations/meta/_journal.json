@@ -183,6 +183,13 @@
       "when": 1792641861560,
       "tag": "0025_capability-requests",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792642796952,
+      "tag": "0026_custom-actions",
+      "breakpoints": true
     }
   ]
 }

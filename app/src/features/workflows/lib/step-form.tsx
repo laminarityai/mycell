@@ -2,7 +2,8 @@
 
 // The side panel's form for a step: its fields by its type, each change applied to the working
 // spec by the step's ID. Its ID and, for an action, its risk level are shown, never edited: the
-// ID is what other steps name, and only the catalog decides a risk level (invariant 4).
+// ID is what other steps name, and only the catalog, or for a custom action the fixed rule,
+// decides a risk level (invariant 4).
 import { ShieldCheck } from "lucide-react";
 import { removeStep, updateStep } from "@/features/spec/edit";
 import { findStep, stepLocation } from "@/features/spec/tree";
@@ -46,7 +47,8 @@ export function StepForm({ stepId, ...props }: PanelProps & { stepId: string }) 
   const depth = stepLocation(spec, step.id)?.length ?? 0;
   const invalid = (field: string) => here.some((issue) => issue.path[depth] === field);
   const action = actions.find(step.type === "tool" ? step.action : "");
-  const risk = step.type === "draft" ? actions.find(step.output)?.risk : action?.risk;
+  const used = step.type === "draft" ? actions.find(step.output) : action;
+  const risk = used?.risk;
   return (
     <PanelShell
       title={action === undefined ? TITLES[step.type] : `${action.app} · ${TITLES[step.type]}`}
@@ -55,7 +57,8 @@ export function StepForm({ stepId, ...props }: PanelProps & { stepId: string }) 
           <code className="font-mono">{step.id}</code>
           {risk === undefined ? null : (
             <>
-              · <RiskBadge risk={risk} /> <span>from the catalog</span>
+              · <RiskBadge risk={risk} />{" "}
+              <span>{used?.kind === "custom" ? "set by rule" : "from the catalog"}</span>
             </>
           )}
         </span>

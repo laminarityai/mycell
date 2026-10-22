@@ -1,14 +1,45 @@
 import { expect } from "vitest";
-import { defineIsolationCases, notTenantScoped } from "@/db/testing/isolation";
+import { readOutlookMessage, storeCustomAction } from "@/db/testing/custom-actions";
+import { defineIsolationCases } from "@/db/testing/isolation";
 import { systemCtx } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
 import * as server from "../server";
 import { fileRequest, MERGE_CONTACTS } from "./capability-request-helpers";
 
 export const isolationCases = defineIsolationCases(server, {
-  getActionSet: notTenantScoped(
-    "Until custom actions are stored, every company's action set is the catalog, reading nothing.",
-  ),
+  getActionSet: async ({ orgA, orgB }) => {
+    await storeCustomAction(orgB.admin.ctx);
+    await storeCustomAction(orgA.admin.ctx, readOutlookMessage({ name: "microsoft.read-mail" }));
+
+    const custom = (await server.getActionSet(orgA.member.ctx)).actions.filter(
+      (action) => action.kind === "custom",
+    );
+    expect(custom.map((action) => action.name)).toEqual(["microsoft.read-mail"]);
+    expect((await server.getActionSet(orgA.admin.ctx)).find("microsoft.read-message")).toBe(
+      undefined,
+    );
+  },
+
+  listCustomActions: async ({ orgA, orgB }) => {
+    await storeCustomAction(orgB.admin.ctx);
+
+    expect(await server.listCustomActions(orgA.admin.ctx)).toEqual([]);
+    expect(await server.listCustomActions(systemCtx(orgA.id))).toEqual([]);
+  },
+
+  storeCustomActions: async ({ orgA, orgB }) => {
+    await storeCustomAction(orgB.admin.ctx);
+    const before = await server.listCustomActions(orgB.admin.ctx);
+
+    // The same name, doing something else, is free in org A: names are unique per company.
+    const other = readOutlookMessage({ description: "Read an Outlook message's subject." });
+    await storeCustomAction(orgA.admin.ctx, other);
+
+    expect(await server.listCustomActions(orgB.admin.ctx)).toEqual(before);
+    expect(await server.listCustomActions(orgA.admin.ctx)).toEqual([
+      expect.objectContaining({ description: "Read an Outlook message's subject." }),
+    ]);
+  },
 
   fileCapabilityRequest: async ({ orgA, orgB }) => {
     const theirs = await fileRequest(orgB.admin.ctx);

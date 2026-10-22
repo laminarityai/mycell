@@ -1,8 +1,10 @@
 // Running one action for a step, as the tool and draft steps both do: find the action in the
-// company's action set and its executor, check the input against the action's schema, run it,
-// and check what it returned. Messages name the action and the fields, never their values.
+// company's action set and its executor (a catalog action's own, or the one generic executor for
+// a custom action), check the input against the action's schema, run it, and check what it
+// returned. Messages name the action and the fields, never their values.
 import type { ActionName } from "@/features/policy/catalog";
 import type { Json } from "../types";
+import { runCustomAction } from "./custom-action";
 import { RunStepError } from "./failures";
 import type { Compose, StepContext } from "./step-context";
 
@@ -19,8 +21,9 @@ export async function runAction(
 ): Promise<Json> {
   const action = context.actionSet.find(name);
   // Executors are by catalog action name; a name with none isn't available.
-  const executor = action === undefined ? undefined : context.actions[action.name as ActionName];
-  if (action === undefined || executor === undefined || executor.status === "pending") {
+  const executor =
+    action?.kind === "catalog" ? context.actions[action.name as ActionName] : undefined;
+  if (action === undefined || executor?.status === "pending") {
     throw new RunStepError("not_available", `The action ${name} isn't available yet.`);
   }
   const parsed = action.input.safeParse(input);
@@ -31,10 +34,19 @@ export async function runAction(
       `The input to ${name} is invalid at: ${fields.join(", ")}.`,
     );
   }
-  const marker = `${context.run.id}/${stepId}`;
-  // The input passed the action's own schema, which its executor's input type matches.
-  const valid = parsed.data as never;
-  const result = await executor.run(context.ctx, context.run.connectionId, valid, marker, compose);
+  const { ctx, run } = context;
+  let result: unknown;
+  if (action.kind === "custom") {
+    // A custom read runs for real in a run and in Try it alike.
+    result = await runCustomAction(ctx, run.connectionId, action, parsed.data as never);
+  } else if (executor === undefined) {
+    throw new RunStepError("not_available", `The action ${name} isn't available yet.`);
+  } else {
+    const marker = `${run.id}/${stepId}`;
+    // The input passed the action's own schema, which its executor's input type matches.
+    const valid = parsed.data as never;
+    result = await executor.run(ctx, run.connectionId, valid, marker, compose);
+  }
   const output = action.output.safeParse(result);
   if (!output.success) {
     throw new RunStepError("invalid_output", `${name} returned an unexpected result.`);

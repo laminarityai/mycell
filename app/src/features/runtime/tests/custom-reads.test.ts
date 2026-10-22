@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { readOutlookMessage, storeCustomAction } from "@/db/testing/custom-actions";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
+import { disconnect } from "@/features/connections/server";
 import { grantCredits } from "@/features/credits/server";
 import { systemCtx } from "@/lib/ctx";
 import { connectApp, connectGoogle } from "@/testing/connect-helpers";
@@ -24,6 +25,7 @@ const spec = {
   id: "outlook-log",
   credentials: "member",
   trigger: { type: "gmail.message_received" },
+  autonomy: { rung: 3 },
   steps: [
     {
       id: "outlook",
@@ -53,11 +55,12 @@ async function setUp() {
   const google = await connectGoogle(admin, orgA.admin.email);
   const gmail = google.mailbox.add(pricingQuestion());
   google.sheets.add("sheet-1", "Log", []);
-  const microsoft = await connectApp(admin, "microsoft", orgA.admin.email);
-  const outlook = fakeNango.microsoft(microsoft.connectionId);
+  const connected = await connectApp(admin, "microsoft", orgA.admin.email);
+  const outlook = fakeNango.microsoft(connected.connectionId);
   outlook.addMessage({ id: OUTLOOK_ID, subject: SUBJECT, from: SENDER, body: "Tracking: 1Z" });
   await storeCustomAction(admin, readOutlookMessage());
-  return { orgA, orgB, admin, system, google, gmail, outlook };
+  const microsoft = connected.id ?? "";
+  return { orgA, orgB, admin, system, google, gmail, microsoft, outlook };
 }
 
 describe("a custom read in a run", () => {
@@ -72,9 +75,7 @@ describe("a custom read in a run", () => {
     expect(outlook.requests.slice(before)).toEqual([
       { method: "GET", path: `/v1.0/me/messages/${OUTLOOK_ID}`, query: {}, body: undefined },
     ]);
-    expect(google.sheets.rows("sheet-1", "Log")).toEqual([
-      [SUBJECT, SENDER, `mycel:${runId}/log`],
-    ]);
+    expect(google.sheets.rows("sheet-1", "Log")).toEqual([[SUBJECT, SENDER, `mycel:${runId}/log`]]);
     const run = await getRun(admin, runId);
     expect(run.steps.at(0)).toMatchObject({
       stepId: "outlook",
@@ -90,20 +91,23 @@ describe("a custom read in a run", () => {
   });
 
   it("fails the step, sending nothing, when its owner has no connection to the app", async () => {
-    const { orgA, system, outlook } = await setUp();
-    const member = orgA.member.ctx;
-    const workflowId = await publish(orgA.admin.ctx, spec);
-    // The member's own Google account, but no Microsoft 365.
-    const google = await connectGoogle(member, orgA.member.email);
-    const gmail = google.mailbox.add(pricingQuestion());
-    const runId = await startMemberRun(member, workflowId, google.id, gmail.id);
+    const { admin, system, google, gmail, microsoft, outlook } = await setUp();
+    const workflowId = await publish(admin, spec);
+    await disconnect(admin, microsoft);
     const before = outlook.requests.length;
+    const { runId } = await startRun(admin, workflowId, google.id, gmail.id);
 
     expect(await executeRun(system, runId)).toEqual({ status: "failed" });
 
     expect(outlook.requests.length).toBe(before);
-    const run = await getRun(orgA.admin.ctx, runId).catch(() => undefined);
-    expect(run).toBeUndefined();
+    expect((await getRun(admin, runId)).steps).toMatchObject([
+      {
+        stepId: "outlook",
+        status: "failed",
+        errorCode: "app_not_connected",
+        errorMessage: "The run's account has no Microsoft 365 connection to call it through.",
+      },
+    ]);
   });
 });
 
@@ -131,8 +135,13 @@ describe("another company's custom action", () => {
     await connectGoogle(orgB.admin.ctx, orgB.admin.email);
     await connectApp(orgB.admin.ctx, "microsoft", orgB.admin.email);
 
-    await expect(publish(orgB.admin.ctx, spec)).rejects.toThrow(
-      `"microsoft.read-message" isn't a catalog action`,
-    );
+    await expect(publish(orgB.admin.ctx, spec)).rejects.toMatchObject({
+      issues: [
+        {
+          path: ["steps", 0, "action"],
+          message: `"microsoft.read-message" isn't a catalog action or one of the company's custom actions.`,
+        },
+      ],
+    });
   });
 });

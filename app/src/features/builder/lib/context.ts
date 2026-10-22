@@ -32,11 +32,11 @@ export type ContextProvider = (
   actions: ActionSet,
 ) => Promise<ContextSection>;
 
-/** Every action a spec may use: its app, what it does, its fixed risk and its pending form. */
+/** Every action a spec may use, catalog and custom: its app, what it does, its fixed risk and its pending form. */
 const actionCatalog: ContextProvider = (_ctx, _turn, actions) => {
   const lines = actions.actions.map((action) =>
     [
-      `- ${action.name} (${action.app}): ${action.description}`,
+      `- ${action.name} (${action.app}${action.kind === "custom" ? ", the company's custom action, its level set by Mycel's rule" : ""}): ${action.description}`,
       `  Risk level: ${action.risk}.` +
         (action.pendingForm === undefined
           ? " Runs on its own."
@@ -76,12 +76,12 @@ const conditionFields: ContextProvider = (_ctx, _turn, actions) => {
 };
 
 /** The org's workflows with a summary of each working spec; the whole one for this turn's. */
-const workflows: ContextProvider = async (ctx, turn) => {
+const workflows: ContextProvider = async (ctx, turn, actions) => {
   const summaries = await listWorkflows(ctx);
   if (summaries.length === 0) return { title: "Workflows", content: "The org has none yet." };
   const lines: string[] = [];
   for (const summary of summaries) {
-    const workflow = await getWorkflow(ctx, summary.id);
+    const workflow = await getWorkflow(ctx, summary.id, actions);
     const state =
       summary.latestVersion === null
         ? "not published"

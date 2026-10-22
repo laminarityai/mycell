@@ -8,6 +8,7 @@ import {
   NewConversationButton,
   type ConversationTryIt,
 } from "@/features/builder/ui";
+import { listCustomActions } from "@/features/custom-actions/server";
 import { getCtx } from "@/features/orgs/server";
 import { recentMessages } from "@/features/runtime/server";
 import { getWorkflow } from "@/features/workflows/server";
@@ -57,8 +58,9 @@ async function ConversationView({ params, searchParams }: PageProps<"/builder/[c
     }),
     listConversations(ctx),
   ]);
-  const [proposals, workflow] = await Promise.all([
+  const [proposals, customActions, workflow] = await Promise.all([
     listProposals(ctx, conversation.id),
+    listCustomActions(ctx),
     conversation.workflowId === null ? null : getWorkflow(ctx, conversation.workflowId),
   ]);
   // The picker reads the inboxes only once the admin asks for it (`?try`).
@@ -78,6 +80,7 @@ async function ConversationView({ params, searchParams }: PageProps<"/builder/[c
         <Conversation
           conversation={conversation}
           proposals={proposals}
+          customActions={customActions}
           workflow={
             workflow === null
               ? null

@@ -34,7 +34,12 @@ export function maxRisk(spec: Spec, actions: ActionSet): RiskLevel {
     const action = actions.find(used.name);
     if (action === undefined) {
       const path = [...location, used.field];
-      throw new SpecInvalidError([{ path, message: `"${used.name}" isn't a catalog action or one of the company's custom actions.` }]);
+      throw new SpecInvalidError([
+        {
+          path,
+          message: `"${used.name}" isn't a catalog action or one of the company's custom actions.`,
+        },
+      ]);
     }
     if (ORDER.indexOf(action.risk) > ORDER.indexOf(highest)) highest = action.risk;
   }
@@ -142,7 +147,10 @@ function actionIssues(spec: Spec, actions: ActionSet): SpecIssue[] {
     const path = [...location, field];
     const action = actions.find(name);
     if (action === undefined) {
-      issues.push({ path, message: `"${name}" isn't a catalog action or one of the company's custom actions.` });
+      issues.push({
+        path,
+        message: `"${name}" isn't a catalog action or one of the company's custom actions.`,
+      });
     } else if (step.type === "tool" && action.risk === "external_send") {
       issues.push({
         path,

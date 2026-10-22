@@ -7,7 +7,12 @@ import { NotFoundError } from "@/lib/errors";
 import { fakeNango } from "@/testing/fake-nango";
 import * as server from "../server";
 import type { ConnectionsListing } from "../types";
-import { connectGmail, connectOrgInbox } from "@/testing/connect-helpers";
+import {
+  connectApp,
+  connectGmail,
+  connectGoogle,
+  connectOrgInbox,
+} from "@/testing/connect-helpers";
 
 // Org B's member connects their Gmail and org B's admin a shared inbox, so every case can
 // check org B is left as it was. Org B's admin sees all of it.
@@ -245,6 +250,21 @@ export const isolationCases = defineIsolationCases(server, {
 
     expect(await server.listConnections(orgs.orgB.admin.ctx)).toEqual(before);
     expect(await server.listConnections(orgs.orgB.member.ctx)).toEqual(memberBefore);
+  },
+
+  connectionToApp: async (orgs) => {
+    const { memberBefore } = await seedOrgBConnection(orgs);
+    const [theirs] = memberBefore.connections.map((connection) => connection.id);
+    await connectApp(orgs.orgB.member.ctx, "microsoft", orgs.orgB.member.email);
+    const ours = await connectGoogle(orgs.orgA.member.ctx, orgs.orgA.member.email);
+    const system = systemCtx(orgs.orgA.id);
+
+    // Org B's run connection is not found; org A's own finds no Microsoft 365 of org B's.
+    await expect(server.connectionToApp(system, theirs, "microsoft")).rejects.toThrow(
+      NotFoundError,
+    );
+    expect(await server.connectionToApp(system, ours.id, "microsoft")).toBeUndefined();
+    expect(await server.connectionToApp(system, ours.id, "google")).toBe(ours.id);
   },
 
   // The webhook carries no ctx: it acts as the user its tags name, inside that user's own org.

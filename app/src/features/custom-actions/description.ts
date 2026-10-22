@@ -16,8 +16,7 @@ import {
 } from "./types";
 
 export type CustomActionCheck =
-  | { ok: true; action: CustomActionRecord }
-  | { ok: false; issues: string[] };
+  { ok: true; action: CustomActionRecord } | { ok: false; issues: string[] };
 
 /**
  * Checks a description the builder chat wrote: its shape, that its call stays on its registered
@@ -58,9 +57,16 @@ function descriptionIssues(description: CustomActionDescription): string[] {
     issues.push(`"${description.name}" is a catalog action's name. Choose another.`);
   }
   const named = (where: string, input: string) => {
-    if (inputs[input] === undefined) issues.push(`${where} names "${input}", which isn't an input.`);
+    if (!Object.hasOwn(inputs, input)) {
+      issues.push(`${where} names "${input}", which isn't an input.`);
+    }
   };
-  for (const [, input] of call.path.matchAll(PLACEHOLDER)) named("The path", input ?? "");
+  for (const [, input] of call.path.matchAll(PLACEHOLDER)) {
+    named("The path", input);
+    if (Object.hasOwn(inputs, input) && inputs[input].optional) {
+      issues.push(`The path names "${input}", so it can't be optional.`);
+    }
+  }
   const mappings = "graphql" in call ? { variables: call.variables } : call;
   for (const [field, mapping] of Object.entries({
     query: "query" in mappings ? mappings.query : {},
@@ -89,7 +95,9 @@ function descriptionIssues(description: CustomActionDescription): string[] {
     }
   }
   for (const name of editable) {
-    if (inputs[name]?.type !== "text") issues.push(`editable names "${name}", which isn't a text input.`);
+    if (!Object.hasOwn(inputs, name) || inputs[name].type !== "text") {
+      issues.push(`editable names "${name}", which isn't a text input.`);
+    }
   }
   return issues;
 }
@@ -125,13 +133,11 @@ export function customActionOf(record: CustomActionRecord): CustomAction {
         ]),
       ),
     ),
-    conditionFields: Object.entries(outputs).map(
-      ([name, output]): ConditionField => ({
-        name,
-        type: CONDITION_TYPES[output.type],
-        label: output.label,
-      }),
-    ),
+    conditionFields: Object.entries(outputs).map(([name, output]): ConditionField => ({
+      name,
+      type: CONDITION_TYPES[output.type],
+      label: output.label,
+    })),
     request: {
       ...request,
       outputs: Object.fromEntries(Object.entries(outputs).map(([name, o]) => [name, o.path])),
@@ -157,6 +163,9 @@ export function actionSetWith(records: readonly CustomActionRecord[]): ActionSet
   return actionSetOf([...catalogActionSet.actions, ...records.map(customActionOf)]);
 }
 
+/** A value a custom action's input takes: text, a number, yes/no, or a choice's text. */
+export type CustomValue = string | number | boolean;
+
 /** A custom action's call with its inputs filled in: what the executor sends. */
 export type RenderedRequest = {
   method: "GET" | "POST" | "PUT" | "PATCH";
@@ -173,7 +182,7 @@ export type RenderedRequest = {
  */
 export function renderRequest(
   action: CustomAction,
-  input: Readonly<Record<string, unknown>>,
+  input: Readonly<Record<string, CustomValue | undefined>>,
 ): RenderedRequest | undefined {
   const { request } = action;
   const path = request.path.replace(PLACEHOLDER, (_match, name: string) =>

@@ -77,7 +77,13 @@ export const customActionDescriptionSchema = z
     editable: z.array(inputName).default([]),
     risk: z.unknown().optional(),
   })
-  .transform(({ risk: _ignored, ...description }) => description);
+  .transform(
+    (description) =>
+      Object.fromEntries(Object.entries(description).filter(([key]) => key !== "risk")) as Omit<
+        typeof description,
+        "risk"
+      >,
+  );
 
 export type CustomActionDescription = z.output<typeof customActionDescriptionSchema>;
 

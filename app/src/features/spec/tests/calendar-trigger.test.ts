@@ -1,6 +1,8 @@
 // The Calendar trigger in a spec (M11): a new invite starts the run, so the steps read the
 // invite, never a Gmail message.
 import { describe, expect, it } from "vitest";
+import { graphView } from "../graph";
+import { layoutTree } from "../layout";
 import { newPath, newStep } from "../new-step";
 import type { Spec } from "../types";
 import { validateSpec } from "../validate";
@@ -189,5 +191,17 @@ describe("a spec with the Calendar trigger", () => {
         { type: "tool", action: "x.y", inputs: ["eventId"] },
       ),
     ).toMatchObject({ input: { eventId: { from: "trigger.eventId" } } });
+  });
+
+  it("is drawn on the graph as what starts the run", () => {
+    const parsed = validateSpec(inviteSpec([classify]));
+    if (!parsed.ok) throw new Error("the spec should validate");
+
+    const layout = layoutTree(graphView(parsed.spec));
+
+    expect(layout.nodes.find((node) => node.kind === "trigger")).toMatchObject({
+      label: "When a new invite lands on the calendar",
+    });
+    expect(graphView(null).trigger).toBe("When a message arrives in Gmail");
   });
 });

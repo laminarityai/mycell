@@ -17,6 +17,7 @@ import { findWorkflow } from "./access";
 import { gainedForEnablements, pauseEnablements } from "./version-pauses";
 import { latestVersions, version } from "./latest-versions";
 import { removeInvisibleIn } from "./lost-visibility";
+import { readViewers } from "./visibility";
 
 /**
  * Re-validates the working spec (connections may have changed since it was saved) and records
@@ -47,6 +48,8 @@ export async function publishWorkflow(
     { ...validated, credentials: validated.applied.credentials },
     actions,
   );
+  // Who is in the org and each one's tags, read now: the transaction queries only through `tx`.
+  const viewers = await readViewers(ctx);
   try {
     // The version, its tags, the removals and the pauses together: a version is never seen
     // without who it's for, nor runs for anyone who can't see it or hasn't agreed to it.
@@ -87,7 +90,7 @@ export async function publishWorkflow(
         tags.map((tag) => ({ workflowVersionId: inserted.id, tagId: tag.id })),
       );
       // Members the new tags leave out lose their enablements, before anything is paused.
-      await removeInvisibleIn(ctx, tx, { workflowId });
+      await removeInvisibleIn(ctx, { tx, viewers }, { workflowId });
       if (gained !== null) await pauseEnablements(tx, workflowId, gained);
       return inserted;
     });

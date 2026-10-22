@@ -4,12 +4,12 @@
 // tag cleans up in a job, as the system ctx (ADR-0009). Until a job runs, the trigger's fan-out
 // checks visibility itself (startable.ts), so a slow cleanup never starts a run.
 import { and, eq, inArray, type SQL } from "drizzle-orm";
-import { forOrg, type OrgScopedDb } from "@/db/for-org";
+import { forOrg } from "@/db/for-org";
 import type { Ctx } from "@/lib/ctx";
 import { ForbiddenError } from "@/lib/errors";
 import { latestVersions } from "./latest-versions";
 import { enablements } from "./schema";
-import { seenByUsers } from "./visibility";
+import { seenByUsers, type InTransaction } from "./visibility";
 
 /** Whose enablements to look at: one user's, one workflow's, both, or (neither) the org's. */
 export type LostVisibilityScope = { userId?: string; workflowId?: string };
@@ -24,15 +24,27 @@ export async function removeInvisibleEnablements(
   scope: LostVisibilityScope,
 ): Promise<number> {
   if (ctx.role !== "admin" && ctx.role !== "system") throw new ForbiddenError();
-  return removeInvisibleIn(ctx, forOrg(ctx), scope);
+  return removeInvisible(ctx, scope);
 }
 
-/** removeInvisibleEnablements through `db`: a publish passes its transaction. */
+/**
+ * removeInvisibleEnablements inside a transaction: a publish passes its `tx` and the viewers it
+ * read before it began (readViewers), so this queries only through `tx`.
+ */
 export async function removeInvisibleIn(
   ctx: Ctx,
-  db: OrgScopedDb,
+  inTransaction: InTransaction,
   scope: LostVisibilityScope,
 ): Promise<number> {
+  return removeInvisible(ctx, scope, inTransaction);
+}
+
+async function removeInvisible(
+  ctx: Ctx,
+  scope: LostVisibilityScope,
+  inTransaction?: InTransaction,
+): Promise<number> {
+  const db = inTransaction?.tx ?? forOrg(ctx);
   const rows = await db.select(enablements, { where: inScope(scope) });
   if (rows.length === 0) return 0;
   const latest = await latestVersions(ctx, [...new Set(rows.map((row) => row.workflowId))], db);
@@ -43,7 +55,7 @@ export async function removeInvisibleIn(
   const seen = await seenByUsers(
     ctx,
     pairs.map(({ row, versionId }) => ({ userId: row.userId, versionId })),
-    db,
+    inTransaction,
   );
   const unseen = pairs
     .filter(({ row, versionId }) => !seen(row.userId, versionId))

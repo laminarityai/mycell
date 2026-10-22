@@ -24,6 +24,20 @@ import {
 import { env } from "@/env";
 import { NotFoundError } from "@/lib/errors";
 
+export type KeyStoreErrorCode =
+  "not_configured" | "no_mac" | "no_data_key" | "no_key_id" | "no_plaintext";
+
+/**
+ * The key store can't do what was asked: it isn't configured, or KMS answered without what it
+ * should have. Its message is built from its code only, never from key material.
+ */
+export class KeyStoreError extends Error {
+  constructor(readonly code: KeyStoreErrorCode) {
+    super(`The key store failed: ${code}.`);
+    this.name = "KeyStoreError";
+  }
+}
+
 /** A data key: its plaintext, for this one use only, and its encrypted form, to store. */
 export type DataKey = { plaintext: Uint8Array; encrypted: Uint8Array };
 
@@ -34,7 +48,8 @@ let client: KMSClient | undefined;
 
 function kms(): KMSClient {
   if (env.KMS_REGION === undefined) {
-    throw new Error("The key store needs KMS_REGION (see app/.env.example).");
+    // It needs KMS_REGION (see app/.env.example).
+    throw new KeyStoreError("not_configured");
   }
   client ??= new KMSClient({
     region: env.KMS_REGION,
@@ -85,7 +100,7 @@ export async function generateMac(orgId: string, message: Uint8Array): Promise<U
         MacAlgorithm: "HMAC_SHA_256",
       }),
     );
-    if (Mac === undefined) throw new Error("KMS returned no MAC.");
+    if (Mac === undefined) throw new KeyStoreError("no_mac");
     return Mac;
   });
 }
@@ -110,7 +125,7 @@ async function generateUnder(orgId: string): Promise<DataKey> {
     }),
   );
   if (Plaintext === undefined || CiphertextBlob === undefined) {
-    throw new Error("KMS returned no data key.");
+    throw new KeyStoreError("no_data_key");
   }
   return { plaintext: Plaintext, encrypted: CiphertextBlob };
 }
@@ -127,7 +142,7 @@ async function createOrgKey(orgId: string, purpose: KeyPurpose): Promise<void> {
     }),
   );
   const keyId = KeyMetadata?.KeyId;
-  if (keyId === undefined) throw new Error("KMS made a key with no ID.");
+  if (keyId === undefined) throw new KeyStoreError("no_key_id");
   try {
     await kms().send(
       new CreateAliasCommand({ AliasName: aliasOf(orgId, purpose), TargetKeyId: keyId }),
@@ -153,7 +168,7 @@ export async function decryptDataKey(orgId: string, encrypted: Uint8Array): Prom
         EncryptionContext: encryptionContext(orgId),
       }),
     );
-    if (Plaintext === undefined) throw new Error("KMS returned no plaintext.");
+    if (Plaintext === undefined) throw new KeyStoreError("no_plaintext");
     return Plaintext;
   } catch (error) {
     if (unreadable(error)) throw new NotFoundError("encrypted item");
@@ -190,7 +205,7 @@ async function destroyKey(alias: string): Promise<void> {
     if (error instanceof NotFoundException) return;
     throw error;
   }
-  if (keyId === undefined) throw new Error("KMS described a key with no ID.");
+  if (keyId === undefined) throw new KeyStoreError("no_key_id");
   await kms().send(
     new ScheduleKeyDeletionCommand({ KeyId: keyId, PendingWindowInDays: DELETION_WINDOW_DAYS }),
   );

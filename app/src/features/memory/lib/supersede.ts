@@ -20,7 +20,7 @@ type FactRow = typeof facts.$inferSelect;
  */
 export async function placeInTimeline(
   tx: OrgScopedDb,
-  fact: FactRow,
+  fact: Pick<FactRow, "id" | "subjectId" | "predicate">,
   statedAt: Date,
 ): Promise<void> {
   if (fact.predicate === null) return;

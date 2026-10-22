@@ -193,15 +193,10 @@ async function storeObject(
   object: ExtractedObject,
   matched: string | undefined,
 ): Promise<string> {
-  let id = matched;
-  if (id === undefined) {
-    const created = (
-      await tx.insert(memoryObjects, { id: randomUUID(), kind: object.kind, name: object.name })
-    ).at(0);
-    if (created === undefined) throw new Error("The object wasn't stored.");
-    id = created.id;
+  const objectId = matched ?? randomUUID();
+  if (matched === undefined) {
+    await tx.insert(memoryObjects, { id: objectId, kind: object.kind, name: object.name });
   }
-  const objectId = id;
   await tx.insert(
     objectKeys,
     object.keys.map((key) => ({ objectId, ...key })),
@@ -229,22 +224,20 @@ async function storeFact(tx: OrgScopedDb, fact: FactToStore, statedAt: Date): Pr
     })
   ).at(0);
   if (same !== undefined) return same.id;
-  const created = (
-    await tx.insert(facts, {
-      id: randomUUID(),
-      subjectId: fact.subjectId,
-      statement: fact.statement,
-      predicate: fact.predicate,
-      value: fact.value,
-      objectId: fact.objectId,
-      origin: "source",
-      validFrom: fact.validFrom,
-      embedding: fact.embedding,
-    })
-  ).at(0);
-  if (created === undefined) throw new Error("The fact wasn't stored.");
-  await placeInTimeline(tx, created, statedAt);
-  return created.id;
+  const id = randomUUID();
+  await tx.insert(facts, {
+    id,
+    subjectId: fact.subjectId,
+    statement: fact.statement,
+    predicate: fact.predicate,
+    value: fact.value,
+    objectId: fact.objectId,
+    origin: "source",
+    validFrom: fact.validFrom,
+    embedding: fact.embedding,
+  });
+  await placeInTimeline(tx, { id, subjectId: fact.subjectId, predicate: fact.predicate }, statedAt);
+  return id;
 }
 
 function objectCount(rows: { subjectId: string; objectId: string | null }[]): number {

@@ -8,6 +8,8 @@ import { ForbiddenError } from "@/lib/errors";
 import { open, parseEnvelope, seal } from "./lib/envelope";
 import { decryptDataKey, destroyKeys, generateDataKey, generateMac } from "./lib/kms";
 
+export { KeyStoreError, type KeyStoreErrorCode } from "./lib/kms";
+
 /** Encrypts `text` with the ctx org's key. Only `decryptForOrg` in the same org opens it. */
 export async function encryptForOrg(ctx: Ctx, text: string): Promise<string> {
   const dataKey = await generateDataKey(ctx.orgId);

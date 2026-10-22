@@ -57,6 +57,20 @@ const envSchema = z.object({
   CREDIT_ESTIMATE_FAST: positiveNumber("5"),
   CREDIT_ESTIMATE_SMART: positiveNumber("50"),
   CREDIT_ESTIMATE_JUDGE: positiveNumber("50"),
+  // The key store (ADR-0020, ADR-0024): AWS KMS holds one key per org, made on first use under
+  // the alias `alias/<KMS_ALIAS_PREFIX>/org/<org ID>`. The key store needs KMS_REGION; without
+  // it, encrypting or decrypting fails. The access key pair is an IAM user's; leave both unset to
+  // use the AWS SDK's own credential chain (a role) instead. Vercel reserves AWS_REGION and the
+  // AWS_* key names, hence the KMS_ prefix. KMS_ENDPOINT points at a KMS other than AWS's
+  // regional one, such as LocalStack.
+  KMS_REGION: z.string().min(1).optional(),
+  KMS_ACCESS_KEY_ID: z.string().min(1).optional(),
+  KMS_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+  KMS_ALIAS_PREFIX: z
+    .string()
+    .regex(/^[\w-]+$/, "Letters, digits, - and _ only")
+    .default("mycel"),
+  KMS_ENDPOINT: z.url().optional(),
 });
 
 export const env = envSchema
@@ -70,6 +84,13 @@ export const env = envSchema
       if (parsed[key] === undefined) {
         context.addIssue({ code: "custom", path: [key], message: "Required unless INNGEST_DEV=1" });
       }
+    }
+    if ((parsed.KMS_ACCESS_KEY_ID === undefined) !== (parsed.KMS_SECRET_ACCESS_KEY === undefined)) {
+      context.addIssue({
+        code: "custom",
+        path: ["KMS_SECRET_ACCESS_KEY"],
+        message: "KMS_ACCESS_KEY_ID and KMS_SECRET_ACCESS_KEY are set together or not at all",
+      });
     }
   })
   .parse(process.env);

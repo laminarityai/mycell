@@ -1,13 +1,15 @@
-// The Google APIs the fake Nango's proxy serves, each by its host and path prefix, answering
-// from the connection's own fake (its Gmail mailbox, its Drive or its spreadsheets). Like
-// Google, an API answers 403 to a connection whose token holds none of the scopes it accepts
-// (for a write, none of the scopes its writes accept), and a host answers 404 for a path it
-// doesn't serve.
+// The APIs the fake Nango's proxy serves, each by its host and path prefix, answering from the
+// connection's own fake: Google's (its Gmail mailbox, its Drive or its spreadsheets), and the
+// registered app Pipedrive, on the company's own subdomain. Like Google, an API answers 403 to a
+// connection whose token holds none of the scopes it accepts (for a write, none of the scopes
+// its writes accept), and a host answers 404 for a path it doesn't serve.
 import { HttpResponse } from "msw";
+import { REGISTERED_APPS } from "@/features/connections/registered-apps";
 import { GOOGLE_APP_SCOPES } from "@/features/connections/types";
 import { driveError, driveResponse } from "./fake-drive";
 import { gmailError, gmailResponse, gmailWrite } from "./fake-gmail";
 import type { FakeConnection } from "./fake-nango";
+import { pipedriveError } from "./fake-pipedrive";
 import { sheetsError } from "./fake-sheets";
 
 type Respond = (connection: FakeConnection, path: string, params: URLSearchParams) => Response;
@@ -25,6 +27,7 @@ type RespondToWrite = (
 ) => Response;
 
 export type ProxiedSource = {
+  // An origin, or `https://*.<domain>` for an app on each company's own subdomain.
   host: string;
   prefix: string;
   // Any one of these lets a token call the API.
@@ -42,6 +45,9 @@ const DRIVE_READONLY = GOOGLE_APP_SCOPES.drive;
 const DRIVE = "https://www.googleapis.com/auth/drive";
 const DRIVE_FILE = "https://www.googleapis.com/auth/drive.file";
 const SPREADSHEETS_READONLY = "https://www.googleapis.com/auth/spreadsheets.readonly";
+const PIPEDRIVE_WRITE_SCOPES = REGISTERED_APPS.pipedrive.scopes.filter((scope) =>
+  scope.endsWith(":full"),
+);
 
 export const PROXIED_SOURCES: ProxiedSource[] = [
   {
@@ -79,10 +85,33 @@ export const PROXIED_SOURCES: ProxiedSource[] = [
     },
     rateLimited: () => sheetsError(429, "RESOURCE_EXHAUSTED"),
   },
+  {
+    host: "https://*.pipedrive.com",
+    prefix: "/",
+    // Every Pipedrive token holds `base`; which paths need which other scope isn't modelled.
+    scopes: ["base"],
+    respond: (connection, path, params) =>
+      connection.pipedrive.respond("GET", path, params, undefined),
+    write: {
+      scopes: PIPEDRIVE_WRITE_SCOPES,
+      respond: (connection, path, params, body, method) =>
+        connection.pipedrive.respond(method, path, params, body),
+    },
+    rateLimited: () => pipedriveError(429, "Request over limit"),
+  },
 ];
 
-/** The host each Nango integration proxies to when a request names none (Nango's providers). */
-export const INTEGRATION_HOSTS: Partial<Record<string, string>> = {
+/**
+ * The origin Nango proxies a connection's request to when it names none: the integration's own
+ * host (Nango's providers), or for Pipedrive the company's, from the token response.
+ */
+export function integrationHost(connection: FakeConnection): string | undefined {
+  if (connection.integration === "pipedrive") return connection.pipedrive.apiDomain;
+  return INTEGRATION_HOSTS[connection.integration];
+}
+
+// The host each Google integration proxies to when a request names none (Nango's providers).
+const INTEGRATION_HOSTS: Partial<Record<string, string>> = {
   google: "https://www.googleapis.com",
   "google-mail": "https://gmail.googleapis.com",
   "google-drive": "https://www.googleapis.com",
@@ -90,12 +119,14 @@ export const INTEGRATION_HOSTS: Partial<Record<string, string>> = {
 
 /**
  * What a connection is granted unless a test says otherwise: every app Mycel asks for on the
- * `google` integration, and the one scope each one-app integration asked for before ADR-0014.
+ * `google` integration, the one scope each one-app integration asked for before ADR-0014, and
+ * everything a registered app asks for (Pipedrive's users accept all or none).
  */
 export const DEFAULT_SCOPES: Partial<Record<string, readonly string[]>> = {
   google: Object.values(GOOGLE_APP_SCOPES),
   "google-mail": [GMAIL_READONLY],
   "google-drive": [DRIVE_READONLY],
+  pipedrive: REGISTERED_APPS.pipedrive.scopes,
 };
 
 /**
@@ -104,9 +135,15 @@ export const DEFAULT_SCOPES: Partial<Record<string, readonly string[]>> = {
  * such path. A host the fake doesn't know fails the test.
  */
 export function proxiedSource(host: string, path: string): ProxiedSource | undefined {
-  const onHost = PROXIED_SOURCES.filter((source) => source.host === host);
+  const onHost = PROXIED_SOURCES.filter((source) => onSourceHost(source.host, host));
   if (onHost.length === 0) throw new Error(`The fake Nango proxies to no API on ${host}`);
   return onHost.find((source) => path.startsWith(source.prefix));
+}
+
+function onSourceHost(pattern: string, origin: string): boolean {
+  const domain = /^https:\/\/\*\.(.+)$/.exec(pattern)?.[1];
+  if (domain === undefined) return pattern === origin;
+  return origin.startsWith("https://") && origin.endsWith(`.${domain}`);
 }
 
 /** What the source answers before reaching its API: 404 off its paths, 403 without a scope. */

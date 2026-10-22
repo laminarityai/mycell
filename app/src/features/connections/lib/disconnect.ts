@@ -8,7 +8,7 @@ import type { Ctx } from "@/lib/ctx";
 import { ConflictError, ForbiddenError, NotFoundError } from "@/lib/errors";
 import { deleteNangoConnection } from "./nango";
 import { connections } from "./schema";
-import { INTEGRATIONS } from "./google";
+import { integrationOf } from "./apps";
 
 type Connection = typeof connections.$inferSelect;
 
@@ -56,7 +56,7 @@ export async function forgetNangoConnection(
     where: eq(connections.nangoConnectionId, nangoConnectionId),
   });
   const connection = rows.at(0);
-  if (connection === undefined || INTEGRATIONS[connection.source] !== integration) return;
+  if (connection === undefined || integrationOf(connection.source) !== integration) return;
   await forOrg(orgCtx).delete(connections, eq(connections.id, connection.id));
 }
 
@@ -77,7 +77,7 @@ export function mayManage(ctx: Ctx, connection: Pick<Connection, "kind" | "owner
  */
 export async function deleteConnection(ctx: Ctx, connection: Connection): Promise<void> {
   try {
-    await deleteNangoConnection(connection.nangoConnectionId, INTEGRATIONS[connection.source]);
+    await deleteNangoConnection(connection.nangoConnectionId, integrationOf(connection.source));
   } catch (error) {
     console.warn(
       `Deleting Nango connection ${connection.nangoConnectionId} failed; reconciliation will retry.`,

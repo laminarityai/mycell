@@ -5,21 +5,23 @@ import { z } from "zod";
 import { getCtx } from "@/features/orgs/server";
 import { actionError, type ActionResult } from "@/lib/errors";
 import { disconnect, startConnect, startReconnect } from "./server";
-import { connectionKindSchema } from "./types";
+import { connectionKindSchema, registeredAppIdSchema } from "./types";
 
 const disconnectInput = z.object({ connectionId: z.string().min(1) });
 
 /**
- * Starts connecting a Google account (ADR-0014) and hands the browser the token Nango's
- * Connect UI opens with.
+ * Starts connecting an account in a registered app (one Google account, ADR-0014) and hands
+ * the browser the token Nango's Connect UI opens with.
  */
 export async function startConnectAction(
+  app: unknown,
   kind: unknown,
 ): Promise<{ token: string } | { error: string }> {
   const ctx = await getCtx();
+  const parsedApp = registeredAppIdSchema.parse(app);
   const parsedKind = connectionKindSchema.parse(kind);
   try {
-    return await startConnect(ctx, "google", parsedKind);
+    return await startConnect(ctx, parsedApp, parsedKind);
   } catch (error) {
     return { error: actionError(error).error ?? "Couldn't start connecting. Try again." };
   }

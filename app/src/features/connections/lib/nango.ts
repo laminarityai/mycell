@@ -140,8 +140,9 @@ export async function nangoConnectionExists(
   throw new Error(`Nango connection read failed: ${String(response.status)}`);
 }
 
-// The parts of a connection Mycel reads: Google's token response, kept whole by Nango as
-// `credentials.raw`, whose `scope` lists the granted scopes, space-separated.
+// The parts of a connection Mycel reads: the app's token response, kept whole by Nango as
+// `credentials.raw`, whose `scope` lists the granted scopes: space-separated for Google, as
+// OAuth has it, and comma-separated for Pipedrive (unverified), so either is read.
 const connectionCredentials = z.object({
   credentials: z.object({
     raw: z.object({ scope: z.string().optional() }).optional(),
@@ -149,7 +150,7 @@ const connectionCredentials = z.object({
 });
 
 /**
- * The OAuth scopes Google granted the connection, from Nango's copy of its token response.
+ * The OAuth scopes the app granted the connection, from Nango's copy of its token response.
  * Throws NangoConnectionGoneError when Nango has no such connection.
  */
 export async function readGrantedScopes(
@@ -165,7 +166,7 @@ export async function readGrantedScopes(
   if (response.status === 404) throw new NangoConnectionGoneError();
   if (!response.ok) throw new Error(`Nango connection read failed: ${String(response.status)}`);
   const { credentials } = connectionCredentials.parse(await response.json());
-  return (credentials.raw?.scope ?? "").split(/\s+/).filter((scope) => scope !== "");
+  return (credentials.raw?.scope ?? "").split(/[\s,]+/).filter((scope) => scope !== "");
 }
 
 // An error body from Nango itself rather than from the source: Nango's codes are strings, and
@@ -175,8 +176,11 @@ export async function readGrantedScopes(
 // alone can't say the connection is gone.
 const nangoError = z.object({ error: z.object({ code: z.string() }) });
 
-/** A call through the Nango proxy: which API host it reaches, and the path on that host. */
-export type ProxyTarget = { baseUrl: string; path: string };
+/**
+ * A call through the Nango proxy: the path, and the API host it reaches when that isn't the
+ * integration's own (Google's APIs are each on their own host).
+ */
+export type ProxyTarget = { baseUrl?: string; path: string };
 
 type ProxiedConnection = { connectionId: string; integration: string };
 
@@ -242,8 +246,9 @@ async function nangoProxy<T>(
       ...init.headers,
       "Connection-Id": connection.connectionId,
       "Provider-Config-Key": connection.integration,
-      // One Nango integration reaches every Google API, each on its own host.
-      "Base-Url-Override": baseUrl,
+      // One Nango integration reaches every Google API, each on its own host; any other app's
+      // calls go to the host Nango keeps for its integration.
+      ...(baseUrl === undefined ? {} : { "Base-Url-Override": baseUrl }),
     },
   });
   if (response.ok) {

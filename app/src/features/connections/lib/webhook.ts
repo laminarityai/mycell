@@ -10,7 +10,7 @@ import type { Ctx } from "@/lib/ctx";
 import { checkAccount } from "./account-check";
 import { ATTEMPT_TAGS } from "./connect";
 import { forgetNangoConnection } from "./disconnect";
-import { grantedApps, INTEGRATIONS, readAccountEmail } from "./google";
+import { integrationOf, readAccountEmail } from "./apps";
 import {
   deleteNangoConnection,
   isSignedByNango,
@@ -20,6 +20,7 @@ import {
 import { recordCredentials } from "./reauth";
 import { recordConnection, refuse } from "./record";
 import { connectAttempts } from "./schema";
+import { SOURCE_NAMES } from "./source-names";
 
 // The tags startConnect put on the connect session.
 const attemptTags = z.object({
@@ -79,21 +80,24 @@ async function settleAttempt(webhook: AuthWebhook): Promise<void> {
   const found = await findAttempt(webhook);
   if (found === undefined) return;
   const { ctx, attempt } = found;
-  if (attempt.status !== "pending" || INTEGRATIONS[attempt.source] !== webhook.providerConfigKey) {
+  if (attempt.status !== "pending" || integrationOf(attempt.source) !== webhook.providerConfigKey) {
     return;
   }
   if (!webhook.success) {
-    await refuse(ctx, attempt, "Google didn't finish connecting. Try again.");
+    await refuse(
+      ctx,
+      attempt,
+      `${SOURCE_NAMES[attempt.source]} didn't finish connecting. Try again.`,
+    );
     return;
   }
   const grantedScopes = await readGrantedScopes(webhook.connectionId, webhook.providerConfigKey);
-  const apps = grantedApps(attempt.source, grantedScopes);
   // A refused account's access is revoked at Nango before the attempt says why.
   const reject = async (refusal: string) => {
     await deleteNangoConnection(webhook.connectionId, webhook.providerConfigKey);
     await refuse(ctx, attempt, refusal);
   };
-  const accountEmail = await readAccountEmail(attempt.source, webhook.connectionId, apps);
+  const accountEmail = await readAccountEmail(attempt.source, webhook.connectionId, grantedScopes);
   if (accountEmail === undefined) {
     await reject("Allow Gmail or Drive, so Mycel can tell which account this is.");
     return;

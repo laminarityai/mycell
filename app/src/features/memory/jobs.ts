@@ -33,9 +33,12 @@ const stepRunner =
   <T>(id: string, run: () => Promise<T>) =>
     step.run(id, run) as Promise<T>;
 
-// One of these jobs at a time per org, across them (scope "env"): learning, deletions, sharing
-// changes, an exclusion's forgetting, forgetting a person, retention and resuming postponed
-// items never race each other, and one org's backfill leaves other orgs unblocked.
+// One step of these jobs at a time per org, across them (scope "env"): learning, deletions,
+// sharing changes, an exclusion's forgetting, forgetting a person, retention and resuming
+// postponed items never run a step at the same time, and one org's backfill leaves other orgs
+// unblocked. Inngest's concurrency limits executing steps, not runs: another job's step can run
+// between two steps of one run, so each step checks again what it relies on (learning's second
+// step re-checks the exclusions and the do-not-learn list).
 const PER_ORG = [{ scope: "env", key: '"memory-org-" + event.data.orgId', limit: 1 }] as const;
 
 /**

@@ -12,9 +12,11 @@ import {
   addExclusion,
   forgetExcluded,
   getMemorySettings,
+  learnFromItem,
   readObject,
   removeExclusion,
 } from "../server";
+import { itemToLearnSchema } from "../types";
 import { learnStoredItems, scriptDocLearning, scriptLearning, withCredits } from "./memory-helpers";
 
 beforeEach(resetDatabase);
@@ -25,6 +27,7 @@ const ROLE = "Dana Ruiz leads procurement at Acme.";
 const KIM_ROLE = "Kim Lee runs sales at Globex.";
 const runInline = <T>(_id: string, run: () => Promise<T>) => run();
 const byEmail = (value: string) => ({ key: { kind: "email" as const, value } });
+const ACME_DOMAIN = { kind: "domain" as const, value: "acme.example" };
 
 // Org A's member has a mailbox with an HR label, and memory has started.
 async function setup() {
@@ -125,6 +128,33 @@ describe("excluding an address or a domain", () => {
     expect(await arrives({ from: "someone@else.example", cc: [KIM], text: "Hi" })).toEqual([
       { outcome: "skipped", reason: "excluded" },
     ]);
+  });
+});
+
+describe("an exclusion added while an item is being learned", () => {
+  it("keeps the item out though it was added between learning's two steps", async () => {
+    const { orgA, mailbox } = await setup();
+    mailbox.mailbox.add({ ...fromDana, to: [orgA.member.email], at: new Date() });
+    await pollConnection(systemCtx(orgA.id), mailbox.id);
+    const stored = fakeInngest.sent("discovery/item.stored").at(-1);
+    scriptDana();
+
+    // The admin excludes Acme, and the exclusion's job runs, after the item was decided on
+    // and before it's extracted: the job finds nothing learned yet.
+    let forgot: Awaited<ReturnType<typeof forgetExcluded>> | undefined;
+    const interleaved = async <T>(id: string, run: () => Promise<T>) => {
+      if (id === "extract") ({ forgot } = await exclude(orgA.admin.ctx, ACME_DOMAIN));
+      return run();
+    };
+    const outcome = await learnFromItem(
+      systemCtx(orgA.id),
+      itemToLearnSchema.parse(stored?.data),
+      interleaved,
+    );
+
+    expect(forgot).toEqual({ sourceRecords: 0 });
+    expect(outcome).toEqual({ outcome: "skipped", reason: "excluded" });
+    await expect(readObject(orgA.member.ctx, byEmail(DANA))).rejects.toThrow(NotFoundError);
   });
 });
 

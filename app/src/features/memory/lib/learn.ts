@@ -7,7 +7,7 @@
 // to its facts there and then), or else, once the injection screen has passed it (an item it
 // flags, or one nothing could screen, is skipped before any model reads it), whether it's
 // business (`classify`). The second, for a business
-// item, reads it again, extracts objects and facts, drops any object keyed by a forgotten
+// item, reads it again, checks the exclusions again, extracts objects and facts, drops any object keyed by a forgotten
 // address with the facts about it or linking to it, embeds the statements and stores them.
 // Every model call is tagged `memory` in the ledger. The item's content is fetched inside each
 // step and never leaves it (invariant 8): a step returns only what it decided. A connection or
@@ -100,6 +100,7 @@ export async function learnFromItem(
       return { outcome: "gone" };
     case "unsupported":
     case "outdated":
+    case "excluded":
     case "flagged":
     case "unscreened":
     case "known":
@@ -136,12 +137,18 @@ async function decide(ctx: Ctx, item: ItemToLearn): Promise<Decision> {
 }
 
 type Learned =
-  | { decision: Unread | "flagged" | "unscreened" | "known" | "nothing_stated" }
+  | { decision: Unread | "excluded" | "flagged" | "unscreened" | "known" | "nothing_stated" }
   | ({ decision: "stored" } & Stored);
 
 async function extractAndStore(ctx: Ctx, item: ItemToLearn): Promise<Learned> {
   const source = await read(ctx, item);
   if (typeof source === "string") return { decision: source };
+  // Again: an exclusion added since the first step, whose job may have run between the two
+  // steps and found nothing learned yet, keeps the item out.
+  if (await isExcluded(ctx, item.connectionId, source.item)) {
+    await retireOlderVersions(ctx, source);
+    return { decision: "excluded" };
+  }
   if (CAN_CHANGE[item.app]) {
     const screened = await screen(ctx, source.item);
     if (screened !== null) {

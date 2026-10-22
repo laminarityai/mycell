@@ -6,9 +6,10 @@ import { appList, SOURCE_NAMES } from "./source-names";
 /**
  * Tells whoever manages these connections (the owner, or admins for org connections) what
  * needs them: a connection Google stopped accepting Mycel's access to (polling skips it until
- * it's reconnected), apps a Google connection wasn't allowed, one-app connections from before
- * one Google connection per account, which connecting Google replaces, and Gmail read without
- * the write access workflows' labels and drafts need (ADR-0011).
+ * it's reconnected), a backfill that failed (a reconnect starts it again), apps a Google
+ * connection wasn't allowed, one-app connections from before one Google connection per
+ * account, which connecting Google replaces, and Gmail read without the write access
+ * workflows' labels and drafts need (ADR-0011).
  */
 export function ConnectionNotices({ connections }: { connections: ConnectionSummary[] }) {
   return connections.flatMap((connection) => {
@@ -20,7 +21,7 @@ export function ConnectionNotices({ connections }: { connections: ConnectionSumm
             key={connection.id}
             role="status"
             className={
-              connection.status === "needs_reauth"
+              connection.status === "needs_reauth" || connection.status === "failed"
                 ? "text-sm text-destructive"
                 : "text-sm text-muted-foreground"
             }
@@ -35,6 +36,9 @@ function noticeFor(connection: ConnectionSummary): string | undefined {
   const account = connection.accountEmail;
   if (connection.status === "needs_reauth") {
     return `Google stopped accepting Mycel's access to ${account}. Reconnect it to pick up new ${appList(connection.apps)} activity again.`;
+  }
+  if (connection.status === "failed") {
+    return `Mycel couldn't finish reading ${account}'s history. Reconnect it to try again.`;
   }
   if (connection.source !== "google") {
     const write = needsWriteAccess(connection)
@@ -59,19 +63,22 @@ function needsWriteAccess(connection: ConnectionSummary): boolean {
 }
 
 /**
- * A connection's controls: Reconnect when Google stopped accepting it, to allow apps a Google
- * connection wasn't granted, or to grant Gmail write access, and Disconnect.
+ * A connection's controls: Reconnect when Google stopped accepting it, to retry a backfill that
+ * failed, to allow apps a Google connection wasn't granted, or to grant Gmail write access,
+ * and Disconnect.
  */
 export function ConnectionControls({ connection }: { connection: ConnectionSummary }) {
   const allow = connection.source === "google" ? connection.missingApps : [];
   const reconnectLabel =
     connection.status === "needs_reauth"
       ? "Reconnect"
-      : allow.length > 0
-        ? `Reconnect to allow ${appList(allow)}`
-        : needsWriteAccess(connection)
-          ? "Reconnect to grant write access"
-          : undefined;
+      : connection.status === "failed"
+        ? "Reconnect to retry"
+        : allow.length > 0
+          ? `Reconnect to allow ${appList(allow)}`
+          : needsWriteAccess(connection)
+            ? "Reconnect to grant write access"
+            : undefined;
   return (
     <div className="flex flex-wrap items-start justify-end gap-2">
       {reconnectLabel === undefined ? null : (

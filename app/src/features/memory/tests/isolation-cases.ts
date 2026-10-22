@@ -58,6 +58,47 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await snapshot()).toEqual(before);
   },
 
+  deleteRemovedItem: async (orgs) => {
+    const { mailbox, sourceRef, snapshot } = await seedOrgB(orgs);
+    const before = await snapshot();
+    const { orgA } = orgs;
+    const item = { connectionId: mailbox.id, app: "gmail" as const, itemId: sourceRef };
+
+    expect(await server.deleteRemovedItem(systemCtx(orgA.id), item)).toEqual({ records: 0 });
+    for (const ctx of [orgA.admin.ctx, orgA.member.ctx]) {
+      await expect(server.deleteRemovedItem(ctx, item)).rejects.toThrow(ForbiddenError);
+    }
+
+    expect(await snapshot()).toEqual(before);
+  },
+
+  rereadAccess: async (orgs) => {
+    const { mailbox, snapshot } = await seedOrgB(orgs);
+    const before = await snapshot();
+    const { orgA } = orgs;
+    const item = { connectionId: mailbox.id, app: "drive" as const, sourceRef: "1abc@2026-10-01" };
+
+    expect(await server.rereadAccess(systemCtx(orgA.id), item)).toEqual({ outcome: "unknown" });
+    for (const ctx of [orgA.admin.ctx, orgA.member.ctx]) {
+      await expect(server.rereadAccess(ctx, item)).rejects.toThrow(ForbiddenError);
+    }
+
+    expect(await snapshot()).toEqual(before);
+  },
+
+  rereadDriveAccess: async (orgs) => {
+    const { snapshot } = await seedOrgB(orgs);
+    const before = await snapshot();
+    const { orgA } = orgs;
+
+    expect(await server.rereadDriveAccess(systemCtx(orgA.id))).toEqual({ files: 0, removed: 0 });
+    for (const ctx of [orgA.admin.ctx, orgA.member.ctx]) {
+      await expect(server.rereadDriveAccess(ctx)).rejects.toThrow(ForbiddenError);
+    }
+
+    expect(await snapshot()).toEqual(before);
+  },
+
   readObject: async (orgs) => {
     const { object, snapshot } = await seedOrgB(orgs);
     const { orgA } = orgs;

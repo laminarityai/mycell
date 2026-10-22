@@ -2,7 +2,8 @@
 // Mycel makes (users.getProfile, users.messages.list and get, users.history.list,
 // users.threads.get, users.labels.list, users.drafts.list and get, and the writes in
 // fake-gmail-writes.ts) in the shapes Google documents, from messages a test seeds. A test can
-// also send or delete a draft itself, as the person would in Gmail.
+// also send or delete a draft, and trash or delete a message, itself, as the person would in
+// Gmail.
 import { HttpResponse } from "msw";
 import {
   draftMessage,
@@ -23,12 +24,26 @@ import {
 
 export type { FakeMessageInput, GmailMessage };
 
-/** A users.history resource: one change to the mailbox. The fake records messageAdded only. */
+type HistoryMessage = { id: string; threadId: string; labelIds: string[] };
+
+/**
+ * A users.history resource: one change to the mailbox. The fake records a message added,
+ * deleted for good, or given labels (such as TRASH).
+ */
 type HistoryRecord = {
   id: string;
   messages: { id: string; threadId: string }[];
-  messagesAdded: { message: { id: string; threadId: string; labelIds: string[] } }[];
+  messagesAdded?: { message: HistoryMessage }[];
+  messagesDeleted?: { message: HistoryMessage }[];
+  labelsAdded?: { message: HistoryMessage; labelIds: string[] }[];
 };
+
+// Each historyTypes value, and the field of a record that holds that kind of change.
+const HISTORY_TYPES = {
+  messageAdded: "messagesAdded",
+  messageDeleted: "messagesDeleted",
+  labelAdded: "labelsAdded",
+} as const;
 
 /** Thrown for a startHistoryId Gmail no longer keeps; the fake proxy answers it with 404. */
 class HistoryExpiredError extends Error {}
@@ -58,6 +73,34 @@ export class FakeMailbox implements WritableMailbox {
       messagesAdded: [{ message: { ...ref, labelIds: message.labelIds } }],
     });
     return message;
+  }
+
+  /** The person moves the message to the trash: it keeps its ID, with the TRASH label. */
+  trash(id: string): void {
+    const message = this.messages.find((m) => m.id === id);
+    if (message === undefined) throw new Error(`The fake mailbox has no message ${id}`);
+    message.labelIds = [...message.labelIds.filter((label) => label !== "TRASH"), "TRASH"];
+    const record = this.nextRecord(message);
+    record.labelsAdded = [{ message: historyMessage(message), labelIds: ["TRASH"] }];
+  }
+
+  /** The person deletes the message for good: Gmail no longer has it. */
+  delete(id: string): void {
+    const message = this.messages.find((m) => m.id === id);
+    if (message === undefined) throw new Error(`The fake mailbox has no message ${id}`);
+    this.messages = this.messages.filter((m) => m !== message);
+    const record = this.nextRecord(message);
+    record.messagesDeleted = [{ message: historyMessage(message) }];
+  }
+
+  private nextRecord(message: GmailMessage): HistoryRecord {
+    this.historyId += 1;
+    const record = {
+      id: String(this.historyId),
+      messages: [{ id: message.id, threadId: message.threadId }],
+    };
+    this.history.push(record);
+    return record;
   }
 
   /** Gmail drops the history up to now, so a poll from any earlier history ID gets 404. */
@@ -100,19 +143,24 @@ export class FakeMailbox implements WritableMailbox {
   }
 
   /**
-   * users.history.list: the records after `startHistoryId`, oldest first, paged. Records
-   * hold `messageAdded` changes only, so `historyTypes` filters nothing. Throws
-   * HistoryExpiredError for a start Gmail no longer keeps.
+   * users.history.list: the records after `startHistoryId` of the `historyTypes` asked for
+   * (every type, if none), oldest first, paged. Throws HistoryExpiredError for a start Gmail no
+   * longer keeps.
    */
   listHistory(params: URLSearchParams) {
     const start = Number(params.get("startHistoryId"));
     if (!Number.isInteger(start) || start <= 0) throw new Error("startHistoryId is required");
     if (start < this.oldestHistoryId) throw new HistoryExpiredError();
     const types = params.getAll("historyTypes");
-    if (types.some((type) => type !== "messageAdded")) {
-      throw new Error("The fake Gmail records messageAdded history only");
-    }
-    const after = this.history.filter((record) => Number(record.id) > start);
+    const unknown = types.find((type) => !(type in HISTORY_TYPES));
+    if (unknown !== undefined) throw new Error(`The fake Gmail doesn't record ${unknown}`);
+    const fields = (types.length === 0 ? Object.keys(HISTORY_TYPES) : types).map(
+      (type) => HISTORY_TYPES[type as keyof typeof HISTORY_TYPES],
+    );
+    const after = this.history.filter(
+      (record) =>
+        Number(record.id) > start && fields.some((field) => (record[field]?.length ?? 0) > 0),
+    );
     const pageSize = Math.min(Number(params.get("maxResults") ?? 100), 500);
     const offset = Number(params.get("pageToken") ?? 0);
     const page = after.slice(offset, offset + pageSize);
@@ -223,6 +271,10 @@ export class FakeMailbox implements WritableMailbox {
     this.draftMessages = this.draftMessages.filter((m) => m.id !== draft.messageId);
     return true;
   }
+}
+
+function historyMessage(message: GmailMessage): HistoryMessage {
+  return { id: message.id, threadId: message.threadId, labelIds: [...message.labelIds] };
 }
 
 // The Gmail API behind the proxy, answering from the connection's mailbox.

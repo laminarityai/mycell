@@ -9,6 +9,7 @@ import {
   announcedFor,
   sendAnnounced,
   type Announced,
+  type Changes,
   type Received,
   type Sent,
   type Stored,
@@ -24,7 +25,8 @@ export const CONNECTORS: Record<IngestedApp, Connector> = {
   drive: driveConnector,
 };
 
-type StepValue = string | number | boolean | null | string[] | Received[] | Sent[] | Stored[];
+type StepValue =
+  string | number | boolean | null | string[] | Received[] | Sent[] | Stored[] | Changes;
 
 /** A step result: JSON, since Inngest stores it and replays it instead of re-running. */
 export type StepResult = Record<string, StepValue>;

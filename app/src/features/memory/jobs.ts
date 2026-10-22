@@ -2,7 +2,7 @@
 import { cron } from "inngest";
 import { listOrgIds } from "@/features/orgs/server";
 import { systemCtx } from "@/lib/ctx";
-import { itemStored } from "@/lib/events";
+import { itemChanged, itemRemoved, itemStored } from "@/lib/events";
 import { inngest } from "@/lib/inngest";
 import {
   exclusionAdded,
@@ -12,10 +12,13 @@ import {
   sendPostponedDue,
 } from "./lib/events";
 import {
+  deleteRemovedItem,
   forgetExcluded,
   learnFromItem,
   pruneAccessLog,
   queueStoredItems,
+  rereadAccess,
+  rereadDriveAccess,
   resumePostponed,
 } from "./server";
 
@@ -25,20 +28,17 @@ const stepRunner =
   <T>(id: string, run: () => Promise<T>) =>
     step.run(id, run) as Promise<T>;
 
-// One of these at a time per org, across the functions that change what memory holds: two items
-// never race to create the same object, an exclusion's forgetting never races an item it
-// covers, and one org's backfill leaves other orgs' learning unblocked.
-const ONE_AT_A_TIME_PER_ORG: [{ scope: "env"; key: string; limit: number }] = [
-  { scope: "env", key: '"memory-org-" + event.data.orgId', limit: 1 },
-];
+// One of these jobs at a time per org, across them (scope "env"): learning, deletions, sharing
+// changes, an exclusion's forgetting and resuming postponed items never race each other, and
+// one org's backfill leaves other orgs unblocked.
+const PER_ORG = [{ scope: "env", key: '"memory-org-" + event.data.orgId', limit: 1 }] as const;
 
-/** Learns from each item discovery stores, and each item memory queues itself. */
+/**
+ * Learns from each item discovery stores, and each item memory queues itself. One item at a
+ * time per org, so two items never race to create the same object.
+ */
 export const learnJob = inngest.createFunction(
-  {
-    id: "memory-learn-item",
-    triggers: [itemStored, itemQueued],
-    concurrency: ONE_AT_A_TIME_PER_ORG,
-  },
+  { id: "memory-learn-item", triggers: [itemStored, itemQueued], concurrency: [...PER_ORG] },
   async ({ event, step }) =>
     learnFromItem(
       systemCtx(event.data.orgId),
@@ -59,14 +59,14 @@ export const startJob = inngest.createFunction(
 
 /** Forgets what memory learned from the items a new exclusion covers. */
 export const forgetExcludedJob = inngest.createFunction(
-  { id: "memory-forget-excluded", triggers: [exclusionAdded], concurrency: ONE_AT_A_TIME_PER_ORG },
+  { id: "memory-forget-excluded", triggers: [exclusionAdded], concurrency: [...PER_ORG] },
   async ({ event, step }) =>
     forgetExcluded(systemCtx(event.data.orgId), event.data.exclusionId, stepRunner(step)),
 );
 
 /** Queues the items postponed for the budget again. */
 export const resumePostponedJob = inngest.createFunction(
-  { id: "memory-resume-postponed", triggers: [postponedDue], concurrency: ONE_AT_A_TIME_PER_ORG },
+  { id: "memory-resume-postponed", triggers: [postponedDue], concurrency: [...PER_ORG] },
   async ({ event, step }) => step.run("resume", () => resumePostponed(systemCtx(event.data.orgId))),
 );
 
@@ -97,5 +97,56 @@ export const pruneAccessLogJob = inngest.createFunction(
       await step.run(`prune-${orgId}`, () => pruneAccessLog(systemCtx(orgId)));
     }
     return { orgs: orgIds.length };
+  },
+);
+
+/** Deletes what memory learned from each item discovery finds gone from its app. */
+export const deleteRemovedItemJob = inngest.createFunction(
+  { id: "memory-delete-removed-item", triggers: [itemRemoved], concurrency: [...PER_ORG] },
+  async ({ event, step }) =>
+    step.run("delete", () =>
+      deleteRemovedItem(systemCtx(event.data.orgId), {
+        connectionId: event.data.connectionId,
+        app: event.data.app,
+        itemId: event.data.itemId,
+      }),
+    ),
+);
+
+/** Reads again who may see each Drive file discovery finds changed in place. */
+export const rereadAccessJob = inngest.createFunction(
+  { id: "memory-reread-access", triggers: [itemChanged], concurrency: [...PER_ORG] },
+  async ({ event, step }) =>
+    step.run("reread", () =>
+      rereadAccess(systemCtx(event.data.orgId), {
+        connectionId: event.data.connectionId,
+        app: event.data.app,
+        sourceRef: event.data.sourceRef,
+      }),
+    ),
+);
+
+/**
+ * Every night at 04:30 UTC, reads again who may see each Drive file memory learned from, in
+ * each org: the backstop for a sharing change or removal the changes feed missed.
+ */
+export const rereadDriveAccessJob = inngest.createFunction(
+  {
+    id: "memory-reread-drive-access",
+    triggers: [cron("TZ=UTC 30 4 * * *")],
+    // One run at a time: a slow run must not overlap the next.
+    concurrency: [{ limit: 1 }],
+  },
+  async ({ step }) => {
+    const orgIds = await step.run("list-orgs", () => listOrgIds());
+    const run = stepRunner(step);
+    let files = 0;
+    for (const orgId of orgIds) {
+      const done = await rereadDriveAccess(systemCtx(orgId), (id, work) =>
+        run(`${orgId}-${id}`, work),
+      );
+      files += done.files;
+    }
+    return { orgs: orgIds.length, files };
   },
 );

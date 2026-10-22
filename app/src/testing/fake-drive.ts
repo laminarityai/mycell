@@ -4,10 +4,13 @@
 // and responses carry only the `fields` a request asks for, as Drive's do; asking for a file's
 // name fails the test. Each file has a sharing list (its permissions: its owners, and the
 // people, groups, domains or anyone it's shared with), which Drive shows only to an account
-// that may share the file: an owner, or someone it's shared with as a writer.
+// that may share the file: an owner, or someone it's shared with as a writer. A test can share
+// and unshare a file, and remove it from the account's Drive (deleted, or no longer shared with
+// the account), each a change in the feed.
 import { randomUUID } from "node:crypto";
 import { HttpResponse } from "msw";
 import { parseFields, project } from "./fake-drive-fields";
+import { permission, type DrivePermission, type FakeShareInput } from "./fake-drive-sharing";
 
 /** A file to seed, described the way a test thinks about it. */
 export type FakeFileInput = {
@@ -29,25 +32,7 @@ export type FakeFileInput = {
   parents?: string[];
 };
 
-/** One entry on a file's sharing list, besides its owners: a person, a group, a domain or anyone. */
-export type FakeShareInput =
-  | { type: "user" | "group"; emailAddress: string; role?: ShareRole }
-  | { type: "domain"; domain: string; role?: ShareRole }
-  | { type: "anyone"; role?: ShareRole };
-
-type ShareRole = "writer" | "commenter" | "reader";
-
-/** A permissions resource, as Drive gives it. */
-export type DrivePermission = {
-  kind: "drive#permission";
-  id: string;
-  type: "user" | "group" | "domain" | "anyone";
-  role: "owner" | ShareRole;
-  emailAddress?: string;
-  domain?: string;
-  allowFileDiscovery?: boolean;
-  deleted?: boolean;
-};
+export type { DrivePermission, FakeShareInput };
 
 const GOOGLE_DOC = "application/vnd.google-apps.document";
 
@@ -76,14 +61,16 @@ export type DriveFileResource = {
   parents?: string[];
 };
 
-// One entry in the changes feed: the file changed at `time`.
-type ChangeRecord = { token: number; fileId: string; time: string };
+// One entry in the changes feed: the file changed at `time`, or left the account's Drive.
+type ChangeRecord = { token: number; fileId: string; time: string; removed: boolean };
 
 /** Thrown for a page token Drive won't accept; the fake proxy answers it with 400. */
 class InvalidPageTokenError extends Error {}
 
 export class FakeDrive {
   private files = new Map<string, DriveFileResource>();
+  // Files that left the account's Drive, for the changes feed to report.
+  private removedFiles = new Map<string, DriveFileResource>();
   private texts = new Map<string, string>();
   private changes: ChangeRecord[] = [];
   private lastToken = 100;
@@ -115,6 +102,7 @@ export class FakeDrive {
       ],
     };
     this.files.set(file.id, file);
+    this.removedFiles.delete(file.id);
     if (input.text !== undefined) this.texts.set(file.id, input.text);
     this.record(file.id, time);
     return file;
@@ -133,6 +121,31 @@ export class FakeDrive {
   trash(id: string, at: Date): void {
     this.file(id).trashed = true;
     this.record(id, at.toISOString());
+  }
+
+  /** The file is shared with someone else, without changing its content or modified time. */
+  share(id: string, share: FakeShareInput, at = new Date()): void {
+    const file = this.file(id);
+    file.permissions = [...(file.permissions ?? []), permission(share, share.role ?? "reader")];
+    this.record(id, at.toISOString());
+  }
+
+  /** The file is no longer shared with `emailAddress`; its content and modified time stay. */
+  unshare(id: string, emailAddress: string, at = new Date()): void {
+    const file = this.file(id);
+    file.permissions = (file.permissions ?? []).filter((p) => p.emailAddress !== emailAddress);
+    this.record(id, at.toISOString());
+  }
+
+  /**
+   * The file leaves the account's Drive: deleted for good, or no longer shared with the account.
+   * The changes feed reports it removed, and the account can no longer read it.
+   */
+  remove(id: string, at = new Date()): void {
+    this.removedFiles.set(id, this.file(id));
+    this.files.delete(id);
+    this.texts.delete(id);
+    this.record(id, at.toISOString(), true);
   }
 
   /** Drive stops accepting every page token handed out so far. */
@@ -188,7 +201,9 @@ export class FakeDrive {
       latest.delete(change.fileId);
       latest.set(change.fileId, change);
     }
-    const all = [...latest.values()].filter((c) => this.visible(this.file(c.fileId), params));
+    const all = [...latest.values()].filter((c) =>
+      this.visible(this.removedFiles.get(c.fileId) ?? this.file(c.fileId), params),
+    );
     const pageSize = Math.min(Number(params.get("pageSize") ?? 100), 1000);
     const page = all.slice(0, pageSize);
     const rest = all.at(pageSize);
@@ -198,9 +213,10 @@ export class FakeDrive {
         kind: "drive#change",
         changeType: "file",
         time: change.time,
-        removed: false,
+        removed: change.removed,
         fileId: change.fileId,
-        file: this.view(this.file(change.fileId)),
+        // A removed file's change has no file.
+        ...(change.removed ? {} : { file: this.view(this.file(change.fileId)) }),
       })),
       ...(rest === undefined
         ? { newStartPageToken: String(this.lastToken + 1) }
@@ -244,9 +260,9 @@ export class FakeDrive {
     return file.driveId === undefined || params.get("includeItemsFromAllDrives") === "true";
   }
 
-  private record(fileId: string, time: string): void {
+  private record(fileId: string, time: string, removed = false): void {
     this.lastToken += 1;
-    this.changes.push({ token: this.lastToken, fileId, time });
+    this.changes.push({ token: this.lastToken, fileId, time, removed });
   }
 }
 
@@ -256,20 +272,6 @@ function fileFields(params: URLSearchParams) {
   const fields = required(params, "fields");
   if (/\bname\b/.test(fields)) throw new Error(`Mycel asked Drive for file names: ${fields}`);
   return parseFields(fields);
-}
-
-function permission(share: FakeShareInput, role: DrivePermission["role"]): DrivePermission {
-  const id = randomUUID().replaceAll("-", "").slice(0, 20);
-  const base = { kind: "drive#permission" as const, id, role };
-  switch (share.type) {
-    case "user":
-    case "group":
-      return { ...base, type: share.type, emailAddress: share.emailAddress, deleted: false };
-    case "domain":
-      return { ...base, type: "domain", domain: share.domain, allowFileDiscovery: true };
-    case "anyone":
-      return { ...base, type: "anyone", allowFileDiscovery: false };
-  }
 }
 
 function required(params: URLSearchParams, name: string): string {

@@ -15,7 +15,7 @@ import { getConnection, recordIngestState } from "@/features/connections/server"
 import { ingestedAppSchema, type IngestedApp } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
 import type { PollOutcome } from "../types";
-import { announcedFor, sendAnnounced, NOTHING, type Announced } from "./announce";
+import { announcedFor, changesOf, sendAnnounced, NOTHING, type Announced } from "./announce";
 import { BACKFILL_DAYS, DAY_MS } from "./backfill";
 import { CONNECTORS, runInline, sourceClient, storeWindow, untilGone } from "./ingest-steps";
 import type { RunStep } from "./ingest-steps";
@@ -73,7 +73,7 @@ async function pollApp(
 type PollOnce = { result: "skipped" | "expired" | "polled"; items: number } & Announced;
 
 // Stores what's new, and hands on what it newly stored (Gmail messages, received and sent, and
-// Drive file versions) for the step after it to announce.
+// Drive file versions), and what it found removed or changed, for the step after it to announce.
 async function pollOnce(ctx: Ctx, connectionId: string, app: IngestedApp): Promise<PollOnce> {
   const connection = await getConnection(ctx, connectionId);
   const state = connection.ingest[app];
@@ -89,7 +89,8 @@ async function pollOnce(ctx: Ctx, connectionId: string, app: IngestedApp): Promi
     lastPolledAt: new Date(),
   });
   const announced = announcedFor(app, created, { newMail: true });
-  return { result: "polled", items: found.events.length, ...announced };
+  const changes = changesOf(app, state.cursor, found, created);
+  return { result: "polled", items: found.events.length, ...announced, changes };
 }
 
 // The source no longer knows the app's cursor: backfill the app from the latest stored event,

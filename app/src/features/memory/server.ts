@@ -4,6 +4,9 @@
 
 // Called only by memory's job (and tests), as the org's system ctx.
 export { learnFromItem } from "./lib/learn";
+// Following the apps, as the org's system ctx: an item deleted there, a Drive file's sharing
+// changed, and the nightly re-read of every Drive file's sharing.
+export { deleteRemovedItem, rereadAccess, rereadDriveAccess } from "./lib/source-changes";
 // Every read is logged (ADR-0024), as the reader its caller names: the person by default, the
 // builder chat, or a workflow run.
 export { readObject } from "./lib/logged-reads";

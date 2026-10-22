@@ -1,6 +1,8 @@
 // The Gmail connector: the history ID as the cursor, messages.list for the backfill, and
-// history.list (messageAdded only) for polling. Both fetch and normalize each message the same
-// way.
+// history.list for polling: messages added, which it fetches and normalizes as the backfill
+// does, and messages deleted for good or moved to the trash, which it reports removed. Deleting
+// in Gmail's own app moves a message to the trash, where it stays 30 days before it's deleted
+// for good, so a trashed message counts as removed: what Mycel learned from it goes at once.
 import type { Connector, NormalizedEvent, SourceClient } from "../connector";
 import { historyListSchema, messageListSchema, messageSchema, profileSchema } from "./api";
 import { normalizeMessage } from "./normalize";
@@ -13,6 +15,8 @@ const PAGE_SIZE = 100;
 const FETCH_CONCURRENCY = 10;
 // History records per history.list page, Gmail's maximum.
 const HISTORY_PAGE_SIZE = 500;
+// The history polling reads: messages added, deleted for good, and given labels (the trash).
+const HISTORY_TYPES = ["messageAdded", "messageDeleted", "labelAdded"];
 // messages.list leaves spam and trash out unless asked (includeSpamTrash), so polling does too.
 // Drafts are left out of both: each save replaces a draft's message with a new message ID (Gmail
 // drafts guide), so every autosave would otherwise become another event.
@@ -48,14 +52,15 @@ export const gmailConnector: Connector = {
 
   async poll(client, cursor) {
     const added = new Set<string>();
+    const removed = new Set<string>();
     let nextCursor: string | undefined;
     let pageToken: string | null = null;
     do {
       const query = new URLSearchParams({
         startHistoryId: cursor,
-        historyTypes: "messageAdded",
         maxResults: String(HISTORY_PAGE_SIZE),
       });
+      for (const type of HISTORY_TYPES) query.append("historyTypes", type);
       if (pageToken !== null) query.set("pageToken", pageToken);
       const page = await client.get(
         `/gmail/v1/users/me/history?${query.toString()}`,
@@ -68,13 +73,17 @@ export const gmailConnector: Connector = {
       nextCursor ??= page.historyId;
       for (const record of page.history ?? []) {
         for (const { message } of record.messagesAdded ?? []) added.add(message.id);
+        for (const { message } of record.messagesDeleted ?? []) removed.add(message.id);
+        for (const { message, labelIds } of record.labelsAdded ?? []) {
+          if (labelIds?.includes("TRASH") === true) removed.add(message.id);
+        }
       }
       pageToken = page.nextPageToken ?? null;
     } while (pageToken !== null);
     const events = await mapConcurrently([...added], FETCH_CONCURRENCY, (id) =>
       fetchEvent(client, id),
     );
-    return { events: events.filter(isIngested), nextCursor };
+    return { events: events.filter(isIngested), removed: [...removed], nextCursor };
   },
 };
 

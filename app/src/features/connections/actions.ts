@@ -2,53 +2,38 @@
 
 import { refresh } from "next/cache";
 import { z } from "zod";
-import { getCtx } from "@/features/orgs/server";
-import { actionError, type ActionResult } from "@/lib/errors";
+import { runFormAction, runValueAction } from "@/features/orgs/form-action";
+import type { ActionResult } from "@/lib/errors";
 import { disconnect, startConnect, startReconnect } from "./server";
-import { connectionKindSchema } from "./types";
+import { connectionKindSchema, registeredAppIdSchema } from "./types";
 
-const disconnectInput = z.object({ connectionId: z.string().min(1) });
+const connectInput = z.object({ app: registeredAppIdSchema, kind: connectionKindSchema });
+const connectionId = z.string().min(1);
+const disconnectInput = z.object({ connectionId });
+
+/** A Connect UI session's token, or why it couldn't start. */
+type ConnectSession = Promise<{ token: string } | ActionResult>;
 
 /**
- * Starts connecting a Google account (ADR-0014) and hands the browser the token Nango's
- * Connect UI opens with.
+ * Starts connecting an account in a registered app (one Google account, ADR-0014) and hands
+ * the browser the token Nango's Connect UI opens with.
  */
-export async function startConnectAction(
-  kind: unknown,
-): Promise<{ token: string } | { error: string }> {
-  const ctx = await getCtx();
-  const parsedKind = connectionKindSchema.parse(kind);
-  try {
-    return await startConnect(ctx, "google", parsedKind);
-  } catch (error) {
-    return { error: actionError(error).error ?? "Couldn't start connecting. Try again." };
-  }
+export async function startConnectAction(app: unknown, kind: unknown): ConnectSession {
+  return runValueAction({ app, kind }, connectInput, (ctx, input) =>
+    startConnect(ctx, input.app, input.kind),
+  );
 }
 
 /** Starts reconnecting a connection and hands the browser the token Connect UI opens with. */
-export async function startReconnectAction(
-  connectionId: unknown,
-): Promise<{ token: string } | { error: string }> {
-  const ctx = await getCtx();
-  const id = disconnectInput.shape.connectionId.parse(connectionId);
-  try {
-    return await startReconnect(ctx, id);
-  } catch (error) {
-    return { error: actionError(error).error ?? "Couldn't start reconnecting. Try again." };
-  }
+export async function startReconnectAction(id: unknown): ConnectSession {
+  return runValueAction(id, connectionId, (ctx, input) => startReconnect(ctx, input));
 }
 
 export async function disconnectAction(
   _previous: ActionResult,
   form: FormData,
 ): Promise<ActionResult> {
-  const ctx = await getCtx();
-  const input = disconnectInput.parse(Object.fromEntries(form));
-  try {
-    await disconnect(ctx, input.connectionId);
-  } catch (error) {
-    return actionError(error);
-  }
-  refresh();
-  return {};
+  return runFormAction(form, disconnectInput, (ctx, input) => disconnect(ctx, input.connectionId), {
+    after: refresh,
+  });
 }

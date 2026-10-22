@@ -1,13 +1,15 @@
 // Context providers: what the agent knows about the org when a turn starts. Each is a function
 // of the admin's ctx (and the turn) returning one titled section of the agent's instructions,
-// so a new source of context (discovery's suggestions in M2, org memory in M9) is one more
-// entry in `contextProviders`, and the turn loop doesn't change. Each reads through another
+// so a new source of context (company memory; discovery's suggestions in M2) is one more entry
+// in `contextProviders`, and the turn loop doesn't change. Each reads through another
 // feature's entry functions with the admin's ctx, so it sees only what the admin may.
 import { z } from "zod";
+import { registeredAppOf, registeredApps } from "@/features/connections/registered-apps";
 import { gmailConnections, listConnections } from "@/features/connections/server";
+import { getActionSet } from "@/features/custom-actions/server";
 import type { ConnectionSummary } from "@/features/connections/types";
 import { getOrgSettings } from "@/features/orgs/server";
-import { catalog } from "@/features/policy/catalog";
+import type { ActionSet } from "@/features/policy/types";
 import { operatorsFor, type ValueType } from "@/features/spec/conditions";
 import { formatSpec } from "@/features/spec/format";
 import type { Spec, Step } from "@/features/spec/types";
@@ -17,17 +19,26 @@ import type { Ctx } from "@/lib/ctx";
 import type { ProposalStatus } from "../types";
 import { declaredFieldLines } from "./condition-fields-context";
 import { listProposals } from "./proposals";
+import { memorySection } from "./search-memory";
 import type { TurnInfo } from "./tools";
 
 export type ContextSection = { title: string; content: string };
 
-export type ContextProvider = (ctx: Ctx, turn: TurnInfo) => Promise<ContextSection>;
+/**
+ * One section of context, from the admin's ctx, the turn and the company's action set, which
+ * `gatherContext` resolves once for every provider.
+ */
+export type ContextProvider = (
+  ctx: Ctx,
+  turn: TurnInfo,
+  actions: ActionSet,
+) => Promise<ContextSection>;
 
-/** Every action a spec may use: its app, what it does, its fixed risk and its pending form. */
-const actionCatalog: ContextProvider = () => {
-  const lines = Object.values(catalog).map((action) =>
+/** Every action a spec may use, catalog and custom: its app, what it does, its fixed risk and its pending form. */
+const actionCatalog: ContextProvider = (_ctx, _turn, actions) => {
+  const lines = actions.actions.map((action) =>
     [
-      `- ${action.name} (${action.app}): ${action.description}`,
+      `- ${action.name} (${action.app}${action.kind === "custom" ? ", the company's custom action, its level set by Mycel's rule" : ""}): ${action.description}`,
       `  Risk level: ${action.risk}.` +
         (action.pendingForm === undefined
           ? " Runs on its own."
@@ -50,7 +61,7 @@ const FIELD_TYPES: { reads: string; type: ValueType }[] = [
  * Every kind of value a path's condition may test, and the checks each allows: classify answers,
  * extract fields, the trigger's declared facts and catalog actions' declared result fields.
  */
-const conditionFields: ContextProvider = () => {
+const conditionFields: ContextProvider = (_ctx, _turn, actions) => {
   const lines = [
     "A path's condition tests values from the steps above its branch on its own path. Each check is one of:",
     '- A classify step\'s answer: { "classify": "<classify step id>", "is": "<label>", "minP": 0.85 }. ' +
@@ -61,18 +72,18 @@ const conditionFields: ContextProvider = () => {
       "is_not_empty take no value.",
     ...FIELD_TYPES.map(({ reads, type }) => `  - ${reads}: ${operatorsFor(type).join(", ")}`),
     "Trigger facts and tool step results take the same checks for their type:",
-    ...declaredFieldLines(),
+    ...declaredFieldLines(actions),
   ];
   return Promise.resolve({ title: "Fields a condition may test", content: lines.join("\n") });
 };
 
 /** The org's workflows with a summary of each working spec; the whole one for this turn's. */
-const workflows: ContextProvider = async (ctx, turn) => {
+const workflows: ContextProvider = async (ctx, turn, actions) => {
   const summaries = await listWorkflows(ctx);
   if (summaries.length === 0) return { title: "Workflows", content: "The org has none yet." };
   const lines: string[] = [];
   for (const summary of summaries) {
-    const workflow = await getWorkflow(ctx, summary.id);
+    const workflow = await getWorkflow(ctx, summary.id, actions);
     const state =
       summary.latestVersion === null
         ? "not published"
@@ -136,6 +147,43 @@ const connections: ContextProvider = async (ctx) => {
   return { title: "Connections", content: lines.join("\n") };
 };
 
+/**
+ * The apps Mycel's team registered, which a custom action may call, each with the admin's own
+ * and the org's connections to it. Other members' connections are never listed (ADR-0001).
+ */
+const registeredAppsContext: ContextProvider = async (ctx) => {
+  const listing = await listConnections(ctx);
+  const lines = registeredApps.map((app) => {
+    const to = (connection: ConnectionSummary) => registeredAppOf(connection.source) === app.id;
+    const connected = [
+      ...listing.connections
+        .filter(to)
+        .map(({ accountEmail, id }) => `${accountEmail}, your own (connection ID ${id})`),
+      ...listing.orgConnections
+        .filter(to)
+        .map(({ accountEmail, id }) => `${accountEmail}, an org connection (connection ID ${id})`),
+    ];
+    return (
+      `- ${app.id} (${app.name}): ` +
+      (connected.length === 0
+        ? "neither you nor the org has connected it yet. A workflow using it needs a connection " +
+          "to it, made on the Connections page: your own for member credentials, the org's for " +
+          "org credentials."
+        : `connected as ${connected.join("; ")}.`)
+    );
+  });
+  return {
+    title: "Registered apps",
+    content: [
+      "The apps Mycel's team has registered. When no catalog action fits, a custom action may " +
+        "make one call to one of them: find the call with look_up_app_api, then describe it " +
+        "with describe_custom_action. Any other app isn't registered: say so, and file a " +
+        "capability request for it.",
+      ...lines,
+    ].join("\n"),
+  };
+};
+
 const tags: ContextProvider = async (ctx) => {
   const all = await listTags(ctx);
   return {
@@ -184,11 +232,14 @@ export const contextProviders: ContextProvider[] = [
   conditionFields,
   workflows,
   connections,
+  registeredAppsContext,
   tags,
   proposals,
+  memorySection,
 ];
 
 /** Every provider's section, in order. */
 export async function gatherContext(ctx: Ctx, turn: TurnInfo): Promise<ContextSection[]> {
-  return Promise.all(contextProviders.map((provider) => provider(ctx, turn)));
+  const actions = await getActionSet(ctx);
+  return Promise.all(contextProviders.map((provider) => provider(ctx, turn, actions)));
 }

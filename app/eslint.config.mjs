@@ -130,8 +130,6 @@ export default defineConfig([
   {
     // A rule's options replace, not merge, so the restrictions above are repeated here.
     files: ["src/features/*/actions.ts"],
-    // Until #124 converts it.
-    ignores: ["src/features/connections/actions.ts"],
     rules: {
       "no-restricted-imports": [
         "error",

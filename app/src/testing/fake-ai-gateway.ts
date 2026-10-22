@@ -1,7 +1,7 @@
 // The fake AI Gateway: Vercel's AI Gateway behind msw's fetch interception, so model calls run
 // the real AI SDK without network or keys. Each test scripts the answers it expects, in order:
 // a Jev decision, a structured output, a text, a streamed reply (text and tool calls, for the
-// builder chat), or a failure, each with the cost the gateway reports. A request with no script
+// builder chat), embeddings, or a failure, each with the cost the gateway reports. A request with no script
 // left (or the wrong key) fails the test after it ends.
 import { http, HttpResponse } from "msw";
 import { env } from "@/env";
@@ -13,7 +13,7 @@ import {
 
 const BASE_URL = "https://ai-gateway.vercel.sh/v4/ai";
 
-export type FakeGatewayEndpoint = "decision" | "language";
+export type FakeGatewayEndpoint = "decision" | "language" | "embedding";
 
 /** A request the fake received: which endpoint, for which model, with what body. */
 export type FakeGatewayRequest = {
@@ -97,6 +97,17 @@ class FakeAiGateway {
     );
   }
 
+  /** The vectors for the next embedding request, one per text it sent. */
+  embeddings(vectors: number[][], options: ScriptOptions = {}): void {
+    this.script("embedding", options.model, () =>
+      HttpResponse.json({
+        embeddings: vectors,
+        usage: { tokens: 8 },
+        providerMetadata: costMetadata(options.costUsd),
+      }),
+    );
+  }
+
   /**
    * A streamed answer to one model step of a `streamText` call, as the gateway's server-sent
    * events: the text in a few deltas, then each tool call, then the finish with the cost. A
@@ -142,6 +153,7 @@ class FakeAiGateway {
   readonly handlers = [
     http.post(`${BASE_URL}/decision-model`, ({ request }) => this.handle("decision", request)),
     http.post(`${BASE_URL}/language-model`, ({ request }) => this.handle("language", request)),
+    http.post(`${BASE_URL}/embedding-model`, ({ request }) => this.handle("embedding", request)),
   ];
 
   private script(
@@ -166,7 +178,7 @@ class FakeAiGateway {
       );
     }
     const modelId =
-      request.headers.get(endpoint === "decision" ? "ai-model-id" : "ai-language-model-id") ?? "";
+      request.headers.get(endpoint === "language" ? "ai-language-model-id" : "ai-model-id") ?? "";
     const streaming = request.headers.get("ai-language-model-streaming") === "true";
     this.received.push({
       endpoint,

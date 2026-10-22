@@ -149,8 +149,16 @@ export const isolationCases = defineIsolationCases(server, {
       declined: 0,
       done_in_app: 0,
       gone: 0,
+      expired: 0,
+      unconfirmed: 0,
     };
-    const nothing = { approvals: none, escalations: none, approvedWithoutEdits: null, byUser: [] };
+    const nothing = {
+      approvals: none,
+      escalations: none,
+      heldSends: none,
+      approvedWithoutEdits: null,
+      byUser: [],
+    };
 
     expect(await server.reviewStats(orgs.orgA.admin.ctx, { since, groupBy: "user" })).toEqual(
       nothing,

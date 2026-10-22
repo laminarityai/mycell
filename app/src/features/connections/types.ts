@@ -1,16 +1,53 @@
 import { z } from "zod";
-import { googleScope } from "@/lib/google";
+import { GOOGLE_APPS, googleScope } from "@/lib/google";
 
 /**
- * What a connection reaches. `google` is one Google account, with every Google app it allows
- * (ADR-0014). `gmail` and `drive` are the one-app connections made before that: nothing makes
- * them any more, and connecting Google for their account replaces them. Outlook joins after v1.
+ * The apps our team has registered with their vendor and in Mycel (ADR-0018), each described
+ * in `registered-apps.ts`. People connect them; the builder writes custom actions for them.
  */
-export const sourceSchema = z.enum(["google", "gmail", "drive"]);
+export const registeredAppIdSchema = z.enum(["google", "microsoft"]);
+export type RegisteredAppId = z.infer<typeof registeredAppIdSchema>;
+
+/**
+ * What a connection reaches: one account in a registered app. `google` is one Google account,
+ * with every Google app it allows (ADR-0014). `gmail` and `drive` are the one-app connections
+ * made before that: nothing makes them any more, and connecting Google for their account
+ * replaces them. Outlook joins after v1.
+ */
+export const sourceSchema = z.enum([...registeredAppIdSchema.options, "gmail", "drive"]);
 export type Source = z.infer<typeof sourceSchema>;
 
+/** The format of an app's published API description, as its vendor publishes it. */
+export type ApiDescriptionFormat = "openapi" | "google-discovery" | "graphql";
+
+/**
+ * A registered app: configuration our team writes when we register Mycel with the app's vendor
+ * and add its Nango integration (ADR-0018). Connecting, the proxy and custom actions read it.
+ */
+export type RegisteredApp = {
+  id: RegisteredAppId;
+  // How the UI names it.
+  name: string;
+  // Its Nango integration (provider config key).
+  integration: string;
+  // The API origins its calls may reach.
+  hosts: readonly string[];
+  // The permissions (OAuth scopes) its connections ask for.
+  scopes: readonly string[];
+  // An accounting or payments app: custom actions may only read in it (ADR-0018).
+  accountingOrPayments: boolean;
+  // Its terms ban keeping stored indexes of its data, so memory asks it live (ADR-0025).
+  bansStoredIndexes: boolean;
+  // Its published API description, copied into the repo: paths relative to `app/`, and where
+  // each was copied from.
+  apiDescription: {
+    format: ApiDescriptionFormat;
+    files: readonly { path: string; source: string }[];
+  };
+};
+
 /** The Google apps a Google connection asks for, in the order the UI lists them. */
-export const googleAppSchema = z.enum(["gmail", "drive", "sheets", "calendar", "docs", "tasks"]);
+export const googleAppSchema = z.enum(GOOGLE_APPS);
 export type GoogleApp = z.infer<typeof googleAppSchema>;
 
 /**
@@ -24,6 +61,16 @@ export const GOOGLE_APP_SCOPES: Record<GoogleApp, string> = {
   calendar: googleScope("calendar.events"),
   docs: googleScope("documents"),
   tasks: googleScope("tasks"),
+};
+
+/** How the UI names each Google app. */
+export const GOOGLE_APP_NAMES: Record<GoogleApp, string> = {
+  gmail: "Gmail",
+  drive: "Drive",
+  sheets: "Sheets",
+  calendar: "Calendar",
+  docs: "Docs",
+  tasks: "Tasks",
 };
 
 /** The apps discovery ingests from. Each has its own backfill, cursor and poll. */
@@ -169,15 +216,16 @@ export type ReconciliationSummary = {
 /**
  * The source refused a proxied request (anything but a 404 or 410, which read as "no such
  * item"). It carries the source's status and parsed error body, so a connector can tell a
- * refusal it recovers from (Drive's invalid page token) from a failure.
+ * refusal it recovers from (Drive's invalid page token) from a failure. Its message names the
+ * call by its path, or a custom call by its path template, never the input values in it.
  */
 export class SourceRequestError extends Error {
   constructor(
     readonly status: number,
     readonly body: unknown,
-    path: string,
+    call: string,
   ) {
-    super(`Nango proxy ${path} failed: ${String(status)}`);
+    super(`Nango proxy ${call} failed: ${String(status)}`);
     this.name = "SourceRequestError";
   }
 }

@@ -13,12 +13,17 @@
     "db:generate": "node --env-file-if-exists=.env node_modules/drizzle-kit/bin.cjs generate",
     "db:migrate": "node --env-file-if-exists=.env node_modules/drizzle-kit/bin.cjs migrate",
     "credits:grant": "node --env-file-if-exists=.env --import tsx scripts/grant-credits.ts",
+    "capability-requests": "node --env-file-if-exists=.env --import tsx scripts/capability-requests.ts",
+    "api-index": "node --import tsx scripts/api-index.ts",
     "nango:preflight": "node --env-file-if-exists=.env --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/nango-preflight.ts"
   },
   "dependencies": {
     "@ai-sdk/react": "4.0.150",
+    "@aws-sdk/client-kms": "3.1155.0",
     "@better-auth/drizzle-adapter": "1.7.11",
+    "@inngest/middleware-encryption": "2.0.0",
     "@nangohq/frontend": "0.71.13",
+    "@vercel/oidc": "3.2.0",
     "@xyflow/react": "^12.12.0",
     "ai": "7.0.146",
     "better-auth": "1.7.11",
@@ -39,6 +44,7 @@
   "devDependencies": {
     "@playwright/test": "1.64.1",
     "@tailwindcss/turbopack": "^4",
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^24",
     "@types/pg": "8.23.1",
     "@types/react": "^19",
@@ -49,6 +55,7 @@
     "eslint-config-next": "16.4.2",
     "eslint-config-prettier": "10.1.8",
     "eslint-plugin-jsx-a11y": "6.10.2",
+    "js-yaml": "4.3.2",
     "msw": "3.0.3",
     "tailwindcss": "^4",
     "tsx": "4.21.0",

@@ -1,13 +1,14 @@
 "use client";
 
-// What "+" on the graph offers: the model steps, each catalog action grouped by its app with its
-// fixed risk level, and a branch. A draft's external send isn't offered as an action: a draft
-// step writes it, and the policy engine adds its review.
+// What "+" on the graph offers: the model steps, each action in the company's action set grouped
+// by its app with its fixed risk level, and a branch. A draft's external send isn't offered as an
+// action: a draft step writes it, and the policy engine adds its review.
 import { X } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { z } from "zod";
-import { catalog } from "@/features/policy/catalog";
+import type { ActionSet } from "@/features/policy/types";
 import type { NewStepKind } from "@/features/spec/new-step";
+import { useActionSet } from "./action-set-context";
 import { riskLabel } from "./risk-badge";
 
 type Item = { label: string; hint: string; kind: NewStepKind };
@@ -21,10 +22,10 @@ const STEPS: Item[] = [
 
 const BRANCH: Item = { label: "Branch", hint: "Split into paths", kind: { type: "branch" } };
 
-/** The catalog's actions a tool step may run, grouped by app, in catalog order. */
-function actionGroups(): { app: string; items: Item[] }[] {
+/** The actions a tool step may run, grouped by app, in the action set's order. */
+function actionGroups(actions: ActionSet): { app: string; items: Item[] }[] {
   const groups = new Map<string, Item[]>();
-  for (const action of Object.values(catalog)) {
+  for (const action of actions.actions) {
     if (action.pendingForm !== undefined) continue;
     const verb = action.name.split(".").at(-1)?.replaceAll("-", " ") ?? action.name;
     const label = `${action.app} · ${verb.charAt(0).toUpperCase()}${verb.slice(1)}`;
@@ -39,11 +40,13 @@ function toolKind(action: string, inputs: string[]): NewStepKind {
   return { type: "tool", action, inputs };
 }
 
-const GROUPS = [
-  { app: "Steps", items: STEPS },
-  ...actionGroups(),
-  { app: "Paths", items: [BRANCH] },
-];
+function menuGroups(actions: ActionSet): { app: string; items: Item[] }[] {
+  return [
+    { app: "Steps", items: STEPS },
+    ...actionGroups(actions),
+    { app: "Paths", items: [BRANCH] },
+  ];
+}
 
 export function AddStepMenu({
   point,
@@ -55,6 +58,8 @@ export function AddStepMenu({
   onPick: (kind: NewStepKind) => void;
   onClose: () => void;
 }) {
+  const actions = useActionSet();
+  const groups = useMemo(() => menuGroups(actions), [actions]);
   const first = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     first.current?.focus();
@@ -81,7 +86,7 @@ export function AddStepMenu({
           <X aria-hidden className="size-3" />
         </button>
       </div>
-      {GROUPS.map((group, g) => (
+      {groups.map((group, g) => (
         <div key={group.app} role="group" aria-label={group.app} className="border-t py-1">
           <p className="px-2 pt-1 pb-0.5 text-[11px] font-medium text-muted-foreground uppercase">
             {group.app}

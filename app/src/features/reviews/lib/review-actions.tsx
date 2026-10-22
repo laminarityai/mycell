@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import type { HeldSendField } from "@/features/runtime/adapters";
 import type { ActionResult } from "@/lib/errors";
 import {
   approveReviewAction,
@@ -75,6 +76,93 @@ export function ReviewActions({ reviewId, draftText }: { reviewId: string; draft
         >
           Edit
         </Button>
+        <form action={decline}>
+          <input type="hidden" name="reviewId" value={reviewId} />
+          <Button type="submit" variant="outline" disabled={busy}>
+            Decline
+          </Button>
+        </form>
+      </div>
+      <Problem result={approveResult} />
+      <Problem result={declineResult} />
+    </div>
+  );
+}
+
+/**
+ * What a person does with an open held send: approve it as it is, edit its editable fields and
+ * approve the edit, or decline it. Each edited field goes to the Server Action as
+ * `field:<name>`, and on to the app; it's never stored.
+ */
+export function HeldSendActions({
+  reviewId,
+  fields,
+}: {
+  reviewId: string;
+  fields: HeldSendField[];
+}) {
+  const [approveResult, approve, approving] = useActionState(approveReviewAction, {});
+  const [declineResult, decline, declining] = useActionState(declineReviewAction, {});
+  const [editing, setEditing] = useState(false);
+  const busy = approving || declining;
+  const editable = fields.filter((field) => field.editable);
+
+  if (editing) {
+    return (
+      <form action={approve} className="flex flex-col gap-3">
+        <input type="hidden" name="reviewId" value={reviewId} />
+        {editable.map((field) => (
+          <label key={field.name} className="flex flex-col gap-1 text-sm font-medium">
+            {field.description}
+            {/* React resets the form after its action: a refused send starts from what it sent. */}
+            <Textarea
+              name={`field:${field.name}`}
+              defaultValue={approveResult.values?.[`field:${field.name}`] ?? field.value}
+              rows={6}
+              required
+            />
+          </label>
+        ))}
+        <div className="flex gap-2">
+          <Button type="submit" disabled={busy}>
+            Send edited request
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={busy}
+            onClick={() => {
+              setEditing(false);
+            }}
+          >
+            Cancel
+          </Button>
+        </div>
+        <Problem result={approveResult} />
+      </form>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex gap-2">
+        <form action={approve}>
+          <input type="hidden" name="reviewId" value={reviewId} />
+          <Button type="submit" disabled={busy}>
+            Approve and send
+          </Button>
+        </form>
+        {editable.length === 0 ? null : (
+          <Button
+            type="button"
+            variant="outline"
+            disabled={busy}
+            onClick={() => {
+              setEditing(true);
+            }}
+          >
+            Edit
+          </Button>
+        )}
         <form action={decline}>
           <input type="hidden" name="reviewId" value={reviewId} />
           <Button type="submit" variant="outline" disabled={busy}>

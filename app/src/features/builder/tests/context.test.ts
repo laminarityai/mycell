@@ -6,7 +6,7 @@ import { GOOGLE_APP_SCOPES } from "@/features/connections/types";
 import { specV1Schema } from "@/features/spec/v1";
 import { createTag } from "@/features/tags/server";
 import { publishWorkflow, saveWorkflow } from "@/features/workflows/server";
-import { connectGmail, connectOrgInbox } from "@/testing/connect-helpers";
+import { connectApp, connectGmail, connectOrgInbox } from "@/testing/connect-helpers";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import { getConversation, startConversation, streamTurn } from "../server";
 import { draftSpec, labelSpec, triageSpec } from "./specs";
@@ -85,6 +85,68 @@ describe("a turn's context", () => {
 
 /** Text as it reads inside the request's JSON, its quotes and newlines escaped. */
 const inJson = (text: string) => JSON.stringify(text).slice(1, -1);
+
+describe("what the agent is told about custom actions", () => {
+  it("prefers the catalog, limits a custom action to one call, and otherwise says what it can't do", async () => {
+    const { orgA } = await seedTwoOrgs();
+
+    const request = await instructionsOfTurn(orgA);
+
+    for (const words of [
+      "Prefer the actions in the action catalog below",
+      "Only when no",
+      "with look_up_app_api rather",
+      "A custom action is one call only.",
+      "a job that needs several calls",
+      "When neither the catalog nor one custom action can do what the admin asks, say plainly what",
+      "file a capability request",
+    ]) {
+      expect(request).toContain(words);
+    }
+  });
+});
+
+describe("what the agent is told about registered apps", () => {
+  it("lists each registered app with the admin's own and the org's connections to it, never another member's", async () => {
+    const { orgA, orgB } = await seedTwoOrgs();
+    const admin = orgA.admin.ctx;
+    const google = await connectApp(admin, "google", orgA.admin.email);
+    const own = await connectApp(admin, "microsoft", orgA.admin.email);
+    const org = await connectApp(admin, "microsoft", "team@org-a.test", { kind: "org" });
+    const members = await connectApp(orgA.member.ctx, "microsoft", "outlook-member@org-a.test");
+    await connectApp(orgB.admin.ctx, "microsoft", "outlook@org-b.test");
+
+    const request = await instructionsOfTurn(orgA);
+
+    expect(request).toContain("## Registered apps");
+    expect(request).toContain("find the call with look_up_app_api");
+    expect(request).toContain(
+      inJson(
+        `- google (Google): connected as admin@org-a.test, your own (connection ID ${String(google.id)}).`,
+      ),
+    );
+    expect(request).toContain(
+      inJson(
+        `- microsoft (Microsoft 365): connected as admin@org-a.test, your own (connection ID ${String(own.id)}); ` +
+          `team@org-a.test, an org connection (connection ID ${String(org.id)}).`,
+      ),
+    );
+    expect(request).not.toContain("outlook-member@org-a.test");
+    expect(request).not.toContain(String(members.id));
+    expect(request).not.toContain("org-b.test");
+  });
+
+  it("says when neither the admin nor the org has connected an app", async () => {
+    const { orgA } = await seedTwoOrgs();
+    await connectApp(orgA.member.ctx, "microsoft", "outlook-member@org-a.test");
+
+    const request = await instructionsOfTurn(orgA);
+
+    expect(request).toContain(
+      "- microsoft (Microsoft 365): neither you nor the org has connected it yet.",
+    );
+  });
+});
 
 describe("what the agent is told about who sees a workflow and its reviews", () => {
   it("explains publishing to tags, and the hand-off setting, off unless asked for", async () => {

@@ -4,6 +4,7 @@
 // (invariant 8): those stay on the admin's page. A tool input the spec fills from a reference
 // is named by its reference, never by the value it resolved to, which may come from the email.
 import { checkWords } from "@/features/policy/condition-fields";
+import type { ActionSet } from "@/features/policy/types";
 import type { BranchPath, DryRunResult, DryRunStep } from "@/features/runtime/types";
 import { describeCheck } from "@/features/spec/conditions";
 import { findStep } from "@/features/spec/tree";
@@ -20,11 +21,11 @@ const ENDINGS: Record<DryRunResult["ended"], string> = {
     "It partly failed: a step above failed and ended its own path, and the other paths ran on.",
 };
 
-/** Summarizes a dry run of `spec`. */
-export function summarizeTryIt(result: DryRunResult, spec: Spec): TryItSummary {
+/** Summarizes a dry run of `spec`, whose actions are in the company's action set `actions`. */
+export function summarizeTryIt(result: DryRunResult, spec: Spec, actions: ActionSet): TryItSummary {
   return {
     lines: [
-      ...result.steps.flatMap((step) => [lineOf(step, spec), ...pathLines(step, spec)]),
+      ...result.steps.flatMap((step) => [lineOf(step, spec), ...pathLines(step, spec, actions)]),
       ENDINGS[result.ended],
     ],
     costUsd: result.costUsd,
@@ -81,10 +82,10 @@ const PATH_WORDS: Record<BranchPath["status"], string> = {
  * with whether it passed: never its reason, which may quote the value it tested. The branch's
  * own line already says whether it took the otherwise path.
  */
-function pathLines(step: DryRunStep, spec: Spec): string[] {
+function pathLines(step: DryRunStep, spec: Spec, actions: ActionSet): string[] {
   const branch = findStep(spec, step.stepId);
   if (branch?.type !== "branch" || step.paths === undefined) return [];
-  const words = checkWords(spec);
+  const words = checkWords(spec, actions);
   return step.paths.flatMap((result) => {
     const path = branch.paths.find((candidate) => candidate.id === result.id);
     if (path === undefined) return [];

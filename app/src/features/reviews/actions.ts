@@ -5,11 +5,8 @@ import { z } from "zod";
 import { runFormAction } from "@/features/orgs/form-action";
 import type { ActionResult } from "@/lib/errors";
 import { approveEditedReview, approveReview, declineReview, handOff, markDone } from "./server";
+import { approveFormSchema } from "./types";
 
-// `text` is there only when the person edited the draft: the edited reply, held in memory and
-// handed to the adapter, never stored (invariant 8). A refusal hands it back to the form that
-// sent it, so the edit isn't lost.
-const approveInput = z.object({ reviewId: z.string().min(1), text: z.string().optional() });
 const reviewInput = z.object({ reviewId: z.string().min(1) });
 const handOffInput = z.object({ reviewId: z.string().min(1), toUserId: z.string().min(1) });
 
@@ -20,13 +17,15 @@ export async function approveReviewAction(
   _previous: ActionResult,
   form: FormData,
 ): Promise<ActionResult> {
+  // The edits are held in memory and handed to the adapter, never stored (invariant 8). A
+  // refusal hands them back to the form that sent them, so they aren't lost.
   return runFormAction(
     form,
-    approveInput,
-    (ctx, { reviewId, text }) =>
-      text === undefined
+    approveFormSchema,
+    (ctx, { reviewId, edits }) =>
+      edits === undefined
         ? approveReview(ctx, reviewId)
-        : approveEditedReview(ctx, reviewId, { text }),
+        : approveEditedReview(ctx, reviewId, edits),
     { after: backToList },
   );
 }

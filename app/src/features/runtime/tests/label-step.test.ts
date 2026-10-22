@@ -41,7 +41,12 @@ describe("the add-label action", () => {
       {
         stepId: "label",
         status: "succeeded",
-        output: { messageId: message.id, labelId: label.id },
+        output: {
+          fields: {
+            messageId: { kind: "text", size: message.id.length },
+            labelId: { kind: "text", size: label.id.length },
+          },
+        },
       },
     ]);
   });

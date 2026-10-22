@@ -25,9 +25,13 @@ export const stepId = z
   .regex(/^[a-z][a-z0-9_-]*$/, "Start with a letter; use lowercase letters, digits, - and _.")
   .refine((id) => id !== "trigger", "`trigger` is reserved for the triggering event.");
 
-/** Model roles a step names instead of a model (invariant 6). */
-export const modelRoleSchema = z.enum(["classify", "fast", "smart", "judge"]);
+/** Model roles: code and specs name one instead of a model (invariant 6). */
+export const modelRoleSchema = z.enum(["classify", "fast", "smart", "judge", "embed"]);
 export type ModelRole = z.infer<typeof modelRoleSchema>;
+
+/** The roles a step may name: every role but `embed`, whose model only turns text into vectors. */
+export const stepModelRoleSchema = modelRoleSchema.exclude(["embed"]);
+export type StepModelRole = z.infer<typeof stepModelRoleSchema>;
 
 /** A catalog action's name. `policy` checks that it exists; the spec only names it. */
 const actionName = z.string().min(1);
@@ -116,7 +120,7 @@ export const stepBase = { id: stepId, checks: checksSchema.optional() };
 export const classifyStep = specObject({
   ...stepBase,
   type: z.literal("classify"),
-  role: modelRoleSchema,
+  role: stepModelRoleSchema,
   question: z.string().min(1),
   labels: z.array(z.string().min(1)).min(2).max(10),
 });
@@ -124,7 +128,7 @@ export const classifyStep = specObject({
 export const extractStep = specObject({
   ...stepBase,
   type: z.literal("extract"),
-  role: modelRoleSchema,
+  role: stepModelRoleSchema,
   fields: z
     .record(
       z.string().regex(/^[A-Za-z][A-Za-z0-9_]*$/, "Name a field with letters, digits and _."),
@@ -144,17 +148,24 @@ export const toolStep = specObject({
 export const draftStep = specObject({
   ...stepBase,
   type: z.literal("draft"),
-  role: modelRoleSchema,
+  role: stepModelRoleSchema,
   instructions: z.string().min(1),
   context: z.array(z.string().min(1)).default([]),
   output: actionName,
 });
 
-/** In v1 a person approves by sending the Gmail draft. */
+/**
+ * Where a person reviews what waits: `gmail_drafts`, the Gmail drafts the draft steps above it
+ * made; `held_send`, the requests of the custom writes above it, which Mycel holds until a person
+ * approves them (ADR-0020).
+ */
+export const approvalChannels = ["gmail_drafts", "held_send"] as const;
+export type ApprovalChannel = (typeof approvalChannels)[number];
+
 export const approvalStep = specObject({
   ...stepBase,
   type: z.literal("approval"),
-  channel: z.literal("gmail_drafts"),
+  channel: z.enum(approvalChannels),
 });
 
 export const escalateStep = specObject({

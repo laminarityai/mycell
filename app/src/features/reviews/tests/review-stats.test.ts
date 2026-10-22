@@ -82,6 +82,7 @@ describe("reviewStats", () => {
         waiting: 2,
       }),
       escalations: counts(),
+      heldSends: counts(),
       // 4 of approved 4, edited 1, declined 1, gone 1: sent from Gmail is left out.
       approvedWithoutEdits: 4 / 7,
       byUser: [],
@@ -111,6 +112,7 @@ describe("reviewStats", () => {
         user: person(orgs, "admin"),
         approvals: counts({ approved: 1, waiting: 1 }),
         escalations: counts(),
+        heldSends: counts(),
         approvedWithoutEdits: 1,
       },
       {
@@ -124,6 +126,7 @@ describe("reviewStats", () => {
           waiting: 1,
         }),
         escalations: counts(),
+        heldSends: counts(),
         approvedWithoutEdits: 3 / 6,
       },
     ]);
@@ -191,6 +194,7 @@ describe("reviewStats", () => {
     expect(stats).toEqual({
       approvals: counts(),
       escalations: counts(),
+      heldSends: counts(),
       approvedWithoutEdits: null,
       byUser: [],
     });
@@ -260,6 +264,7 @@ describe("reviewStats", () => {
         user: null,
         approvals: counts({ approved: 1 }),
         escalations: counts(),
+        heldSends: counts(),
         approvedWithoutEdits: 1,
       },
     ]);

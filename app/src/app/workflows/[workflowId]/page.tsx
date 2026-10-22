@@ -2,12 +2,14 @@ import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { listConversations } from "@/features/builder/server";
 import { ConversationList, NewConversationButton } from "@/features/builder/ui";
+import { listCustomActions } from "@/features/custom-actions/server";
 import { getCtx } from "@/features/orgs/server";
 import { listRuns } from "@/features/runtime/server";
 import { listTags } from "@/features/tags/server";
 import { RecentRuns, RunOnMessageForm } from "@/features/runtime/ui";
 import { getWorkflow, previewPublish, runnableConnections } from "@/features/workflows/server";
 import {
+  ActionSetProvider,
   GraphTraceProvider,
   WorkflowArchiveSection,
   WorkflowEditor,
@@ -51,11 +53,12 @@ async function Workflow({ params }: Pick<PageProps<"/workflows/[workflowId]">, "
     if (error instanceof NotFoundError) notFound();
     throw error;
   });
-  const [runs, runnable, conversations, tags, preview] = await Promise.all([
+  const [runs, runnable, conversations, tags, customActions, preview] = await Promise.all([
     listRuns(ctx, workflowId),
     runnableConnections(ctx, workflowId),
     listConversations(ctx, { workflowId }),
     listTags(ctx),
+    listCustomActions(ctx),
     // What publishing would pause; nothing to say when there's nothing new to publish, or the
     // policy refuses the working spec (publishing says why).
     workflow.unpublishedChanges && workflow.maxRisk !== null
@@ -68,27 +71,30 @@ async function Workflow({ params }: Pick<PageProps<"/workflows/[workflowId]">, "
     label: connection.accountEmail,
   }));
   return (
-    <div className="flex flex-col gap-8">
-      <WorkflowEditor
-        workflow={workflow}
-        tags={tags.map((tag) => ({ id: tag.id, name: tag.name }))}
-        preview={preview}
-      />
-      <WorkflowSwitchSection workflow={workflow} connections={connections} />
-      {workflow.versions.length > 0 ? <WorkflowArchiveSection workflow={workflow} /> : null}
-      <section className="flex flex-col gap-3" aria-label="Builder conversations">
-        <h2 className="text-lg font-semibold">Builder conversations</h2>
-        <p className="text-sm text-muted-foreground">
-          Ask the builder to change this workflow, or continue a conversation about it.
-        </p>
-        <ConversationList conversations={conversations} />
-        <NewConversationButton workflowId={workflow.id} />
-      </section>
-      <section className="flex flex-col gap-3" aria-label="Runs">
-        <h2 className="text-lg font-semibold">Runs</h2>
-        <RunOnMessageForm workflowId={workflow.id} connections={connections} />
-        <RecentRuns runs={runs} />
-      </section>
-    </div>
+    // The graph, the step menu and the side panel look actions up in the company's action set.
+    <ActionSetProvider customActions={customActions}>
+      <div className="flex flex-col gap-8">
+        <WorkflowEditor
+          workflow={workflow}
+          tags={tags.map((tag) => ({ id: tag.id, name: tag.name }))}
+          preview={preview}
+        />
+        <WorkflowSwitchSection workflow={workflow} connections={connections} />
+        {workflow.versions.length > 0 ? <WorkflowArchiveSection workflow={workflow} /> : null}
+        <section className="flex flex-col gap-3" aria-label="Builder conversations">
+          <h2 className="text-lg font-semibold">Builder conversations</h2>
+          <p className="text-sm text-muted-foreground">
+            Ask the builder to change this workflow, or continue a conversation about it.
+          </p>
+          <ConversationList conversations={conversations} />
+          <NewConversationButton workflowId={workflow.id} />
+        </section>
+        <section className="flex flex-col gap-3" aria-label="Runs">
+          <h2 className="text-lg font-semibold">Runs</h2>
+          <RunOnMessageForm workflowId={workflow.id} connections={connections} />
+          <RecentRuns runs={runs} />
+        </section>
+      </div>
+    </ActionSetProvider>
   );
 }

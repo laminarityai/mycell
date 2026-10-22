@@ -9,15 +9,19 @@ const FORMAT: Intl.DateTimeFormatOptions = {
   timeZone: "UTC",
 };
 
+const DAY: Intl.DateTimeFormatOptions = { dateStyle: "medium", timeZone: "UTC" };
+
 /**
- * A date such as "Oct 21, 2026, 2:05 PM UTC", the same on the server and in any browser, with
- * its exact time for machines and on hover.
+ * A date such as "Oct 21, 2026, 2:05 PM UTC", or with `day` just "Oct 21, 2026" (the UTC day),
+ * the same on the server and in any browser, with its exact time for machines and on hover.
  */
-export function DateTime({ value }: { value: Date }) {
+export function DateTime({ value, day = false }: { value: Date; day?: boolean }) {
   const iso = value.toISOString();
   return (
     <time dateTime={iso} title={iso}>
-      {value.toLocaleString("en-US", FORMAT)} UTC
+      {day
+        ? value.toLocaleDateString("en-US", DAY)
+        : `${value.toLocaleString("en-US", FORMAT)} UTC`}
     </time>
   );
 }

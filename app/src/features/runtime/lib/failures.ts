@@ -3,8 +3,8 @@
 // another attempt could help, and how the run ends if it was the last.
 import { isForeignKeyViolation } from "@/db/errors";
 import { SourceRequestError } from "@/features/connections/types";
+import { ModelCallError } from "@/features/models/types";
 import { NotFoundError, OutOfCreditsError } from "@/lib/errors";
-import { ModelCallError } from "../types";
 import { StepCheckError, type StepCheck } from "./checks";
 
 export const runStepErrorCodes = [
@@ -20,6 +20,8 @@ export const runStepErrorCodes = [
   "source_forbidden",
   // An executor's result didn't match its catalog action's output schema.
   "invalid_output",
+  // A custom action's app has no connection the run may call it through (ADR-0018).
+  "app_not_connected",
 ] as const;
 export type RunStepErrorCode = (typeof runStepErrorCodes)[number];
 

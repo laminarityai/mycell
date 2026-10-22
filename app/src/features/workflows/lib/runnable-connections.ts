@@ -2,6 +2,7 @@
 // running it on one message. The same rules as validation and switching on, so the pickers never
 // offer a connection either would refuse.
 import type { ConnectionSummary } from "@/features/connections/types";
+import { getActionSet } from "@/features/custom-actions/server";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { findWorkflow } from "./access";
 import { scopeIssues } from "./scope-check";
@@ -22,8 +23,9 @@ export async function runnableConnections(
   const workflow = await findWorkflow(ctx, workflowId);
   const version = (await latestVersions(ctx, [workflowId])).get(workflowId);
   const spec = version?.spec ?? workflow.workingSpec;
+  const actions = await getActionSet(ctx);
   const usable = candidateConnections(spec, await readSetup(ctx)).filter(
-    (connection) => scopeIssues(spec, [connection]).length === 0,
+    (connection) => scopeIssues(spec, [connection], actions).length === 0,
   );
   const on = (await switchOf(ctx, workflow))?.connectionId;
   return [

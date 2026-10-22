@@ -1,6 +1,6 @@
-// The fields a branch's condition may test (ADR-0015), with the catalog's declarations added to
+// The fields a branch's condition may test (ADR-0015), with the action set's declarations added to
 // what the spec declares itself: its trigger's facts and its extract steps' fields. `spec`
-// checks those; a tool step's fields are checked here, since only the catalog knows them.
+// checks those; a tool step's fields are checked here, since only the action set knows them.
 // Pure: no IO, no ctx, so client code may import it.
 import {
   EXTRACTED,
@@ -16,25 +16,25 @@ import {
 import { eachStep, stepsAbove } from "@/features/spec/tree";
 import { triggerFacts } from "@/features/spec/triggers";
 import type { Spec, SpecIssue, Step, ValueType } from "@/features/spec/types";
-import { findAction } from "./catalog";
+import type { ActionSet } from "./types";
 
 /** A value a condition may test: `{ from }` as a check names it, its type, and its words. */
 export type TestableField = { from: string; type: ValueType; label: string };
 
-/** Every field the spec's trigger and the catalog's actions declare. */
-export function declaredFields(spec: Spec): DeclaredFields {
+/** Every field the spec's trigger and the actions in `actions` declare. */
+export function declaredFields(spec: Spec, actions: ActionSet): DeclaredFields {
   return {
     trigger: triggerFacts[spec.trigger.type],
-    action: (name) => findAction(name)?.conditionFields,
+    action: (name) => actions.find(name)?.conditionFields,
   };
 }
 
 /**
  * What each of the spec's checks tests, in the words the condition editor labels it with: a
- * trigger fact's label, an extract field's description, a catalog action field's label.
+ * trigger fact's label, an extract field's description, an action field's label.
  */
-export function checkWords(spec: Spec): SubjectWords {
-  return subjectWords(spec, (name) => findAction(name)?.conditionFields);
+export function checkWords(spec: Spec, actions: ActionSet): SubjectWords {
+  return subjectWords(spec, (name) => actions.find(name)?.conditionFields);
 }
 
 /**
@@ -43,7 +43,7 @@ export function checkWords(spec: Spec): SubjectWords {
  * top down. Classify answers are checked by their own kind of check, so they aren't listed.
  * Empty when `branchId` isn't a branch.
  */
-export function testableFields(spec: Spec, branchId: string): TestableField[] {
+export function testableFields(spec: Spec, branchId: string, actions: ActionSet): TestableField[] {
   const placed = eachStep(spec).find(({ step }) => step.id === branchId);
   if (placed?.step.type !== "branch") return [];
   const facts = triggerFacts[spec.trigger.type].map((fact) => ({
@@ -60,7 +60,7 @@ export function testableFields(spec: Spec, branchId: string): TestableField[] {
       }));
     }
     if (step.type !== "tool") return [];
-    return (findAction(step.action)?.conditionFields ?? []).map((field) => ({
+    return (actions.find(step.action)?.conditionFields ?? []).map((field) => ({
       from: `${step.id}.${field.name}`,
       type: field.type,
       label: field.label,
@@ -81,13 +81,13 @@ export type CheckChoices = {
 };
 
 /** Everything a check on one of `branchId`'s paths may test, and how. */
-export function checkChoices(spec: Spec, branchId: string): CheckChoices {
+export function checkChoices(spec: Spec, branchId: string, actions: ActionSet): CheckChoices {
   const answers = stepsAbove(spec, branchId).flatMap((step) =>
     step.type === "classify"
       ? step.labels.map((is) => ({ classify: step.id, is, label: `"${step.id}" says "${is}"` }))
       : [],
   );
-  const fields = testableFields(spec, branchId).map((field) => ({
+  const fields = testableFields(spec, branchId, actions).map((field) => ({
     ...field,
     operators: operatorsFor(field.type),
   }));
@@ -99,8 +99,8 @@ export function checkChoices(spec: Spec, branchId: string): CheckChoices {
  * operator the field's type doesn't allow. Assumes the spec passed `validateSpec`, which
  * checked every other check.
  */
-export function conditionIssues(spec: Spec): SpecIssue[] {
-  const declared = declaredFields(spec);
+export function conditionIssues(spec: Spec, actions: ActionSet): SpecIssue[] {
+  const declared = declaredFields(spec, actions);
   return eachStep(spec).flatMap(({ step, location, above }) => {
     if (step.type !== "branch") return [];
     return step.paths.flatMap((path, p) =>

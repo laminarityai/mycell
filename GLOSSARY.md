@@ -28,6 +28,10 @@ _Avoid_: Group, team, role
 One authorised link between a user or the org and an external account, such as one person's Google account.
 _Avoid_: Integration, account, link
 
+**Registered app**:
+An app our team has registered with its vendor and set up in Mycel, so that people can connect it and the builder chat can make custom actions in it. Google and Pipedrive are the first.
+_Avoid_: Integration, provider, connector
+
 **Google app**:
 One of the Google products a connection can reach: Gmail, Drive, Sheets, Calendar, Docs or Tasks. A person connects Google once, and the connection records which apps they allowed.
 _Avoid_: Service, product, integration

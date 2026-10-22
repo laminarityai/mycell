@@ -8,6 +8,7 @@ import { catalogActionSet } from "@/features/policy/catalog";
 import { customActionRisk } from "@/features/policy/custom-risk";
 import type { ActionSet, CustomAction, CustomRequest } from "@/features/policy/types";
 import type { ConditionField, ValueType } from "@/features/spec/types";
+import { bodyOf, bodyPathIssues } from "./lib/body-paths";
 import {
   customActionDescriptionSchema,
   type CustomActionDescription,
@@ -79,6 +80,7 @@ function descriptionIssues(description: CustomActionDescription): string[] {
     variables: "variables" in mappings ? mappings.variables : {},
   })) {
     for (const [key, input] of Object.entries(mapping)) named(`${field}.${key}`, input);
+    if (field !== "query") issues.push(...bodyPathIssues(field, Object.keys(mapping)));
   }
   if (call.path.includes("?")) {
     issues.push("Put query parameters in `query`, not in the path.");
@@ -199,8 +201,9 @@ export type RenderedRequest = {
 };
 
 /**
- * Fills the action's path (each value URL-encoded), query and body from its checked input.
- * Undefined when the filled path would leave the app's hosts: it's never sent.
+ * Fills the action's path (each value URL-encoded), query and body from its checked input, the
+ * body nested as its dotted paths say. Undefined when the filled path would leave the app's
+ * hosts: it's never sent.
  */
 export function renderRequest(
   action: CustomAction,
@@ -222,11 +225,11 @@ export function renderRequest(
     input[name] === undefined ? [] : [[field, input[name]] as const],
   );
   if ("graphql" in request) {
-    const variables = Object.fromEntries(fields);
+    const variables = bodyOf(fields);
     return { method: "POST", path: withQuery, url, body: { query: request.graphql, variables } };
   }
   if (request.method === "DELETE") return undefined;
-  const body = request.method === "GET" ? undefined : Object.fromEntries(fields);
+  const body = request.method === "GET" ? undefined : bodyOf(fields);
   return { method: request.method, path: withQuery, url, body };
 }
 

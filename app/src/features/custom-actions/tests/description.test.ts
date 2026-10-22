@@ -107,6 +107,50 @@ describe("checking a custom action's description", () => {
     expect(checkCustomAction(replyToOutlookMessage({ outputs: {} }))).toMatchObject({ ok: true });
   });
 
+  it("takes a nested body by dotted paths, and refuses paths that don't make one body", () => {
+    const withBody = (body: Record<string, string>) =>
+      replyToOutlookMessage({
+        call: { method: "POST", path: REPLY_PATH, body },
+        inputs: {
+          messageId: { type: "text", description: "The Outlook message's ID." },
+          comment: { type: "text", description: "The reply's text." },
+          to: { type: "text", description: "Who it goes to." },
+        },
+      });
+
+    expect(
+      checkCustomAction(
+        withBody({ "message.body.content": "comment", "message.toRecipients.0.address": "to" }),
+      ),
+    ).toMatchObject({ ok: true });
+    expect(checkCustomAction(withBody({ "message body": "comment" }))).toEqual({
+      ok: false,
+      issues: [
+        "body.message body: write a body field like message.body.content, property names and list indexes joined by dots.",
+      ],
+    });
+    expect(checkCustomAction(withBody({ message: "comment", "message.subject": "to" }))).toEqual({
+      ok: false,
+      issues: ["body.message holds one input, so body.message.subject can't be inside it."],
+    });
+    expect(checkCustomAction(withBody({ "0.text": "comment" }))).toEqual({
+      ok: false,
+      issues: ["body.0.text: the body is an object, so it can't start with a list index."],
+    });
+    expect(checkCustomAction(withBody({ "to.0": "comment", "to.name": "to" }))).toEqual({
+      ok: false,
+      issues: ["body.to holds either properties or list items, not both."],
+    });
+    expect(checkCustomAction(withBody({ "to.0": "comment", "to.2": "to" }))).toEqual({
+      ok: false,
+      issues: ["body.to is a list: number its items from 0, with none missing."],
+    });
+    expect(checkCustomAction(withBody({ "a.__proto__.b": "comment" }))).toEqual({
+      ok: false,
+      issues: ['body.a.__proto__.b: "__proto__" can\'t be a field name.'],
+    });
+  });
+
   it("refuses a catalog action's name", () => {
     expect(checkCustomAction(readOutlookMessage({ name: "google-mail.read-message" }))).toEqual({
       ok: false,

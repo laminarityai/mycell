@@ -31,7 +31,8 @@ export const describeCustomActionTool: ToolDefinition<
     "path, query, body } where path is " +
     'the path on the app with no host, such as "/v1.0/me/messages/{messageId}", with each ' +
     "{placeholder} an input, and query and body map each query parameter or body field to an " +
-    "input), inputs (each " +
+    "input; a nested body field is a dotted path of property names and list indexes, such as " +
+    '"message.toRecipients.0.emailAddress.address"), inputs (each ' +
     'name to { type: "text" | "number" | "yes_no" | "choice", description, choices for a ' +
     'choice, optional }), outputs (for a read, each result field\'s name to { type: "text" | ' +
     '"number" | "yes_no", label, path }, path being property names and list indexes joined by ' +

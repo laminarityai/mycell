@@ -104,8 +104,9 @@ export const runSteps = pgTable(
     attempts: integer("attempts").notNull(),
     // When the step's last attempt began.
     lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true }).defaultNow().notNull(),
-    // Labels, probabilities, IDs, counts and field names; never content (ADR-0012). Null when
-    // the step failed or has nothing to show.
+    // Labels, probabilities, IDs, field names, and a tool result's field kinds and sizes; never
+    // content, which only the step state carries (ADR-0021). Null when the step failed or has
+    // nothing to show.
     output: jsonb("output").$type<Json>(),
     // Built from codes and field names only.
     errorCode: text("error_code"),

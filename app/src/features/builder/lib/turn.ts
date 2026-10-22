@@ -54,6 +54,7 @@ export async function streamTurn(
   const turn: TurnInfo = {
     conversationId: conversation.id,
     workflowId: conversation.workflowId,
+    message: text,
     failedProposals: 0,
   };
   const instructions = instructionsWith(await gatherContext(ctx, turn));

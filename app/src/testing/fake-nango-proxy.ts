@@ -5,12 +5,7 @@
 import { http, HttpResponse } from "msw";
 import type { FakeConnection } from "./fake-nango";
 import { authorised, NANGO_API as API, proxyRefusal, unauthorised } from "./fake-nango-http";
-import {
-  INTEGRATION_HOSTS,
-  proxiedSource,
-  refusal,
-  type ProxyMethod,
-} from "./fake-proxied-sources";
+import { integrationHost, proxiedSource, refusal, type ProxyMethod } from "./fake-proxied-sources";
 
 /** What the proxy needs from the fake Nango: its connections, hook and rate limiting. */
 export type ProxyState = {
@@ -65,7 +60,7 @@ async function proxy(state: ProxyState, request: Request, method: ProxyMethod) {
 function baseUrl(request: Request, connection: FakeConnection): string {
   const override = request.headers.get("Base-Url-Override");
   if (override === null || override === "") {
-    const host = INTEGRATION_HOSTS[connection.integration];
+    const host = integrationHost(connection);
     if (host === undefined) throw new Error(`No host for integration ${connection.integration}`);
     return host;
   }

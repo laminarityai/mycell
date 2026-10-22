@@ -1,21 +1,12 @@
-// What a connection's source needs beyond Nango itself: its Nango integration, the API host
-// each Google API path is on, which apps its granted scopes allow, and how to read which
-// account it reached.
+// What a Google connection needs beyond Nango itself: the API host each Google API path is on,
+// which apps its granted scopes allow, and how to read which account it reached.
 import { z } from "zod";
 import { GOOGLE_HOSTS } from "@/lib/google";
-import { GOOGLE_APP_SCOPES, googleAppSchema, type GoogleApp, type Source } from "../types";
+import { GOOGLE_APP_SCOPES, googleAppSchema, type GoogleApp } from "../types";
 import { NangoConnectionGoneError, nangoProxyGet, type ProxyTarget } from "./nango";
 
-/**
- * The Nango integration (provider config key) behind each source. `google` is the one Google
- * connection per account; `google-mail` and `google-drive` remain for the one-app connections
- * made before it, until they're replaced.
- */
-export const INTEGRATIONS: Record<Source, string> = {
-  google: "google",
-  gmail: "google-mail",
-  drive: "google-drive",
-};
+/** The sources that reach Google: one Google connection, or a one-app one from before it. */
+export type GoogleSource = "google" | "gmail" | "drive";
 
 // Each Google API's host, by the prefix its paths start with. Every proxied call names its
 // host with Nango's Base-Url-Override, since one integration reaches them all.
@@ -43,13 +34,13 @@ export function proxyTarget(path: string): ProxyTarget {
  * The apps a connection may use. A Google connection's are those whose scope Google granted;
  * a one-app connection's is its own app.
  */
-export function grantedApps(source: Source, scopes: readonly string[]): GoogleApp[] {
+export function grantedApps(source: GoogleSource, scopes: readonly string[]): GoogleApp[] {
   if (source !== "google") return [source];
   return googleAppSchema.options.filter((app) => scopes.includes(GOOGLE_APP_SCOPES[app]));
 }
 
 /** The apps a Google connection asks for that it wasn't granted. None for a one-app one. */
-export function missingApps(source: Source, scopes: readonly string[]): GoogleApp[] {
+export function missingApps(source: GoogleSource, scopes: readonly string[]): GoogleApp[] {
   if (source !== "google") return [];
   const granted = grantedApps(source, scopes);
   return googleAppSchema.options.filter((app) => !granted.includes(app));
@@ -83,16 +74,13 @@ const accountEmailReaders: [GoogleApp, (connection: NangoConnection) => Promise<
 ];
 
 /**
- * The connected account's address, lowercased, asked of the first app among `apps` that can
- * tell. Undefined when none of them can (the account allowed neither Gmail nor Drive).
+ * The connected Google account's address, asked of the first app among `apps` that can tell.
+ * Undefined when none of them can (the account allowed neither Gmail nor Drive).
  */
-export async function readAccountEmail(
-  source: Source,
-  connectionId: string,
+export async function readGoogleAccountEmail(
+  connection: NangoConnection,
   apps: readonly GoogleApp[],
 ): Promise<string | undefined> {
   const reader = accountEmailReaders.find(([app]) => apps.includes(app));
-  if (reader === undefined) return undefined;
-  const email = await reader[1]({ connectionId, integration: INTEGRATIONS[source] });
-  return email.toLowerCase();
+  return reader === undefined ? undefined : reader[1](connection);
 }

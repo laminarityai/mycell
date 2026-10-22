@@ -1,7 +1,7 @@
 // Connecting through the whole flow (startConnect, OAuth in the fake Nango, the signed creation
 // webhook), for any feature's tests: a feature's tests can't import another feature's tests/.
 import { handleNangoWebhook, listConnections, startConnect } from "@/features/connections/server";
-import type { ConnectionKind } from "@/features/connections/types";
+import type { ConnectionKind, RegisteredAppId } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
 import type { FakeFileInput } from "./fake-drive";
 import type { FakeMessageInput } from "./fake-gmail";
@@ -89,6 +89,28 @@ async function connectFlow(
   const webhook = fakeNango.completeConnect(token, { emailAddress }, scopes);
   const response = await handleNangoWebhook(webhook.rawBody, webhook.headers);
   return { ...webhook, response };
+}
+
+/**
+ * The bare connect flow for a registered app: start an attempt for the caller (their own
+ * account by default, or an org one), finish OAuth as `emailAddress` (granting `scopes`,
+ * everything the app asks for by default), and deliver the creation webhook. Returns the
+ * webhook, with Nango's connection ID, Mycel's response to it, and the recorded connection's ID
+ * (undefined when the account was refused).
+ */
+export async function connectApp(
+  ctx: Ctx,
+  app: RegisteredAppId,
+  emailAddress: string,
+  options: { kind?: ConnectionKind; scopes?: readonly string[] } = {},
+) {
+  const { token } = await startConnect(ctx, app, options.kind ?? "member");
+  const webhook = fakeNango.completeConnect(token, { emailAddress }, options.scopes);
+  const response = await handleNangoWebhook(webhook.rawBody, webhook.headers);
+  const connection = (await all(ctx)).find(
+    (c) => c.source === app && c.accountEmail === emailAddress.toLowerCase(),
+  );
+  return { ...webhook, response, id: connection?.id };
 }
 
 /** connectGoogle, seeding only the Drive: for tests about Drive files. */

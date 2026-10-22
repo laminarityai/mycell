@@ -18,10 +18,16 @@ import {
   unique,
   vector,
 } from "drizzle-orm/pg-core";
-// The one table outside memory its tables reference: derived data cascades from its connection
-// (docs/conventions.md, "Derived data cascades from its connection").
+// Derived data cascades from its connection (docs/conventions.md, "Derived data cascades from
+// its connection").
 import { connections } from "@/features/connections/lib/schema";
-import { MEMORY_APPS, OBJECT_KEY_KINDS, OBJECT_KINDS } from "../types";
+import {
+  ACCESS_LOG_READER_KINDS,
+  MEMORY_APPS,
+  MEMORY_READ_OPERATIONS,
+  OBJECT_KEY_KINDS,
+  OBJECT_KINDS,
+} from "../types";
 
 /** The `embed` role's default model's dimensions (openai/text-embedding-3-small). */
 export const EMBEDDING_DIMENSIONS = 1536;
@@ -234,4 +240,56 @@ export const factSources = pgTable(
       foreignColumns: [sourceRecords.orgId, sourceRecords.id],
     }).onDelete("cascade"),
   ],
+);
+
+/**
+ * The access log (ADR-0024): one row per read of memory, saying who or what read, when, and
+ * which objects and facts, by ID only: never the query or what a fact says. It isn't derived
+ * from any connection, so it has none and outlives the facts it names, for
+ * ACCESS_LOG_RETENTION_DAYS. Its IDs are plain: a reader leaving the org or a fact going leaves
+ * the entry as it was.
+ */
+export const accessLogEntries = pgTable(
+  "access_log_entries",
+  {
+    id: text("id").primaryKey(),
+    orgId: text("org_id").notNull(),
+    readAt: timestamp("read_at", { withTimezone: true }).defaultNow().notNull(),
+    operation: text("operation", { enum: MEMORY_READ_OPERATIONS }).notNull(),
+    readerKind: text("reader_kind", { enum: ACCESS_LOG_READER_KINDS }).notNull(),
+    // The person whose view was read (see AccessLogEntry); null for the system ctx.
+    userId: text("user_id"),
+    runId: text("run_id"),
+    workflowId: text("workflow_id"),
+    staffConsentId: text("staff_consent_id"),
+    objectIds: text("object_ids").array().notNull(),
+    factIds: text("fact_ids").array().notNull(),
+    // Whose member connections held a source of a fact read, when it was read: the members who
+    // see this entry.
+    sourceOwnerIds: text("source_owner_ids").array().notNull(),
+  },
+  (table) => [
+    index("access_log_entries_org_id_read_at_idx").on(table.orgId, table.readAt),
+    index("access_log_entries_source_owner_ids_idx").using("gin", table.sourceOwnerIds),
+  ],
+);
+
+/**
+ * An admin's consent for one of our staff to read memory for one case, until it expires or the
+ * admin revokes it (ADR-0024). Kept, revoked or expired, while log entries may name it, and
+ * after its admin leaves the org (a plain user ID), though it then lets no one read.
+ */
+export const staffConsents = pgTable(
+  "staff_consents",
+  {
+    id: text("id").primaryKey(),
+    orgId: text("org_id").notNull(),
+    grantedByUserId: text("granted_by_user_id").notNull(),
+    staffEmail: text("staff_email").notNull(),
+    reason: text("reason").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (table) => [index("staff_consents_org_id_idx").on(table.orgId)],
 );

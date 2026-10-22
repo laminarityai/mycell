@@ -51,6 +51,9 @@ function NavLinks({ waiting, admin }: { waiting: number; admin: boolean }) {
           <Link href="/builder" className={LINK}>
             Builder chat
           </Link>
+          <Link href="/capability-requests" className={LINK}>
+            Capability requests
+          </Link>
         </>
       ) : null}
     </>

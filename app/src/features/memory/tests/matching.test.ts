@@ -11,6 +11,7 @@ import { readObject, searchMemory } from "../server";
 import {
   learnStoredItems,
   meaning,
+  scriptDocLearning,
   scriptLearning,
   withCredits,
   type ScriptedExtraction,
@@ -23,6 +24,7 @@ const OTHER_DANA = "dana.ruiz@globex.example";
 const HANDLES = "Dana Ruiz will handle Acme's renewal.";
 const ROLE = "Dana Ruiz leads procurement at Acme.";
 const GLOBEX_ROLE = "Dana Ruiz runs finance at Globex.";
+const SIGNS = "Dana Ruiz signs Acme's contracts.";
 
 const byEmail = (value: string) => ({ key: { kind: "email" as const, value } });
 
@@ -172,6 +174,31 @@ describe("matching an object without an exact key", () => {
 
     const found = await searchMemory(orgA.member.ctx, { text: "renewal contract" });
     expect(found.objects.filter((object) => object.kind === "deal")).toHaveLength(1);
+  });
+
+  it("matches a person a Drive doc names to the one an email taught", async () => {
+    const { orgA, mailbox, nameOnly } = await setup();
+    mailbox.drive.add({
+      name: "Acme contacts",
+      mimeType: "application/vnd.google-apps.document",
+      text: "Dana Ruiz signs Acme's contracts.",
+      at: daysAgo(1),
+    });
+    await pollConnection(systemCtx(orgA.id), mailbox.id);
+    scriptDocLearning(
+      {
+        objects: [{ ref: "dana", kind: "person", name: "Dana Ruiz" }],
+        facts: [{ about: "dana", statement: SIGNS, evidence: "Dana Ruiz signs Acme's contracts" }],
+      },
+      1,
+      [meaning(9)],
+    );
+    confirms(true);
+
+    await learnStoredItems(orgA.id);
+
+    const dana = await readObject(orgA.member.ctx, { id: nameOnly.id });
+    expect(dana.facts.map((fact) => fact.statement)).toEqual([HANDLES, SIGNS]);
   });
 });
 

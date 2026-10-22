@@ -1,16 +1,18 @@
 // Who sees what memory holds (ADR-0023), one function every read goes through. A viewer sees a
 // source record when:
-// - their own mailbox holds the item: this copy, or another under the same item key;
-// - their address is on its access list;
+// - their own mailbox or Drive holds the item: this copy, or another under the same item key;
+// - their address, or their address's domain, is on its access list;
 // - it came from an org connection, such as support@;
-// - or its access list names a list an admin marked company-wide, such as all@.
+// - or its access list makes it company-wide: it names a list an admin marked company-wide (such
+//   as all@), the company's Workspace domain (a doc shared with the company), or anyone (a doc
+//   shared with anyone who has the link).
 // A fact is visible when one of its source records is, and an object when one of its facts is.
 // Group membership is never guessed: a group that isn't marked counts only through a copy in the
-// viewer's own mailbox. Admin rights widen nothing, and the system ctx (an org-credential run) is
-// no one, so it sees only what's company-wide. Docs shared with the domain join with Drive.
-import { and, eq, inArray } from "drizzle-orm";
+// viewer's own mailbox or Drive. Admin rights widen nothing, and the system ctx (an
+// org-credential run) is no one, so it sees only what's company-wide.
+import { and, eq, inArray, or } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
-import { listUsers } from "@/features/orgs/server";
+import { getWorkspaceDomain, listUsers } from "@/features/orgs/server";
 import type { Ctx } from "@/lib/ctx";
 import { markedAddresses } from "./company-wide-lists";
 import { accessListEntries, sourceRecords } from "./schema";
@@ -51,17 +53,26 @@ export async function visibleSourceRecords(
   // The viewer's own address, and every company-wide list's. A marked address that has since
   // become a person's own counts as theirs, not as a list's.
   const addresses = [...new Set([...viewer.addresses, ...(await companyWideLists(ctx))])];
-  const addressedTo =
-    addresses.length === 0
-      ? []
-      : await db.select(accessListEntries, {
-          where: and(
-            inArray(accessListEntries.sourceRecordId, ids),
-            eq(accessListEntries.kind, "address"),
-            inArray(accessListEntries.value, addresses),
-          ),
-        });
-  const addressed = new Set(addressedTo.map((entry) => entry.sourceRecordId));
+  // The company's domain, and the viewer's own address's.
+  const domains = [
+    ...new Set([
+      (await getWorkspaceDomain(ctx)).toLowerCase(),
+      ...viewer.addresses.map((address) => address.slice(address.lastIndexOf("@") + 1)),
+    ]),
+  ];
+  const sharedWith = await db.select(accessListEntries, {
+    where: and(
+      inArray(accessListEntries.sourceRecordId, ids),
+      or(
+        eq(accessListEntries.kind, "anyone"),
+        and(eq(accessListEntries.kind, "domain"), inArray(accessListEntries.value, domains)),
+        addresses.length === 0
+          ? undefined
+          : and(eq(accessListEntries.kind, "address"), inArray(accessListEntries.value, addresses)),
+      ),
+    ),
+  });
+  const addressed = new Set(sharedWith.map((entry) => entry.sourceRecordId));
 
   return new Set(
     records

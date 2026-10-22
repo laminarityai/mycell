@@ -7,7 +7,13 @@ import { systemCtx } from "@/lib/ctx";
 import { connectMailbox, daysAgo } from "@/testing/connect-helpers";
 import type { FakeMessageInput } from "@/testing/fake-gmail";
 import { readObject, searchMemory } from "../server";
-import { learnStoredItems, meaning, scriptLearning, withCredits } from "./memory-helpers";
+import {
+  learnStoredItems,
+  meaning,
+  scriptDocLearning,
+  scriptLearning,
+  withCredits,
+} from "./memory-helpers";
 
 beforeEach(resetDatabase);
 
@@ -209,5 +215,43 @@ describe("a fact that changes", () => {
     expect(seen.history).toEqual([
       expect.objectContaining({ statement: MARCH, supersededBy: june?.id, validUntil: null }),
     ]);
+  });
+
+  it("supersedes a fact from an email with a newer one from a Drive doc", async () => {
+    const { orgA, adminBox, learnMarch } = await setup();
+    await learnMarch();
+    // The admin's account notes, shared with the company.
+    adminBox.drive.add({
+      name: "Acme account notes",
+      mimeType: "application/vnd.google-apps.document",
+      text: "Acme (acme.example): the renewal has moved to May.",
+      at: daysAgo(1),
+      sharedWith: [{ type: "domain", domain: orgA.workspaceDomain }],
+    });
+    await pollConnection(systemCtx(orgA.id), adminBox.id);
+    scriptDocLearning(
+      {
+        objects: [acme],
+        facts: [
+          {
+            about: "acme",
+            statement: MAY,
+            evidence: "the renewal has moved to May",
+            predicate: "renewal_date",
+            value: "May",
+          },
+        ],
+      },
+      1,
+      [meaning(1, 2, 0.1)],
+    );
+
+    await learnStoredItems(orgA.id);
+
+    // Company-wide, so the member sees it replace what their email said.
+    const seen = await readObject(orgA.member.ctx, byDomain);
+    expect(statements(seen.facts)).toEqual([SEATS, MAY]);
+    expect(statements(seen.history)).toEqual([MARCH]);
+    expect(seen.facts.find((fact) => fact.statement === MAY)?.sources[0]?.app).toBe("drive");
   });
 });

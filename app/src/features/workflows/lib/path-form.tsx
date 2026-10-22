@@ -8,6 +8,7 @@ import { checkChoices } from "@/features/policy/condition-fields";
 import { movePath, removePath, updatePath } from "@/features/spec/edit";
 import { eachStep } from "@/features/spec/tree";
 import type { BranchStep, Check, Path, Spec } from "@/features/spec/types";
+import { useActionSet } from "./action-set-context";
 import { MoveButtons } from "./branch-fields";
 import { CheckEditor, firstCheck } from "./check-editor";
 import { PanelShell, type PanelProps } from "./panel-shell";
@@ -42,7 +43,8 @@ export function PathForm({
   issues,
   onClose,
 }: PanelProps & { branch: BranchStep; path: Path; index: number }) {
-  const choices = checkChoices(spec, branch.id);
+  const actions = useActionSet();
+  const choices = checkChoices(spec, branch.id, actions);
   const update = (change: (path: Path) => Path) => {
     edit((current) => updatePath(current, path.id, change));
   };

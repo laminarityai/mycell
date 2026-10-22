@@ -85,7 +85,13 @@ describe("the steps", () => {
     expect((await getRun(admin, runId)).steps).toMatchObject([
       {
         stepId: "read",
-        output: { messageId: message.id, threadId: message.threadId, labelIds: message.labelIds },
+        output: {
+          fields: {
+            messageId: { kind: "text", size: message.id.length },
+            threadId: { kind: "text", size: message.threadId.length },
+            labelIds: { kind: "list", size: message.labelIds.length },
+          },
+        },
       },
       { stepId: "human", type: "escalate", status: "succeeded" },
     ]);
@@ -166,6 +172,7 @@ describe("executorCoverage", () => {
         "google-mail.create-draft": "ready",
         "google-sheet.read-range": "ready",
         "google-sheet.append-row": "ready",
+        "memory.lookup": "ready",
       },
       steps: {
         classify: "ready",

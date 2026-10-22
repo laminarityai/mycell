@@ -2,6 +2,7 @@
 // `amount`. Usage rows stay when a workflow, run or connection goes: they are the org's bill.
 import { boolean, index, numeric, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { modelRoleSchema, type ModelRole } from "@/features/spec/types";
+import { CREDIT_PURPOSES } from "../types";
 
 export const creditLedger = pgTable(
   "credit_ledger",
@@ -11,7 +12,8 @@ export const creditLedger = pgTable(
     kind: text("kind", { enum: ["grant", "usage"] }).notNull(),
     // Credits: positive for a grant, negative (or zero) for usage.
     amount: numeric("amount", { mode: "number" }).notNull(),
-    // Usage only: the role the call named, the model it resolved to, and how the call ended.
+    // Usage only: the role the call named, the model it resolved to, and how the call ended. The
+    // injection screen names no role: its row has the service as its model.
     role: text("role", { enum: modelRoleSchema.options as [ModelRole, ...ModelRole[]] }),
     modelId: text("model_id"),
     outcome: text("outcome", { enum: ["succeeded", "failed"] }),
@@ -24,7 +26,17 @@ export const creditLedger = pgTable(
     runId: text("run_id"),
     // Made by a dry run ("Try it"), which has no run record.
     dryRun: boolean("dry_run").notNull().default(false),
+    // What the usage was spent on, when that has a budget of its own (memory's learning).
+    purpose: text("purpose", { enum: CREDIT_PURPOSES }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [index("credit_ledger_org_id_idx").on(table.orgId)],
+  (table) => [
+    index("credit_ledger_org_id_idx").on(table.orgId),
+    // A budget adds up its purpose's spending this month.
+    index("credit_ledger_org_id_purpose_created_at_idx").on(
+      table.orgId,
+      table.purpose,
+      table.createdAt,
+    ),
+  ],
 );

@@ -13,8 +13,8 @@ import {
   type TextStreamPart,
   type ToolSet,
 } from "ai";
-import { openMeteredStream } from "@/features/runtime/server";
-import type { MeteredStream } from "@/features/runtime/types";
+import { openMeteredStream } from "@/features/models/server";
+import type { MeteredStream } from "@/features/models/types";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { OutOfCreditsError, typedErrorMessage, ValidationError } from "@/lib/errors";
 import type { BuilderUIMessage, Notice, StoredPart } from "../types";
@@ -54,7 +54,9 @@ export async function streamTurn(
   const turn: TurnInfo = {
     conversationId: conversation.id,
     workflowId: conversation.workflowId,
+    message: text,
     failedProposals: 0,
+    customActions: [],
   };
   const instructions = instructionsWith(await gatherContext(ctx, turn));
   const assistantId = randomUUID();

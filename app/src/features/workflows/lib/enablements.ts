@@ -5,6 +5,7 @@
 import { eq } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { listConnections } from "@/features/connections/server";
+import { getActionSet } from "@/features/custom-actions/server";
 import { userNames } from "@/features/orgs/server";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
@@ -12,7 +13,7 @@ import type { EnablementSummary, EnableResult } from "../types";
 import { findWorkflow } from "./access";
 import { deleteEnablement, switchOnEnablement } from "./enablement-rows";
 import { enablements } from "./schema";
-import { missingAccess } from "./requirements";
+import { missingAccess, unconnectedApps } from "./requirements";
 import { latestVersions } from "./latest-versions";
 import { getVisibleWorkflow } from "./visibility";
 
@@ -33,11 +34,20 @@ export async function enable(ctx: Ctx, workflowId: string): Promise<EnableResult
   const version = (await latestVersions(ctx, [workflowId])).get(workflowId);
   // A visible workflow is published: none means it went since it was read, so it's not found.
   if (version === undefined) throw new NotFoundError("workflow version");
-  const connection = (await listConnections(ctx)).connections.find(
-    (own) => own.source === "google",
-  );
-  if (connection === undefined) return { needs: "connect", ...missingAccess(version, null) };
-  const missing = missingAccess(version, connection);
+  const own = (await listConnections(ctx)).connections;
+  const connection = own.find((candidate) => candidate.source === "google");
+  const actions = await getActionSet(ctx);
+  const unconnected = unconnectedApps(version.requiredActions, own, actions);
+  if (unconnected.length > 0) {
+    const apps = unconnected.join(" and ");
+    throw new ValidationError(
+      `This workflow uses ${apps}: connect your ${apps} account first, then switch it on.`,
+    );
+  }
+  if (connection === undefined) {
+    return { needs: "connect", ...missingAccess(version, null, actions) };
+  }
+  const missing = missingAccess(version, connection, actions);
   if (missing.apps.length > 0 || missing.scopes.length > 0) {
     return { needs: "reconnect", connectionId: connection.id, ...missing };
   }

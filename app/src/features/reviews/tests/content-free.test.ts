@@ -23,7 +23,9 @@ describe("a review's content", () => {
     const id = review?.id ?? "";
 
     const opened = await openReview(admin, id);
-    expect(opened.view?.message?.text).toContain(IN_MESSAGE);
+    expect(opened.view).toMatchObject({
+      message: { text: expect.stringContaining(IN_MESSAGE) as string },
+    });
     expect(opened.view).toMatchObject({
       kind: "draft",
       draft: { text: expect.stringContaining(IN_DRAFT) as string },
@@ -48,7 +50,9 @@ describe("a review's content", () => {
     const id = (await listReviews(admin)).at(0)?.id ?? "";
 
     const opened = await openReview(admin, id);
-    expect(opened.view?.message?.text).toContain(IN_MESSAGE);
+    expect(opened.view).toMatchObject({
+      message: { text: expect.stringContaining(IN_MESSAGE) as string },
+    });
     await markDone(admin, id);
 
     for (const marker of [IN_SUBJECT, IN_MESSAGE]) {

@@ -1,0 +1,1 @@
+ALTER TABLE "memory_postponed_items" ADD COLUMN "reason" text DEFAULT 'budget' NOT NULL;

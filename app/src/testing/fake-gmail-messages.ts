@@ -72,7 +72,10 @@ export function gmailMessage(input: FakeMessageInput, historyId: string): GmailM
     ...(input.bcc ? [{ name: "Bcc", value: input.bcc.join(", ") }] : []),
     { name: "Subject", value: input.subject ?? "" },
     { name: "Date", value: input.at.toUTCString() },
-    { name: "Message-ID", value: `<${id}@mail.gmail.com>` },
+    // A test's own Message-ID makes copies of one email in several mailboxes.
+    ...(hasHeader(input, "Message-ID")
+      ? []
+      : [{ name: "Message-ID", value: `<${id}@mail.gmail.com>` }]),
     ...Object.entries(input.headers ?? {}).map(([name, value]) => ({ name, value })),
   ];
   const bodies: GmailPart[] = [
@@ -128,4 +131,8 @@ export function textPart(partId: string, mimeType: string, content: string): Gma
     headers: [{ name: "Content-Type", value: `${mimeType}; charset="UTF-8"` }],
     body: { size: Buffer.byteLength(content), data },
   };
+}
+
+function hasHeader(input: FakeMessageInput, name: string): boolean {
+  return Object.keys(input.headers ?? {}).some((key) => key.toLowerCase() === name.toLowerCase());
 }

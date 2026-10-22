@@ -1,8 +1,9 @@
 // Where each ingested app stands on a connection. A state starts when the connection is
 // recorded, or a reconnect grants its app; discovery's ingest moves it along; a reconnect that
-// leaves its app out drops it. Deleting the connection cascades to its states.
+// leaves its app out drops it, and one that keeps an app whose backfill failed starts it again.
+// Deleting the connection cascades to its states.
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray, notInArray } from "drizzle-orm";
+import { and, eq, inArray, notInArray, or } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import type { Ctx } from "@/lib/ctx";
 import {
@@ -18,36 +19,45 @@ type IngestStateRow = typeof ingestStates.$inferSelect;
 
 /**
  * Makes the connection's states match the apps it may use: a `backfilling` state for each
- * ingested app among `apps` that has none, and none for an app it may no longer use. Returns
- * the IDs of the states it started.
+ * ingested app among `apps` that has none, a new one in place of a state whose backfill failed,
+ * and none for an app it may no longer use. Returns the IDs of the states it started. Each is
+ * new, so announcing them starts a backfill even for an app whose backfill was announced before.
  */
 export async function syncIngestStates(
   ctx: Ctx,
   connectionId: string,
   apps: readonly GoogleApp[],
 ): Promise<string[]> {
-  const db = forOrg(ctx);
   const ingested = ingestedAppSchema.options.filter((app) => apps.includes(app));
-  await db.delete(
-    ingestStates,
-    and(eq(ingestStates.connectionId, connectionId), notInArray(ingestStates.app, ingested)),
-  );
-  const started = await db.insert(
-    ingestStates,
-    ingested.map((app) => ({
-      id: randomUUID(),
-      connectionId,
-      app,
-      status: "backfilling" as const,
-    })),
-    { onConflictDoNothing: true },
-  );
-  return started.map((state) => state.id);
+  return forOrg(ctx).transaction(async (tx) => {
+    await tx.delete(
+      ingestStates,
+      and(
+        eq(ingestStates.connectionId, connectionId),
+        or(notInArray(ingestStates.app, ingested), eq(ingestStates.status, "failed")),
+      ),
+    );
+    const started = await tx.insert(
+      ingestStates,
+      ingested.map((app) => ({
+        id: randomUUID(),
+        connectionId,
+        app,
+        status: "backfilling" as const,
+      })),
+      { onConflictDoNothing: true },
+    );
+    return started.map((state) => state.id);
+  });
 }
 
-/** Drops states by ID: undoes a sync whose announcement didn't go out. */
-export async function dropIngestStates(ctx: Ctx, ids: string[]): Promise<void> {
-  await forOrg(ctx).delete(ingestStates, inArray(ingestStates.id, ids));
+/**
+ * Marks states failed by ID: undoes a sync whose announcement didn't go out, so no backfill
+ * will move them along. The owner sees the backfill failed, and the next sync (Nango
+ * redelivering the webhook, or another reconnect) starts them again.
+ */
+export async function failIngestStates(ctx: Ctx, ids: string[]): Promise<void> {
+  await forOrg(ctx).update(ingestStates, { status: "failed" }, inArray(ingestStates.id, ids));
 }
 
 /** The states of these connections, by connection ID. */

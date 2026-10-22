@@ -2,6 +2,7 @@
 // UI messages the chat page streams.
 import type { UIMessage } from "ai";
 import { z } from "zod";
+import type { CustomActionRecord, CustomActionWords } from "@/features/custom-actions/types";
 import type { RiskLevel } from "@/features/policy/types";
 import type { StepDescription } from "@/features/spec/describe";
 import type { Change } from "@/features/spec/diff";
@@ -127,9 +128,19 @@ export type Proposal = {
   spec: Spec;
   /** The working spec it was made against; null for a new workflow. */
   baseSpec: Spec | null;
+  /** The new custom actions it brings, in plain words: stored only if it's accepted. */
+  customActions: ProposedCustomAction[];
+  /** The same, as the records the graph builds the action set it draws the proposal with from. */
+  customActionRecords: CustomActionRecord[];
   createdAt: Date;
   decidedAt: Date | null;
 };
+
+/**
+ * A new custom action as a proposal shows it (ADR-0018): its app, what it does, the call it makes
+ * and the risk level the fixed rule set.
+ */
+export type ProposedCustomAction = CustomActionWords;
 
 /** What `propose_spec` tells the model, and what the conversation keeps of it. */
 export type ProposeSpecResult =

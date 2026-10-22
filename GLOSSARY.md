@@ -28,6 +28,10 @@ _Avoid_: Group, team, role
 One authorised link between a user or the org and an external account, such as one person's Google account.
 _Avoid_: Integration, account, link
 
+**Registered app**:
+An app our team has registered with its vendor and set up in Mycel, so that people can connect it and the builder chat can make custom actions in it. Google and Microsoft 365 are the first.
+_Avoid_: Integration, provider, connector
+
 **Google app**:
 One of the Google products a connection can reach: Gmail, Drive, Sheets, Calendar, Docs or Tasks. A person connects Google once, and the connection records which apps they allowed.
 _Avoid_: Service, product, integration
@@ -43,7 +47,7 @@ _Avoid_: Shared connection
 Whether a piece of data belongs to one member or to the whole org.
 
 **Access list**:
-Who the source app says can see an item, kept on Mycel's record of it; a fact is visible to anyone who can see one of its sources.
+Who Mycel saw can see an item, kept on Mycel's record of it: a doc's sharing list as the app gives it, or for an email the mailboxes holding it and, on one the company sent, everyone on it (never just the addresses its sender wrote). A fact is visible to anyone who can see one of its sources.
 _Avoid_: Promotion (replaced), ACL, permissions
 
 **Event**:
@@ -141,7 +145,7 @@ Running a working spec on one recent message to see what it would do, with every
 _Avoid_: Test run, preview, simulation (a replay of past cases is a shadow eval)
 
 **Model role**:
-The kind of model a step asks for (`classify`, `fast`, `smart` or `judge`), which each org maps to a concrete model.
+The kind of model a step or a model call asks for (`classify`, `fast`, `smart`, `judge` or `embed`), which each org maps to a concrete model. `embed` turns text into vectors for memory, and no step names it.
 _Avoid_: Model, model tier
 
 **Paused**:
@@ -167,8 +171,12 @@ An app's own way of holding an action until a person approves it, such as a Gmai
 _Avoid_: Staged action, preview
 
 **Review**:
-One action waiting for a person's decision, shown on their Reviews page, which points at the waiting item in its app, or holds it when the app can't (ADR-0020). Its kind names the step that made it: `approval` (a draft an approval step left waiting) or `escalation` (a message an escalate step handed over).
+One action waiting for a person's decision, shown on their Reviews page, which points at the waiting item in its app, or holds it when the app can't (ADR-0020). Its kind names what it waits on: `approval` (a draft an approval step left waiting), `escalation` (a message an escalate step handed over) or `held_send` (a held send).
 _Avoid_: Approval for the review itself (it's the step, and the kind of review that step makes), task (a Google Tasks item), notification
+
+**Held send**:
+A custom write's request, which Mycel holds, encrypted with the org's key, until a person approves or declines its review, or for 30 days, when it expires (ADR-0020). Approving sends it once, with any edits to its editable text; if its app never confirms the send, the review ends unconfirmed and it is never sent again.
+_Avoid_: Queued message, outbox, staged send
 
 **Shared review**:
 A review from an org connection's run, seen by everyone who can see its workflow through its tags and by every admin. The first to act on it wins.
@@ -179,15 +187,19 @@ Giving one review to a colleague, who then sees it and acts on it from the revie
 _Avoid_: Delegation (that's connection access, ADR-0016), forwarding (that's sending the email on), reassign
 
 **Custom action**:
-An action one company's builder chat described as a single call to an app, usable only by that company, with its risk set by a fixed rule.
+An action one org's builder chat described as a single call to an app, usable only in that org, with its risk set by a fixed rule.
 _Avoid_: Builder-made action, integration, tool
+
+**Action set**:
+Every action one org's workflows may use: the catalog actions, then that org's custom actions. Where a catalog action and a custom action share a name, the catalog action is the one used.
+_Avoid_: Toolset, action registry
 
 **Capability request**:
 Code the builder chat drafts when a custom action can't do the job, sent to our team to review into the catalog.
 _Avoid_: Feature request
 
 **Builder chat**:
-The admin-only agent that turns descriptions and suggestions into proposed spec changes.
+The admin-only agent that turns descriptions and suggestions into proposed spec changes. It reads only company-wide memory, since its conversations are shared among admins.
 _Avoid_: Copilot, assistant
 
 **Builder conversation**:
@@ -205,7 +217,7 @@ The org's prepaid balance, drawn down by every model call, discovery job, and ev
 _Avoid_: Tokens, usage, points
 
 **Budget**:
-An admin-set monthly credit cap on a single workflow.
+An admin-set monthly credit cap on a single workflow, or on what memory spends learning.
 _Avoid_: Limit, quota
 
 ### Memory
@@ -214,8 +226,46 @@ _Avoid_: Limit, quota
 A short statement about an object that a source states or a person told Mycel, linked to the sources it came from.
 _Avoid_: Memory (for a single item), note, insight, inference
 
+**Source record**:
+Mycel's record of one item memory learned from, such as an email or a version of a Drive doc, as one connection holds it, with the item's access list and a pointer to re-fetch it, never its content.
+_Avoid_: Document, source (the app), evidence
+
+**Item key**:
+What every copy of one item shares, such as an email's Message-ID or a Drive file's ID, so copies in several mailboxes or Drives are known to be the same item.
+
+**Object key**:
+An exact identifier of an object, such as a person's email address or a company's domain, unique in an org; objects with the same key are one object.
+
+**Match candidate**:
+An object that may be the same as one an item mentions, found by a similar name or facts that mean nearly the same; a model must confirm it before the two become one object.
+_Avoid_: Duplicate, alias
+
+**History** (of a fact):
+The older facts a newer one replaced (superseded): same object, same kind of fact (predicate), kept with when they stopped being true and what replaced them. Each reader's current fact is the newest one they can see.
+_Avoid_: Archive, old facts
+
 **Exclusion**:
 A Gmail label, Drive folder or similar that an admin keeps out of memory for the whole company.
 
+**Company-wide list**:
+A group address, such as all@, that an admin marked company-wide, so what memory learns from email sent to it is visible to everyone in the org.
+_Avoid_: Public list, shared list
+
+**Injection screen**:
+The check that content fetched from a company's apps doesn't try to give a model instructions, made before any model reads it; an item it flags is skipped.
+_Avoid_: Guardrail, filter, firewall
+
 **Do-not-learn list**:
-The addresses of people an admin asked Mycel to forget, which memory never learns about again.
+The addresses of people an admin asked Mycel to forget. Memory never learns from their mail or about anyone with their address again, but mail that names them without their address can still teach it about them.
+
+**Retention window**:
+How long memory keeps what it learned from an email or doc after it was sent or saved: 24 months, or less if an admin shortens it. Past it, the item and every fact only it supported are deleted.
+_Avoid_: TTL, expiry
+
+**Access log**:
+The record of every read of memory: who or what read it (a person, the builder chat, a workflow run, our staff), when, and which objects and facts, never what they say. Admins see their company's; members see the reads of facts from their own sources.
+_Avoid_: Audit trail, history
+
+**Staff consent**:
+An admin's permission for one person at Mycel to read the company's memory for one case, for a few days, in that admin's view. Our staff can't read memory without one.
+_Avoid_: Access grant, support access

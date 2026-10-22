@@ -13,6 +13,7 @@ import {
   listConnections,
   listConnectionsForJobs,
   proxyGet,
+  proxyGetText,
   proxyPost,
   recordIngestState,
   startConnect,
@@ -95,6 +96,26 @@ describe("getConnection", () => {
     await expect(getConnection(orgA.admin.ctx, members)).rejects.toThrow(ForbiddenError);
     await expect(getConnection(orgA.member.ctx, orgs)).rejects.toThrow(ForbiddenError);
     expect(await getConnection(orgA.admin.ctx, orgs)).toMatchObject({ kind: "org" });
+  });
+});
+
+describe("proxyGetText", () => {
+  it("reads an answer that is text, such as a Doc's export, null for a file it doesn't have", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const { connectionId: nangoId } = await connectGmail(orgA.member.ctx, orgA.member.email);
+    const id = await ownConnectionId(orgA.member.ctx);
+    const doc = fakeNango.drive(nangoId).add({
+      name: "Plan",
+      mimeType: "application/vnd.google-apps.document",
+      at: new Date(),
+      text: "Ship the plan by Friday.",
+    });
+    const exported = (fileId: string) => `/drive/v3/files/${fileId}/export?mimeType=text%2Fplain`;
+
+    expect(await proxyGetText(orgA.member.ctx, id, exported(doc.id))).toBe(
+      "Ship the plan by Friday.",
+    );
+    expect(await proxyGetText(orgA.member.ctx, id, exported("nope"))).toBeNull();
   });
 });
 

@@ -118,4 +118,24 @@ export const isolationCases = defineIsolationCases(server, {
     expect(found.map((event) => event.connectionId)).toEqual([own.id]);
     expect(await snapshot()).toEqual(before);
   },
+
+  countStoredItems: async (orgs) => {
+    await seedOrgB(orgs);
+
+    expect(await server.countStoredItems(orgs.orgB.admin.ctx)).toBe(2);
+    for (const ctx of [orgs.orgA.admin.ctx, systemCtx(orgs.orgA.id)]) {
+      expect(await server.countStoredItems(ctx)).toBe(0);
+    }
+  },
+
+  listStoredItems: async (orgs) => {
+    await seedOrgB(orgs);
+
+    expect((await server.listStoredItems(orgs.orgB.admin.ctx, { limit: 10 })).items).toHaveLength(
+      2,
+    );
+    for (const ctx of [orgs.orgA.admin.ctx, systemCtx(orgs.orgA.id)]) {
+      expect(await server.listStoredItems(ctx, { limit: 10 })).toEqual({ items: [], next: null });
+    }
+  },
 });

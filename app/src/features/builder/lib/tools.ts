@@ -1,20 +1,34 @@
 // The agent's tools. Each runs with the admin's ctx, so the agent reaches only what the admin
-// could (spec #43, story 39), and says what the conversation keeps of its result: the whole
-// result by default, or less (`read_examples` keeps only source refs, invariant 8). A new tool
+// could (spec #43, story 39), and `search_memory` less: company-wide memory only (ADR-0023). Each
+// says what the conversation keeps of its result: the whole result by default, or less
+// (`read_examples` keeps only source refs, invariant 8, and `search_memory` only the IDs of what
+// it found). A new tool
 // is one more entry in `builderTools`; the turn loop doesn't change.
 import { tool, type Tool } from "ai";
 import { z } from "zod";
 import { getWorkflow } from "@/features/workflows/server";
 import type { Ctx } from "@/lib/ctx";
+import type { CustomActionRecord } from "@/features/custom-actions/types";
+import { lookUpAppApiTool } from "./api-lookup-tool";
+import { fileCapabilityRequestTool } from "./capability-request-tool";
+import { describeCustomActionTool } from "./custom-action-tool";
 import { proposeSpec } from "./proposals";
 import { readExamples } from "./read-examples";
+import { searchMemoryTool } from "./search-memory";
 
 /** What a tool knows about the turn calling it, and the state the turn's tools keep. */
 export type TurnInfo = {
   conversationId: string;
   workflowId: string | null;
+  /** The admin's message that started the turn. */
+  message: string;
   /** The `propose_spec` calls in this turn that failed validation so far. */
   failedProposals: number;
+  /**
+   * The custom actions `describe_custom_action` checked in this turn, which its proposals may
+   * use and carry, to be stored only when one is accepted (ADR-0018).
+   */
+  customActions: CustomActionRecord[];
 };
 
 export type ToolDefinition<I, O> = {
@@ -78,7 +92,11 @@ const proposeSpecTool = builderTool({
 
 /** Every tool the agent may call, by the name the model calls it. */
 export const builderTools: Record<string, BuilderTool> = {
+  describe_custom_action: builderTool(describeCustomActionTool),
+  file_capability_request: builderTool(fileCapabilityRequestTool),
   get_workflow: getWorkflowTool,
+  look_up_app_api: builderTool(lookUpAppApiTool),
   propose_spec: proposeSpecTool,
   read_examples: builderTool(readExamples),
+  search_memory: builderTool(searchMemoryTool),
 };

@@ -7,7 +7,12 @@ import { NotFoundError } from "@/lib/errors";
 import { fakeNango } from "@/testing/fake-nango";
 import * as server from "../server";
 import type { ConnectionsListing } from "../types";
-import { connectGmail, connectOrgInbox } from "@/testing/connect-helpers";
+import {
+  connectApp,
+  connectGmail,
+  connectGoogle,
+  connectOrgInbox,
+} from "@/testing/connect-helpers";
 
 // Org B's member connects their Gmail and org B's admin a shared inbox, so every case can
 // check org B is left as it was. Org B's admin sees all of it.
@@ -177,6 +182,21 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await server.listConnections(orgs.orgB.admin.ctx)).toEqual(before);
   },
 
+  proxyGetText: async (orgs) => {
+    const { before, memberBefore } = await seedOrgBConnection(orgs);
+
+    for (const id of orgBIds(before, memberBefore)) {
+      await expect(
+        server.proxyGetText(
+          orgs.orgA.admin.ctx,
+          id,
+          "/drive/v3/files/f-1/export?mimeType=text%2Fplain",
+        ),
+      ).rejects.toThrow(NotFoundError);
+    }
+    expect(await server.listConnections(orgs.orgB.admin.ctx)).toEqual(before);
+  },
+
   proxyPost: async (orgs) => {
     const { before, memberBefore } = await seedOrgBConnection(orgs);
     const label = z.object({ id: z.string() });
@@ -202,6 +222,18 @@ export const isolationCases = defineIsolationCases(server, {
     for (const id of orgBIds(before, memberBefore)) {
       await expect(
         server.proxyPut(orgs.orgA.admin.ctx, id, "/gmail/v1/users/me/drafts/r-1", {}, draft),
+      ).rejects.toThrow(NotFoundError);
+    }
+    expect(await server.listConnections(orgs.orgB.admin.ctx)).toEqual(before);
+  },
+
+  proxyPatch: async (orgs) => {
+    const { before, memberBefore } = await seedOrgBConnection(orgs);
+    const message = z.object({ id: z.string() });
+
+    for (const id of orgBIds(before, memberBefore)) {
+      await expect(
+        server.proxyPatch(orgs.orgA.admin.ctx, id, "/gmail/v1/users/me/drafts/r-1", {}, message),
       ).rejects.toThrow(NotFoundError);
     }
     expect(await server.listConnections(orgs.orgB.admin.ctx)).toEqual(before);
@@ -245,6 +277,21 @@ export const isolationCases = defineIsolationCases(server, {
 
     expect(await server.listConnections(orgs.orgB.admin.ctx)).toEqual(before);
     expect(await server.listConnections(orgs.orgB.member.ctx)).toEqual(memberBefore);
+  },
+
+  connectionToApp: async (orgs) => {
+    const { memberBefore } = await seedOrgBConnection(orgs);
+    const [theirs] = memberBefore.connections.map((connection) => connection.id);
+    await connectApp(orgs.orgB.member.ctx, "microsoft", orgs.orgB.member.email);
+    const ours = await connectGoogle(orgs.orgA.member.ctx, orgs.orgA.member.email);
+    const system = systemCtx(orgs.orgA.id);
+
+    // Org B's run connection is not found; org A's own finds no Microsoft 365 of org B's.
+    await expect(server.connectionToApp(system, theirs, "microsoft")).rejects.toThrow(
+      NotFoundError,
+    );
+    expect(await server.connectionToApp(system, ours.id, "microsoft")).toBeUndefined();
+    expect(await server.connectionToApp(system, ours.id, "google")).toBe(ours.id);
   },
 
   // The webhook carries no ctx: it acts as the user its tags name, inside that user's own org.

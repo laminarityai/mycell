@@ -10,18 +10,27 @@ import type { Ctx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import type { ConnectionDetails, IngestedApp, IngestStateUpdate } from "../types";
 import { isDelegated } from "./delegation";
-import { grantedApps, INTEGRATIONS, proxyTarget } from "./google";
+import { grantedApps, integrationOf, proxyTargetFor } from "./apps";
 import { ingestByApp, ingestStatesOf } from "./ingest-states";
 import {
   NangoConnectionGoneError,
   nangoProxyDelete,
   nangoProxyGet,
+  nangoProxyGetText,
+  nangoProxyPatch,
   nangoProxyPost,
   nangoProxyPut,
+  type ProxyTarget,
 } from "./nango";
 import { connections, ingestStates } from "./schema";
 
 type Connection = typeof connections.$inferSelect;
+
+/**
+ * What a proxied call says about itself: a custom call's path `template`, which its errors name
+ * it by, since the rendered path and query hold input values (content, an address, a search).
+ */
+export type ProxyCall = { template?: string };
 
 /**
  * Whether the caller may read what a connection reaches: a member connection is its owner's
@@ -92,24 +101,47 @@ function details(
 }
 
 /**
- * A GET to a Google API through the Nango proxy (never Nango syncs), parsed with `schema`. The
- * path is the API's own (`/gmail/v1/users/me/...`, `/drive/v3/...`, `/v4/spreadsheets/...`)
- * and decides which API host the call reaches. Nango retries the source's 429s and 5xx. Null
- * means the source has no such item; a connection gone here or at Nango is NotFoundError.
+ * A GET to the connection's app through the Nango proxy (never Nango syncs), parsed with
+ * `schema`. A Google path is the API's own (`/gmail/v1/users/me/...`, `/drive/v3/...`,
+ * `/v4/spreadsheets/...`) and decides which API host the call reaches; any other app's goes to
+ * the host Nango keeps for the connection (Microsoft Graph's `/v1.0/...`, say). Nango retries the
+ * source's 429s and 5xx. Null means the source has no such item; a connection gone here or at
+ * Nango is NotFoundError. A custom call passes its path template in `call`, for its errors to
+ * name it by.
  */
 export async function proxyGet<T>(
   ctx: Ctx,
   connectionId: string,
   path: string,
   schema: z.ZodType<T>,
+  call: ProxyCall = {},
 ): Promise<T | null> {
-  return proxied(ctx, connectionId, (connection) =>
-    nangoProxyGet(connection, proxyTarget(path), schema),
+  return proxied(
+    ctx,
+    connectionId,
+    path,
+    (connection, target) => nangoProxyGet(connection, target, schema),
+    call,
   );
 }
 
 /**
- * A POST with a JSON body to a Google API through the Nango proxy, checked and answered like
+ * A GET whose answer is text rather than JSON (Drive's files.export as text/plain), checked and
+ * answered like proxyGet. The text is the source's content: callers hold it in memory only
+ * (invariant 8).
+ */
+export async function proxyGetText(
+  ctx: Ctx,
+  connectionId: string,
+  path: string,
+): Promise<string | null> {
+  return proxied(ctx, connectionId, path, (connection, target) =>
+    nangoProxyGetText(connection, target),
+  );
+}
+
+/**
+ * A POST with a JSON body to the connection's app through the Nango proxy, checked and answered like
  * proxyGet. Nango doesn't retry it, since a write whose answer was lost may still have happened:
  * a caller that tries again checks first for what its earlier try did. A connection not granted
  * the scope the write needs gets the source's 403 as SourceRequestError.
@@ -120,9 +152,14 @@ export async function proxyPost<T>(
   path: string,
   body: unknown,
   schema: z.ZodType<T>,
+  call: ProxyCall = {},
 ): Promise<T | null> {
-  return proxied(ctx, connectionId, (connection) =>
-    nangoProxyPost(connection, proxyTarget(path), body, schema),
+  return proxied(
+    ctx,
+    connectionId,
+    path,
+    (connection, target) => nangoProxyPost(connection, target, body, schema),
+    call,
   );
 }
 
@@ -133,9 +170,32 @@ export async function proxyPut<T>(
   path: string,
   body: unknown,
   schema: z.ZodType<T>,
+  call: ProxyCall = {},
 ): Promise<T | null> {
-  return proxied(ctx, connectionId, (connection) =>
-    nangoProxyPut(connection, proxyTarget(path), body, schema),
+  return proxied(
+    ctx,
+    connectionId,
+    path,
+    (connection, target) => nangoProxyPut(connection, target, body, schema),
+    call,
+  );
+}
+
+/** A PATCH with a JSON body (a custom write's), checked and answered like proxyPost. */
+export async function proxyPatch<T>(
+  ctx: Ctx,
+  connectionId: string,
+  path: string,
+  body: unknown,
+  schema: z.ZodType<T>,
+  call: ProxyCall = {},
+): Promise<T | null> {
+  return proxied(
+    ctx,
+    connectionId,
+    path,
+    (connection, target) => nangoProxyPatch(connection, target, body, schema),
+    call,
   );
 }
 
@@ -144,22 +204,30 @@ export async function proxyPut<T>(
  * source had no such item.
  */
 export async function proxyDelete(ctx: Ctx, connectionId: string, path: string): Promise<boolean> {
-  return proxied(ctx, connectionId, (connection) =>
-    nangoProxyDelete(connection, proxyTarget(path)),
+  return proxied(ctx, connectionId, path, (connection, target) =>
+    nangoProxyDelete(connection, target),
   );
 }
 
 async function proxied<T>(
   ctx: Ctx,
   connectionId: string,
-  call: (connection: { connectionId: string; integration: string }) => Promise<T>,
+  path: string,
+  send: (
+    connection: { connectionId: string; integration: string },
+    target: ProxyTarget,
+  ) => Promise<T>,
+  { template }: ProxyCall = {},
 ): Promise<T> {
   const connection = await readable(ctx, connectionId, { delegated: true });
   try {
-    return await call({
-      connectionId: connection.nangoConnectionId,
-      integration: INTEGRATIONS[connection.source],
-    });
+    return await send(
+      { connectionId: connection.nangoConnectionId, integration: integrationOf(connection.source) },
+      {
+        ...proxyTargetFor(connection.source, path),
+        ...(template === undefined ? {} : { template }),
+      },
+    );
   } catch (error) {
     if (error instanceof NangoConnectionGoneError) throw new NotFoundError("connection");
     throw error;

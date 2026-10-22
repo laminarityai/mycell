@@ -34,7 +34,10 @@ const loaded = new Map<RegisteredAppId, Promise<SearchableIndex>>();
 function indexOf(app: RegisteredAppId): Promise<SearchableIndex> {
   let index = loaded.get(app);
   if (index === undefined) {
-    index = readFile(join(process.cwd(), apiIndexPath(app))).then((bytes) =>
+    // Not traced from here, which would take in the whole project: `next.config.ts` traces the
+    // index files themselves into the route that runs the builder chat.
+    const path = join(/*turbopackIgnore: true*/ process.cwd(), apiIndexPath(app));
+    index = readFile(/*turbopackIgnore: true*/ path).then((bytes) =>
       searchable(apiIndexSchema.parse(JSON.parse(gunzipSync(bytes).toString("utf8")))),
     );
     // A failed read is tried again next time rather than kept.

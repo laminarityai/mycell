@@ -53,12 +53,15 @@ export function connectionsApiHandlers(
         return HttpResponse.json({ error }, { status: 404 });
       }
       // The full connection, which names its times as created_at and updated_at (the listing
-      // says `created`). `raw` is Google's whole token response, whose `scope` lists what was
-      // granted.
+      // says `created`). `raw` is the app's whole token response, whose `scope` lists what was
+      // granted: space-separated for Google, comma-separated for Pipedrive (unverified), whose
+      // response also names the company's `api_domain`, which Nango keeps as connection config.
       const { created, ...rest } = listed(connection);
+      const pipedrive = connection.integration === "pipedrive";
+      const apiDomain = pipedrive ? { api_domain: connection.pipedrive.apiDomain } : {};
       return HttpResponse.json({
         ...rest,
-        connection_config: {},
+        connection_config: apiDomain,
         created_at: created,
         updated_at: created,
         last_fetched_at: null,
@@ -69,8 +72,9 @@ export function connectionsApiHandlers(
           raw: {
             access_token: "fake-access-token",
             expires_in: 3599,
-            scope: connection.scopes.join(" "),
+            scope: connection.scopes.join(pipedrive ? "," : " "),
             token_type: "Bearer",
+            ...apiDomain,
           },
         },
       });

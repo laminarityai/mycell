@@ -14,7 +14,7 @@ import {
   nangoConnectionExists,
 } from "./nango";
 import { connectAttempts, connections } from "./schema";
-import { INTEGRATIONS } from "./google";
+import { integrationOf } from "./apps";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -96,7 +96,7 @@ async function readOurs(since: Date) {
       ours.push({
         orgId,
         connectionId: row.id,
-        nango: { nangoConnectionId: row.nangoConnectionId, integration: INTEGRATIONS[row.source] },
+        nango: { nangoConnectionId: row.nangoConnectionId, integration: integrationOf(row.source) },
       });
     }
   }

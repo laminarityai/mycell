@@ -6,7 +6,7 @@ import { ForbiddenError } from "@/lib/errors";
 import type { ConnectionKind, Source } from "../types";
 import { createConnectSession } from "./nango";
 import { connectAttempts } from "./schema";
-import { INTEGRATIONS } from "./google";
+import { integrationOf } from "./apps";
 
 /**
  * Tags Mycel puts on a connect session; Nango copies them onto the connection's webhooks. The
@@ -44,7 +44,7 @@ export async function startConnect(
     status: "pending",
   });
   const token = await createConnectSession({
-    integration: INTEGRATIONS[source],
+    integration: integrationOf(source),
     tags: {
       [ATTEMPT_TAGS.attempt]: attemptId,
       [ATTEMPT_TAGS.org]: ctx.orgId,

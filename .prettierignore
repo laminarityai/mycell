@@ -9,3 +9,5 @@ skills-lock.json
 # Playwright output.
 **/test-results/
 **/playwright-report/
+# Vendors' published API descriptions, copied as published (connections/registered-apps.ts).
+**/api-descriptions/

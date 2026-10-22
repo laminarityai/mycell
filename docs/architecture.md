@@ -41,7 +41,7 @@ app/                         The one Next.js app (deploys to Vercel)
     policy/                  Action risk catalog + policy engine (deterministic)
     runtime/                 Spec interpreter (steps as Inngest steps); model-role routing; Nango tool adapters; pending-form adapters
     reviews/                 Reviews of what runs left waiting in pending forms; the Reviews page; the waiting count and the daily check
-    connections/             Connections, the Nango client and proxy, Nango's webhook, disconnecting
+    connections/             Registered apps, connections to them, the Nango client and proxy, Nango's webhook, disconnecting
     discovery/               Ingest (connectors, backfill, polling), events, object refs, mining, ranking, shadow eval
     credits/                 Credit ledger, estimates, budget enforcement
     key-store/               A key per company in AWS KMS: encrypt, decrypt, destroy
@@ -217,6 +217,15 @@ Every app plugs in through the same four parts, so a new app is mostly catalog w
 | Tasks    | None needed: tasks on the person's own list are reversible                    |                                           |
 
 A review ends as approved, edited and approved, declined (which deletes the waiting item, where the app allows), done in the app, or gone. Where an app has no pending form (Slack, Teams, Chat, comments), Mycel holds the waiting send itself, encrypted, and deletes it when the review ends; a held send's review ends as expired after 30 days (ADR-0020).
+
+### Registered apps (`features/connections`, ADR-0018)
+
+- **A registered app** is configuration our team writes once we've registered Mycel with the app's vendor and added its Nango integration: `connections/registered-apps.ts` (`REGISTERED_APPS`, pure, so anyone may import it, client code included). Each gives its name, Nango integration, allowed API hosts (an origin, or `https://*.<domain>` for an app that serves each company on its own subdomain; `isAppHost` checks a URL against them), the permissions (OAuth scopes) its connections ask for, whether it's an accounting or payments app, whether its terms ban stored indexes (ADR-0025), and its published API description, copied into `app/api-descriptions/` with where it came from. The registry lives in `connections`, not `custom-actions`, because `connections` connects and proxies the apps and `custom-actions` imports `connections`.
+- **Registered so far:** Google (Discovery documents for Gmail, Drive, Sheets, Calendar, Docs and Tasks) and **Pipedrive** (its v1 and v2 OpenAPI documents), chosen from `docs/research/integrations/ranking.md` because its API and OAuth come on every plan, Nango has a provider for it, it authorizes each user rather than the whole company (which maps onto member and org connections), and a private app needs no vendor review. HubSpot ranked higher, but its member connections need a separate user-level app, and its Marketplace rules single out apps where an AI decides which CRM actions to take.
+- **Connecting** one follows ADR-0014's pattern: `startConnect(ctx, app, kind)` opens a session on the app's integration; the creation webhook records what the app granted (`credentials.raw.scope`, space- or comma-separated) and the account, read through the proxy (Pipedrive's `GET /v1/users/me`), under the same account check as Google (a member's own sign-in address, or an org address in the Workspace domain for an admin's org connection). There's one connection per account and app (`connections_org_id_source_account_unique`). Reconnecting, Nango's refresh and deletion webhooks, reconciliation and disconnecting work as for Google, and disconnecting cascades (invariant 3).
+- **Not a discovery source:** a connection to an app other than Google records no ingest states and sends no `connections/connection.recorded`, so nothing backfills or polls it.
+- **The proxy** (`proxyGet`, `proxyPost`, …) reaches any connection's app: a Google path names its API's host with `Base-Url-Override`; any other app's path goes to the host Nango keeps for the integration (Pipedrive's `<api_domain>/api`, so paths start `/v1/` or `/v2/`).
+- **Adding one:** its ID in `registeredAppIdSchema` (`connections/types.ts`), its entry in `REGISTERED_APPS`, its API description, how to read which account it reached (`connections/lib/apps.ts`), its integration in `pnpm nango:preflight`, and a fake of its API in the fake Nango (`src/testing/fake-pipedrive.ts` is Pipedrive's, recording every request it receives).
 
 ### Pending-form adapters and reviews (`features/runtime`, `features/reviews`)
 

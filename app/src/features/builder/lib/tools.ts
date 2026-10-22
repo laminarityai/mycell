@@ -1,6 +1,7 @@
 // The agent's tools. Each runs with the admin's ctx, so the agent reaches only what the admin
 // could (spec #43, story 39), and says what the conversation keeps of its result: the whole
-// result by default, or less (`read_examples` keeps only source refs, invariant 8). A new tool
+// result by default, or less (`read_examples` keeps only source refs, invariant 8, and
+// `search_memory` only the IDs of what it found, ADR-0023). A new tool
 // is one more entry in `builderTools`; the turn loop doesn't change.
 import { tool, type Tool } from "ai";
 import { z } from "zod";
@@ -8,11 +9,14 @@ import { getWorkflow } from "@/features/workflows/server";
 import type { Ctx } from "@/lib/ctx";
 import { proposeSpec } from "./proposals";
 import { readExamples } from "./read-examples";
+import { searchMemoryTool } from "./search-memory";
 
 /** What a tool knows about the turn calling it, and the state the turn's tools keep. */
 export type TurnInfo = {
   conversationId: string;
   workflowId: string | null;
+  /** The admin's message that started the turn. */
+  message: string;
   /** The `propose_spec` calls in this turn that failed validation so far. */
   failedProposals: number;
 };
@@ -81,4 +85,5 @@ export const builderTools: Record<string, BuilderTool> = {
   get_workflow: getWorkflowTool,
   propose_spec: proposeSpecTool,
   read_examples: builderTool(readExamples),
+  search_memory: builderTool(searchMemoryTool),
 };

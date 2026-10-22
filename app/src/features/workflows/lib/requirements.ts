@@ -2,16 +2,16 @@
 // (ADR-0014) and the scope of each catalog action it calls. Both come from the catalog, never
 // from a model.
 import { GOOGLE_APP_SCOPES, type GoogleApp } from "@/features/connections/types";
-import { appsUsed, findAction } from "@/features/policy/catalog";
-import type { CatalogAction } from "@/features/policy/types";
+import { appsUsed, findAction, scopesOf } from "@/features/policy/catalog";
+import type { ConnectionApp } from "@/features/policy/types";
 import type { WorkflowVersion } from "../types";
 import { scopeName } from "./scope-check";
 
 /** Each catalog app as connections name it. */
-const GOOGLE_APPS: Record<CatalogAction["app"], GoogleApp> = { Gmail: "gmail", Sheets: "sheets" };
+const GOOGLE_APPS: Record<ConnectionApp, GoogleApp> = { Gmail: "gmail", Sheets: "sheets" };
 
 /** What a connection is short of: apps as the catalog names them, scopes by short name. */
-export type MissingAccess = { apps: CatalogAction["app"][]; scopes: string[] };
+export type MissingAccess = { apps: ConnectionApp[]; scopes: string[] };
 
 /**
  * The apps the version uses, as the catalog names them: Gmail for the trigger, then each app a
@@ -35,8 +35,10 @@ export function missingAccess(
   const missingApps = requiredApps(version).filter((app) => !apps.includes(GOOGLE_APPS[app]));
   const actionScopes = version.requiredActions.flatMap((name) => {
     const action = findAction(name);
-    if (action === undefined || action.scopes.some((scope) => scopes.includes(scope))) return [];
-    return action.scopes.slice(0, 1);
+    if (action === undefined) return [];
+    return scopesOf(action).flatMap((anyOf) =>
+      anyOf.some((scope) => scopes.includes(scope)) ? [] : anyOf.slice(0, 1),
+    );
   });
   const missingScopes = [
     ...missingApps.map((app) => GOOGLE_APP_SCOPES[GOOGLE_APPS[app]]),

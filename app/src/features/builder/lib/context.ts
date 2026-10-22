@@ -1,7 +1,7 @@
 // Context providers: what the agent knows about the org when a turn starts. Each is a function
 // of the admin's ctx (and the turn) returning one titled section of the agent's instructions,
-// so a new source of context (discovery's suggestions in M2, org memory in M9) is one more
-// entry in `contextProviders`, and the turn loop doesn't change. Each reads through another
+// so a new source of context (company memory; discovery's suggestions in M2) is one more entry
+// in `contextProviders`, and the turn loop doesn't change. Each reads through another
 // feature's entry functions with the admin's ctx, so it sees only what the admin may.
 import { z } from "zod";
 import { gmailConnections, listConnections } from "@/features/connections/server";
@@ -17,6 +17,7 @@ import type { Ctx } from "@/lib/ctx";
 import type { ProposalStatus } from "../types";
 import { declaredFieldLines } from "./condition-fields-context";
 import { listProposals } from "./proposals";
+import { memorySection } from "./search-memory";
 import type { TurnInfo } from "./tools";
 
 export type ContextSection = { title: string; content: string };
@@ -186,6 +187,7 @@ export const contextProviders: ContextProvider[] = [
   connections,
   tags,
   proposals,
+  memorySection,
 ];
 
 /** Every provider's section, in order. */

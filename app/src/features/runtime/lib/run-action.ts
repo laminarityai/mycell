@@ -34,7 +34,9 @@ export async function runAction(
   const marker = `${context.run.id}/${stepId}`;
   // The input passed the action's own schema, which its executor's input type matches.
   const valid = parsed.data as never;
-  const result = await executor.run(context.ctx, context.run.connectionId, valid, marker, compose);
+  const { id, connectionId, sourceRef } = context.run;
+  const run = { id, sourceRef, workflowId: context.attribution.workflowId };
+  const result = await executor.run(context.ctx, connectionId, valid, marker, compose, run);
   const output = action.output.safeParse(result);
   if (!output.success) {
     throw new RunStepError("invalid_output", `${name} returned an unexpected result.`);

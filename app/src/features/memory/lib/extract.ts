@@ -214,9 +214,13 @@ function keysOf(
   return keys;
 }
 
-// Every run of MAX_COPIED_WORDS words in a row in the text, lowercased, letters and digits only.
+// Every run of MAX_COPIED_WORDS words in a row in the text: words as spaces separate them,
+// lowercased, without the punctuation around them.
 function wordRuns(text: string): Set<string> {
-  const words = text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+  const words = normalized(text)
+    .split(" ")
+    .map((word) => word.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ""))
+    .filter((word) => word !== "");
   const runs = new Set<string>();
   for (let i = 0; i + MAX_COPIED_WORDS <= words.length; i += 1) {
     runs.add(words.slice(i, i + MAX_COPIED_WORDS).join(" "));

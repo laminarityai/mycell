@@ -208,10 +208,12 @@ describe("learning from a Gmail message", () => {
     await learnStoredItems(orgA.id);
 
     const usage = (await listLedger(systemCtx(orgA.id))).filter((e) => e.kind === "usage");
-    expect(usage.map((entry) => [entry.role, entry.outcome]).sort()).toEqual([
+    expect(usage.map((entry) => [entry.role ?? entry.modelId, entry.outcome]).sort()).toEqual([
       ["classify", "succeeded"],
       ["embed", "succeeded"],
       ["fast", "succeeded"],
+      // The injection screen, which names no role.
+      ["google/model-armor", "succeeded"],
     ]);
   });
 

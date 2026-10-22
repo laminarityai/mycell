@@ -1,14 +1,16 @@
-// The policy engine (invariant 4): a spec's risk comes only from the catalog's fixed levels.
+// The policy engine (invariant 4): a spec's risk comes only from the fixed levels of the actions
+// in the company's action set, which the caller resolves and hands in (ADR-0018).
 // Pure: no IO, no ctx.
 import { z } from "zod";
 import { eachStep, mapStepLists, type PlacedStep } from "@/features/spec/tree";
 import type { Spec, SpecIssue, Step } from "@/features/spec/types";
 import { SpecInvalidError } from "@/lib/errors";
 import { GOOGLE_SCOPE_PREFIX } from "@/lib/google";
-import { appsUsed, findAction } from "./catalog";
+import { appsUsed } from "./action-set";
 import { conditionIssues } from "./condition-fields";
 import {
   riskLevelSchema,
+  type ActionSet,
   type CatalogAction,
   type InsertedApproval,
   type PolicyResult,
@@ -22,14 +24,14 @@ const ORDER = riskLevelSchema.options;
 /**
  * The highest risk level among the spec's `tool` actions and `draft` outputs. Model steps
  * count as `read`. Any `risk` field in the spec is ignored. Throws SpecInvalidError on actions
- * the catalog doesn't have; `applyPolicy` reports those as issues instead.
+ * `actions` doesn't have; `applyPolicy` reports those as issues instead.
  */
-export function maxRisk(spec: Spec): RiskLevel {
+export function maxRisk(spec: Spec, actions: ActionSet): RiskLevel {
   let highest: RiskLevel = "read";
   for (const { step, location } of eachStep(spec)) {
     const used = actionOf(step);
     if (used === undefined) continue;
-    const action = findAction(used.name);
+    const action = actions.find(used.name);
     if (action === undefined) {
       const path = [...location, used.field];
       throw new SpecInvalidError([{ path, message: `"${used.name}" isn't a catalog action.` }]);
@@ -40,13 +42,13 @@ export function maxRisk(spec: Spec): RiskLevel {
 }
 
 /**
- * Checks the spec's actions against the catalog and makes sure every `external_send` action
+ * Checks the spec's actions against `actions` and makes sure every `external_send` action
  * waits for a person: a `draft` output needs an `approval` step on its own path, and one is
  * inserted directly after the draft when there's none. Returns the spec with what it
  * inserted, or every issue at once.
  */
-export function applyPolicy(spec: Spec): PolicyResult {
-  const issues = [...actionIssues(spec), ...conditionIssues(spec)];
+export function applyPolicy(spec: Spec, actions: ActionSet): PolicyResult {
+  const issues = [...actionIssues(spec, actions), ...conditionIssues(spec, actions)];
   if (issues.length > 0) return { ok: false, issues };
 
   const inserted: InsertedApproval[] = [];
@@ -64,28 +66,29 @@ export function applyPolicy(spec: Spec): PolicyResult {
   );
 
   const result = inserted.length === 0 ? spec : withApprovals;
-  return { ok: true, spec: result, maxRisk: maxRisk(result), inserted };
+  return { ok: true, spec: result, maxRisk: maxRisk(result, actions), inserted };
 }
 
 /**
  * What `after` needs that `before` didn't, or null when nothing: a higher max risk level, an app
  * `before` didn't use, or a scope no action of `before` was allowed by less. An action allowed
  * by any one of several scopes needs nothing new when an action of `before` was allowed only by
- * some of them; otherwise it's its first scope, by short name. Decided from the catalog alone.
+ * some of them; otherwise it's its first scope, by short name. Decided from `actions` alone.
  */
 export function requirementsGained(
   before: Requirements,
   after: Requirements,
+  actions: ActionSet,
 ): RequirementsGained | null {
   const gained: RequirementsGained = {};
   if (ORDER.indexOf(after.maxRisk) > ORDER.indexOf(before.maxRisk)) {
     gained.maxRiskRaised = { from: before.maxRisk, to: after.maxRisk };
   }
-  const apps = appsUsed(before.requiredActions);
-  const newApps = appsUsed(after.requiredActions).filter((app) => !apps.includes(app));
+  const apps = appsUsed(before.requiredActions, actions);
+  const newApps = appsUsed(after.requiredActions, actions).filter((app) => !apps.includes(app));
   if (newApps.length > 0) gained.newApps = newApps;
-  const needed = scopeSets(before.requiredActions);
-  const newScopes = scopeSets(after.requiredActions)
+  const needed = scopeSets(before.requiredActions, actions);
+  const newScopes = scopeSets(after.requiredActions, actions)
     .filter((anyOf) => !needed.some((old) => old.every((scope) => anyOf.includes(scope))))
     .flatMap((anyOf) => anyOf.slice(0, 1).map(shortScope));
   if (newScopes.length > 0) gained.newScopes = [...new Set(newScopes)];
@@ -93,9 +96,9 @@ export function requirementsGained(
 }
 
 // Each action's scopes, any one of which allows it.
-function scopeSets(actionNames: readonly string[]): (readonly string[])[] {
+function scopeSets(actionNames: readonly string[], actions: ActionSet): (readonly string[])[] {
   return actionNames.flatMap((name) => {
-    const action = findAction(name);
+    const action = actions.find(name);
     return action === undefined ? [] : [action.scopes];
   });
 }
@@ -130,13 +133,13 @@ function unreviewedDrafts(placed: PlacedStep[]): string[] {
  * Unknown actions, actions used where their risk level doesn't allow, and literal inputs the
  * action's input schema refuses.
  */
-function actionIssues(spec: Spec): SpecIssue[] {
+function actionIssues(spec: Spec, actions: ActionSet): SpecIssue[] {
   const issues: SpecIssue[] = [];
   for (const { step, location } of eachStep(spec)) {
     if (step.type !== "tool" && step.type !== "draft") continue;
     const [field, name] = step.type === "tool" ? ["action", step.action] : ["output", step.output];
     const path = [...location, field];
-    const action = findAction(name);
+    const action = actions.find(name);
     if (action === undefined) {
       issues.push({ path, message: `"${name}" isn't a catalog action.` });
     } else if (step.type === "tool" && action.risk === "external_send") {

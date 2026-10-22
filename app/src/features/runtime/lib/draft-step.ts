@@ -5,7 +5,7 @@
 // review of it, which the person approves, edits or declines on the Reviews page (or finishes in
 // Gmail), and the run goes on to its later steps.
 import { z } from "zod";
-import { findAction } from "@/features/policy/catalog";
+import { catalog } from "@/features/policy/catalog";
 import { findStep, stepsAbove } from "@/features/spec/tree";
 import type { Step } from "@/features/spec/types";
 import type { Json } from "../types";
@@ -70,7 +70,7 @@ async function contextText(step: StepOf<"draft">, context: StepContext): Promise
   return parts.join("\n\n");
 }
 
-const RANGE_READ = findAction("google-sheet.read-range");
+const RANGE_READ = catalog["google-sheet.read-range"];
 
 /**
  * The values an earlier read-range step read, re-read here: that step handed on only the
@@ -78,7 +78,7 @@ const RANGE_READ = findAction("google-sheet.read-range");
  */
 async function sheetText(name: string, context: StepContext): Promise<string | undefined> {
   const step = findStep(context.spec, name);
-  if (step?.type !== "tool" || RANGE_READ === undefined || step.action !== RANGE_READ.name) {
+  if (step?.type !== "tool" || step.action !== RANGE_READ.name) {
     return undefined;
   }
   const input = RANGE_READ.input.safeParse(await resolveInput(context, step.input));

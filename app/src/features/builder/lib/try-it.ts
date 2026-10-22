@@ -2,6 +2,7 @@
 // message, whose full result goes back to the admin's page, and whose content-free summary is
 // posted to the conversation as the admin's, so the agent can react to it on the next turn.
 import { randomUUID } from "node:crypto";
+import { getActionSet } from "@/features/custom-actions/server";
 import { dryRun } from "@/features/runtime/server";
 import type { DryRunResult } from "@/features/runtime/types";
 import { getWorkflow } from "@/features/workflows/server";
@@ -29,7 +30,7 @@ export async function tryInConversation(
   }
   const workflow = await getWorkflow(ctx, conversation.workflowId);
   const result = await dryRun(ctx, workflow.workingSpec, { ...input, workflowId: workflow.id });
-  const summary = summarizeTryIt(result, workflow.workingSpec);
+  const summary = summarizeTryIt(result, workflow.workingSpec, await getActionSet(ctx));
   const id = randomUUID();
   await appendMessage(ctx, conversation, {
     id,

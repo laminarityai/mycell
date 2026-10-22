@@ -7,6 +7,7 @@
 // check and are recorded, marked as a dry run's (invariant 7).
 import { randomUUID } from "node:crypto";
 import { requireBuildableConnection } from "@/features/connections/server";
+import { getActionSet } from "@/features/custom-actions/server";
 import { eachStep } from "@/features/spec/tree";
 import type { Spec } from "@/features/spec/types";
 import { checkWorkflowSpec } from "@/features/workflows/server";
@@ -48,6 +49,7 @@ export async function dryRun(ctx: Ctx, spec: unknown, options: DryRunOptions) {
   const steps: DryRunStep[] = [];
   // What the step running now read or would have written, as its stub reports it.
   const current: { effect: DryRunEffect | null } = { effect: null };
+  const actionSet = await getActionSet(ctx);
   const actions = dryRunActions((effect) => {
     current.effect = effect;
   });
@@ -59,6 +61,7 @@ export async function dryRun(ctx: Ctx, spec: unknown, options: DryRunOptions) {
       attribution: { workflowId: options.workflowId, dryRun: true },
       spec: validated.applied,
       outputs,
+      actionSet,
       actions,
       // Its approvals are reported as reviews it would wait for: nothing is recorded.
       awaitReview: () => Promise.resolve(),

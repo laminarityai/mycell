@@ -1,13 +1,13 @@
 // What a new version does to the enablements of the workflow it's published for (M5). They
 // follow it, unless it needs what the version before it didn't (the policy engine decides that
-// from the catalog): a higher max risk, a new app or a new scope. Then every one that's on
-// pauses until its member enables it again, so a member's mailbox never does something riskier,
-// or reads something new, without their say. An org switch always follows: the admin publishing
-// is the one who would switch it on again.
+// from the company's action set): a higher max risk, a new app or a new scope. Then every one
+// that's on pauses until its member enables it again, so a member's mailbox never does something
+// riskier, or reads something new, without their say. An org switch always follows: the admin
+// publishing is the one who would switch it on again.
 import { and, eq } from "drizzle-orm";
 import type { OrgScopedDb } from "@/db/for-org";
 import { requirementsGained } from "@/features/policy/engine";
-import type { Requirements, RequirementsGained } from "@/features/policy/types";
+import type { ActionSet, Requirements, RequirementsGained } from "@/features/policy/types";
 import type { Spec } from "@/features/spec/types";
 import type { PausedChange } from "../types";
 import { enablements } from "./schema";
@@ -20,9 +20,10 @@ import { enablements } from "./schema";
 export function gainedForEnablements(
   previous: Requirements | undefined,
   next: Requirements & { credentials: Spec["credentials"] },
+  actions: ActionSet,
 ): RequirementsGained | null {
   if (previous === undefined || next.credentials !== "member") return null;
-  return requirementsGained(previous, next);
+  return requirementsGained(previous, next, actions);
 }
 
 /** Each enablement of the workflow that's on: what a pause would pause. */

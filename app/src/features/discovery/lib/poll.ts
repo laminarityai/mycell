@@ -88,7 +88,7 @@ async function pollOnce(ctx: Ctx, connectionId: string, app: IngestedApp): Promi
     cursor: found.nextCursor,
     lastPolledAt: new Date(),
   });
-  const announced = app === "gmail" ? announcedOf(created) : NOTHING;
+  const announced = app === "gmail" ? announcedOf(created, { newMail: true }) : NOTHING;
   return { result: "polled", items: found.events.length, ...announced };
 }
 

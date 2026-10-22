@@ -1,6 +1,7 @@
 // Inngest events one feature sends and another triggers on, where neither may import the other:
 // discovery sends gmail.message_received, and runtime's fan-out triggers on it; discovery sends
-// gmail.message_sent, and reviews ends a review its person finished in Gmail.
+// gmail.message_sent, and reviews ends a review its person finished in Gmail; discovery sends
+// item.stored, and memory learns from the item.
 import { eventType } from "inngest";
 import { z } from "zod";
 import { inngest } from "./inngest";
@@ -55,6 +56,35 @@ export async function sendGmailMessagesSent(messages: GmailMessageSent[]): Promi
   await inngest.send(
     messages.map((data) =>
       gmailMessageSent.create(data, { id: `gmail-sent-${data.connectionId}-${data.sourceRef}` }),
+    ),
+  );
+}
+
+/**
+ * A backfill, a poll or a recovery newly stored an item from an app on a connection: for now
+ * each Gmail message except drafts, received or sent. Memory learns from it. Pointers only:
+ * `sourceRef` is how the item is re-fetched.
+ */
+export const itemStored = eventType("discovery/item.stored", {
+  schema: z.object({
+    orgId: z.string().min(1),
+    connectionId: z.string().min(1),
+    app: z.enum(["gmail"]),
+    sourceRef: z.string().min(1),
+    occurredAt: z.iso.datetime(),
+  }),
+});
+
+export type ItemStored = z.infer<typeof itemStored.schema>;
+
+/** Sends one event per item. The event ID makes a resent item start nothing new. */
+export async function sendItemsStored(items: ItemStored[]): Promise<void> {
+  if (items.length === 0) return;
+  await inngest.send(
+    items.map((data) =>
+      itemStored.create(data, {
+        id: `item-stored-${data.connectionId}-${data.app}-${data.sourceRef}`,
+      }),
     ),
   );
 }

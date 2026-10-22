@@ -12,6 +12,7 @@ import {
   type Announced,
   type Received,
   type Sent,
+  type Stored,
 } from "./announce";
 import type { Connector, SourceClient } from "./connector";
 import { driveConnector } from "./drive/connector";
@@ -24,7 +25,7 @@ export const CONNECTORS: Record<IngestedApp, Connector> = {
   drive: driveConnector,
 };
 
-type StepValue = string | number | boolean | null | string[] | Received[] | Sent[];
+type StepValue = string | number | boolean | null | string[] | Received[] | Sent[] | Stored[];
 
 /** A step result: JSON, since Inngest stores it and replays it instead of re-running. */
 export type StepResult = Record<string, StepValue>;
@@ -69,10 +70,10 @@ export function sourceClient(ctx: Ctx, connectionId: string): SourceClient {
 /**
  * Stores everything that occurred in one app since `since`, one page per step named
  * `<stepPrefix>page-<n>`. With `recordProgress`, the app's ingest state shows the running
- * count (the backfill's progress). With `announce` (a recovery's), each page's new Gmail
- * messages are sent on as discovery/gmail.message_received (inbound) and
- * discovery/gmail.message_sent (sent), in a step after the page's
- * (`<stepPrefix>page-<n>-announce`). Returns how many items it stored.
+ * count (the backfill's progress). Each page's new Gmail messages are sent on as
+ * discovery/item.stored, and with `announce` (a recovery's) also as
+ * discovery/gmail.message_received (inbound) and discovery/gmail.message_sent (sent), in a step
+ * after the page's (`<stepPrefix>page-<n>-announce`). Returns how many items it stored.
  */
 export async function storeWindow(
   ctx: Ctx,
@@ -120,7 +121,7 @@ async function storePage(
     from.pageToken,
   );
   const created = await storeEvents(ctx, connection, app, page.events);
-  const announced = announce && app === "gmail" ? announcedOf(created) : NOTHING;
+  const announced = app === "gmail" ? announcedOf(created, { newMail: announce }) : NOTHING;
   const items = from.items + page.events.length;
   if (recordProgress) {
     await recordIngestState(ctx, connectionId, app, { backfilledItems: items });

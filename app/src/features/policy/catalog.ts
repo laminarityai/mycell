@@ -1,9 +1,12 @@
 // The action catalog, as code (invariant 4): every catalog action's risk level is fixed here
 // by our team, and nothing a spec or a model says changes it. v1 has six Gmail and Sheets
-// actions and one that reads memory; no action is `financial` or `destructive`.
+// actions and one that reads memory; no action is `financial` or `destructive`. Code that looks
+// up the action a workflow names takes the company's action set (`action-set.ts`), which starts
+// from this catalog.
 import { z } from "zod";
 import { GOOGLE_HOSTS, googleScope as scope } from "@/lib/google";
-import type { CatalogAction, ConnectionApp } from "./types";
+import { actionSetOf, scopesOf } from "./action-set";
+import type { ActionSet, CatalogAction } from "./types";
 
 const GMAIL_HOST = GOOGLE_HOSTS.gmail;
 const SHEETS_HOST = GOOGLE_HOSTS.sheets;
@@ -25,17 +28,27 @@ const sheetRange = z.string().regex(/^.+![^!]+$/, "Name the sheet in the range, 
 
 const actions = [
   {
+    kind: "catalog",
     name: "google-mail.read-message",
     app: "Gmail",
-    description: "Read one message's IDs and labels.",
+    description: "Read one message: its IDs, labels, sender, subject and plain-text body.",
     risk: "read",
     integration: "google",
     host: GMAIL_HOST,
     scopes: GMAIL_READ,
     input: z.object({ messageId: id }),
-    output: z.object({ messageId: id, threadId: id, labelIds: z.array(z.string()) }),
+    // Its sender, subject and body pass to later steps, never into run records (ADR-0021).
+    output: z.object({
+      messageId: id,
+      threadId: id,
+      labelIds: z.array(z.string()),
+      from: z.string(),
+      subject: z.string(),
+      body: z.string(),
+    }),
   },
   {
+    kind: "catalog",
     name: "google-mail.read-thread",
     app: "Gmail",
     description: "Read the thread a message belongs to.",
@@ -50,6 +63,7 @@ const actions = [
     ],
   },
   {
+    kind: "catalog",
     name: "google-mail.add-label",
     app: "Gmail",
     description: "Add a label to a message, creating the label if it doesn't exist.",
@@ -61,6 +75,7 @@ const actions = [
     output: z.object({ messageId: id, labelId: id }),
   },
   {
+    kind: "catalog",
     name: "google-mail.create-draft",
     app: "Gmail",
     description: "Write a reply to the triggering message as a draft in its thread.",
@@ -74,6 +89,7 @@ const actions = [
     output: z.object({ draftId: id, threadId: id }),
   },
   {
+    kind: "catalog",
     name: "google-sheet.read-range",
     app: "Sheets",
     description: "Read a range of cells from a spreadsheet.",
@@ -92,6 +108,7 @@ const actions = [
     conditionFields: [{ name: "rowCount", type: "number", label: "The number of rows read" }],
   },
   {
+    kind: "catalog",
     name: "google-sheet.append-row",
     app: "Sheets",
     description: "Add a row after the last row of a range's table.",
@@ -103,6 +120,7 @@ const actions = [
     output: z.object({ updatedRange: z.string() }),
   },
   {
+    kind: "catalog",
     name: "memory.lookup",
     app: "Memory",
     description:
@@ -144,6 +162,9 @@ function byName() {
 
 export const actionNames = actions.map((action) => action.name);
 
+/** The catalog alone, as an action set: what every company's action set starts from. */
+export const catalogActionSet: ActionSet = actionSetOf(actions);
+
 /**
  * The catalog actions a connection granted `grantedScopes` may run, in catalog order: those
  * that need no scope, and those with any one of their scopes granted, the same rule as
@@ -153,30 +174,4 @@ export function actionsAllowedBy(grantedScopes: readonly string[]): CatalogActio
   return actions.filter((action) =>
     scopesOf(action).every((anyOf) => anyOf.some((s) => grantedScopes.includes(s))),
   );
-}
-
-/**
- * The scopes the action needs of the connection a run is on, as lists any one scope of which
- * allows it: one list for a Google action, none for one on what Mycel holds.
- */
-export function scopesOf(action: CatalogAction): (readonly string[])[] {
-  return action.integration === "google" ? [action.scopes] : [];
-}
-
-/** The catalog action with this name, or undefined when there is none. */
-export function findAction(name: string): CatalogAction | undefined {
-  return (catalog as Readonly<Record<string, CatalogAction>>)[name];
-}
-
-/**
- * The connection apps a workflow calling `actionNames` uses, as admins name them: Gmail, whose
- * new mail every workflow's trigger watches, then each Google action's app, each once. Memory
- * is Mycel's own, so it's no app of the connection.
- */
-export function appsUsed(actionNames: readonly string[]): ConnectionApp[] {
-  const apps = actionNames.flatMap((name) => {
-    const action = findAction(name);
-    return action?.integration === "google" ? [action.app] : [];
-  });
-  return [...new Set<ConnectionApp>(["Gmail", ...apps])];
 }

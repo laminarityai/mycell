@@ -7,9 +7,11 @@ import { actionError, type ActionResult } from "@/lib/errors";
 import { parseForm } from "@/lib/forms";
 import { approveEditedReview, approveReview, declineReview, handOff, markDone } from "./server";
 
-// `text` is there only when the person edited the draft: the edited reply, held in memory and
-// handed to the adapter, never stored (invariant 8).
+// `text` is there only when the person edited the draft, and `field:<name>` fields only when
+// they edited a held send: the edits, held in memory and handed to the adapter, never stored
+// (invariant 8).
 const approveInput = z.object({ reviewId: z.string().min(1), text: z.string().optional() });
+const FIELD = "field:";
 const reviewInput = z.object({ reviewId: z.string().min(1) });
 const handOffInput = z.object({ reviewId: z.string().min(1), toUserId: z.string().min(1) });
 
@@ -21,8 +23,17 @@ export async function approveReviewAction(
   const ctx = await getCtx();
   try {
     const { reviewId, text } = parseForm(approveInput, form);
-    if (text === undefined) await approveReview(ctx, reviewId);
-    else await approveEditedReview(ctx, reviewId, { text });
+    const fields = Object.fromEntries(
+      [...form.entries()].flatMap(([name, value]) =>
+        name.startsWith(FIELD) && typeof value === "string"
+          ? [[name.slice(FIELD.length), value]]
+          : [],
+      ),
+    );
+    if (text !== undefined) await approveEditedReview(ctx, reviewId, { text });
+    else if (Object.keys(fields).length > 0) {
+      await approveEditedReview(ctx, reviewId, { fields });
+    } else await approveReview(ctx, reviewId);
   } catch (error) {
     return actionError(error);
   }

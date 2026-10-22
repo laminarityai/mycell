@@ -7,6 +7,9 @@ import { tool, type Tool } from "ai";
 import { z } from "zod";
 import { getWorkflow } from "@/features/workflows/server";
 import type { Ctx } from "@/lib/ctx";
+import type { CustomActionRecord } from "@/features/custom-actions/types";
+import { fileCapabilityRequestTool } from "./capability-request-tool";
+import { describeCustomActionTool } from "./custom-action-tool";
 import { proposeSpec } from "./proposals";
 import { readExamples } from "./read-examples";
 import { searchMemoryTool } from "./search-memory";
@@ -19,6 +22,11 @@ export type TurnInfo = {
   message: string;
   /** The `propose_spec` calls in this turn that failed validation so far. */
   failedProposals: number;
+  /**
+   * The custom actions `describe_custom_action` checked in this turn, which its proposals may
+   * use and carry, to be stored only when one is accepted (ADR-0018).
+   */
+  customActions: CustomActionRecord[];
 };
 
 export type ToolDefinition<I, O> = {
@@ -82,6 +90,8 @@ const proposeSpecTool = builderTool({
 
 /** Every tool the agent may call, by the name the model calls it. */
 export const builderTools: Record<string, BuilderTool> = {
+  describe_custom_action: builderTool(describeCustomActionTool),
+  file_capability_request: builderTool(fileCapabilityRequestTool),
   get_workflow: getWorkflowTool,
   propose_spec: proposeSpecTool,
   read_examples: builderTool(readExamples),

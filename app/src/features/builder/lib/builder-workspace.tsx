@@ -5,8 +5,10 @@
 // Under 768px the two become tabs, Chat and Workflow, which turn to Workflow when a proposal or
 // a Try it is shown. Both stay mounted, so a turn streams on while the graph is looked at.
 import { MessageSquare, Workflow } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import type { CustomActionRecord } from "@/features/custom-actions/types";
 import {
+  ActionSetProvider,
   GraphTraceProvider,
   useGraphTrace,
   useShowOnGraph,
@@ -24,9 +26,12 @@ export type WorkspaceWorkflow = EditableWorkflow;
 export function BuilderWorkspace({
   proposals,
   workflow,
+  customActions,
   chat,
 }: {
   proposals: Proposal[];
+  /** The company's custom actions, which the graph looks actions up in with the catalog. */
+  customActions: CustomActionRecord[];
   /** The conversation's workflow; null until a proposal for a new one is accepted. */
   workflow: WorkspaceWorkflow | null;
   chat: ReactNode;
@@ -34,7 +39,9 @@ export function BuilderWorkspace({
   return (
     <GraphTraceProvider>
       <ProposalOnGraphProvider proposals={proposals}>
-        <Split workflow={workflow} chat={chat} />
+        <ActionSetProvider customActions={customActions}>
+          <Split workflow={workflow} customActions={customActions} chat={chat} />
+        </ActionSetProvider>
       </ProposalOnGraphProvider>
     </GraphTraceProvider>
   );
@@ -47,7 +54,9 @@ const TABS: { id: Tab; label: string; Icon: typeof Workflow }[] = [
   { id: "workflow", label: "Workflow", Icon: Workflow },
 ];
 
-function Split({ workflow, chat }: { workflow: WorkspaceWorkflow | null; chat: ReactNode }) {
+type PaneProps = { workflow: WorkspaceWorkflow | null; customActions: CustomActionRecord[] };
+
+function Split({ workflow, customActions, chat }: PaneProps & { chat: ReactNode }) {
   const trace = useGraphTrace();
   const drawn = useProposalOnGraph()?.drawn ?? null;
   const [tab, setTab] = useState<Tab>("chat");
@@ -91,7 +100,7 @@ function Split({ workflow, chat }: { workflow: WorkspaceWorkflow | null; chat: R
         id="builder-panel-workflow"
         className={cn("min-h-0 min-w-0 flex-1", tab !== "workflow" && "max-md:hidden")}
       >
-        <GraphPane workflow={workflow} />
+        <GraphPane workflow={workflow} customActions={customActions} />
       </div>
     </div>
   );
@@ -101,9 +110,14 @@ function Split({ workflow, chat }: { workflow: WorkspaceWorkflow | null; chat: R
  * The graph, filling the right side. Its frame is the anchor for what slides over its right
  * edge, such as a side panel.
  */
-function GraphPane({ workflow }: { workflow: WorkspaceWorkflow | null }) {
+function GraphPane({ workflow, customActions }: PaneProps) {
   const showTrace = useShowOnGraph();
   const drawn = useProposalOnGraph()?.drawn ?? null;
+  // A drawn proposal's steps may use the custom actions it brings, not stored until accepted.
+  const drawnActions = useMemo(
+    () => [...customActions, ...(drawn?.customActionRecords ?? [])],
+    [customActions, drawn],
+  );
   // A Try it was of the working spec before it changed.
   const revision = workflow === null ? null : `${workflow.id}@${String(workflow.revision)}`;
   useEffect(() => {
@@ -122,22 +136,24 @@ function GraphPane({ workflow }: { workflow: WorkspaceWorkflow | null }) {
         </div>
       )}
       {workflow !== null && drawn === null ? null : (
-        <WorkflowGraph
-          spec={drawn === null ? null : drawn.baseSpec}
-          proposal={drawn?.spec}
-          placeholder
-          fill
-        >
-          {drawn === null ? null : (
-            <p
-              role="status"
-              className="absolute top-3 left-3 z-10 max-w-sm rounded-lg border bg-background/95 px-3 py-2 text-xs shadow-sm"
-            >
-              <span className="font-medium">Showing the proposal</span> “{drawn.name}” as its
-              changes. Accept or reject it in the chat.
-            </p>
-          )}
-        </WorkflowGraph>
+        <ActionSetProvider customActions={drawnActions}>
+          <WorkflowGraph
+            spec={drawn === null ? null : drawn.baseSpec}
+            proposal={drawn?.spec}
+            placeholder
+            fill
+          >
+            {drawn === null ? null : (
+              <p
+                role="status"
+                className="absolute top-3 left-3 z-10 max-w-sm rounded-lg border bg-background/95 px-3 py-2 text-xs shadow-sm"
+              >
+                <span className="font-medium">Showing the proposal</span> “{drawn.name}” as its
+                changes. Accept or reject it in the chat.
+              </p>
+            )}
+          </WorkflowGraph>
+        </ActionSetProvider>
       )}
     </section>
   );

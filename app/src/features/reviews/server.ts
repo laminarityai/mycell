@@ -23,5 +23,5 @@ export {
   openReview,
 } from "./lib/acting";
 // The daily check job, as each org's system ctx: ends the waiting reviews whose item was
-// finished in its app or is gone.
+// finished in its app or is gone, and expires held sends older than 30 days (ADR-0020).
 export { checkWaitingReviews } from "./lib/acting";

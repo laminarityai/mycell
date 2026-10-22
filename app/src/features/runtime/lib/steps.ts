@@ -93,7 +93,7 @@ export async function branchStep(
 ): Promise<StepExecution> {
   const choose = step.mode === "every" ? chooseEveryMatch : chooseFirstMatch;
   const outputs = await withTriggerFacts(step, context);
-  const { taken, paths } = choose(step, outputs, checkWords(context.spec));
+  const { taken, paths } = choose(step, outputs, checkWords(context.spec, context.actionSet));
   const stops = taken.includes(step.otherwise.id) && step.otherwise.steps.length === 0;
   // The paths checked, with each check's pass or fail; never a reason, which may quote a value.
   const checked = paths

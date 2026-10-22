@@ -5,9 +5,10 @@
 // feature's entry functions with the admin's ctx, so it sees only what the admin may.
 import { z } from "zod";
 import { gmailConnections, listConnections } from "@/features/connections/server";
+import { getActionSet } from "@/features/custom-actions/server";
 import type { ConnectionSummary } from "@/features/connections/types";
 import { getOrgSettings } from "@/features/orgs/server";
-import { catalog } from "@/features/policy/catalog";
+import type { ActionSet } from "@/features/policy/types";
 import { operatorsFor, type ValueType } from "@/features/spec/conditions";
 import { formatSpec } from "@/features/spec/format";
 import type { Spec, Step } from "@/features/spec/types";
@@ -22,13 +23,21 @@ import type { TurnInfo } from "./tools";
 
 export type ContextSection = { title: string; content: string };
 
-export type ContextProvider = (ctx: Ctx, turn: TurnInfo) => Promise<ContextSection>;
+/**
+ * One section of context, from the admin's ctx, the turn and the company's action set, which
+ * `gatherContext` resolves once for every provider.
+ */
+export type ContextProvider = (
+  ctx: Ctx,
+  turn: TurnInfo,
+  actions: ActionSet,
+) => Promise<ContextSection>;
 
-/** Every action a spec may use: its app, what it does, its fixed risk and its pending form. */
-const actionCatalog: ContextProvider = () => {
-  const lines = Object.values(catalog).map((action) =>
+/** Every action a spec may use, catalog and custom: its app, what it does, its fixed risk and its pending form. */
+const actionCatalog: ContextProvider = (_ctx, _turn, actions) => {
+  const lines = actions.actions.map((action) =>
     [
-      `- ${action.name} (${action.app}): ${action.description}`,
+      `- ${action.name} (${action.app}${action.kind === "custom" ? ", the company's custom action, its level set by Mycel's rule" : ""}): ${action.description}`,
       `  Risk level: ${action.risk}.` +
         (action.pendingForm === undefined
           ? " Runs on its own."
@@ -51,7 +60,7 @@ const FIELD_TYPES: { reads: string; type: ValueType }[] = [
  * Every kind of value a path's condition may test, and the checks each allows: classify answers,
  * extract fields, the trigger's declared facts and catalog actions' declared result fields.
  */
-const conditionFields: ContextProvider = () => {
+const conditionFields: ContextProvider = (_ctx, _turn, actions) => {
   const lines = [
     "A path's condition tests values from the steps above its branch on its own path. Each check is one of:",
     '- A classify step\'s answer: { "classify": "<classify step id>", "is": "<label>", "minP": 0.85 }. ' +
@@ -62,18 +71,18 @@ const conditionFields: ContextProvider = () => {
       "is_not_empty take no value.",
     ...FIELD_TYPES.map(({ reads, type }) => `  - ${reads}: ${operatorsFor(type).join(", ")}`),
     "Trigger facts and tool step results take the same checks for their type:",
-    ...declaredFieldLines(),
+    ...declaredFieldLines(actions),
   ];
   return Promise.resolve({ title: "Fields a condition may test", content: lines.join("\n") });
 };
 
 /** The org's workflows with a summary of each working spec; the whole one for this turn's. */
-const workflows: ContextProvider = async (ctx, turn) => {
+const workflows: ContextProvider = async (ctx, turn, actions) => {
   const summaries = await listWorkflows(ctx);
   if (summaries.length === 0) return { title: "Workflows", content: "The org has none yet." };
   const lines: string[] = [];
   for (const summary of summaries) {
-    const workflow = await getWorkflow(ctx, summary.id);
+    const workflow = await getWorkflow(ctx, summary.id, actions);
     const state =
       summary.latestVersion === null
         ? "not published"
@@ -192,5 +201,6 @@ export const contextProviders: ContextProvider[] = [
 
 /** Every provider's section, in order. */
 export async function gatherContext(ctx: Ctx, turn: TurnInfo): Promise<ContextSection[]> {
-  return Promise.all(contextProviders.map((provider) => provider(ctx, turn)));
+  const actions = await getActionSet(ctx);
+  return Promise.all(contextProviders.map((provider) => provider(ctx, turn, actions)));
 }

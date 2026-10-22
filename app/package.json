@@ -13,11 +13,14 @@
     "db:generate": "node --env-file-if-exists=.env node_modules/drizzle-kit/bin.cjs generate",
     "db:migrate": "node --env-file-if-exists=.env node_modules/drizzle-kit/bin.cjs migrate",
     "credits:grant": "node --env-file-if-exists=.env --import tsx scripts/grant-credits.ts",
+    "capability-requests": "node --env-file-if-exists=.env --import tsx scripts/capability-requests.ts",
     "nango:preflight": "node --env-file-if-exists=.env --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/nango-preflight.ts"
   },
   "dependencies": {
     "@ai-sdk/react": "4.0.150",
+    "@aws-sdk/client-kms": "3.1155.0",
     "@better-auth/drizzle-adapter": "1.7.11",
+    "@inngest/middleware-encryption": "2.0.0",
     "@nangohq/frontend": "0.71.13",
     "@vercel/oidc": "3.2.0",
     "@xyflow/react": "^12.12.0",

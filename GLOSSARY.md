@@ -28,6 +28,10 @@ _Avoid_: Group, team, role
 One authorised link between a user or the org and an external account, such as one person's Google account.
 _Avoid_: Integration, account, link
 
+**Registered app**:
+An app our team has registered with its vendor and set up in Mycel, so that people can connect it and the builder chat can make custom actions in it. Google and Microsoft 365 are the first.
+_Avoid_: Integration, provider, connector
+
 **Google app**:
 One of the Google products a connection can reach: Gmail, Drive, Sheets, Calendar, Docs or Tasks. A person connects Google once, and the connection records which apps they allowed.
 _Avoid_: Service, product, integration
@@ -167,8 +171,12 @@ An app's own way of holding an action until a person approves it, such as a Gmai
 _Avoid_: Staged action, preview
 
 **Review**:
-One action waiting for a person's decision, shown on their Reviews page, which points at the waiting item in its app, or holds it when the app can't (ADR-0020). Its kind names the step that made it: `approval` (a draft an approval step left waiting) or `escalation` (a message an escalate step handed over).
+One action waiting for a person's decision, shown on their Reviews page, which points at the waiting item in its app, or holds it when the app can't (ADR-0020). Its kind names what it waits on: `approval` (a draft an approval step left waiting), `escalation` (a message an escalate step handed over) or `held_send` (a held send).
 _Avoid_: Approval for the review itself (it's the step, and the kind of review that step makes), task (a Google Tasks item), notification
+
+**Held send**:
+A custom write's request, which Mycel holds, encrypted with the company's key, until a person approves or declines its review, or for 30 days, when it expires (ADR-0020). Approving sends it once, with any edits to its editable text.
+_Avoid_: Queued message, outbox, staged send
 
 **Shared review**:
 A review from an org connection's run, seen by everyone who can see its workflow through its tags and by every admin. The first to act on it wins.

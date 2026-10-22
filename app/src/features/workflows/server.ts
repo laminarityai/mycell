@@ -30,3 +30,6 @@ export { currentVersionIds, workflowNames } from "./lib/names";
 // For any role: whether the caller sees each workflow through its tags, and whether its latest
 // version lets a review be handed on. Reviews decides from it who sees an org review.
 export { reviewSharing } from "./lib/review-sharing";
+// For admins: which workflows use each action, in their working spec or latest version, for the
+// custom actions page.
+export { workflowsUsingActions } from "./lib/action-uses";

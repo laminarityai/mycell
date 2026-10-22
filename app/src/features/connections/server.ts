@@ -1,5 +1,7 @@
 // The connections feature: links from a user or the org to an external account, made through
 // Nango. It is the only feature that talks to Nango.
+// Which connection a run reaches another registered app through, for custom actions.
+export { connectionToApp } from "./lib/app-connection";
 export { startConnect } from "./lib/connect";
 export { deleteMemberConnectionsOf, disconnect } from "./lib/disconnect";
 // The Inngest events that start a backfill: a connection was recorded, or a reconnect granted
@@ -18,7 +20,7 @@ export {
 export { reconcileConnections } from "./lib/reconcile";
 export { startReconnect } from "./lib/reconnect";
 // How other features use a connection, without touching Nango or the table: what it is and
-// was granted, which ones the caller may read, GETs, POSTs, PUTs and DELETEs to its Google APIs,
+// was granted, which ones the caller may read, GETs, POSTs, PUTs, PATCHes and DELETEs to its app,
 // and where each ingested app stands.
 export {
   getConnection,
@@ -27,6 +29,7 @@ export {
   proxyDelete,
   proxyGet,
   proxyGetText,
+  proxyPatch,
   proxyPost,
   proxyPut,
   readableConnectionIds,

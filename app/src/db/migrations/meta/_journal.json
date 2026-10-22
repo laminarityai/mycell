@@ -232,6 +232,27 @@
       "when": 1792659706644,
       "tag": "0032_relink-superseded-facts",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1792660823797,
+      "tag": "0033_capability-requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1792660835257,
+      "tag": "0034_custom-actions",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1792660841660,
+      "tag": "0035_held-sends",
+      "breakpoints": true
     }
   ]
 }

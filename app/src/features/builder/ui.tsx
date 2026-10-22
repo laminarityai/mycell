@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { CustomActionRecord } from "@/features/custom-actions/types";
 import { BuilderChat } from "./lib/builder-chat";
 import { BuilderWorkspace, type WorkspaceWorkflow } from "./lib/builder-workspace";
 import { toUIMessages } from "./lib/history";
@@ -49,10 +50,13 @@ export function Conversation({
   conversation,
   proposals,
   workflow,
+  customActions,
   tryIt,
 }: {
   conversation: BuilderConversation;
   proposals: Proposal[];
+  /** The company's custom actions, for the graph to look actions up in. */
+  customActions: CustomActionRecord[];
   workflow: ConversationPageWorkflow | null;
   /** Null until the conversation has a working spec to try. */
   tryIt: ConversationTryIt | null;
@@ -63,6 +67,7 @@ export function Conversation({
       key={conversation.id}
       proposals={proposals}
       workflow={workflow}
+      customActions={customActions}
       chat={
         <BuilderChat
           conversationId={conversation.id}

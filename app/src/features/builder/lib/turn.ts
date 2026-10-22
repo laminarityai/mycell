@@ -56,6 +56,7 @@ export async function streamTurn(
     workflowId: conversation.workflowId,
     message: text,
     failedProposals: 0,
+    customActions: [],
   };
   const instructions = instructionsWith(await gatherContext(ctx, turn));
   const assistantId = randomUUID();

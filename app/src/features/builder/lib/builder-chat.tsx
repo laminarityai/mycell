@@ -4,6 +4,7 @@
 // admin's new message goes to the server, which holds the rest.
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ const TOOL_LABELS: Record<string, string> = {
 
 /** Tools whose calls show more than their label. */
 const PROPOSE_SPEC = "propose_spec";
+const FILE_CAPABILITY_REQUEST = "file_capability_request";
 
 export function BuilderChat({
   conversationId,
@@ -158,6 +160,24 @@ function MessagePart({
       return <p className="text-xs text-muted-foreground">Couldn&apos;t check a proposal.</p>;
     }
     return <ProposeSpecPart output={output} proposals={proposals} />;
+  }
+  if (toolName === FILE_CAPABILITY_REQUEST && "state" in part) {
+    if (part.state === "output-error") {
+      return (
+        <p className="text-xs text-muted-foreground">Couldn&apos;t file a capability request.</p>
+      );
+    }
+    if (part.state !== "output-available") {
+      return <p className="text-xs text-muted-foreground">Asking Mycel&apos;s team…</p>;
+    }
+    return (
+      <p className="text-xs text-muted-foreground">
+        Asked Mycel&apos;s team for this.{" "}
+        <Link href="/capability-requests" className="underline">
+          Follow it on Capability requests
+        </Link>
+      </p>
+    );
   }
   return <p className="text-xs text-muted-foreground">{TOOL_LABELS[toolName] ?? toolName}</p>;
 }

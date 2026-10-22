@@ -57,6 +57,12 @@ function NavLinks({ waiting, admin }: { waiting: number; admin: boolean }) {
           <Link href="/memory" className={LINK}>
             Memory settings
           </Link>
+          <Link href="/custom-actions" className={LINK}>
+            Custom actions
+          </Link>
+          <Link href="/capability-requests" className={LINK}>
+            Capability requests
+          </Link>
         </>
       ) : null}
     </>

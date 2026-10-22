@@ -2,11 +2,14 @@
 // RunStep under the step's own ID, so Inngest memoizes each and a retry never repeats a
 // finished one (ADR-0006). The step walker decides which step runs next. Each step checks
 // first that the run may go on, tries its work up to the retry policy's attempts, and records
-// itself; when the walk ends, the run's status is written once. A step hands on derived data
-// only; content stays inside the step that fetched it.
+// itself; when the walk ends, the run's status is written once. A step's output may carry
+// content to later steps through the step state, which Inngest stores encrypted; its record
+// keeps none (ADR-0021).
 import { and, eq } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { getConnection } from "@/features/connections/server";
+import { getActionSet } from "@/features/custom-actions/server";
+import type { ActionSet } from "@/features/policy/types";
 import { createReview } from "@/features/reviews/server";
 import type { Spec, Step } from "@/features/spec/types";
 import { getWorkflowVersion, listSwitchedOn } from "@/features/workflows/server";
@@ -14,6 +17,7 @@ import type { Ctx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import type { RetryPolicy, RunOutcome, RunStep } from "../types";
 import { actionExecutors } from "./actions";
+import { holdCustomWrite } from "./custom-action";
 import { attemptStep } from "./executors";
 import { isConnectionGone, type Failure } from "./failures";
 import { defaultRetryPolicy, runInline, withRetries } from "./run-step";
@@ -50,9 +54,10 @@ export async function executeRun(
   if (run === undefined) return { status: "cancelled" };
   if (run.status !== "running") return { status: run.status };
   const { spec } = await getWorkflowVersion(ctx, run.workflowVersionId);
+  const actionSet = await getActionSet(ctx);
 
   const status = await walkSteps(spec, (step, place) =>
-    runStep(step.id, () => executeStep(ctx, run, step, { ...place, spec, retry })),
+    runStep(step.id, () => executeStep(ctx, run, step, { ...place, spec, actionSet, retry })),
   );
   // The one place a run's status is written, once the walk has ended. It's outside any step,
   // so it writes only a run still running: a retry that replays the walk changes nothing.
@@ -60,7 +65,7 @@ export async function executeRun(
   return { status };
 }
 
-type RunPlace = StepPlace & { spec: Spec; retry: RetryPolicy };
+type RunPlace = StepPlace & { spec: Spec; actionSet: ActionSet; retry: RetryPolicy };
 
 async function executeStep(ctx: Ctx, run: Run, step: Step, place: RunPlace): Promise<StepResult> {
   const startedAt = new Date();
@@ -71,12 +76,17 @@ async function executeStep(ctx: Ctx, run: Run, step: Step, place: RunPlace): Pro
     attribution: { workflowId: run.workflowId, runId: run.id },
     spec: place.spec,
     outputs: place.outputs,
+    actionSet: place.actionSet,
     actions: actionExecutors,
-    awaitReview: (item) =>
+    holdSend: holdCustomWrite,
+    awaitReview: ({ kind, itemRef, threadRef, ...item }) =>
       createReview(ctx, {
-        ...item,
+        kind,
+        itemRef,
+        threadRef,
+        ...("reason" in item ? { reason: item.reason } : {}),
         runId: run.id,
-        connectionId: run.connectionId,
+        connectionId: "connectionId" in item ? item.connectionId : run.connectionId,
         workflowId: run.workflowId,
         workflowVersionId: run.workflowVersionId,
         sourceRef: run.sourceRef,

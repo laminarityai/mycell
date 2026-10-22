@@ -1,3 +1,4 @@
+import { REGISTERED_APPS } from "../registered-apps";
 import type { ConnectionKind, GoogleApp, Source } from "../types";
 
 /** How the UI names each Google app. */
@@ -10,9 +11,10 @@ export const APP_NAMES: Record<GoogleApp, string> = {
   tasks: "Tasks",
 };
 
-/** How the UI names each source. */
+/** How the UI names each source: its registered app, or a one-app connection's app. */
 export const SOURCE_NAMES: Record<Source, string> = {
-  google: "Google",
+  google: REGISTERED_APPS.google.name,
+  microsoft: REGISTERED_APPS.microsoft.name,
   gmail: "Gmail",
   drive: "Google Drive",
 };
@@ -28,6 +30,7 @@ export function appList(apps: readonly GoogleApp[]): string {
 export function attemptTarget(attempt: { source: Source; kind: ConnectionKind }): string {
   const orgTargets: Record<Source, string> = {
     google: "an org Google account",
+    microsoft: "an org Microsoft 365 account",
     gmail: "an org inbox",
     drive: "an org Drive",
   };

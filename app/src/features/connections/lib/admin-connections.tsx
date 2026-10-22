@@ -8,7 +8,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { ConnectionOwner, ConnectionsListing } from "../types";
-import { ConnectButton } from "./connect-button";
+import { RegisteredAppsList } from "./registered-apps-list";
 import { ConnectionApps, ConnectionControls, ConnectionNotices } from "./connection-controls";
 import { LastPolled, StatusBadge } from "./status-badge";
 
@@ -18,9 +18,7 @@ export function AdminConnections({ listing }: { listing: ConnectionsListing }) {
     <>
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-medium">Org connections</h2>
-        <div className="flex gap-2">
-          <ConnectButton kind="org" label="Connect an org Google account" />
-        </div>
+        <RegisteredAppsList kind="org" connections={listing.orgConnections} />
         <ConnectionNotices connections={listing.orgConnections} />
         {listing.orgConnections.length === 0 ? (
           <p className="text-sm text-muted-foreground">No org connections yet.</p>

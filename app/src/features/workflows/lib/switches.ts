@@ -6,7 +6,9 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { listConnections } from "@/features/connections/server";
+import { getActionSet } from "@/features/custom-actions/server";
 import type { ConnectionSummary } from "@/features/connections/types";
+import type { ActionSet } from "@/features/policy/types";
 import type { Spec, SpecIssue } from "@/features/spec/types";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError, SpecInvalidError, ValidationError } from "@/lib/errors";
@@ -38,7 +40,7 @@ export async function switchWorkflowOn(
     throw new ValidationError("Publish the workflow before switching it on.");
   }
   const connection = await chosenConnection(ctx, version.spec, connectionId);
-  const issues = connectionIssues(version.spec, connection);
+  const issues = connectionIssues(version.spec, connection, await getActionSet(ctx));
   if (issues.length > 0) throw new SpecInvalidError(issues);
 
   if (version.spec.credentials === "org") {
@@ -210,7 +212,11 @@ async function chosenConnection(
 }
 
 // The setup checks, against the one chosen connection.
-function connectionIssues(spec: Spec, connection: ConnectionSummary): SpecIssue[] {
+function connectionIssues(
+  spec: Spec,
+  connection: ConnectionSummary,
+  actions: ActionSet,
+): SpecIssue[] {
   if (!reachesGmail(connection)) {
     return [
       {
@@ -219,5 +225,5 @@ function connectionIssues(spec: Spec, connection: ConnectionSummary): SpecIssue[
       },
     ];
   }
-  return scopeIssues(spec, [connection]);
+  return scopeIssues(spec, [connection], actions);
 }

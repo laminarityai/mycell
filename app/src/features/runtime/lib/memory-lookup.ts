@@ -83,12 +83,6 @@ async function viewerCtx(ctx: Ctx, connectionId: string): Promise<Ctx> {
   return { orgId: ctx.orgId, userId: owner.id, role: owner.role };
 }
 
-/** What a lookup's run record keeps: how many facts it found, never what they say. */
-export function lookupRecord(output: Json): Json {
-  const parsed = lookupOutputSchema.safeParse(output);
-  return { factCount: parsed.success ? parsed.data.factCount : 0 };
-}
-
 /** A lookup's facts as a draft step's model reads them. */
 export function lookupText(stepId: string, output: Json): string {
   const parsed = lookupOutputSchema.safeParse(output);

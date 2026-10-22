@@ -1,3 +1,4 @@
+import type { CustomActionRecord } from "@/features/custom-actions/types";
 import type { InsertedApproval, RequirementsGained, RiskLevel } from "@/features/policy/types";
 import type { Spec, SpecIssue } from "@/features/spec/types";
 import type { Tag } from "@/features/tags/types";
@@ -13,6 +14,12 @@ export type WorkflowInput = {
    * ConflictError if the working spec has moved on since.
    */
   baseRevision?: number;
+  /**
+   * Custom actions the spec brings with it, as accepted from the builder proposal `proposalId`
+   * (ADR-0018): stored in the same transaction as the spec, so neither is stored without the
+   * other.
+   */
+  newCustomActions?: { actions: readonly CustomActionRecord[]; proposalId: string };
 };
 
 /** What saving showed: the working spec's max risk and the approvals the policy inserted. */
@@ -42,6 +49,19 @@ export type PublishSettings = {
  * one), by name; and whether that version lets a review be handed on (`review.handoff`).
  */
 export type ReviewSharing = { seen: boolean; handOff: boolean; tags: string[] };
+
+/**
+ * A workflow that uses an action, as the custom actions page lists it: in its working spec, in
+ * its latest version (the one that runs), or both.
+ */
+export type ActionUse = {
+  workflowId: string;
+  name: string;
+  inWorkingSpec: boolean;
+  /** The latest version's number when that version uses it; null when it doesn't or none is. */
+  publishedVersion: number | null;
+  archived: boolean;
+};
 
 /** An immutable snapshot of a workflow's spec, after the policy engine ran on it. */
 export type WorkflowVersion = {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { ValueType } from "@/features/spec/types";
-import { catalog } from "../catalog";
+import { catalog, catalogActionSet } from "../catalog";
 import { checkChoices, testableFields } from "../condition-fields";
 import { applyPolicy } from "../engine";
 import { parsedSpec } from "./specs";
@@ -109,7 +109,7 @@ describe("applyPolicy on checks of a tool step's result", () => {
       value("thread.messageCount", "at_least", 2),
     ]);
 
-    expect(applyPolicy(spec)).toMatchObject({ ok: true });
+    expect(applyPolicy(spec, catalogActionSet)).toMatchObject({ ok: true });
   });
 
   it("refuses a field the action doesn't declare, and an operator its type doesn't allow", () => {
@@ -118,7 +118,7 @@ describe("applyPolicy on checks of a tool step's result", () => {
       value("lookup.rowCount", "contains", "1"),
     ]);
 
-    expect(applyPolicy(spec)).toEqual({
+    expect(applyPolicy(spec, catalogActionSet)).toEqual({
       ok: false,
       issues: [
         {
@@ -154,7 +154,7 @@ describe("testableFields", () => {
     ];
     const spec = lookupSpec([value("lookup.rowCount", "more_than", 0)], inner);
 
-    expect(testableFields(spec, "size")).toEqual([
+    expect(testableFields(spec, "size", catalogActionSet)).toEqual([
       { from: "trigger.sender", type: "text", label: "The sender's address" },
       { from: "trigger.senderDomain", type: "text", label: "The sender's domain" },
       { from: "trigger.subject", type: "text", label: "The subject" },
@@ -170,8 +170,10 @@ describe("testableFields", () => {
       },
       { from: "count.chairs", type: "number", label: "How many chairs" },
     ]);
-    expect(testableFields(spec, "route").map((field) => field.from)).not.toContain("count.chairs");
-    expect(testableFields(spec, "lookup")).toEqual([]);
+    expect(
+      testableFields(spec, "route", catalogActionSet).map((field) => field.from),
+    ).not.toContain("count.chairs");
+    expect(testableFields(spec, "lookup", catalogActionSet)).toEqual([]);
   });
 });
 
@@ -264,7 +266,7 @@ describe("checkChoices", () => {
   it("offers a branch's classify answers and fields from above it on its own path only", () => {
     const spec = sortingSpec();
 
-    const choices = checkChoices(spec, "size");
+    const choices = checkChoices(spec, "size", catalogActionSet);
 
     expect(choices.answers).toEqual([
       { classify: "kind", is: "sales", label: '"kind" says "sales"' },
@@ -279,7 +281,7 @@ describe("checkChoices", () => {
       "order.rush",
       "count.chairs",
     ]);
-    const inner = checkChoices(spec, "inner");
+    const inner = checkChoices(spec, "inner", catalogActionSet);
     expect(inner.answers.map((answer) => answer.classify)).toEqual([
       "kind",
       "kind",
@@ -291,7 +293,7 @@ describe("checkChoices", () => {
   });
 
   it("gives each field the operators its type allows", () => {
-    const fields = checkChoices(sortingSpec(), "size").fields;
+    const fields = checkChoices(sortingSpec(), "size", catalogActionSet).fields;
     const operators = (from: string) => fields.find((field) => field.from === from)?.operators;
 
     expect(operators("count.chairs")).toEqual([

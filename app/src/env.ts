@@ -33,6 +33,11 @@ const envSchema = z.object({
     .transform((value) => value === "1"),
   INNGEST_EVENT_KEY: z.string().min(1).optional(),
   INNGEST_SIGNING_KEY: z.string().min(1).optional(),
+  // The app key Inngest's encryption middleware encrypts step state and function results with,
+  // so what Inngest stores of a run is ciphertext (ADR-0021). One key for the whole app, held in
+  // a KMS in production and set here from it. Required unless INNGEST_DEV=1; without it the dev
+  // server keeps step state in the clear.
+  INNGEST_ENCRYPTION_KEY: z.string().min(32).optional(),
   // The Vercel AI Gateway: every model call goes through it, and it reports each call's cost.
   AI_GATEWAY_API_KEY: z.string().min(1),
   // Where the gateway is, when not Vercel's own (https://ai-gateway.vercel.sh/v4/ai). Only the
@@ -78,6 +83,20 @@ const envSchema = z.object({
     )
     .optional(),
   GCP_SERVICE_ACCOUNT_EMAIL: z.email().optional(),
+  // The key store (ADR-0020, ADR-0024): AWS KMS holds one key per org, made on first use under
+  // the alias `alias/<KMS_ALIAS_PREFIX>/org/<org ID>`. The key store needs KMS_REGION; without
+  // it, encrypting or decrypting fails. The access key pair is an IAM user's; leave both unset to
+  // use the AWS SDK's own credential chain (a role) instead. Vercel reserves AWS_REGION and the
+  // AWS_* key names, hence the KMS_ prefix. KMS_ENDPOINT points at a KMS other than AWS's
+  // regional one, such as LocalStack.
+  KMS_REGION: z.string().min(1).optional(),
+  KMS_ACCESS_KEY_ID: z.string().min(1).optional(),
+  KMS_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+  KMS_ALIAS_PREFIX: z
+    .string()
+    .regex(/^[\w-]+$/, "Letters, digits, - and _ only")
+    .default("mycel"),
+  KMS_ENDPOINT: z.url().optional(),
 });
 
 export const env = envSchema
@@ -94,10 +113,21 @@ export const env = envSchema
       }
     }
     if (parsed.INNGEST_DEV) return;
-    for (const key of ["INNGEST_EVENT_KEY", "INNGEST_SIGNING_KEY"] as const) {
+    for (const key of [
+      "INNGEST_EVENT_KEY",
+      "INNGEST_SIGNING_KEY",
+      "INNGEST_ENCRYPTION_KEY",
+    ] as const) {
       if (parsed[key] === undefined) {
         context.addIssue({ code: "custom", path: [key], message: "Required unless INNGEST_DEV=1" });
       }
+    }
+    if ((parsed.KMS_ACCESS_KEY_ID === undefined) !== (parsed.KMS_SECRET_ACCESS_KEY === undefined)) {
+      context.addIssue({
+        code: "custom",
+        path: ["KMS_SECRET_ACCESS_KEY"],
+        message: "KMS_ACCESS_KEY_ID and KMS_SECRET_ACCESS_KEY are set together or not at all",
+      });
     }
   })
   .parse(process.env);

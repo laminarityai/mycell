@@ -23,7 +23,7 @@ export const endedInGmailJob = inngest.createFunction(
 
 /**
  * Every morning at 07:00 UTC, ends each org's waiting reviews whose item was finished in its app
- * or is gone, one step per org: an org whose step fails is retried alone, and a retried step
+ * or is gone, and expires held sends nobody ended within 30 days, one step per org: an org whose step fails is retried alone, and a retried step
  * only checks again the reviews still waiting.
  */
 export const checkWaitingReviewsJob = inngest.createFunction(

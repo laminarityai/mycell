@@ -140,8 +140,8 @@ export async function nangoConnectionExists(
   throw new Error(`Nango connection read failed: ${String(response.status)}`);
 }
 
-// The parts of a connection Mycel reads: Google's token response, kept whole by Nango as
-// `credentials.raw`, whose `scope` lists the granted scopes, space-separated.
+// The parts of a connection Mycel reads: the app's token response, kept whole by Nango as
+// `credentials.raw`, whose `scope` lists the granted scopes, space-separated as OAuth has it.
 const connectionCredentials = z.object({
   credentials: z.object({
     raw: z.object({ scope: z.string().optional() }).optional(),
@@ -149,7 +149,7 @@ const connectionCredentials = z.object({
 });
 
 /**
- * The OAuth scopes Google granted the connection, from Nango's copy of its token response.
+ * The OAuth scopes the app granted the connection, from Nango's copy of its token response.
  * Throws NangoConnectionGoneError when Nango has no such connection.
  */
 export async function readGrantedScopes(
@@ -172,11 +172,15 @@ export async function readGrantedScopes(
 // Google's are numbers. For a connection it doesn't have, the proxy answers 400
 // `{ error: { code: "server_error", message: "Failed to get connection" } }`, the same code it
 // uses when a token refresh fails (allProxy.ts, handleProxyServiceErrorResponse), so the code
-// alone can't say the connection is gone.
+// alone can't say the connection is gone. Microsoft Graph's codes are strings too, so its
+// refusals also ask Nango about the connection before being read as Graph's answer.
 const nangoError = z.object({ error: z.object({ code: z.string() }) });
 
-/** A call through the Nango proxy: which API host it reaches, and the path on that host. */
-export type ProxyTarget = { baseUrl: string; path: string };
+/**
+ * A call through the Nango proxy: the path, and the API host it reaches when that isn't the
+ * integration's own (Google's APIs are each on their own host).
+ */
+export type ProxyTarget = { baseUrl?: string; path: string };
 
 type ProxiedConnection = { connectionId: string; integration: string };
 
@@ -236,6 +240,19 @@ export async function nangoProxyPut<T>(
   });
 }
 
+/** A PATCH through the Nango proxy with a JSON body, answered and not retried like a POST. */
+export async function nangoProxyPatch<T>(
+  connection: ProxiedConnection,
+  target: ProxyTarget,
+  body: unknown,
+  schema: z.ZodType<T>,
+): Promise<T | null> {
+  return nangoProxy(connection, target, json(schema), {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
 /**
  * A DELETE through the Nango proxy, not retried. True when the source deleted the item, false
  * when it had no such item (404 or 410); refusals throw as for the other verbs.
@@ -264,8 +281,9 @@ async function nangoProxy<T>(
       ...init.headers,
       "Connection-Id": connection.connectionId,
       "Provider-Config-Key": connection.integration,
-      // One Nango integration reaches every Google API, each on its own host.
-      "Base-Url-Override": baseUrl,
+      // One Nango integration reaches every Google API, each on its own host; any other app's
+      // calls go to the host Nango keeps for its integration.
+      ...(baseUrl === undefined ? {} : { "Base-Url-Override": baseUrl }),
     },
   });
   if (response.ok) return parse(await response.text());

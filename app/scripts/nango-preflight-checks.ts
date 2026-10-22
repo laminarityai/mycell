@@ -9,11 +9,12 @@ import { z } from "zod";
 const NANGO_API_URL = "https://api.nango.dev";
 
 /**
- * Mycel's integrations, by ID (provider config key), each expected on its own provider: the one
- * Google integration that every new connection uses (ADR-0014, connections/lib/google.ts). The
- * one-app `google-mail` and `google-drive` serve only connections made before it.
+ * Mycel's integrations, by ID (provider config key), each expected on its own provider: every
+ * registered app's (connections/registered-apps.ts, which this script can't import), starting
+ * with the one Google integration that every new Google connection uses (ADR-0014). The one-app
+ * `google-mail` and `google-drive` serve only connections made before it.
  */
-export const EXPECTED_INTEGRATIONS = ["google"] as const;
+export const EXPECTED_INTEGRATIONS = ["google", "microsoft"] as const;
 
 /** What the checks read: the env values that matter, as src/env.ts parsed them. */
 export type PreflightConfig = {

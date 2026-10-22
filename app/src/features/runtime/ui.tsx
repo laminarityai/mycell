@@ -1,3 +1,4 @@
+import { DateTime } from "@/components/date-time";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -59,7 +60,7 @@ export function RecentRuns({ runs }: { runs: RunRecord[] }) {
         {runs.map((run) => (
           <TableRow key={run.id}>
             <TableCell className="whitespace-normal">
-              {run.startedAt.toLocaleString("en-US")}
+              <DateTime value={run.startedAt} />
             </TableCell>
             <TableCell className="font-mono text-xs break-all whitespace-normal">
               {run.sourceRef}

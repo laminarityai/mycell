@@ -27,6 +27,7 @@ export function RunOnMessageForm({
       </p>
     );
   }
+  // React resets the form after its action: a refused run starts from what it sent.
   return (
     <form action={start} className="flex flex-col gap-3">
       <input type="hidden" name="workflowId" value={workflowId} />
@@ -35,7 +36,7 @@ export function RunOnMessageForm({
         <select
           name="connectionId"
           className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
-          defaultValue={connections[0]?.id}
+          defaultValue={result.values?.connectionId ?? connections[0]?.id}
         >
           {connections.map((connection) => (
             <option key={connection.id} value={connection.id}>
@@ -46,7 +47,12 @@ export function RunOnMessageForm({
       </label>
       <label className="flex flex-col gap-1 text-sm font-medium">
         Gmail message ID
-        <Input name="sourceRef" required className="font-mono" />
+        <Input
+          name="sourceRef"
+          defaultValue={result.values?.sourceRef}
+          required
+          className="font-mono"
+        />
       </label>
       <div>
         <Button type="submit" variant="outline" disabled={starting}>

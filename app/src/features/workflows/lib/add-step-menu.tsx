@@ -63,6 +63,7 @@ export function AddStepMenu({
     <div
       role="menu"
       aria-label="Add a step"
+      tabIndex={-1}
       style={point}
       className="nodrag nopan nowheel absolute z-30 max-h-[calc(100%-16px)] w-64 overflow-y-auto rounded-lg border bg-popover p-1 text-sm shadow-lg"
       onKeyDown={(event) => {

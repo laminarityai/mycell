@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DateTime } from "@/components/date-time";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -269,7 +270,7 @@ export function WorkflowEditor({
           <ul className="flex flex-col gap-1 text-sm">
             {workflow.versions.map((version) => (
               <li key={version.id} className="flex items-center gap-2">
-                Version {version.number}, published {version.publishedAt.toLocaleString("en-US")}
+                Version {version.number}, published <DateTime value={version.publishedAt} />
                 <RiskBadge risk={version.maxRisk} />
               </li>
             ))}

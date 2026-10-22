@@ -1,3 +1,4 @@
+import { DateTime } from "@/components/date-time";
 import { Badge } from "@/components/ui/badge";
 import type { ConnectionStatus } from "../types";
 
@@ -27,9 +28,5 @@ export function StatusBadge({
 /** When polling last finished for a connection, or that it hasn't yet. */
 export function LastPolled({ at }: { at: Date | null }) {
   if (at === null) return <span className="text-muted-foreground">Not yet</span>;
-  return (
-    <time dateTime={at.toISOString()} title={at.toISOString()}>
-      {at.toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" })} UTC
-    </time>
-  );
+  return <DateTime value={at} />;
 }

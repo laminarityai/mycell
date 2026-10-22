@@ -28,6 +28,8 @@ Every change keeps all eight true.
 - Reads: Server Components call `server.ts` functions. Writes: Server Actions. Route handlers serve only webhooks, Inngest, and streaming.
 - Parse every IO boundary with Zod.
 - Errors: throw the typed error classes, and turn them into messages at the Server Action or route boundary.
+- Server Actions go through `runFormAction` from `orgs/form-action.ts`, and only write.
+- Show dates with `<DateTime>`; the server's time zone isn't the reader's.
 - UI: Tailwind and shadcn/ui components.
 - Tests: Vitest, against real Postgres in Docker.
 - Names: glossary terms, `kebab-case` files, named exports.

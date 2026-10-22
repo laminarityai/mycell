@@ -27,6 +27,13 @@ const driverImports = {
   ],
   message: "Database drivers belong in src/db. Query org data through forOrg(ctx).",
 };
+// A JSON column's shape can change under rows stored in the old one, so each is read through
+// its Zod schema.
+const jsonColumnImport = {
+  name: "drizzle-orm/pg-core",
+  importNames: ["json", "jsonb"],
+  message: "Declare JSON columns with zodJsonb from @/db/columns, so reads are parsed.",
+};
 
 // The server renders dates in its own time zone and the browser in the reader's, so formatting
 // one anywhere but <DateTime> risks a hydration error and a time the reader can't place.
@@ -177,13 +184,14 @@ export default defineConfig([
     },
   },
   {
-    // A feature's tables may reference Better Auth's in foreign keys, and nothing more.
+    // A feature's tables may reference Better Auth's in foreign keys, and nothing more. Their
+    // JSON columns are zodJsonb.
     files: ["src/features/*/lib/schema.ts"],
     ignores: ["src/features/orgs/lib/**"],
     rules: {
       "no-restricted-imports": [
         "error",
-        { paths: [modelCalls], patterns: [rawClientImport, driverImports] },
+        { paths: [modelCalls, jsonColumnImport], patterns: [rawClientImport, driverImports] },
       ],
     },
   },

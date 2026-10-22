@@ -2,11 +2,13 @@
 // connection's (org_id, connection_id) with a cascading foreign key, so deleting the connection
 // deletes them (invariant 3). Neither holds content: no subject, body, snippet or file name
 // (invariant 8). `source_ref` is how content is re-fetched.
-import { foreignKey, index, jsonb, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { foreignKey, index, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { z } from "zod";
+import { zodJsonb } from "@/db/columns";
 // The one table outside discovery its tables reference: derived data cascades from its
 // connection (docs/conventions.md, "Derived data cascades from its connection").
 import { connections } from "@/features/connections/lib/schema";
-import { EVENT_TYPES, type AttachmentMeta } from "../types";
+import { attachmentMetaSchema, EVENT_TYPES } from "../types";
 
 /** One normalized thing that happened in a source: a Gmail message, or a Drive file change. */
 export const events = pgTable(
@@ -30,7 +32,7 @@ export const events = pgTable(
     // Null for a file change, which goes no way.
     direction: text("direction", { enum: ["inbound", "outbound"] }),
     threadId: text("thread_id"),
-    attachments: jsonb("attachments").$type<AttachmentMeta[]>().notNull(),
+    attachments: zodJsonb("attachments", z.array(attachmentMetaSchema)).notNull(),
     labelIds: text("label_ids").array().notNull(),
     // A Drive file's MIME type; null for an email.
     mimeType: text("mime_type"),

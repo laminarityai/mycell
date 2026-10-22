@@ -6,12 +6,13 @@ import {
   foreignKey,
   index,
   integer,
-  jsonb,
   pgTable,
   text,
   timestamp,
   unique,
 } from "drizzle-orm/pg-core";
+import { z } from "zod";
+import { zodJsonb } from "@/db/columns";
 // Runs reference the connection they act on and the version they run: derived data cascades
 // from its connection (docs/conventions.md).
 import { connections } from "@/features/connections/lib/schema";
@@ -21,7 +22,7 @@ import { reviews } from "@/features/reviews/lib/schema";
 import { customActions } from "@/features/custom-actions/lib/schema";
 import { modelRoleSchema, stepTypes, type ModelRole, type StepType } from "@/features/spec/types";
 import { enablements, workflowVersions } from "@/features/workflows/lib/schema";
-import { runStatuses, runStepStatuses, type Json } from "../types";
+import { runStatuses, runStepStatuses } from "../types";
 
 const modelRoleEnum = modelRoleSchema.options as [ModelRole, ...ModelRole[]];
 
@@ -97,7 +98,7 @@ export const runSteps = pgTable(
     // Labels, probabilities, IDs, field names, and a tool result's field kinds and sizes; never
     // content, which only the step state carries (ADR-0021). Null when the step failed or has
     // nothing to show.
-    output: jsonb("output").$type<Json>(),
+    output: zodJsonb("output", z.json()),
     // Built from codes and field names only.
     errorCode: text("error_code"),
     errorMessage: text("error_message"),

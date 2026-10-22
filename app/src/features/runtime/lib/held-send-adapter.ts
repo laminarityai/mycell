@@ -13,13 +13,22 @@ import {
 import { listCustomActions } from "@/features/custom-actions/server";
 import type { StoredCustomAction } from "@/features/custom-actions/types";
 import type { Ctx } from "@/lib/ctx";
-import { ItemGoneError, ValidationError } from "@/lib/errors";
+import { SourceRequestError } from "@/features/connections/types";
+import {
+  ForbiddenError,
+  ItemGoneError,
+  NotFoundError,
+  SendUnconfirmedError,
+  ValidationError,
+} from "@/lib/errors";
 import {
   deleteHeldSend,
   deleteHeldSendsBefore,
   findHeldSend,
   heldSendExists,
   holdRequest,
+  putBackHeldSend,
+  takeHeldSend,
   type HeldRequest,
   type HeldSend,
 } from "./held-sends";
@@ -42,14 +51,24 @@ export const heldSendAdapter: PendingFormAdapter<HeldSendInput> = {
     return { itemRef: id, threadRef: id };
   },
 
-  // Sends the request once, as held or with the person's edits, then deletes it. The app
-  // answering that what it was sent to isn't there ends it gone.
+  // Takes the request out of storage, then sends it once, as held or with the person's edits,
+  // from memory. The app answering that what it was sent to isn't there ends it gone. A refusal
+  // before the request reached the app puts it back to wait again; any other failure may have
+  // reached the app, so it stays taken and is never sent again (SendUnconfirmedError).
   async approve(ctx, item, edits) {
     const send = await heldSendOf(ctx, item);
-    const request =
-      edits === undefined ? send.held.request : edited(await actionOf(ctx, send), send, edits);
-    const answer = await sent(ctx, send.connectionId, request);
-    await deleteHeldSend(ctx, send.id);
+    const record = await actionOf(ctx, send);
+    const request = edits === undefined ? send.held.request : edited(record, send, edits);
+    const taken = await takeHeldSend(ctx, send.id);
+    if (taken === undefined) throw new ItemGoneError();
+    let answer: unknown;
+    try {
+      answer = await sent(ctx, send.connectionId, request);
+    } catch (error) {
+      if (!neverReachedApp(error)) throw new SendUnconfirmedError();
+      await putBackHeldSend(ctx, taken);
+      throw error;
+    }
     if (answer === null) throw new ItemGoneError();
   },
 
@@ -121,6 +140,17 @@ function edited(record: StoredCustomAction, send: HeldSend, edits: ReviewEdits):
 }
 
 const answer = z.unknown();
+
+/**
+ * Whether a failed send certainly never reached the app: the connection was gone or not the
+ * caller's, or the app or Nango refused it outright (a 4xx other than a timeout). A 5xx, a
+ * timeout or a dropped connection may have come after the app carried the request out.
+ */
+function neverReachedApp(error: unknown): boolean {
+  if (error instanceof NotFoundError || error instanceof ForbiddenError) return true;
+  if (!(error instanceof SourceRequestError)) return false;
+  return error.status >= 400 && error.status < 500 && error.status !== 408;
+}
 
 // Sends a write's request through the proxy; null when the app had no such item (404 or 410).
 function sent(ctx: Ctx, connectionId: string, request: RenderedRequest): Promise<unknown> {

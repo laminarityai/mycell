@@ -9,9 +9,10 @@ import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { disconnect } from "@/features/connections/server";
 import { getRun } from "@/features/runtime/server";
-import type { Ctx } from "@/lib/ctx";
+import { systemCtx, type Ctx } from "@/lib/ctx";
 import { AlreadyHandledError, ConflictError, ValidationError } from "@/lib/errors";
 import type { FakeAppRequest } from "@/testing/fake-microsoft";
+import { fakeNango } from "@/testing/fake-nango";
 import {
   approveEditedReview,
   approveReview,
@@ -152,6 +153,56 @@ describe("a held send's review", () => {
     await expect(approveReview(owner, reviewId)).rejects.toThrow(ConflictError);
 
     expect((await openReview(owner, reviewId)).review.status).toBe("gone");
+  });
+});
+
+describe("a held send whose app doesn't confirm it was sent", () => {
+  it.each(["error", "dropped"] as const)(
+    "ends unconfirmed when the app took it but its answer was lost (%s), and is never sent again",
+    async (how) => {
+      const orgs = await seedTwoOrgs();
+      const { owner, reviewId, outlook, runId } = await heldSend(orgs);
+      const heldSendId = await heldSendIdOf(owner, runId);
+      outlook.loseNextAnswer(how);
+
+      await expect(approveReview(owner, reviewId)).rejects.toThrow(
+        "its app didn't confirm it was sent",
+      );
+      await expect(approveReview(owner, reviewId)).rejects.toThrow(AlreadyHandledError);
+      await checkWaitingReviews(systemCtx(orgs.orgA.id));
+
+      expect(writes(outlook.requests)).toHaveLength(1);
+      expect(await openReview(owner, reviewId)).toMatchObject({
+        review: { status: "unconfirmed", endedByUserId: orgs.orgA.admin.id },
+        view: null,
+      });
+      expect(await tablesHolding(heldSendId)).not.toContain("held_sends");
+    },
+  );
+
+  it("ends unconfirmed when the proxy answers 500, which may have reached the app", async () => {
+    const orgs = await seedTwoOrgs();
+    const { owner, reviewId, outlook } = await heldSend(orgs);
+    fakeNango.failWrites(1);
+
+    await expect(approveReview(owner, reviewId)).rejects.toThrow(ConflictError);
+    await expect(approveReview(owner, reviewId)).rejects.toThrow(AlreadyHandledError);
+
+    expect(writes(outlook.requests)).toEqual([]);
+    expect((await openReview(owner, reviewId)).review.status).toBe("unconfirmed");
+  });
+
+  it("waits on, still held, when Nango refused it before it reached the app", async () => {
+    const orgs = await seedTwoOrgs();
+    const { owner, reviewId, outlook, microsoftNangoId, runId } = await heldSend(orgs);
+    const heldSendId = await heldSendIdOf(owner, runId);
+    fakeNango.revokeAccess(microsoftNangoId);
+
+    await expect(approveReview(owner, reviewId)).rejects.toThrow();
+
+    expect(writes(outlook.requests)).toEqual([]);
+    expect((await openReview(owner, reviewId)).review.status).toBe("waiting");
+    expect(await tablesHolding(heldSendId)).toContain("held_sends");
   });
 });
 

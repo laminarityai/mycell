@@ -3,7 +3,8 @@
 // was sent and how often, and answers who the signed-in user is (`GET /v1.0/me`), the messages
 // of their Outlook mailbox that a test seeds (`GET /v1.0/me/messages/{id}`), and replies to them
 // (`POST /v1.0/me/messages/{id}/reply`, which a test reads back from `requests`). Any other path
-// is 404, as Graph answers a resource it doesn't have.
+// is 404, as Graph answers a resource it doesn't have. A test may lose the answer to the next
+// write Graph carries out, as a gateway error or timeout on the way back would.
 import { HttpResponse } from "msw";
 import type { ProxyMethod } from "./fake-proxied-sources";
 
@@ -27,9 +28,16 @@ export type FakeOutlookMessage = {
 const MESSAGE_PATH = /^\/v1\.0\/me\/messages\/([^/]+)$/;
 const REPLY_PATH = /^\/v1\.0\/me\/messages\/([^/]+)\/reply$/;
 
+/**
+ * How the answer to a write Graph carried out is lost: `error` answers 500, as a gateway that
+ * lost it would; `dropped` drops the connection, as a timeout does.
+ */
+export type LostAnswer = "error" | "dropped";
+
 export class FakeMicrosoft {
   readonly requests: FakeAppRequest[] = [];
   private readonly messages = new Map<string, FakeOutlookMessage>();
+  private lostAnswer: LostAnswer | undefined;
 
   constructor(readonly userEmail: string) {}
 
@@ -42,6 +50,11 @@ export class FakeMicrosoft {
   /** Deletes a message, as its owner would in Outlook. */
   deleteMessage(id: string): void {
     this.messages.delete(id);
+  }
+
+  /** Carries out the next write as usual, then loses its answer `how`. */
+  loseNextAnswer(how: LostAnswer): void {
+    this.lostAnswer = how;
   }
 
   respond(method: ProxyMethod, path: string, params: URLSearchParams, body: unknown): Response {
@@ -61,9 +74,18 @@ export class FakeMicrosoft {
     // message.reply: 202 with no body, for a message the mailbox has.
     const replyTo = method === "POST" ? REPLY_PATH.exec(path)?.[1] : undefined;
     if (replyTo !== undefined && this.messages.has(decodeURI(replyTo))) {
-      return new HttpResponse(null, { status: 202 });
+      return this.answer(new HttpResponse(null, { status: 202 }));
     }
     return graphError(404, "Request_ResourceNotFound", "Resource not found.");
+  }
+
+  // The answer to a write Graph carried out, unless a test asked to lose it.
+  private answer(response: Response): Response {
+    const lost = this.lostAnswer;
+    this.lostAnswer = undefined;
+    if (lost === "dropped") return HttpResponse.error();
+    if (lost === "error") return graphError(500, "InternalServerError", "Internal error.");
+    return response;
   }
 }
 

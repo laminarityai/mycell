@@ -104,8 +104,8 @@ export async function heldSend(orgs: TwoOrgs, options: HeldSendOptions = {}) {
   return { owner: runner, admin, system, workflowId, runId, outcome, reviewId, message, ...apps };
 }
 
-// The account's Google connection and its Microsoft 365 connection, with the Outlook message the
-// reply goes to.
+// The account's Google connection and its Microsoft 365 connection (Mycel's ID and Nango's), with
+// the Outlook message the reply goes to.
 async function connectApps(ctx: Ctx, email: string, kind: "member" | "org") {
   const google = await connectGoogle(ctx, email, { kind });
   const microsoft = await connectApp(ctx, "microsoft", email, { kind });
@@ -116,5 +116,10 @@ async function connectApps(ctx: Ctx, email: string, kind: "member" | "org") {
     from: "ada@customer.test",
     body: "Could you send a quote?",
   });
-  return { google, microsoftId: microsoft.id ?? "", outlook };
+  return {
+    google,
+    microsoftId: microsoft.id ?? "",
+    microsoftNangoId: microsoft.connectionId,
+    outlook,
+  };
 }

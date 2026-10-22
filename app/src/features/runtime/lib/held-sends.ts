@@ -77,6 +77,23 @@ export async function heldSendExists(ctx: Ctx, id: string): Promise<boolean> {
   return (await forOrg(ctx).select(heldSends, { where: eq(heldSends.id, id) })).length > 0;
 }
 
+/** A held send's stored row, encrypted as it is at rest. */
+export type HeldSendRow = typeof heldSends.$inferSelect;
+
+/**
+ * Takes the held send out of storage to send it: deletes it and returns its row, still
+ * encrypted, or undefined when it was already gone. Whoever takes it is the only one who can send
+ * it, so it's sent at most once.
+ */
+export async function takeHeldSend(ctx: Ctx, id: string): Promise<HeldSendRow | undefined> {
+  return (await forOrg(ctx).delete(heldSends, eq(heldSends.id, id))).at(0);
+}
+
+/** Puts back a held send taken out by takeHeldSend that was never sent, as it was. */
+export async function putBackHeldSend(ctx: Ctx, row: HeldSendRow): Promise<void> {
+  await forOrg(ctx).insert(heldSends, row);
+}
+
 /** Deletes the held send; false when it was already gone. */
 export async function deleteHeldSend(ctx: Ctx, id: string): Promise<boolean> {
   return (await forOrg(ctx).delete(heldSends, eq(heldSends.id, id))).length > 0;

@@ -34,8 +34,10 @@ export type PendingForms = Record<ReviewKind, PendingFormAdapter>;
  * Where a review stands: waiting, or how it ended. `done_in_app` is the person finishing it in
  * the app itself (a draft sent, or an escalated message replied to, from Gmail), or marking an
  * escalation done; `gone` is the item gone with no one finishing it; `expired` is a held send
- * nobody ended within 30 days, whose request was then deleted (ADR-0020). Reviews of items an
- * app holds never time out.
+ * nobody ended within 30 days, whose request was then deleted (ADR-0020); `unconfirmed` is a held
+ * send someone approved whose app didn't confirm it was sent (an error or a lost answer after
+ * the request may have reached it), so it may or may not have gone and is never sent again.
+ * Reviews of items an app holds never time out.
  */
 export const reviewStatuses = [
   "waiting",
@@ -45,6 +47,7 @@ export const reviewStatuses = [
   "done_in_app",
   "gone",
   "expired",
+  "unconfirmed",
 ] as const;
 export type ReviewStatus = (typeof reviewStatuses)[number];
 

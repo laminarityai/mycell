@@ -138,7 +138,8 @@ function escalations(counts: ReviewCounts): string {
   return parts.length === 0 ? "None" : parts.join(", ");
 }
 
-// A held send ends approved (as it was, or edited), declined, expired after 30 days, or gone.
+// A held send ends approved (as it was, or edited), declined, expired after 30 days, gone, or
+// approved without its app confirming the send.
 function heldSends(counts: ReviewCounts): string {
   const parts = [
     counts.approved > 0 ? `${String(counts.approved)} approved` : null,
@@ -146,6 +147,7 @@ function heldSends(counts: ReviewCounts): string {
     counts.declined > 0 ? `${String(counts.declined)} declined` : null,
     counts.expired > 0 ? `${String(counts.expired)} expired` : null,
     counts.gone > 0 ? `${String(counts.gone)} gone` : null,
+    counts.unconfirmed > 0 ? `${String(counts.unconfirmed)} unconfirmed` : null,
     counts.waiting > 0 ? `${String(counts.waiting)} waiting` : null,
   ].filter((part) => part !== null);
   return parts.length === 0 ? "None" : parts.join(", ");

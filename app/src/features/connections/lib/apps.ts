@@ -2,6 +2,7 @@
 // integration behind its source, where a proxied path goes, which Google apps it may use, whether
 // discovery ingests from it, and how to read which account it reached.
 import { z } from "zod";
+import { InvariantError } from "@/lib/errors";
 import { REGISTERED_APPS } from "../registered-apps";
 import type { GoogleApp, RegisteredAppId, Source } from "../types";
 import {
@@ -46,7 +47,7 @@ export function ingestsFrom(source: Source): boolean {
 export function proxyTargetFor(source: Source, path: string): ProxyTarget {
   if (isGoogle(source)) return proxyTarget(path);
   if (!path.startsWith("/") || path.startsWith("//")) {
-    throw new Error(`${path} isn't a path on ${REGISTERED_APPS[source].name}`);
+    throw new InvariantError(`${path} isn't a path on ${REGISTERED_APPS[source].name}`);
   }
   return { path };
 }

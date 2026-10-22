@@ -76,6 +76,19 @@ describe("reconcileConnections", () => {
     expect(fakeNango.hasConnection(nangoId)).toBe(false);
   });
 
+  it("leaves a Nango connection it couldn't delete for the next run, and finishes this one", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const nangoId = await connectWithoutWebhook(orgA.member.ctx, orgA.member.email);
+    fakeNango.failDeletes();
+
+    expect(await reconcileConnections(hoursFromNow(25))).toEqual(NOTHING_DONE);
+    expect(fakeNango.hasConnection(nangoId)).toBe(true);
+
+    fakeNango.failDeletes(false);
+    const summary = await reconcileConnections(hoursFromNow(25));
+    expect(summary.deletedAtNango).toEqual([{ nangoConnectionId: nangoId, integration: "google" }]);
+  });
+
   it("leaves connections on both sides untouched, across two orgs", async () => {
     const { orgA, orgB } = await seedTwoOrgs();
     const nangoIds = [

@@ -4,6 +4,7 @@
 // code declares when the module loads, and renders each template as a PromptText, which is what
 // the model calls take (docs/conventions.md, "Prompts").
 import { z } from "zod";
+import { InvariantError } from "./errors";
 
 /** Text rendered from a prompt file. Only this module makes one. */
 export type PromptText = string & { readonly __brand: "PromptText" };
@@ -55,7 +56,7 @@ export function joinPrompts(
 function checkedTemplates(file: unknown, declared: PromptVariables): Record<string, string> {
   const parsed = fileSchema.safeParse(file);
   if (!parsed.success) {
-    throw new Error(`A prompt file maps names to text: ${z.prettifyError(parsed.error)}`);
+    throw new InvariantError(`A prompt file maps names to text: ${z.prettifyError(parsed.error)}`);
   }
   const templates = parsed.data;
   const problems = Object.keys(declared)
@@ -82,7 +83,9 @@ function checkedTemplates(file: unknown, declared: PromptVariables): Record<stri
     }
   }
   if (problems.length > 0) {
-    throw new Error(`A prompt file doesn't match its declaration: ${problems.join("; ")}.`);
+    throw new InvariantError(
+      `A prompt file doesn't match its declaration: ${problems.join("; ")}.`,
+    );
   }
   return templates;
 }
@@ -90,7 +93,7 @@ function checkedTemplates(file: unknown, declared: PromptVariables): Record<stri
 // One pass, so a value holding `{{…}}` is never filled in itself.
 function fill(template: string, values: Record<string, string>): PromptText {
   return template.replace(PLACEHOLDER, (_, name: string) => {
-    if (!Object.hasOwn(values, name)) throw new Error(`No value for {{${name}}}.`);
+    if (!Object.hasOwn(values, name)) throw new InvariantError(`No value for {{${name}}}.`);
     return values[name];
   }) as PromptText;
 }

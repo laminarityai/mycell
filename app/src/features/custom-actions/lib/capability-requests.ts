@@ -10,7 +10,7 @@ import { forOrg } from "@/db/for-org";
 import { REGISTERED_APPS, registeredApps } from "@/features/connections/registered-apps";
 import { registeredAppIdSchema } from "@/features/connections/types";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
-import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
+import { ForbiddenError, InvariantError, NotFoundError, ValidationError } from "@/lib/errors";
 import type { PromptText } from "@/lib/prompts";
 import {
   capabilityRequestInputSchema,
@@ -70,7 +70,7 @@ export async function fileCapabilityRequest(
           )
         ).at(0);
       // One of the two always returns the row, so this is a bug.
-      if (row === undefined) throw new Error("The capability request wasn't recorded.");
+      if (row === undefined) throw new InvariantError("The capability request wasn't recorded.");
       await tx.insert(capabilityRequestAsks, {
         id: randomUUID(),
         requestId: row.id,

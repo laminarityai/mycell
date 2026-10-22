@@ -55,12 +55,25 @@ export function checkCustomAction(input: unknown): CustomActionCheck {
 
 const PLACEHOLDER = /\{([^{}]*)\}/g;
 
+/**
+ * The words before the dot in catalog actions' names (`google-mail`), kept for the catalog with
+ * every other `google-` word, so a custom action never takes the name of one the catalog adds.
+ */
+const CATALOG_WORDS = new Set(
+  catalogActionSet.actions.map((action) => action.name.split(".", 1)[0] ?? ""),
+);
+
 function descriptionIssues(description: CustomActionDescription): string[] {
   const { app: appId, call, inputs, editable } = description;
   const app = REGISTERED_APPS[appId];
   const issues: string[] = [];
+  const word = description.name.split(".", 1)[0] ?? "";
   if (catalogActionSet.find(description.name) !== undefined) {
     issues.push(`"${description.name}" is a catalog action's name. Choose another.`);
+  } else if (CATALOG_WORDS.has(word) || word.startsWith("google-")) {
+    issues.push(
+      `Names starting "${word}." are kept for catalog actions: name a custom action after its app's word, such as "microsoft.read-message".`,
+    );
   }
   const named = (where: string, input: string) => {
     if (!Object.hasOwn(inputs, input)) {

@@ -1,7 +1,7 @@
 // Checking a custom action's description (ADR-0018): the call stays on its registered app, names
 // only its own inputs, and gets its level from the fixed rule, never from the description.
 import { describe, expect, it } from "vitest";
-import { checkCustomAction, customActionWords } from "../description";
+import { actionSetWith, checkCustomAction, customActionWords } from "../description";
 import { readOutlookMessage, REPLY_PATH, replyToOutlookMessage } from "@/db/testing/custom-actions";
 
 const withCall = (call: Record<string, unknown>) =>
@@ -156,6 +156,37 @@ describe("checking a custom action's description", () => {
       ok: false,
       issues: ['"google-mail.read-message" is a catalog action\'s name. Choose another.'],
     });
+  });
+
+  it("refuses a name in the catalog's own words, which it keeps for actions it adds later", () => {
+    for (const [name, word] of [
+      ["google-mail.read-labels", "google-mail"],
+      ["google-calendar.read-event", "google-calendar"],
+    ]) {
+      expect(checkCustomAction(readOutlookMessage({ name })), name).toEqual({
+        ok: false,
+        issues: [
+          `Names starting "${word}." are kept for catalog actions: name a custom action after its app's word, such as "microsoft.read-message".`,
+        ],
+      });
+    }
+    expect(checkCustomAction(readOutlookMessage({ name: "google.read-event" }))).toMatchObject({
+      ok: true,
+    });
+  });
+});
+
+describe("an org's action set", () => {
+  it("keeps the catalog's action when a stored custom action has its name", () => {
+    const check = checkCustomAction(readOutlookMessage());
+    if (!check.ok) throw new Error(check.issues.join(" "));
+    // Stored before the catalog gained an action of the same name.
+    const clash = { ...check.action, name: "google-mail.read-message" };
+
+    const actions = actionSetWith([clash]);
+
+    expect(actions.find("google-mail.read-message")).toMatchObject({ kind: "catalog" });
+    expect(actions.actions.filter((action) => action.name === clash.name)).toHaveLength(1);
   });
 });
 

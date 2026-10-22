@@ -150,11 +150,18 @@ export const draftStep = specObject({
   output: actionName,
 });
 
-/** In v1 a person approves by sending the Gmail draft. */
+/**
+ * Where a person reviews what waits: `gmail_drafts`, the Gmail drafts the draft steps above it
+ * made; `held_send`, the requests of the custom writes above it, which Mycel holds until a person
+ * approves them (ADR-0020).
+ */
+export const approvalChannels = ["gmail_drafts", "held_send"] as const;
+export type ApprovalChannel = (typeof approvalChannels)[number];
+
 export const approvalStep = specObject({
   ...stepBase,
   type: z.literal("approval"),
-  channel: z.literal("gmail_drafts"),
+  channel: z.enum(approvalChannels),
 });
 
 export const escalateStep = specObject({

@@ -29,6 +29,28 @@ export function readOutlookMessage(overrides: Record<string, unknown> = {}) {
   };
 }
 
+export const REPLY_PATH = "/v1.0/me/messages/{messageId}/reply";
+
+/**
+ * Replies to one Outlook message through Microsoft Graph: a write, so it waits for a person,
+ * who may edit its comment first.
+ */
+export function replyToOutlookMessage(overrides: Record<string, unknown> = {}) {
+  return {
+    name: "microsoft.reply-to-message",
+    app: "microsoft",
+    description: "Reply to one Outlook message with a comment.",
+    call: { method: "POST", path: REPLY_PATH, body: { comment: "comment" } },
+    inputs: {
+      messageId: { type: "text", description: "The Outlook message's ID." },
+      comment: { type: "text", description: "The reply's text." },
+    },
+    outputs: {},
+    editable: ["comment"],
+    ...overrides,
+  };
+}
+
 /** The description, checked: what a proposal carries and storing takes. */
 export function checkedCustomAction(description: unknown): CustomActionRecord {
   const check = checkCustomAction(description);

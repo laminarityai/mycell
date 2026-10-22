@@ -70,9 +70,8 @@ export const customActionDescriptionSchema = z
     description: z.string().min(1),
     call: z.union([restCall, graphqlCall]),
     inputs: z.record(inputName, inputSchema).default({}),
-    outputs: z
-      .record(inputName, outputSchema)
-      .refine((outputs) => Object.keys(outputs).length > 0, "Name at least one result field."),
+    /** A read's result fields; a write's never reach the run, since it sends only once approved. */
+    outputs: z.record(inputName, outputSchema).default({}),
     /** For a write: the text inputs a reviewer may edit before it's sent. */
     editable: z.array(inputName).default([]),
     risk: z.unknown().optional(),

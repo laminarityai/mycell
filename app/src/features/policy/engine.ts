@@ -3,7 +3,7 @@
 // Pure: no IO, no ctx.
 import { z } from "zod";
 import { eachStep, mapStepLists, type PlacedStep } from "@/features/spec/tree";
-import type { Spec, SpecIssue, Step } from "@/features/spec/types";
+import type { ApprovalChannel, Spec, SpecIssue, Step } from "@/features/spec/types";
 import { SpecInvalidError } from "@/lib/errors";
 import { GOOGLE_SCOPE_PREFIX } from "@/lib/google";
 import { appsUsed } from "./action-set";
@@ -48,9 +48,9 @@ export function maxRisk(spec: Spec, actions: ActionSet): RiskLevel {
 
 /**
  * Checks the spec's actions against `actions` and makes sure every `external_send` action
- * waits for a person: a `draft` output needs an `approval` step on its own path, and one is
- * inserted directly after the draft when there's none. Returns the spec with what it
- * inserted, or every issue at once.
+ * waits for a person: a `draft` output needs a `gmail_drafts` approval on its own path, and a
+ * `tool` step's custom write a `held_send` one (ADR-0020); one is inserted directly after the
+ * step when there's none. Returns the spec with what it inserted, or every issue at once.
  */
 export function applyPolicy(spec: Spec, actions: ActionSet): PolicyResult {
   const issues = [...actionIssues(spec, actions), ...conditionIssues(spec, actions)];
@@ -59,14 +59,15 @@ export function applyPolicy(spec: Spec, actions: ActionSet): PolicyResult {
   const inserted: InsertedApproval[] = [];
   const placed = eachStep(spec);
   const ids = new Set(placed.map(({ step }) => step.id));
-  const unreviewed = new Set(unreviewedDrafts(placed));
+  const unreviewed = new Map(unreviewedSends(placed, actions).map((send) => [send.stepId, send]));
   const withApprovals = mapStepLists(spec, (steps) =>
     steps.flatMap((step): Step[] => {
-      if (step.type !== "draft" || !unreviewed.has(step.id)) return [step];
+      const send = unreviewed.get(step.id);
+      if (send === undefined) return [step];
       const stepId = freeId(`${step.id}-approval`, ids);
       ids.add(stepId);
-      inserted.push({ stepId, after: step.id, action: step.output });
-      return [step, { id: stepId, type: "approval", channel: "gmail_drafts" }];
+      inserted.push({ stepId, after: step.id, action: send.action });
+      return [step, { id: stepId, type: "approval", channel: send.channel }];
     }),
   );
 
@@ -114,24 +115,44 @@ function shortScope(scope: string): string {
 }
 
 /**
- * The drafts no approval reviews. Only an approval after the draft in its own list reviews it:
- * every run that makes the draft reaches it. One above the draft ran before the draft was
- * made; one on a sibling path, or on a path below the draft, which a run may not take, doesn't
- * count either: a branch chooses a path but never removes a review (ADR-0015).
+ * What a step sends that waits for a person, and the approval channel that reviews it: a draft
+ * step's Gmail draft, or a tool step's custom write, which Mycel holds (ADR-0020).
  */
-function unreviewedDrafts(placed: PlacedStep[]): string[] {
+function sendOf(
+  step: Step,
+  actions: ActionSet,
+): { action: string; channel: ApprovalChannel } | undefined {
+  if (step.type === "draft") return { action: step.output, channel: "gmail_drafts" };
+  if (step.type !== "tool") return undefined;
+  const action = actions.find(step.action);
+  if (action?.kind !== "custom" || action.risk !== "external_send") return undefined;
+  return { action: step.action, channel: "held_send" };
+}
+
+/**
+ * The sends no approval reviews. Only an approval of the send's channel after it in its own list
+ * reviews it: every run that makes the send reaches it. One above the send ran before the send
+ * was made; one on a sibling path, or on a path below the send, which a run may not take,
+ * doesn't count either: a branch chooses a path but never removes a review (ADR-0015).
+ */
+function unreviewedSends(
+  placed: PlacedStep[],
+  actions: ActionSet,
+): { stepId: string; action: string; channel: ApprovalChannel }[] {
   // Each step's list, as the location of the list, and its index in it.
   const listOf = (location: SpecIssue["path"]) => JSON.stringify(location.slice(0, -1));
   const indexOf = (location: SpecIssue["path"]) => Number(location.at(-1));
   return placed.flatMap(({ step, location }) => {
-    if (step.type !== "draft") return [];
+    const send = sendOf(step, actions);
+    if (send === undefined) return [];
     const reviewed = placed.some(
       (other) =>
         other.step.type === "approval" &&
+        other.step.channel === send.channel &&
         listOf(other.location) === listOf(location) &&
         indexOf(other.location) > indexOf(location),
     );
-    return reviewed ? [] : [step.id];
+    return reviewed ? [] : [{ stepId: step.id, ...send }];
   });
 }
 
@@ -151,12 +172,16 @@ function actionIssues(spec: Spec, actions: ActionSet): SpecIssue[] {
         path,
         message: `"${name}" isn't a catalog action or one of the company's custom actions.`,
       });
-    } else if (step.type === "tool" && action.risk === "external_send") {
+    } else if (
+      step.type === "tool" &&
+      action.kind === "catalog" &&
+      action.risk === "external_send"
+    ) {
       issues.push({
         path,
         message: `"${name}" sends outside the company, so it can only be a draft step's output.`,
       });
-    } else if (step.type === "draft" && action.risk !== "external_send") {
+    } else if (step.type === "draft" && action.pendingForm === undefined) {
       issues.push({ path, message: `"${name}" doesn't create a draft; use it in a tool step.` });
     } else if (step.type === "tool") {
       issues.push(...literalInputIssues(step, location, action));

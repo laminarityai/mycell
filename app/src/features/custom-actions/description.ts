@@ -22,7 +22,8 @@ export type CustomActionCheck =
  * Checks a description the builder chat wrote: its shape, that its call stays on its registered
  * app and names only its own inputs, and the fixed risk rule, which sets its level (a level the
  * description proposes is dropped). Every issue comes back at once, in words the builder can fix.
- * Custom writes wait for held sends (#98), so only a read passes for now.
+ * A write is `external_send`: each time it runs, Mycel holds its request until a person approves
+ * it (ADR-0020).
  */
 export function checkCustomAction(input: unknown): CustomActionCheck {
   const parsed = customActionDescriptionSchema.safeParse(input);
@@ -38,10 +39,13 @@ export function checkCustomAction(input: unknown): CustomActionCheck {
   const issues = descriptionIssues(description);
   const risk = customActionRisk(description.call, REGISTERED_APPS[description.app]);
   if (!risk.ok) issues.push(risk.reason);
-  else if (risk.risk !== "read") {
-    issues.push(
-      "Only a call that reads can be a custom action for now: a custom write needs held sends, which aren't built yet.",
-    );
+  else if (risk.risk === "read") {
+    if (Object.keys(description.outputs).length === 0) {
+      issues.push("outputs: Name at least one result field.");
+    }
+    if (description.editable.length > 0) {
+      issues.push("Only a write has text a reviewer edits: a read sends nothing to review.");
+    }
   }
   if (issues.length > 0 || !risk.ok) return { ok: false, issues };
   return { ok: true, action: { ...description, risk: risk.risk } };
@@ -133,11 +137,16 @@ export function customActionOf(record: CustomActionRecord): CustomAction {
         ]),
       ),
     ),
-    conditionFields: Object.entries(outputs).map(([name, output]): ConditionField => ({
-      name,
-      type: CONDITION_TYPES[output.type],
-      label: output.label,
-    })),
+    // A write's result never reaches the run (it's sent only once approved), so only a read's
+    // fields can be branched on.
+    conditionFields:
+      record.risk === "read"
+        ? Object.entries(outputs).map(([name, output]): ConditionField => ({
+            name,
+            type: CONDITION_TYPES[output.type],
+            label: output.label,
+          }))
+        : [],
     request: {
       ...request,
       outputs: Object.fromEntries(Object.entries(outputs).map(([name, o]) => [name, o.path])),

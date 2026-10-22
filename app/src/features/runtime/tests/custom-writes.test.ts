@@ -3,12 +3,15 @@
 // Reviews page. Try it shows the exact request instead, sending nothing.
 import { beforeEach, describe, expect, it } from "vitest";
 import { tablesHolding } from "@/db/testing/content-scan";
+import { readOutlookMessage, storeCustomAction } from "@/db/testing/custom-actions";
 import { heldReplySpec, heldSend, OUTLOOK_MESSAGE } from "@/db/testing/held-sends";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { listReviews } from "@/features/reviews/server";
+import type { Ctx } from "@/lib/ctx";
 import { fakeKms } from "@/testing/fake-kms";
-import { dryRun, getRun } from "../server";
+import { publishTo } from "@/testing/visibility-helpers";
+import { dryRun, executeRun, getRun, startRun } from "../server";
 import type { RunStep } from "../types";
 
 beforeEach(resetDatabase);
@@ -97,3 +100,63 @@ describe("a custom write in Try it", () => {
     expect(outlook.requests.length).toBe(before);
   });
 });
+
+describe("a held_send approval", () => {
+  it("records only what a custom write above it held, not a read's look-alike result", async () => {
+    const orgs = await seedTwoOrgs();
+    const { admin, system, google, outlook, microsoftId, runId } = await heldSend(orgs);
+    const heldSendId = (await heldSendIdsOf(admin, runId))[0];
+    await storeCustomAction(admin, readIdsOfMessage());
+    outlook.addMessage({ id: "look-alike", subject: heldSendId, from: microsoftId, body: "" });
+    const { workflowId } = await publishTo(admin, "Look-alikes", lookAlikeSpec(), ["sales"]);
+    const message = google.mailbox.add({
+      from: "Ada Lovelace <ada@customer.test>",
+      subject: "Another quote",
+      text: "Could you quote 10 tables?",
+      at: new Date(Date.now() - 60 * 1000),
+    });
+
+    const second = (await startRun(admin, workflowId, google.id, message.id)).runId;
+    await executeRun(system, second);
+
+    expect((await getRun(admin, second)).steps.map((step) => step.status)).toEqual([
+      "succeeded",
+      "succeeded",
+    ]);
+    expect(await heldSendIdsOf(admin, second)).toEqual([]);
+    expect(await listReviews(admin)).toHaveLength(1);
+  });
+});
+
+// A custom read whose result fields are named like a held send's: a message's subject and
+// sender, which an outside sender controls.
+function readIdsOfMessage() {
+  return readOutlookMessage({
+    name: "microsoft.read-ids",
+    outputs: {
+      heldSendId: { type: "text", label: "The subject", path: "subject" },
+      connectionId: { type: "text", label: "The sender", path: "from.emailAddress.address" },
+    },
+  });
+}
+
+function lookAlikeSpec() {
+  return heldReplySpec({
+    id: "look-alikes",
+    steps: [
+      {
+        id: "read-ids",
+        type: "tool",
+        action: "microsoft.read-ids",
+        input: { messageId: "look-alike" },
+      },
+      { id: "approve", type: "approval", channel: "held_send" },
+    ],
+  });
+}
+
+// The held sends a run's approval step recorded.
+async function heldSendIdsOf(ctx: Ctx, runId: string): Promise<string[]> {
+  const approval = (await getRun(ctx, runId)).steps.find((step) => step.type === "approval");
+  return (approval?.output as { heldSendIds?: string[] } | null)?.heldSendIds ?? [];
+}

@@ -4,16 +4,17 @@
 // nothing is merged.
 import { randomUUID } from "node:crypto";
 import { and, asc, eq, isNull } from "drizzle-orm";
-import { forOrg } from "@/db/for-org";
+import { forOrg, type OrgScopedDb } from "@/db/for-org";
 import { actionSetWith } from "@/features/custom-actions/description";
 import { listCustomActions } from "@/features/custom-actions/server";
 import { readStoredSpec } from "@/features/spec/stored";
 import type { SpecIssue } from "@/features/spec/types";
 import {
+  checkWorkflowSave,
   checkWorkflowSpec,
   getWorkflow,
   listWorkflows,
-  saveWorkflow,
+  saveWorkflowIn,
 } from "@/features/workflows/server";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { ConflictError, NotFoundError } from "@/lib/errors";
@@ -138,32 +139,41 @@ export async function acceptProposal(
 ): Promise<{ workflowId: string }> {
   requireAdmin(ctx);
   const row = await openProposal(ctx, proposalId);
-  const spec = readStoredSpec(row.spec);
-  // Its custom actions are stored with the spec, in one transaction, or not at all.
-  const newCustomActions =
-    row.customActions.length === 0 ? undefined : { actions: row.customActions, proposalId: row.id };
-  if (row.workflowId === null) {
-    const saved = await saveWorkflow(ctx, { name: row.name, spec, newCustomActions });
-    await decide(ctx, row.id, "accepted", { workflowId: saved.id });
-    // A conversation is about one workflow: the first accepted proposal links it.
-    await forOrg(ctx).update(
-      builderConversations,
-      { workflowId: saved.id, updatedAt: new Date() },
-      and(eq(builderConversations.id, row.conversationId), isNull(builderConversations.workflowId)),
-    );
-    return { workflowId: saved.id };
-  }
-  const baseRevision = row.baseRevision ?? undefined;
+  // Everything saving reads and checks comes first: the transaction queries only through `tx`.
+  const save = await checkWorkflowSave(ctx, {
+    workflowId: row.workflowId ?? undefined,
+    name: row.name,
+    spec: readStoredSpec(row.spec),
+    baseRevision: row.baseRevision ?? undefined,
+    // Its custom actions are stored with the spec, or not at all.
+    newCustomActions:
+      row.customActions.length === 0
+        ? undefined
+        : { actions: row.customActions, proposalId: row.id },
+  });
+  const newWorkflow = row.workflowId === null;
   try {
-    await saveWorkflow(ctx, {
-      workflowId: row.workflowId,
-      name: row.name,
-      spec,
-      baseRevision,
-      newCustomActions,
+    // The working spec, the decision and the conversation's link land together, or none does
+    // and the proposal stays open to accept again.
+    return await forOrg(ctx).transaction(async (tx) => {
+      const saved = await saveWorkflowIn(ctx, tx, save);
+      await decide(ctx, row.id, "accepted", { workflowId: saved.id }, tx);
+      // A conversation is about one workflow: the first accepted proposal links it.
+      if (newWorkflow) {
+        await tx.update(
+          builderConversations,
+          { workflowId: saved.id, updatedAt: new Date() },
+          and(
+            eq(builderConversations.id, row.conversationId),
+            isNull(builderConversations.workflowId),
+          ),
+        );
+      }
+      return { workflowId: saved.id };
     });
   } catch (error) {
-    if (!(error instanceof ConflictError)) throw error;
+    // A new workflow has no working spec to have moved on.
+    if (row.workflowId === null || !(error instanceof ConflictError)) throw error;
     const current = await getWorkflow(ctx, row.workflowId);
     if (current.revision === row.baseRevision) throw error;
     await decide(ctx, row.id, "stale");
@@ -171,8 +181,6 @@ export async function acceptProposal(
       "The workflow changed after this proposal was made, so it wasn't saved. Ask the builder to propose again from the current working spec.",
     );
   }
-  await decide(ctx, row.id, "accepted");
-  return { workflowId: row.workflowId };
 }
 
 /** Rejects the proposal; nothing changes. */
@@ -205,13 +213,15 @@ const STATUS_WORDS: Record<ProposalStatus, string> = {
   stale: "found out of date",
 };
 
+// Through `db`, which accepting passes its transaction as.
 async function decide(
   ctx: Ctx,
   proposalId: string,
   status: ProposalStatus,
   extra: { workflowId?: string } = {},
+  db: OrgScopedDb = forOrg(ctx),
 ): Promise<void> {
-  await forOrg(ctx).update(
+  await db.update(
     builderProposals,
     { ...extra, status, decidedBy: ctx.userId, decidedAt: new Date() },
     eq(builderProposals.id, proposalId),

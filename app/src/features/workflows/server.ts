@@ -5,6 +5,9 @@ export { getWorkflowVersion, publishWorkflow } from "./lib/versions";
 export { previewPublish } from "./lib/publish-preview";
 export { getVisibleWorkflow, listVisibleWorkflows } from "./lib/visibility";
 export { getWorkflow, listWorkflows, saveWorkflow } from "./lib/workflows";
+// Saving inside the caller's transaction, as accepting a proposal does: everything a save reads
+// and checks first, then the writes through the caller's `tx`.
+export { checkWorkflowSave, saveWorkflowIn } from "./lib/workflows";
 export { switchWorkflowOff, switchWorkflowOn } from "./lib/switches";
 // Admins stop a workflow everywhere, and bring it back as it was.
 export { archiveWorkflow, restoreWorkflow } from "./lib/archiving";

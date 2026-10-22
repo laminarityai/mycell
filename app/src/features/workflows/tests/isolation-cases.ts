@@ -1,8 +1,9 @@
 import { expect } from "vitest";
+import { forOrg } from "@/db/for-org";
 import { defineIsolationCases } from "@/db/testing/isolation";
 import type { TwoOrgs } from "@/db/testing/two-org-fixture";
 import { systemCtx, type Ctx } from "@/lib/ctx";
-import { NotFoundError } from "@/lib/errors";
+import { ConflictError, NotFoundError } from "@/lib/errors";
 import { connectGmail, connectMailbox } from "@/testing/connect-helpers";
 import { listTags, renameTag, unassignTag } from "@/features/tags/server";
 import { publishTo, tagUsers } from "@/testing/visibility-helpers";
@@ -51,6 +52,34 @@ export const isolationCases = defineIsolationCases(server, {
     // The same spec ID is free in org A.
     await server.saveWorkflow(ctx, { name: "A", spec: draftSpec() });
 
+    expect(await server.getWorkflow(orgs.orgB.admin.ctx, id)).toEqual(before);
+  },
+
+  checkWorkflowSave: async (orgs) => {
+    const { id } = await seedOrgBWorkflow(orgs);
+
+    await expect(
+      server.checkWorkflowSave(orgs.orgA.admin.ctx, {
+        workflowId: id,
+        name: "A",
+        spec: draftSpec(),
+      }),
+    ).rejects.toThrow(NotFoundError);
+  },
+
+  saveWorkflowIn: async (orgs) => {
+    const { id, before } = await seedOrgBWorkflow(orgs);
+    // A save of org B's workflow, checked in org B, finds nothing to write through org A.
+    const checked = await server.checkWorkflowSave(orgs.orgB.admin.ctx, {
+      workflowId: id,
+      name: "Taken",
+      spec: draftSpec(),
+    });
+    const ctx = orgs.orgA.admin.ctx;
+
+    await expect(
+      forOrg(ctx).transaction((tx) => server.saveWorkflowIn(ctx, tx, checked)),
+    ).rejects.toThrow(ConflictError);
     expect(await server.getWorkflow(orgs.orgB.admin.ctx, id)).toEqual(before);
   },
 

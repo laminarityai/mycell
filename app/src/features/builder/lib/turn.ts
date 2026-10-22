@@ -22,6 +22,7 @@ import { gatherContext } from "./context";
 import { appendMessage, findConversation, messagesOf } from "./conversations";
 import { toModelMessages } from "./history";
 import { instructionsWith } from "./instructions";
+import { toolResultPrompts } from "./prompts";
 import { builderTools, type BuilderTool, type TurnInfo } from "./tools";
 
 /** A turn's model steps, at most (spec #43, "Limits"). */
@@ -33,7 +34,7 @@ const FAILED: Notice = {
 };
 
 /** What a failed tool call says, kept and shown, unless it's one of our typed errors. */
-const TOOL_FAILED = "That tool call failed.";
+const TOOL_FAILED = toolResultPrompts.toolFailed();
 
 /**
  * Takes the admin's message and streams the agent's reply. Out of credits, no model is called:

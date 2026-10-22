@@ -4,6 +4,7 @@ import type { LanguageModel } from "ai";
 import type { z } from "zod";
 import type { CreditPurpose } from "@/features/credits/types";
 import type { ModelRole } from "@/features/spec/types";
+import type { PromptText } from "@/lib/prompts";
 
 /**
  * What a model call is for; recorded on its ledger entry. `purpose` tags usage a budget of its
@@ -29,10 +30,13 @@ export type MeteredStream = {
   finish(outcome: "succeeded" | "failed"): Promise<void>;
 };
 
-/** A text call. */
+/**
+ * A text call. Its `system` and `prompt` are rendered from a prompt file (`@/lib/prompts`), with
+ * anything not written for the model, such as a message, filled in as a variable.
+ */
 export type TextRequest = CallAttribution & {
-  system?: string;
-  prompt: string;
+  system?: PromptText;
+  prompt: PromptText;
   maxOutputTokens?: number;
 };
 
@@ -60,7 +64,8 @@ export type Classification = {
 
 /** A classify request: which label, of 2 to 10, fits `state` best. */
 export type ClassifyRequest = CallAttribution & {
-  question: string;
+  /** Rendered from a prompt file, like a text call's prompt; a spec's question as a variable. */
+  question: PromptText;
   labels: string[];
   /** What to classify, such as the message's sender, subject and text, held in memory only. */
   state: string;

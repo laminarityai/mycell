@@ -11,6 +11,7 @@ import { REGISTERED_APPS, registeredApps } from "@/features/connections/register
 import { registeredAppIdSchema } from "@/features/connections/types";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
+import type { PromptText } from "@/lib/prompts";
 import {
   capabilityRequestInputSchema,
   type CapabilityRequest,
@@ -18,6 +19,7 @@ import {
   type CapabilityRequestStatus,
   type FiledCapabilityRequest,
 } from "../types";
+import { capabilityRequestPrompts } from "./prompts";
 import { capabilityRequestAsks, capabilityRequests } from "./schema";
 
 type RequestRow = typeof capabilityRequests.$inferSelect;
@@ -145,11 +147,10 @@ function collapse(text: string): string {
   return text.trim().replace(/\s+/g, " ");
 }
 
-function filedMessage(count: number, row: RequestRow): string {
+function filedMessage(count: number, row: RequestRow): PromptText {
   return count === 1
-    ? "Filed: our team will see it. Tell the admin plainly what you can't do yet."
-    : `This was asked for ${String(count)} times now, and its status is ${row.status}. ` +
-        "Tell the admin plainly what you can't do yet.";
+    ? capabilityRequestPrompts.filed()
+    : capabilityRequestPrompts.askedAgain({ count: String(count), status: row.status });
 }
 
 function toRequest(row: RequestRow, asks: AskRow[]): CapabilityRequest {

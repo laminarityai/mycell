@@ -1,5 +1,11 @@
+import { createRequire } from "node:module";
 import { defineConfig } from "vitest/config";
 import { checkoutIsolation } from "./checkout-isolation";
+
+// Required at runtime rather than imported, so loading this config doesn't bundle the loader.
+const { promptModule } = createRequire(import.meta.url)("./prompt-loader.cjs") as {
+  promptModule: (source: string) => string;
+};
 
 // Tests use their own database on the local Postgres (`pnpm db:up`) or the CI service
 // container, never the one in .env: mycel_test_<suffix>, named for this checkout so parallel
@@ -49,6 +55,15 @@ process.env.KMS_SECRET_ACCESS_KEY = "test-kms-secret-access-key";
 
 export default defineConfig({
   resolve: { tsconfigPaths: true },
+  // Prompt files load as Turbopack bundles them (next.config.ts).
+  plugins: [
+    {
+      name: "prompt-files",
+      transform(source, id) {
+        return id.endsWith(".prompt.yml") ? { code: promptModule(source), map: null } : undefined;
+      },
+    },
+  ],
   test: {
     include: ["src/**/*.test.ts", "scripts/**/*.test.ts"],
     globalSetup: ["src/db/testing/global-setup.ts"],

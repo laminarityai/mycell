@@ -1,0 +1,6 @@
+# Placeholders that aren't {{name}}, for definePrompts' own tests (prompts.test.ts).
+
+spaced: |-
+  Hello, {{ name }}.
+unclosed: |-
+  Hello, {{name}.

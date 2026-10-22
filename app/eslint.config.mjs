@@ -60,6 +60,41 @@ const actionParsing = {
   message: `Don't parse an action's input by hand: a ZodError would reach the user. ${ACTION_HELPER}`,
 };
 
+// Text for a model is rendered from a prompt file (src/lib/prompts.ts), so a cast can't make one.
+const promptCasts = [
+  {
+    selector:
+      ":matches(TSAsExpression, TSTypeAssertion) > TSTypeReference.typeAnnotation > Identifier.typeName[name=/^Prompt(Text|File)$/]",
+    message:
+      "Write text for a model in a prompt file and render it with definePrompts (src/lib/prompts.ts).",
+  },
+];
+
+// Every model call is metered (invariant 7): only the models feature's calls, and the builder
+// chat's turn and tools, which stream through openMeteredStream, use the AI SDK's model calls.
+const modelCalls = {
+  name: "ai",
+  importNames: [
+    "generateText",
+    "streamText",
+    "generateObject",
+    "streamObject",
+    "experimental_decide",
+    "embed",
+    "embedMany",
+    "createGateway",
+    "tool",
+  ],
+  message:
+    "Call models through @/features/models/server: it checks credits first and records the usage (invariant 7).",
+};
+const MODEL_CALLERS = [
+  "src/features/models/lib/{call-model,classify,embed,gateway,metered-stream}.ts",
+  "src/features/builder/lib/{turn,tools}.ts",
+  // Its tests drive the SDK against the fake AI Gateway, as its calls do.
+  "src/features/models/tests/**",
+];
+
 export default defineConfig([
   ...nextVitals,
   ...nextTs,
@@ -73,6 +108,8 @@ export default defineConfig([
     files: ["**/*.{js,mjs,cjs}"],
     extends: [tseslint.configs.disableTypeChecked],
   },
+  // CommonJS loads what it uses with require: the prompt loader and its Node hooks.
+  { files: ["**/*.cjs"], rules: { "@typescript-eslint/no-require-imports": "off" } },
   {
     // eslint-config-next registers the plugin but turns on few of its rules; these are the rest.
     files: ["**/*.tsx"],
@@ -103,6 +140,13 @@ export default defineConfig([
     },
   },
   {
+    files: ["src/**/*.{ts,tsx}", "e2e/**/*.ts", "scripts/**/*.ts"],
+    rules: {
+      "no-restricted-imports": ["error", { paths: [modelCalls] }],
+      "no-restricted-syntax": ["error", ...promptCasts],
+    },
+  },
+  {
     files: ["src/**/*.{ts,tsx}"],
     // Better Auth's tables key the org as organization_id, so forOrg can't reach them. The orgs
     // feature owns them and queries them directly (docs/conventions.md, "Data access").
@@ -110,7 +154,10 @@ export default defineConfig([
     rules: {
       "no-restricted-imports": [
         "error",
-        { patterns: [rawClientImport, authSchemaImport, driverImports] },
+        {
+          paths: [modelCalls],
+          patterns: [rawClientImport, authSchemaImport, driverImports],
+        },
       ],
     },
   },
@@ -119,13 +166,16 @@ export default defineConfig([
     files: ["src/features/*/lib/schema.ts"],
     ignores: ["src/features/orgs/lib/**"],
     rules: {
-      "no-restricted-imports": ["error", { patterns: [rawClientImport, driverImports] }],
+      "no-restricted-imports": [
+        "error",
+        { paths: [modelCalls], patterns: [rawClientImport, driverImports] },
+      ],
     },
   },
   {
     files: ["src/**/*.{ts,tsx}"],
     ignores: ["src/components/date-time.tsx"],
-    rules: { "no-restricted-syntax": ["error", ...dateFormatting] },
+    rules: { "no-restricted-syntax": ["error", ...dateFormatting, ...promptCasts] },
   },
   {
     // A rule's options replace, not merge, so the restrictions above are repeated here.
@@ -134,17 +184,34 @@ export default defineConfig([
       "no-restricted-imports": [
         "error",
         {
-          paths: actionImports,
+          paths: [...actionImports, modelCalls],
           patterns: [rawClientImport, authSchemaImport, driverImports],
         },
       ],
-      "no-restricted-syntax": ["error", ...dateFormatting, actionParsing],
+      "no-restricted-syntax": ["error", ...dateFormatting, ...promptCasts, actionParsing],
     },
+  },
+  {
+    // The model calls themselves.
+    files: MODEL_CALLERS,
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        { patterns: [rawClientImport, authSchemaImport, driverImports] },
+      ],
+    },
+  },
+  {
+    // The one place a PromptText is made.
+    files: ["src/lib/prompts.ts"],
+    rules: { "no-restricted-syntax": ["error", ...dateFormatting] },
   },
   { files: ["src/env.ts"], rules: { "no-restricted-properties": "off" } },
   { files: [NEXT_DEFAULT_EXPORT_FILES], rules: { "import/no-default-export": "off" } },
   // Playwright loads its global setup as a default export.
   { files: ["e2e/global-setup.ts"], rules: { "import/no-default-export": "off" } },
+  // A prompt file's module is its parsed YAML, as a default export (prompt-loader.cjs).
+  { files: ["src/prompt-files.d.ts"], rules: { "import/no-default-export": "off" } },
   prettier,
   globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts"]),
 ]);

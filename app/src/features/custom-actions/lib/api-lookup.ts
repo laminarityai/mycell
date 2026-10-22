@@ -19,6 +19,7 @@ import {
 } from "../types";
 import { apiIndexSchema } from "./api-index-types";
 import { searchable, searchOperations, type SearchableIndex } from "./api-search";
+import { apiLookupPrompts } from "./prompts";
 
 /**
  * How many operations a search returns, how many fields each of their types shows (by name and
@@ -59,7 +60,11 @@ export async function lookUpAppApi(ctx: Ctx, input: ApiLookupInput): Promise<Api
   if (type !== undefined) {
     const shown = show(type);
     return shown === undefined
-      ? { app, type: null, message: `${REGISTERED_APPS[app].name}'s API has no type "${type}".` }
+      ? {
+          app,
+          type: null,
+          message: apiLookupPrompts.noType({ app: REGISTERED_APPS[app].name, type }),
+        }
       : { app, type: shown };
   }
   const operations = searchOperations(searchableIndex, search ?? "", {
@@ -78,10 +83,10 @@ export async function lookUpAppApi(ctx: Ctx, input: ApiLookupInput): Promise<Api
     return {
       ...rest,
       rule: !risk.ok
-        ? `refused: ${risk.reason}`
+        ? apiLookupPrompts.refused({ reason: risk.reason })
         : risk.risk === "read"
-          ? "a read: runs on its own"
-          : "a write: waits for a person's approval every time it runs",
+          ? apiLookupPrompts.read()
+          : apiLookupPrompts.write(),
       ...(bodyType === undefined ? {} : { body: bodyType }),
       ...(responseType === undefined ? {} : { response: responseType }),
       ...(eachItem === undefined ? {} : { eachItem }),

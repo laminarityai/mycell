@@ -66,4 +66,22 @@ export const isolationCases = defineIsolationCases(server, {
 
     expect(await snapshot()).toEqual(object);
   },
+
+  searchMemory: async (orgs) => {
+    const { object, snapshot } = await seedOrgB(orgs);
+    const { orgA, orgB } = orgs;
+    // Org B's member finds it, so a search that would find it is the one org A runs.
+    const searches = [{ text: "procurement" }, { text: DANA }, byEmail];
+    for (const search of searches) {
+      expect((await server.searchMemory(orgB.member.ctx, search)).facts).toHaveLength(1);
+    }
+
+    for (const ctx of [orgA.admin.ctx, orgA.member.ctx, systemCtx(orgA.id)]) {
+      for (const search of searches) {
+        expect(await server.searchMemory(ctx, search)).toEqual({ objects: [], facts: [] });
+      }
+    }
+
+    expect(await snapshot()).toEqual(object);
+  },
 });

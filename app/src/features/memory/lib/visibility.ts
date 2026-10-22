@@ -1,7 +1,7 @@
 // Who sees what memory holds (ADR-0023), one function every read goes through. A viewer sees a
 // source record when:
 // - their own mailbox or Drive holds the item: this copy, or another under the same item key;
-// - their address, or their address's domain, is on its access list;
+// - their address is on its access list;
 // - it came from an org connection, such as support@;
 // - or its access list makes it company-wide: it names a list an admin marked company-wide (such
 //   as all@), the company's Workspace domain (a doc shared with the company), or anyone (a doc
@@ -53,13 +53,9 @@ export async function visibleSourceRecords(
   // The viewer's own address, and every company-wide list's. A marked address that has since
   // become a person's own counts as theirs, not as a list's.
   const addresses = [...new Set([...viewer.addresses, ...(await companyWideLists(ctx))])];
-  // The company's domain, and the viewer's own address's.
-  const domains = [
-    ...new Set([
-      (await getWorkspaceDomain(ctx)).toLowerCase(),
-      ...viewer.addresses.map((address) => address.slice(address.lastIndexOf("@") + 1)),
-    ]),
-  ];
+  // Only the company's Workspace domain: a reader's own address at another domain (an alias,
+  // a contractor's) widens nothing.
+  const domains = [(await getWorkspaceDomain(ctx)).toLowerCase()];
   const sharedWith = await db.select(accessListEntries, {
     where: and(
       inArray(accessListEntries.sourceRecordId, ids),

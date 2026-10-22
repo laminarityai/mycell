@@ -105,6 +105,21 @@ describe("learning from a Drive doc", () => {
     }
   });
 
+  it("counts only the company's Workspace domain as company-wide, not a reader's own", async () => {
+    const { orgA, doc } = await setup();
+    // A contractor in the org whose own address is at another domain.
+    const casey = await seedUser(orgA.id, "casey@contractor.example", "member");
+    const drive = await connectDrive(orgA.member.ctx, orgA.member.email, [
+      doc({ sharedWith: [{ type: "domain", domain: "contractor.example" }] }),
+    ]);
+    await backfillConnection(orgA.member.ctx, drive.id);
+    scriptDocLearning(ACME_RENEWAL);
+    await learnStoredItems(orgA.id);
+
+    expect(await statements(orgA.member.ctx)).toEqual([RENEWAL]);
+    await expect(readObject(casey.ctx, byAcme)).rejects.toThrow(NotFoundError);
+  });
+
   it("shows a doc's owner what it taught, from a Drive it's shared with", async () => {
     const { orgA, lee, doc } = await setup();
     // Lee owns it and shared it with the member to edit, so the member's Drive shows its list.

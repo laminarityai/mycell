@@ -11,7 +11,7 @@ test("an admin sees memory's estimate before starting it; members have no memory
   await page.goto("/org");
   await page.getByRole("link", { name: "Memory settings" }).click();
   await expect(page).toHaveURL("/memory");
-  await expect(page.getByTestId("memory-estimate")).toContainText("hold 0 emails");
+  await expect(page.getByTestId("memory-estimate")).toContainText("hold 0 emails and doc versions");
   await expect(page.getByRole("spinbutton", { name: "Monthly budget (credits)" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Start memory" })).toBeVisible();
   await expect(page.getByText("Nothing is excluded.")).toBeVisible();

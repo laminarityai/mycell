@@ -2,8 +2,8 @@
 // it (ADR-0022).
 import { z } from "zod";
 
-/** The apps memory learns from. Drive and Calendar join with their tickets. */
-export const MEMORY_APPS = ["gmail"] as const;
+/** The apps memory learns from: Gmail messages and Drive docs. Calendar joins with its ticket. */
+export const MEMORY_APPS = ["gmail", "drive"] as const;
 export type MemoryApp = (typeof MEMORY_APPS)[number];
 
 /** The kinds of object memory holds. */
@@ -27,7 +27,9 @@ export type ItemToLearn = z.infer<typeof itemToLearnSchema>;
 
 /**
  * Why learning skipped an item: no admin has started memory yet; the month's budget is spent,
- * so it waits for next month (`postponed`); an exclusion covers it; learned already; the
+ * so it waits for next month (`postponed`); an exclusion covers it; learned already (for a
+ * Drive file, this version or a newer one); not a kind of item memory reads (a Drive file that
+ * isn't a Google Doc); changed since (a Drive file's newer version is learned on its own); the
  * injection screen flagged it, or no screen is configured, so no model read it; not business;
  * or it stated no fact memory keeps.
  */
@@ -36,6 +38,8 @@ export type SkipReason =
   | "postponed"
   | "excluded"
   | "known"
+  | "unsupported"
+  | "outdated"
   | "flagged"
   | "unscreened"
   | "not_business"
@@ -121,8 +125,8 @@ export type MemorySearchResult = { objects: FoundObject[]; facts: FoundFact[] };
 
 /**
  * What an exclusion keeps out of memory for the whole company (ADR-0023): every email with a
- * Gmail label (by name), every file in a Drive folder (by ID; applied once memory learns from
- * Drive), and every item an address, or an address at a domain, is on.
+ * Gmail label (by name), every doc in a Drive folder or a folder under it (by ID), and every
+ * item an address, or an address at a domain, is on.
  */
 export const EXCLUSION_KINDS = ["gmail_label", "drive_folder", "address", "domain"] as const;
 export type ExclusionKind = (typeof EXCLUSION_KINDS)[number];

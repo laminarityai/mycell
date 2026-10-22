@@ -65,15 +65,18 @@ export type PollOutcome =
 export type ConnectionToPoll = { orgId: string; connectionId: string };
 
 /**
- * An item discovery stored, as `discovery/item.stored` points at it: for now each Gmail message
- * but drafts. `sourceRef` is how it's re-fetched.
+ * An item discovery stored, as `discovery/item.stored` points at it: each Gmail message but
+ * drafts, and each Drive file version. `sourceRef` is how it's re-fetched.
  */
 export type StoredItem = {
   connectionId: string;
-  app: "gmail";
+  app: "gmail" | "drive";
   sourceRef: string;
   occurredAt: Date;
 };
+
+/** Which stored items to count or list: all, or only Drive files of `driveMimeType`. */
+export type StoredItemsQuery = { driveMimeType?: string };
 
 /** One page of stored items; `next` names the page after it, or is null after the last. */
 export type StoredItemsPage = { items: StoredItem[]; next: string | null };

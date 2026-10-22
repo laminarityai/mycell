@@ -61,15 +61,16 @@ export async function sendGmailMessagesSent(messages: GmailMessageSent[]): Promi
 }
 
 /**
- * A backfill, a poll or a recovery newly stored an item from an app on a connection: for now
- * each Gmail message except drafts, received or sent. Memory learns from it. Pointers only:
- * `sourceRef` is how the item is re-fetched.
+ * A backfill, a poll or a recovery newly stored an item from an app on a connection: each Gmail
+ * message except drafts, received or sent, and each Drive file version. Memory learns from it.
+ * Pointers only: `sourceRef` is how the item is re-fetched (a Gmail message ID, or a Drive
+ * file's `<file ID>@<modified time>`).
  */
 export const itemStored = eventType("discovery/item.stored", {
   schema: z.object({
     orgId: z.string().min(1),
     connectionId: z.string().min(1),
-    app: z.enum(["gmail"]),
+    app: z.enum(["gmail", "drive"]),
     sourceRef: z.string().min(1),
     occurredAt: z.iso.datetime(),
   }),

@@ -5,7 +5,7 @@ import { listLedger } from "@/features/credits/server";
 import { backfillConnection, pollConnection } from "@/features/discovery/server";
 import { systemCtx } from "@/lib/ctx";
 import { ConflictError, ForbiddenError } from "@/lib/errors";
-import { connectMailbox, daysAgo } from "@/testing/connect-helpers";
+import { connectGoogle, connectMailbox, daysAgo } from "@/testing/connect-helpers";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import { fakeInngest } from "@/testing/fake-inngest";
 import {
@@ -26,6 +26,7 @@ afterEach(() => {
 });
 
 const DANA = "dana@acme.example";
+const GOOGLE_DOC = "application/vnd.google-apps.document";
 const ROLE = "Dana Ruiz leads procurement at Acme.";
 const runInline = <T>(_id: string, run: () => Promise<T>) => run();
 
@@ -99,6 +100,25 @@ describe("starting memory", () => {
     ]);
   });
 
+  it("estimates from the emails and every version of each Google Doc, not other files", async () => {
+    const { orgA } = await setup();
+    const account = await connectGoogle(orgA.member.ctx, orgA.member.email, {
+      messages: [{ from: DANA, to: [orgA.member.email], text: "Hi", at: daysAgo(3) }],
+      files: [
+        { name: "Notes", mimeType: GOOGLE_DOC, text: "Notes", at: daysAgo(3) },
+        { name: "Numbers", mimeType: "application/vnd.google-apps.spreadsheet", at: daysAgo(3) },
+      ],
+    });
+    await backfillConnection(orgA.member.ctx, account.id);
+    expect((await getMemorySettings(orgA.admin.ctx)).estimate.items).toBe(2);
+
+    const doc = account.files.at(0);
+    account.drive.modify(doc?.id ?? "", new Date(), orgA.member.email, "Notes, edited");
+    await pollConnection(systemCtx(orgA.id), account.id);
+
+    expect((await getMemorySettings(orgA.admin.ctx)).estimate.items).toBe(3);
+  });
+
   it("starts once", async () => {
     const { orgA } = await setup();
     await startMemory(orgA.admin.ctx, { monthlyBudget: 500 });
@@ -117,7 +137,7 @@ describe("the monthly budget", () => {
       { from: "news@deals.example", to: [orgA.member.email], text: "Offers", at: daysAgo(2) },
     ]);
     await backfillConnection(orgA.member.ctx, mailbox.id);
-    classifiedAs("newsletter", { costUsd: 0.002 });
+    classifiedAs("newsletter", "email", { costUsd: 0.002 });
     expect(await learnStoredItems(orgA.id)).toEqual([
       { outcome: "skipped", reason: "not_business" },
     ]);
@@ -150,7 +170,7 @@ describe("the monthly budget", () => {
     vi.setSystemTime(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 1));
 
     expect(await resumePostponed(systemCtx(orgA.id))).toEqual({ queued: 1 });
-    classifiedAs("newsletter", { costUsd: 0.002 });
+    classifiedAs("newsletter", "email", { costUsd: 0.002 });
     expect(await learnStoredItems(orgA.id)).toEqual([
       { outcome: "skipped", reason: "not_business" },
     ]);

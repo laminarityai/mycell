@@ -53,15 +53,36 @@ describe("discovery/item.stored", () => {
     expect(fakeInngest.sent(STORED).map((event) => event.data.sourceRef)).toEqual([message.id]);
   });
 
-  it("isn't sent for Drive files", async () => {
+  it("is sent for each Drive file version a backfill or a poll newly stores", async () => {
     const { orgA } = await seedTwoOrgs();
     const connection = await connectGoogle(orgA.member.ctx, orgA.member.email, {
-      files: [{ name: "Plan", mimeType: "application/vnd.google-apps.document", at: daysAgo(1) }],
+      files: [{ name: "Plan", mimeType: "application/vnd.google-apps.document", at: daysAgo(2) }],
     });
+    const [plan] = connection.files;
+    const first = plan.modifiedTime;
 
     await backfillConnection(orgA.member.ctx, connection.id);
+    const edited = new Date();
+    connection.drive.modify(plan.id, edited);
+    await pollConnection(systemCtx(orgA.id), connection.id);
+    await pollConnection(systemCtx(orgA.id), connection.id);
 
-    expect(fakeInngest.sent(STORED)).toEqual([]);
+    expect(fakeInngest.sent(STORED).map((event) => event.data)).toEqual([
+      {
+        orgId: orgA.id,
+        connectionId: connection.id,
+        app: "drive",
+        sourceRef: `${plan.id}@${first}`,
+        occurredAt: first,
+      },
+      {
+        orgId: orgA.id,
+        connectionId: connection.id,
+        app: "drive",
+        sourceRef: `${plan.id}@${edited.toISOString()}`,
+        occurredAt: edited.toISOString(),
+      },
+    ]);
   });
 });
 

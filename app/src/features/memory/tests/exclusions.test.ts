@@ -4,7 +4,7 @@ import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { backfillConnection, pollConnection } from "@/features/discovery/server";
 import { systemCtx } from "@/lib/ctx";
 import { ConflictError, NotFoundError, ValidationError } from "@/lib/errors";
-import { connectMailbox } from "@/testing/connect-helpers";
+import { connectDrive, connectMailbox, daysAgo } from "@/testing/connect-helpers";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import type { FakeMessageInput } from "@/testing/fake-gmail";
 import { fakeInngest } from "@/testing/fake-inngest";
@@ -15,7 +15,7 @@ import {
   readObject,
   removeExclusion,
 } from "../server";
-import { learnStoredItems, scriptLearning, withCredits } from "./memory-helpers";
+import { learnStoredItems, scriptDocLearning, scriptLearning, withCredits } from "./memory-helpers";
 
 beforeEach(resetDatabase);
 
@@ -125,6 +125,58 @@ describe("excluding an address or a domain", () => {
     expect(await arrives({ from: "someone@else.example", cc: [KIM], text: "Hi" })).toEqual([
       { outcome: "skipped", reason: "excluded" },
     ]);
+  });
+});
+
+describe("excluding a Drive folder", () => {
+  const FOLDER = "application/vnd.google-apps.folder";
+  const DOC = "application/vnd.google-apps.document";
+  const NOTES = "Account notes. Acme (acme.example) renews its contract in March.";
+  const RENEWAL = "Acme renews its contract in March.";
+  const byAcme = { key: { kind: "domain" as const, value: "acme.example" } };
+
+  it("removes what docs in it, or in a folder under it, taught, and skips them from then on", async () => {
+    const { orgA } = await seedTwoOrgs();
+    await withCredits(orgA.id);
+    const legal = "1LegalFolder000000";
+    const contracts = "1ContractsFolder00";
+    const drive = await connectDrive(orgA.member.ctx, orgA.member.email, [
+      { id: legal, name: "Legal", mimeType: FOLDER, at: daysAgo(5) },
+      { id: contracts, name: "Contracts", mimeType: FOLDER, at: daysAgo(5), parents: [legal] },
+      { name: "Acme", mimeType: DOC, text: NOTES, at: daysAgo(2), parents: [contracts] },
+    ]);
+    await backfillConnection(orgA.member.ctx, drive.id);
+    scriptDocLearning({
+      objects: [{ ref: "acme", kind: "company", name: "Acme", domain: "acme.example" }],
+      facts: [
+        {
+          about: "acme",
+          statement: RENEWAL,
+          evidence: "Acme (acme.example) renews its contract in March",
+        },
+      ],
+    });
+    // Only the doc is learned from; the folders aren't docs.
+    expect(await learnStoredItems(orgA.id)).toContainEqual({
+      outcome: "learned",
+      objects: 1,
+      facts: 1,
+    });
+
+    const { forgot } = await exclude(orgA.admin.ctx, {
+      kind: "drive_folder",
+      value: `https://drive.google.com/drive/folders/${legal}`,
+    });
+
+    expect(forgot).toEqual({ sourceRecords: 1 });
+    await expect(readObject(orgA.member.ctx, byAcme)).rejects.toThrow(NotFoundError);
+    // A new version of the doc is skipped, before any model reads it.
+    const doc = drive.files.at(-1);
+    drive.drive.modify(doc?.id ?? "", new Date(), orgA.member.email, `${NOTES} Updated.`);
+    await pollConnection(systemCtx(orgA.id), drive.id);
+    const requests = fakeAiGateway.requests().length;
+    expect(await learnStoredItems(orgA.id)).toEqual([{ outcome: "skipped", reason: "excluded" }]);
+    expect(fakeAiGateway.requests()).toHaveLength(requests);
   });
 });
 

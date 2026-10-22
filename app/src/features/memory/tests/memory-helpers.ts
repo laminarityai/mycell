@@ -45,12 +45,25 @@ export async function withCredits(orgId: string): Promise<void> {
   await startMemory(systemCtx(orgId), { monthlyBudget: 1000 });
 }
 
-const LABELS = ["business", "newsletter", "marketing", "notification", "personal"];
+// The labels classify chooses from, for each kind of item.
+const LABELS = {
+  email: ["business", "newsletter", "marketing", "notification", "personal"],
+  document: ["business", "personal", "template", "other"],
+};
 
-/** The classify call's answer: Jev picks `label` (business, newsletter, …). */
-export function classifiedAs(label: string, options: { costUsd?: number } = {}): void {
+/**
+ * The classify call's answer about an email (or a doc): Jev picks `label` (business, …), at the
+ * cost the gateway reports, if any.
+ */
+export function classifiedAs(
+  label: string,
+  kind: keyof typeof LABELS = "email",
+  options: { costUsd?: number } = {},
+): void {
+  // They sum to 1, as Jev's do.
+  const others = LABELS[kind].length - 1;
   const probabilities = Object.fromEntries(
-    LABELS.map((other) => [other, other === label ? 0.92 : 0.02]),
+    LABELS[kind].map((other) => [other, other === label ? 1 - others * 0.02 : 0.02]),
   );
   fakeAiGateway.decision({ choice: label, probabilities }, options);
 }
@@ -87,6 +100,21 @@ export function scriptLearning(
   vectors?: number[][],
 ) {
   classifiedAs("business");
+  scriptExtraction(extraction, kept, vectors);
+}
+
+/** scriptLearning for a business doc. */
+export function scriptDocLearning(extraction: ScriptedExtraction, kept = extraction.facts.length) {
+  classifiedAs("business", "document");
+  scriptExtraction(extraction, kept);
+}
+
+/** The extraction's answer and the embeddings of the facts it keeps, as for scriptLearning. */
+export function scriptExtraction(
+  extraction: ScriptedExtraction,
+  kept = extraction.facts.length,
+  vectors?: number[][],
+) {
   fakeAiGateway.object({
     objects: extraction.objects.map((object) => ({
       email: null,

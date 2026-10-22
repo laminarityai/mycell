@@ -2,21 +2,18 @@
 // an item one covers before any model reads it, and adding one forgets what memory already
 // learned from the items it covers: their source records are deleted, and the database's
 // triggers remove each fact left with no source, and each object left with no fact (migration
-// 0026). A fact another item still supports stays. Drive folders are kept for when memory learns
-// from Drive.
+// 0026). A fact another item still supports stays.
 import { randomUUID } from "node:crypto";
 import { and, asc, eq, inArray, like, or, type SQL } from "drizzle-orm";
-import { z } from "zod";
 import { forOrg } from "@/db/for-org";
-import { listConnectionsForJobs, proxyGet } from "@/features/connections/server";
+import { listConnectionsForJobs } from "@/features/connections/server";
 import type { Ctx } from "@/lib/ctx";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import { exclusionInputSchema, type Exclusion, type ExclusionInput } from "../types";
 import { sendExclusionAdded } from "./events";
-import type { EmailToLearn } from "./gmail";
+import { folderedRecords, inFolders, labelledRecords, labelNames } from "./excluded-items";
 import { accessListEntries, exclusions, sourceRecords } from "./schema";
-
-const GMAIL = "/gmail/v1/users/me";
+import type { SourceItem } from "./source-item";
 
 /** The org's exclusions, oldest first. Admins (and jobs) only. */
 export async function listExclusions(ctx: Ctx): Promise<Exclusion[]> {
@@ -61,22 +58,34 @@ export async function removeExclusion(ctx: Ctx, exclusionId: string): Promise<vo
   if (deleted.length === 0) throw new NotFoundError("exclusion");
 }
 
-/** Whether an exclusion covers the email, read from `connectionId`. */
+/**
+ * Whether an exclusion covers the item, read from `connectionId`: an address on it (an email's
+ * From, To, Cc or Bcc; a doc's sharing list), or one at an excluded domain; an email's label;
+ * or a doc's folder, or one it's under.
+ */
 export async function isExcluded(
   ctx: Ctx,
   connectionId: string,
-  email: EmailToLearn,
+  item: SourceItem,
 ): Promise<boolean> {
   const all = await listExclusions(ctx);
-  if (all.some((exclusion) => coversAddresses(exclusion, email.addresses))) return true;
-  const labels = all.filter((exclusion) => exclusion.kind === "gmail_label");
-  if (labels.length === 0 || email.labelIds.length === 0) return false;
-  const names = new Set(
-    (await labelsOf(ctx, connectionId))
-      .filter((label) => email.labelIds.includes(label.id))
-      .map((label) => label.name.toLowerCase()),
-  );
-  return labels.some((label) => names.has(label.value.toLowerCase()));
+  const addresses = [
+    ...item.addresses,
+    ...item.access.flatMap((entry) => (entry.kind === "address" ? [entry.value] : [])),
+  ];
+  if (all.some((exclusion) => coversAddresses(exclusion, addresses))) return true;
+  const values = (kind: Exclusion["kind"]) =>
+    all.filter((exclusion) => exclusion.kind === kind).map((exclusion) => exclusion.value);
+  const labels = values("gmail_label");
+  if (labels.length > 0 && item.labelIds !== undefined && item.labelIds.length > 0) {
+    const names = await labelNames(ctx, connectionId, item.labelIds);
+    if (labels.some((label) => names.has(label.toLowerCase()))) return true;
+  }
+  const folders = values("drive_folder");
+  if (folders.length > 0 && item.parentIds !== undefined) {
+    return inFolders(ctx, connectionId, item.parentIds, folders);
+  }
+  return false;
 }
 
 function coversAddresses(exclusion: Exclusion, addresses: string[]): boolean {
@@ -91,8 +100,9 @@ function inDomain(domain: string, excluded: string): boolean {
 }
 
 /**
- * Forgets what memory learned from the items an exclusion covers, a connection a step for a
- * label. Returns how many source records went. An exclusion removed meanwhile forgets nothing.
+ * Forgets what memory learned from the items an exclusion covers: for a label or a folder, a
+ * connection a step. Returns how many source records went. An exclusion removed meanwhile
+ * forgets nothing.
  */
 export async function forgetExcluded(
   ctx: Ctx,
@@ -102,25 +112,19 @@ export async function forgetExcluded(
   if (ctx.role !== "system") throw new ForbiddenError();
   const exclusion = (await listExclusions(ctx)).find((e) => e.id === exclusionId);
   if (exclusion === undefined) return { sourceRecords: 0 };
-  switch (exclusion.kind) {
-    case "address":
-    case "domain": {
-      const done = await runStep("forget", () => forgetAddressed(ctx, exclusion));
-      return { sourceRecords: done.deleted };
-    }
-    case "gmail_label": {
-      let deleted = 0;
-      for (const connection of await listConnectionsForJobs(ctx)) {
-        const done = await runStep(`forget-${connection.id}`, () =>
-          forgetLabelled(ctx, connection.id, exclusion.value),
-        );
-        deleted += done.deleted;
-      }
-      return { sourceRecords: deleted };
-    }
-    case "drive_folder":
-      return { sourceRecords: 0 };
+  if (exclusion.kind === "address" || exclusion.kind === "domain") {
+    const done = await runStep("forget", () => forgetAddressed(ctx, exclusion));
+    return { sourceRecords: done.deleted };
   }
+  const recordsOf = exclusion.kind === "gmail_label" ? labelledRecords : folderedRecords;
+  let deleted = 0;
+  for (const connection of await listConnectionsForJobs(ctx)) {
+    const done = await runStep(`forget-${connection.id}`, async () => ({
+      deleted: await deleteRecords(ctx, await recordsOf(ctx, connection.id, exclusion.value)),
+    }));
+    deleted += done.deleted;
+  }
+  return { sourceRecords: deleted };
 }
 
 // Every source record whose access list names the address, or an address at the domain.
@@ -142,62 +146,6 @@ async function forgetAddressed(ctx: Ctx, exclusion: Exclusion): Promise<{ delete
     .filter((entry) => coversAddresses(exclusion, [entry.value]))
     .map((entry) => entry.sourceRecordId);
   return { deleted: await deleteRecords(ctx, ids) };
-}
-
-const labelsSchema = z.object({
-  labels: z.array(z.object({ id: z.string(), name: z.string() })).default([]),
-});
-
-const messageListSchema = z.object({
-  messages: z.array(z.object({ id: z.string() })).default([]),
-  nextPageToken: z.string().optional(),
-});
-
-async function labelsOf(ctx: Ctx, connectionId: string) {
-  return (await proxyGet(ctx, connectionId, `${GMAIL}/labels`, labelsSchema))?.labels ?? [];
-}
-
-// The connection's learned emails with the label (by name) now.
-async function forgetLabelled(
-  ctx: Ctx,
-  connectionId: string,
-  name: string,
-): Promise<{ deleted: number }> {
-  const db = forOrg(ctx);
-  const learned = await db.count(sourceRecords, eq(sourceRecords.connectionId, connectionId));
-  if (learned === 0) return { deleted: 0 };
-  const label = (await labelsOf(ctx, connectionId)).find(
-    (candidate) => candidate.name.toLowerCase() === name.toLowerCase(),
-  );
-  if (label === undefined) return { deleted: 0 };
-  let deleted = 0;
-  let pageToken: string | undefined;
-  do {
-    const query = new URLSearchParams({
-      labelIds: label.id,
-      maxResults: "500",
-      includeSpamTrash: "true",
-      ...(pageToken === undefined ? {} : { pageToken }),
-    });
-    const page = await proxyGet(ctx, connectionId, `${GMAIL}/messages?${query}`, messageListSchema);
-    if (page === null || page.messages.length === 0) break;
-    const records = await db.select(sourceRecords, {
-      where: and(
-        eq(sourceRecords.connectionId, connectionId),
-        eq(sourceRecords.app, "gmail"),
-        inArray(
-          sourceRecords.sourceRef,
-          page.messages.map((message) => message.id),
-        ),
-      ),
-    });
-    deleted += await deleteRecords(
-      ctx,
-      records.map((record) => record.id),
-    );
-    pageToken = page.nextPageToken;
-  } while (pageToken !== undefined);
-  return { deleted };
 }
 
 async function deleteRecords(ctx: Ctx, ids: string[]): Promise<number> {

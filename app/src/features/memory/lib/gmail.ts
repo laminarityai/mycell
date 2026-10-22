@@ -4,6 +4,7 @@
 import { z } from "zod";
 import { proxyGet } from "@/features/connections/server";
 import type { Ctx } from "@/lib/ctx";
+import type { SourceItem } from "./source-item";
 
 const GMAIL = "/gmail/v1/users/me";
 
@@ -39,18 +40,12 @@ const messageSchema = z.object({
   payload: partSchema.optional(),
 });
 
-/** One email, read to learn from. `text` is its headers and body as a model reads them. */
-export type EmailToLearn = {
-  sourceRef: string;
-  // The Message-ID header, lowercased without its angle brackets: the same in every copy.
-  itemKey: string;
-  occurredAt: Date;
-  labelIds: string[];
-  // Everyone on it, lowercased: From, To, Cc, and Bcc as this copy shows it.
-  addresses: string[];
-  // In memory only.
-  text: string;
-};
+/**
+ * One email, read to learn from. Its item key is the Message-ID header, lowercased without its
+ * angle brackets: the same in every copy. Its access list and `addresses` are everyone on it
+ * (From, To, Cc, and Bcc as this copy shows it), and `text` its headers and body.
+ */
+export type EmailToLearn = SourceItem & { kind: "email"; labelIds: string[] };
 
 const SHOWN_HEADERS = ["From", "To", "Cc", "Date", "Subject"];
 
@@ -79,7 +74,11 @@ export async function readEmail(
     return value === "" ? [] : [`${name}: ${value}`];
   });
   const body = bodyText(flatten(message.payload)).slice(0, MAX_BODY_CHARS);
+  const addresses = [
+    ...new Set(["From", "To", "Cc", "Bcc"].flatMap((name) => addressesIn(header(name)))),
+  ];
   return {
+    kind: "email",
     sourceRef: message.id,
     // With no Message-ID, the copy is its own item: Gmail's message IDs are only unique within
     // one mailbox, and a shared item key makes a copy visible to its holder.
@@ -89,9 +88,8 @@ export async function readEmail(
         : messageIdHeader.replace(/^<|>$/g, "").toLowerCase(),
     occurredAt: new Date(Number(message.internalDate)),
     labelIds: message.labelIds,
-    addresses: [
-      ...new Set(["From", "To", "Cc", "Bcc"].flatMap((name) => addressesIn(header(name)))),
-    ],
+    access: addresses.map((value) => ({ kind: "address", value })),
+    addresses,
     text: `${shown.join("\n")}\n\n${body}`,
   };
 }

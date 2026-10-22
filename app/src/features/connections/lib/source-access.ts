@@ -16,6 +16,7 @@ import {
   NangoConnectionGoneError,
   nangoProxyDelete,
   nangoProxyGet,
+  nangoProxyGetText,
   nangoProxyPost,
   nangoProxyPut,
 } from "./nango";
@@ -105,6 +106,21 @@ export async function proxyGet<T>(
 ): Promise<T | null> {
   return proxied(ctx, connectionId, (connection) =>
     nangoProxyGet(connection, proxyTarget(path), schema),
+  );
+}
+
+/**
+ * A GET whose answer is text rather than JSON (Drive's files.export as text/plain), checked and
+ * answered like proxyGet. The text is the source's content: callers hold it in memory only
+ * (invariant 8).
+ */
+export async function proxyGetText(
+  ctx: Ctx,
+  connectionId: string,
+  path: string,
+): Promise<string | null> {
+  return proxied(ctx, connectionId, (connection) =>
+    nangoProxyGetText(connection, proxyTarget(path)),
   );
 }
 

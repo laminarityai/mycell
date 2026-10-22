@@ -177,6 +177,21 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await server.listConnections(orgs.orgB.admin.ctx)).toEqual(before);
   },
 
+  proxyGetText: async (orgs) => {
+    const { before, memberBefore } = await seedOrgBConnection(orgs);
+
+    for (const id of orgBIds(before, memberBefore)) {
+      await expect(
+        server.proxyGetText(
+          orgs.orgA.admin.ctx,
+          id,
+          "/drive/v3/files/f-1/export?mimeType=text%2Fplain",
+        ),
+      ).rejects.toThrow(NotFoundError);
+    }
+    expect(await server.listConnections(orgs.orgB.admin.ctx)).toEqual(before);
+  },
+
   proxyPost: async (orgs) => {
     const { before, memberBefore } = await seedOrgBConnection(orgs);
     const label = z.object({ id: z.string() });

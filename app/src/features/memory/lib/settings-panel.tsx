@@ -36,14 +36,15 @@ function Learning({ settings }: { settings: MemorySettings }) {
         <>
           <p className="text-sm text-muted-foreground">
             Memory learns about your customers, suppliers and deals from your team&apos;s business
-            email. It hasn&apos;t started yet.
+            email and Google Docs. It hasn&apos;t started yet.
           </p>
           <p className="text-sm" data-testid="memory-estimate">
-            Your connected mailboxes hold {credits.format(estimate.items)} emails so far. Learning
-            from all of them costs at most {credits.format(estimate.credits)} credits (up to{" "}
-            {credits.format(estimate.creditsPerItem)} an email; newsletters and other mail that
-            isn&apos;t business cost less). Choose a monthly budget and start: learning pauses when
-            a month&apos;s budget is spent, and carries on the next month.
+            Your connected accounts hold {credits.format(estimate.items)} emails and doc versions so
+            far. Learning from all of them costs at most {credits.format(estimate.credits)} credits
+            (up to {credits.format(estimate.creditsPerItem)} each; newsletters and other items that
+            aren&apos;t business cost less). Each new version of a doc is learned again. Choose a
+            monthly budget and start: learning pauses when a month&apos;s budget is spent, and
+            carries on the next month.
           </p>
           <BudgetForm started={false} budget={Math.max(1, Math.ceil(estimate.credits))} />
         </>
@@ -54,7 +55,7 @@ function Learning({ settings }: { settings: MemorySettings }) {
             {credits.format(settings.spentThisMonth)} of its {credits.format(started.monthlyBudget)}{" "}
             credits.
             {settings.postponedItems > 0
-              ? ` The budget is spent: ${credits.format(settings.postponedItems)} emails wait for next month.`
+              ? ` The budget is spent: ${credits.format(settings.postponedItems)} items wait for next month.`
               : ""}
           </p>
           <BudgetForm started budget={started.monthlyBudget} />
@@ -71,9 +72,9 @@ function Exclusions({ settings }: { settings: MemorySettings }) {
         Exclusions
       </h2>
       <p className="text-sm text-muted-foreground">
-        Memory never learns from emails with an excluded label, or that an excluded address or
-        domain is on, in anyone&apos;s mailbox. Excluding something also deletes what memory already
-        learned from it. Drive folders apply once memory learns from Drive.
+        Memory never learns from emails with an excluded label, docs in an excluded Drive folder (or
+        a folder inside it), or anything an excluded address or domain is on, in anyone&apos;s
+        account. Excluding something also deletes what memory already learned from it.
       </p>
       <AddExclusionForm />
       {settings.exclusions.length === 0 ? (

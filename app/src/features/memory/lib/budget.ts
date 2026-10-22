@@ -17,6 +17,7 @@ import {
   type MemoryEstimate,
 } from "../types";
 import { sendItemsQueued, sendMemoryStarted, sendPostponedDue } from "./events";
+import { GOOGLE_DOC, MAX_DOC_CHARS } from "./drive";
 import { MAX_TEXT_CHARS } from "./gmail";
 import { memorySettings, postponedItems } from "./schema";
 
@@ -28,10 +29,17 @@ export function monthStart(now = new Date()): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 }
 
-/** The most learning one item costs: its screen, `classify`, extraction and embedding. */
+// What memory learns from of what discovery stored: emails, and Google Docs (every version).
+const LEARNABLE = { driveMimeType: GOOGLE_DOC };
+
+/**
+ * The most learning one item costs: two injection screens (a doc is screened again before
+ * extraction, since it can change) of the longest text memory reads, `classify`, extraction and
+ * embedding.
+ */
 export function creditsPerItem(): number {
   return (
-    estimateScreenCredits(MAX_TEXT_CHARS) +
+    2 * estimateScreenCredits(Math.max(MAX_TEXT_CHARS, MAX_DOC_CHARS)) +
     CREDIT_ESTIMATES.classify +
     CREDIT_ESTIMATES.fast +
     CREDIT_ESTIMATES.embed
@@ -39,7 +47,7 @@ export function creditsPerItem(): number {
 }
 
 export async function estimate(ctx: Ctx): Promise<MemoryEstimate> {
-  const items = await countStoredItems(ctx);
+  const items = await countStoredItems(ctx, LEARNABLE);
   const perItem = creditsPerItem();
   return { items, creditsPerItem: perItem, credits: items * perItem };
 }
@@ -123,6 +131,7 @@ export async function queueStoredItems(
     const done = await runStep(`queue-${String(page)}`, async () => {
       const { items, next } = await listStoredItems(ctx, {
         ...(from === null ? {} : { after: from }),
+        ...LEARNABLE,
         limit: PAGE,
       });
       await sendItemsQueued(ctx.orgId, items, "memory-start");

@@ -192,7 +192,18 @@ export async function nangoProxyGet<T>(
   schema: z.ZodType<T>,
 ): Promise<T | null> {
   // Nango retries the source's 429s and 5xx with exponential backoff: a GET changes nothing.
-  return nangoProxy(connection, target, schema, { headers: { Retries: "3" } });
+  return nangoProxy(connection, target, json(schema), { headers: { Retries: "3" } });
+}
+
+/**
+ * A GET through the Nango proxy whose answer is text rather than JSON (Drive's files.export as
+ * text/plain), answered like nangoProxyGet.
+ */
+export async function nangoProxyGetText(
+  connection: ProxiedConnection,
+  target: ProxyTarget,
+): Promise<string | null> {
+  return nangoProxy(connection, target, (text) => text, { headers: { Retries: "3" } });
 }
 
 /**
@@ -206,7 +217,10 @@ export async function nangoProxyPost<T>(
   body: unknown,
   schema: z.ZodType<T>,
 ): Promise<T | null> {
-  return nangoProxy(connection, target, schema, { method: "POST", body: JSON.stringify(body) });
+  return nangoProxy(connection, target, json(schema), {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 }
 
 /** A PUT through the Nango proxy with a JSON body, answered and not retried like a POST. */
@@ -216,7 +230,10 @@ export async function nangoProxyPut<T>(
   body: unknown,
   schema: z.ZodType<T>,
 ): Promise<T | null> {
-  return nangoProxy(connection, target, schema, { method: "PUT", body: JSON.stringify(body) });
+  return nangoProxy(connection, target, json(schema), {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
 }
 
 /**
@@ -227,13 +244,18 @@ export async function nangoProxyDelete(
   connection: ProxiedConnection,
   target: ProxyTarget,
 ): Promise<boolean> {
-  return (await nangoProxy(connection, target, z.unknown(), { method: "DELETE" })) !== null;
+  return (await nangoProxy(connection, target, json(z.unknown()), { method: "DELETE" })) !== null;
+}
+
+// Reads a JSON answer with `schema`. A DELETE's answer has no body.
+function json<T>(schema: z.ZodType<T>): (text: string) => T {
+  return (text) => schema.parse(text === "" ? undefined : JSON.parse(text));
 }
 
 async function nangoProxy<T>(
   connection: ProxiedConnection,
   { baseUrl, path }: ProxyTarget,
-  schema: z.ZodType<T>,
+  parse: (text: string) => T,
   init: { method?: string; body?: string; headers?: Record<string, string> },
 ): Promise<T | null> {
   const response = await nangoFetch(`/proxy${path}`, {
@@ -246,11 +268,7 @@ async function nangoProxy<T>(
       "Base-Url-Override": baseUrl,
     },
   });
-  if (response.ok) {
-    // A DELETE's answer has no body.
-    const text = await response.text();
-    return schema.parse(text === "" ? undefined : JSON.parse(text));
-  }
+  if (response.ok) return parse(await response.text());
   const raw: unknown = await response.json().catch(() => undefined);
   if (
     nangoError.safeParse(raw).success &&

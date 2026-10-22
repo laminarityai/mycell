@@ -3,12 +3,13 @@
 // and each sent one a discovery/gmail.message_sent, which ends a review its person finished in
 // Gmail. The backfill announces neither, so connecting an inbox starts no runs on its history.
 // Every Gmail message any of them newly stores, the backfill's included and drafts excepted,
-// also becomes one discovery/item.stored, which memory learns from.
+// and every Drive file version, also becomes one discovery/item.stored, which memory learns from.
 //
 // Storing and sending are two steps. The store step hands on what it newly stored as
 // `Received`, `Sent` and `Stored` pointers, and the send step after it sends them, so a failed
 // send is retried with the memoized pointers: storing again would find nothing new and send
 // nothing.
+import type { IngestedApp } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
 import { sendGmailMessagesReceived, sendGmailMessagesSent, sendItemsStored } from "@/lib/events";
 import type { RunStep } from "./ingest-steps";
@@ -20,14 +21,34 @@ export type Received = { sourceRef: string; occurredAt: string; labelIds: string
 /** A newly stored sent message, as a step hands it on: its ID, thread and time only. */
 export type Sent = { sourceRef: string; threadId: string; occurredAt: string };
 
-/** A newly stored Gmail message, as a step hands it on for memory: its ID and time only. */
+/**
+ * A newly stored item (a Gmail message or a Drive file version), as a step hands it on for
+ * memory: its ID and time only.
+ */
 export type Stored = { sourceRef: string; occurredAt: string };
 
 /** What one step newly stored and the step after it announces. */
 export type Announced = { received: Received[]; sent: Sent[]; stored: Stored[] };
 
-/** Nothing to announce: what an app other than Gmail stores, or a step that stored nothing. */
+/** Nothing to announce: a step that stored nothing. */
 export const NOTHING: Announced = { received: [], sent: [], stored: [] };
+
+/**
+ * What to announce of the items one app's step newly stored: for Gmail, as announcedOf says;
+ * for Drive, every new file version, for memory only.
+ */
+export function announcedFor(
+  app: IngestedApp,
+  created: NewEvent[],
+  options: { newMail: boolean },
+): Announced {
+  if (app === "gmail") return announcedOf(created, options);
+  return { received: [], sent: [], stored: created.map(storedOf) };
+}
+
+function storedOf(event: NewEvent): Stored {
+  return { sourceRef: event.sourceRef, occurredAt: event.occurredAt.toISOString() };
+}
 
 /**
  * The Gmail messages among `created`: all of them as stored, and, when they're `newMail` (a
@@ -37,10 +58,7 @@ export const NOTHING: Announced = { received: [], sent: [], stored: [] };
  */
 export function announcedOf(created: NewEvent[], { newMail }: { newMail: boolean }): Announced {
   const messages = created.filter((event) => !event.labelIds.includes("DRAFT"));
-  const stored = messages.map((event) => ({
-    sourceRef: event.sourceRef,
-    occurredAt: event.occurredAt.toISOString(),
-  }));
+  const stored = messages.map(storedOf);
   if (!newMail) return { received: [], sent: [], stored };
   const received = messages
     .filter((event) => event.direction === "inbound")
@@ -63,10 +81,14 @@ export function announcedOf(created: NewEvent[], { newMail }: { newMail: boolean
   return { received, sent, stored };
 }
 
-/** Sends `announced` in a step of its own, named `id`. Nothing to send runs no step. */
+/**
+ * Sends what one app's step announced in a step of its own, named `id`. Nothing to send runs no
+ * step.
+ */
 export async function sendAnnounced(
   ctx: Ctx,
   connectionId: string,
+  app: IngestedApp,
   { received, sent, stored }: Announced,
   runStep: RunStep,
   id: string,
@@ -78,9 +100,7 @@ export async function sendAnnounced(
       received.map((message) => ({ orgId, connectionId, ...message })),
     );
     await sendGmailMessagesSent(sent.map((message) => ({ orgId, connectionId, ...message })));
-    await sendItemsStored(
-      stored.map((message) => ({ orgId, connectionId, app: "gmail" as const, ...message })),
-    );
+    await sendItemsStored(stored.map((item) => ({ orgId, connectionId, app, ...item })));
     return {};
   });
 }

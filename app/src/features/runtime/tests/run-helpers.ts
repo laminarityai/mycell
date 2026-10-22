@@ -7,6 +7,7 @@ import { systemCtx, type Ctx } from "@/lib/ctx";
 import { connectMailbox } from "@/testing/connect-helpers";
 import type { FakeMessageInput } from "@/testing/fake-gmail";
 import { fakeNango } from "@/testing/fake-nango";
+import { storedStepOutput } from "@/testing/inngest-step-state";
 import { startRun } from "../server";
 import type { RetryPolicy, RunStep } from "../types";
 
@@ -77,15 +78,17 @@ export async function runOn(steps: Record<string, unknown>[], credits = 100) {
 }
 
 /**
- * A step runner that keeps what Inngest's step state would: each step's result, or the error
- * it threw with everything Inngest serializes (name, message, stack, own fields, `cause`).
+ * A step runner that keeps what Inngest's step state would: each step's result as the client's
+ * encryption middleware sends it (ciphertext, ADR-0021), or the error it threw with everything
+ * Inngest serializes (name, message, stack, own fields, `cause`), which the middleware leaves
+ * in the clear.
  */
 export function stepStateRecorder() {
   const state: string[] = [];
   const runStep: RunStep = async (id, run) => {
     try {
       const result = await run();
-      state.push(JSON.stringify({ id, result }));
+      state.push(JSON.stringify({ id, result: await storedStepOutput(result) }));
       return result;
     } catch (error) {
       state.push(JSON.stringify({ id, thrown: serializedError(error) }));

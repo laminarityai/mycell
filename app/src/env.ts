@@ -33,6 +33,11 @@ const envSchema = z.object({
     .transform((value) => value === "1"),
   INNGEST_EVENT_KEY: z.string().min(1).optional(),
   INNGEST_SIGNING_KEY: z.string().min(1).optional(),
+  // The app key Inngest's encryption middleware encrypts step state and function results with,
+  // so what Inngest stores of a run is ciphertext (ADR-0021). One key for the whole app, held in
+  // a KMS in production and set here from it. Required unless INNGEST_DEV=1; without it the dev
+  // server keeps step state in the clear.
+  INNGEST_ENCRYPTION_KEY: z.string().min(32).optional(),
   // The Vercel AI Gateway: every model call goes through it, and it reports each call's cost.
   AI_GATEWAY_API_KEY: z.string().min(1),
   // Where the gateway is, when not Vercel's own (https://ai-gateway.vercel.sh/v4/ai). Only the
@@ -71,7 +76,11 @@ const envSchema = z.object({
 export const env = envSchema
   .superRefine((parsed, context) => {
     if (parsed.INNGEST_DEV) return;
-    for (const key of ["INNGEST_EVENT_KEY", "INNGEST_SIGNING_KEY"] as const) {
+    for (const key of [
+      "INNGEST_EVENT_KEY",
+      "INNGEST_SIGNING_KEY",
+      "INNGEST_ENCRYPTION_KEY",
+    ] as const) {
       if (parsed[key] === undefined) {
         context.addIssue({ code: "custom", path: [key], message: "Required unless INNGEST_DEV=1" });
       }

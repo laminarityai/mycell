@@ -81,7 +81,10 @@ describe("executeRun", () => {
         stepId: "thread",
         type: "tool",
         status: "succeeded",
-        output: { threadId: "thread-1", messageCount: 2 },
+        // The result's fields by kind and size, never their values (ADR-0021).
+        output: {
+          fields: { threadId: { kind: "text", size: 8 }, messageCount: { kind: "number" } },
+        },
         modelRole: null,
         costUsd: 0,
       },

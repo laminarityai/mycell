@@ -31,7 +31,7 @@ export type CatalogAction = {
   readonly scopes: readonly string[];
   /** The action's input once references are resolved. */
   readonly input: z.ZodType;
-  /** What the action hands on: derived data and IDs only, never content (ADR-0012). */
+  /** What the action hands on to later steps, content included, never into a run record (ADR-0021). */
   readonly output: z.ZodType;
   /**
    * The fields of `output` a branch's condition may test (ADR-0015), each with its type, as

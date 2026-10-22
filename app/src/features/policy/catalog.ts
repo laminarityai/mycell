@@ -29,13 +29,21 @@ const actions = [
   {
     name: "google-mail.read-message",
     app: "Gmail",
-    description: "Read one message's IDs and labels.",
+    description: "Read one message: its IDs, labels, sender, subject and plain-text body.",
     risk: "read",
     integration: "google",
     host: GMAIL_HOST,
     scopes: GMAIL_READ,
     input: z.object({ messageId: id }),
-    output: z.object({ messageId: id, threadId: id, labelIds: z.array(z.string()) }),
+    // Its sender, subject and body pass to later steps, never into run records (ADR-0021).
+    output: z.object({
+      messageId: id,
+      threadId: id,
+      labelIds: z.array(z.string()),
+      from: z.string(),
+      subject: z.string(),
+      body: z.string(),
+    }),
   },
   {
     name: "google-mail.read-thread",

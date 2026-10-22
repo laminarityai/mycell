@@ -38,9 +38,15 @@ export type AwaitedItem =
 export type StepExecution = {
   /** Go on to the next step, or end the run `skipped` or `escalated`. */
   next: "continue" | "skipped" | "escalated";
-  /** Handed on to later steps through the step state: derived data only (ADR-0012). */
+  /**
+   * Handed on to later steps through the step state, which Inngest stores encrypted: it may
+   * carry content, such as a message's body (ADR-0021).
+   */
   output: Json;
-  /** What run_steps keeps: no content, and an extract's field names but not their values. */
+  /**
+   * What run_steps keeps: no content. An extract's field names but not their values, a tool
+   * result's fields by kind and size.
+   */
   record: Json;
   model?: { role: ModelRole; modelId: string; costUsd: number };
   /**

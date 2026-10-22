@@ -2,8 +2,9 @@
 // RunStep under the step's own ID, so Inngest memoizes each and a retry never repeats a
 // finished one (ADR-0006). The step walker decides which step runs next. Each step checks
 // first that the run may go on, tries its work up to the retry policy's attempts, and records
-// itself; when the walk ends, the run's status is written once. A step hands on derived data
-// only; content stays inside the step that fetched it.
+// itself; when the walk ends, the run's status is written once. A step's output may carry
+// content to later steps through the step state, which Inngest stores encrypted; its record
+// keeps none (ADR-0021).
 import { and, eq } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { getConnection } from "@/features/connections/server";

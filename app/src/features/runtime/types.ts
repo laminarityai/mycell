@@ -135,8 +135,16 @@ export type RunStepStatus = (typeof runStepStatuses)[number];
 export type RunOutcome = { status: Exclude<RunStatus, "running"> };
 
 /**
+ * One field of a tool step's result, as its run record lists it: its kind and, for text, a list
+ * or a record, its size (characters, items or fields). Never its value (ADR-0021).
+ */
+export type ResultField =
+  { kind: "text" | "list" | "record"; size: number } | { kind: "number" | "yes_no" | "empty" };
+
+/**
  * One step of a run, as recorded: derived data only (labels, probabilities, IDs, counts, field
- * names), never message content or generated text (invariant 8, ADR-0012).
+ * names, a tool result's field kinds and sizes), never message content or generated text, though
+ * a step's output may carry them to later steps (invariant 8, ADR-0021).
  */
 export type RunStepRecord = {
   stepId: string;

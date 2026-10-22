@@ -45,10 +45,21 @@ async function setup() {
     at: daysAgo(2),
     ...overrides,
   });
-  const mailbox = await connectMailbox(orgA.member.ctx, orgA.member.email, [
-    danaEmail({ text: "I lead procurement at Acme. Our renewal is due in March." }),
-  ]);
+  const mailbox = await connectMailbox(orgA.member.ctx, orgA.member.email, []);
+  const adminBox = await connectMailbox(orgA.admin.ctx, orgA.admin.email, []);
   await backfillConnection(orgA.member.ctx, mailbox.id);
+  await backfillConnection(orgA.admin.ctx, adminBox.id);
+  // Delivers a copy of the email to the member's mailbox and the admin's.
+  const deliver = async (message: FakeMessageInput, messageId: string) => {
+    for (const box of [mailbox, adminBox]) {
+      box.mailbox.add({ ...message, headers: { "Message-ID": `<${messageId}@acme.example>` } });
+      await pollConnection(systemCtx(orgA.id), box.id);
+    }
+  };
+  await deliver(
+    danaEmail({ text: "I lead procurement at Acme. Our renewal is due in March." }),
+    "renewal-1",
+  );
   scriptLearning(
     {
       objects: [dana, acme],
@@ -67,13 +78,13 @@ async function setup() {
   );
   await learnStoredItems(orgA.id);
 
-  mailbox.mailbox.add(
+  await deliver(
     danaEmail({
       text: "We agreed to a three-year extension. Our office moved to Leeds.",
       at: daysAgo(1),
     }),
+    "renewal-2",
   );
-  await pollConnection(systemCtx(orgA.id), mailbox.id);
   scriptLearning(
     {
       objects: [acme],
@@ -102,7 +113,8 @@ describe("searching memory by text", () => {
     expect(result.objects.map((object) => object.name)).toEqual(["Acme"]);
     expect(result.facts[0]).toMatchObject({
       subject: { kind: "company", name: "Acme" },
-      sources: [{ app: "gmail" }],
+      // The member's copy, and the admin's of the same email.
+      sources: [{ app: "gmail" }, { app: "gmail" }],
     });
   });
 });
@@ -190,5 +202,66 @@ describe("what a search shows", () => {
     const result = await searchMemory(orgA.member.ctx, { text: "Acme renewal", limit: 1 });
 
     expect(statements(result)).toEqual([RENEWAL]);
+  });
+});
+
+describe("searching a busy org's memory", () => {
+  it("finds the caller's own fact though many newer ones they can't see match too", async () => {
+    const { orgA } = await seedTwoOrgs();
+    await withCredits(orgA.id);
+    const client = { ref: "client", kind: "company" as const, name: "Client Co" };
+    const own = "Client Co's renewal is due in June.";
+    // The member's own email about Client Co's renewal.
+    const memberBox = await connectMailbox(orgA.member.ctx, orgA.member.email, [
+      {
+        from: "pat@client.example",
+        to: [orgA.member.email],
+        text: "Our renewal at client.example is due in June.",
+        at: daysAgo(10),
+      },
+    ]);
+    await backfillConnection(orgA.member.ctx, memberBox.id);
+    scriptLearning(
+      {
+        objects: [{ ...client, domain: "client.example" }],
+        facts: [
+          { about: "client", statement: own, evidence: "Our renewal at client.example is due" },
+        ],
+      },
+      1,
+      [meaning(10)],
+    );
+    await learnStoredItems(orgA.id);
+    // Then 120 newer facts about Client Co's renewal, from the admin's private mail.
+    const notes = Array.from({ length: 120 }, (_, i) => `Renewal note ${String(i)} is filed.`);
+    const adminBox = await connectMailbox(orgA.admin.ctx, orgA.admin.email, [
+      {
+        from: "pat@client.example",
+        to: [orgA.admin.email],
+        text: `About client.example. ${notes.join(" ")}`,
+        at: daysAgo(1),
+      },
+    ]);
+    await backfillConnection(orgA.admin.ctx, adminBox.id);
+    scriptLearning(
+      {
+        objects: [{ ...client, domain: "client.example" }],
+        facts: notes.map((note, i) => ({
+          about: "client",
+          statement: `Client Co renewal note ${String(i)} exists.`,
+          evidence: note.slice(0, -1),
+        })),
+      },
+      notes.length,
+      notes.map((_, i) => meaning(100 + i)),
+    );
+    await learnStoredItems(orgA.id);
+    const renewal = { text: "renewal" };
+    // The admin's own notes fill a search's default 20.
+    expect((await searchMemory(orgA.admin.ctx, renewal)).facts).toHaveLength(20);
+
+    expect(statements(await searchMemory(orgA.member.ctx, renewal))).toEqual([own]);
+    const byDomain = { key: { kind: "domain" as const, value: "client.example" } };
+    expect(statements(await searchMemory(orgA.member.ctx, byDomain))).toEqual([own]);
   });
 });

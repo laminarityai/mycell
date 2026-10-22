@@ -9,9 +9,9 @@
 //   closest to the best few facts they found, so a fact that shares no word with the text but
 //   means the same as a match is found too.
 // Facts about an object named by its exact key come first. Only facts the caller can see (the
-// one visibility function), and of those only the ones current for them (the newest they can
-// see of each timeline), rank or seed anything, so a fact they can't see never pulls in, pushes
-// down or replaces one they can.
+// one visibility rule, applied in each list's query before it's limited), and of those only the
+// ones current for them (the newest they can see of each timeline), rank or seed anything, so a
+// fact they can't see never crowds out, pulls in, pushes down or replaces one they can.
 import { and, cosineDistance, desc, eq, inArray, lte, ne, or, sql } from "drizzle-orm";
 import { forOrg, type OrgScopedDb } from "@/db/for-org";
 import type { Ctx } from "@/lib/ctx";
@@ -24,7 +24,7 @@ import {
 } from "../types";
 import { facts, memoryObjects, objectKeys } from "./schema";
 import { describeFacts, type FactRow, overTime, type SeenFact, seenFacts } from "./visible-facts";
-import { viewerOf } from "./visibility";
+import { type Reading, readingOf, viewerOf, visibleFact, visibleObject } from "./visibility";
 
 const DEFAULT_LIMIT = 20;
 // How many facts the keyword and link lists rank at most.
@@ -49,12 +49,13 @@ export async function searchMemory(ctx: Ctx, input: MemorySearch): Promise<Memor
   const search = memorySearchSchema.parse(input);
   const db = forOrg(ctx);
   const viewer = await viewerOf(ctx);
+  const reading = await readingOf(ctx, viewer);
   const words = "text" in search ? wordsOf(search.text) : [];
   const keys = "key" in search ? [search.key] : keysIn(search.text);
 
-  const { byKey, named } = await namedObjects(db, keys, words);
-  const keyword = await keywordFacts(db, words);
-  const linked = await linkedFacts(db, named);
+  const { byKey, named } = await namedObjects(db, reading, keys, words);
+  const keyword = await keywordFacts(db, reading, words);
+  const linked = await linkedFacts(db, reading, named);
   const candidates = unique([...keyword, ...linked]);
   const seen = new Map<string, SeenFact>();
   // Only the facts current for the viewer: the newest of each timeline they can see.
@@ -72,7 +73,7 @@ export async function searchMemory(ctx: Ctx, input: MemorySearch): Promise<Memor
     const seeds = fuse(lists)
       .slice(0, SEEDS)
       .flatMap((id) => seen.get(id)?.fact ?? []);
-    const near = await neighbours(db, seeds, new Set(candidates.map((fact) => fact.id)));
+    const near = await neighbours(db, reading, seeds, new Set(candidates.map((fact) => fact.id)));
     lists.push({ facts: await see(near), weight: WEIGHTS.meaning });
   }
 
@@ -103,10 +104,10 @@ function keysIn(text: string): Key[] {
 const anyOf = (words: string[]) => sql`to_tsquery('english', ${words.join(" | ")})`;
 
 /**
- * The objects the search names by an exact key (`byKey`), and those first, then the ones a word
- * of their name matches (`named`).
+ * The objects the search names by an exact key (`byKey`), and those first, then the ones the
+ * caller can see whose name a word matches (`named`).
  */
-async function namedObjects(db: OrgScopedDb, keys: Key[], words: string[]) {
+async function namedObjects(db: OrgScopedDb, reading: Reading, keys: Key[], words: string[]) {
   const keyRows =
     keys.length === 0
       ? []
@@ -122,7 +123,7 @@ async function namedObjects(db: OrgScopedDb, keys: Key[], words: string[]) {
     words.length === 0
       ? []
       : await db.select(memoryObjects, {
-          where: sql`${nameIndex} @@ ${anyOf(words)}`,
+          where: and(sql`${nameIndex} @@ ${anyOf(words)}`, visibleObject(reading)),
           orderBy: [desc(sql`ts_rank_cd(${nameIndex}, ${anyOf(words)})`), memoryObjects.id],
           limit: CANDIDATES,
         });
@@ -130,24 +131,35 @@ async function namedObjects(db: OrgScopedDb, keys: Key[], words: string[]) {
   return { byKey, named: unique([...byKey, ...byName.map((object) => object.id)]) };
 }
 
-/** Facts whose keyword index matches any of the words, best match first. */
-async function keywordFacts(db: OrgScopedDb, words: string[]): Promise<FactRow[]> {
+/** Facts the caller can see whose keyword index matches any of the words, best match first. */
+async function keywordFacts(
+  db: OrgScopedDb,
+  reading: Reading,
+  words: string[],
+): Promise<FactRow[]> {
   if (words.length === 0) return [];
   return db.select(facts, {
-    where: sql`${facts.keywords} @@ ${anyOf(words)}`,
+    where: and(sql`${facts.keywords} @@ ${anyOf(words)}`, visibleFact(reading)),
     orderBy: [desc(sql`ts_rank_cd(${facts.keywords}, ${anyOf(words)})`), desc(facts.recordedAt)],
     limit: CANDIDATES,
   });
 }
 
 /**
- * Facts about the objects, then facts linking another object to them, in the objects'
- * order, newest first.
+ * Facts the caller can see about the objects, then those linking another object to them, in
+ * the objects' order, newest first.
  */
-async function linkedFacts(db: OrgScopedDb, objectIds: string[]): Promise<FactRow[]> {
+async function linkedFacts(
+  db: OrgScopedDb,
+  reading: Reading,
+  objectIds: string[],
+): Promise<FactRow[]> {
   if (objectIds.length === 0) return [];
   const rows = await db.select(facts, {
-    where: or(inArray(facts.subjectId, objectIds), inArray(facts.objectId, objectIds)),
+    where: and(
+      or(inArray(facts.subjectId, objectIds), inArray(facts.objectId, objectIds)),
+      visibleFact(reading),
+    ),
     orderBy: [desc(facts.recordedAt), facts.id],
     limit: CANDIDATES,
   });
@@ -159,11 +171,12 @@ async function linkedFacts(db: OrgScopedDb, objectIds: string[]): Promise<FactRo
 }
 
 /**
- * Facts, other than `known` ones, whose stored embeddings mean nearly the same as a
- * seed's: every seed's closest first, then every seed's second closest, and so on.
+ * Facts the caller can see, other than `known` ones, whose stored embeddings mean nearly the
+ * same as a seed's: every seed's closest first, then every seed's second closest, and so on.
  */
 async function neighbours(
   db: OrgScopedDb,
+  reading: Reading,
   seeds: FactRow[],
   known: Set<string>,
 ): Promise<FactRow[]> {
@@ -171,7 +184,7 @@ async function neighbours(
     seeds.map((seed) => {
       const distance = cosineDistance(facts.embedding, seed.embedding);
       return db.select(facts, {
-        where: and(ne(facts.id, seed.id), lte(distance, 1 - MIN_SIMILARITY)),
+        where: and(ne(facts.id, seed.id), lte(distance, 1 - MIN_SIMILARITY), visibleFact(reading)),
         orderBy: [distance, facts.id],
         limit: NEIGHBOURS,
       });

@@ -5,3 +5,9 @@
 // Called only by memory's job (and tests), as the org's system ctx.
 export { learnFromItem } from "./lib/learn";
 export { readObject } from "./lib/read";
+// Admins only.
+export {
+  listCompanyWideLists,
+  markCompanyWideList,
+  unmarkCompanyWideList,
+} from "./lib/company-wide-lists";

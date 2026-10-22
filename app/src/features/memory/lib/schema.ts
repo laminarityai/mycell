@@ -101,6 +101,21 @@ export const accessListEntries = pgTable(
   ],
 );
 
+/**
+ * A group address, such as all@, an admin marked company-wide (ADR-0023): email sent to it is
+ * visible to everyone in the org. A setting of the org's, not derived from a connection.
+ */
+export const companyWideLists = pgTable(
+  "company_wide_lists",
+  {
+    orgId: text("org_id").notNull(),
+    // Lowercased, at the org's Workspace domain.
+    address: text("address").notNull(),
+    markedAt: timestamp("marked_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.orgId, table.address] })],
+);
+
 /** A person, company, deal, project or document memory knows about. Never matched across orgs. */
 export const memoryObjects = pgTable(
   "memory_objects",

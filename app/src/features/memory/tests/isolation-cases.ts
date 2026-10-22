@@ -3,7 +3,7 @@ import { defineIsolationCases } from "@/db/testing/isolation";
 import type { TwoOrgs } from "@/db/testing/two-org-fixture";
 import { backfillConnection } from "@/features/discovery/server";
 import { systemCtx } from "@/lib/ctx";
-import { ForbiddenError, NotFoundError } from "@/lib/errors";
+import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import { connectMailbox, daysAgo } from "@/testing/connect-helpers";
 import * as server from "../server";
 import { learnStoredItems, scriptLearning, withCredits } from "./memory-helpers";
@@ -65,5 +65,42 @@ export const isolationCases = defineIsolationCases(server, {
     }
 
     expect(await snapshot()).toEqual(object);
+  },
+
+  // Org B's all-staff list: org A neither sees it nor unmarks it, and its own mark on the same
+  // address is its own.
+  listCompanyWideLists: async ({ orgA, orgB }) => {
+    const allB = `all@${orgB.workspaceDomain}`;
+    await server.markCompanyWideList(orgB.admin.ctx, allB);
+
+    expect(await server.listCompanyWideLists(orgA.admin.ctx)).toEqual([]);
+    expect((await server.listCompanyWideLists(orgB.admin.ctx)).map((l) => l.address)).toEqual([
+      allB,
+    ]);
+  },
+
+  markCompanyWideList: async ({ orgA, orgB }) => {
+    const allA = `all@${orgA.workspaceDomain}`;
+    const allB = `all@${orgB.workspaceDomain}`;
+    await server.markCompanyWideList(orgB.admin.ctx, allB);
+
+    // Another company's domain isn't org A's to mark.
+    await expect(server.markCompanyWideList(orgA.admin.ctx, allB)).rejects.toThrow(ValidationError);
+    await server.markCompanyWideList(orgA.admin.ctx, allA);
+
+    expect((await server.listCompanyWideLists(orgB.admin.ctx)).map((l) => l.address)).toEqual([
+      allB,
+    ]);
+  },
+
+  unmarkCompanyWideList: async ({ orgA, orgB }) => {
+    const allB = `all@${orgB.workspaceDomain}`;
+    await server.markCompanyWideList(orgB.admin.ctx, allB);
+
+    await server.unmarkCompanyWideList(orgA.admin.ctx, allB);
+
+    expect((await server.listCompanyWideLists(orgB.admin.ctx)).map((l) => l.address)).toEqual([
+      allB,
+    ]);
   },
 });

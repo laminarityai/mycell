@@ -4,39 +4,55 @@ import { grantCredits } from "@/features/credits/server";
 import { systemCtx } from "@/lib/ctx";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import { fakeInngest } from "@/testing/fake-inngest";
-import { learnFromItem } from "../server";
+import { learnFromItem, startMemory } from "../server";
 import { itemToLearnSchema, type LearnOutcome } from "../types";
 
 // Event IDs name their connection, a fresh one in every test, so one set serves every test.
 const learned = new Set<string>();
 
+const TO_LEARN = new Set(["discovery/item.stored", "memory/item.queued"]);
+// Events sent without an ID (memory's own queued items) are told apart by when they were sent.
+const seenWithoutId = new WeakSet<object>();
+
 /**
- * Learns every item discovery announced since the last call, in order, as memory's job does:
- * as the org's system ctx. Returns each item's outcome.
+ * Learns every item discovery announced, or memory queued, since the last call, in order, as
+ * memory's job does: as the org's system ctx. Returns each item's outcome.
  */
 export async function learnStoredItems(orgId: string): Promise<LearnOutcome[]> {
   const outcomes: LearnOutcome[] = [];
-  for (const event of fakeInngest.sent("discovery/item.stored")) {
-    const key = event.id ?? JSON.stringify(event.data);
-    if (learned.has(key) || event.data.orgId !== orgId) continue;
-    learned.add(key);
+  for (const event of fakeInngest.sent()) {
+    if (!TO_LEARN.has(event.name) || event.data.orgId !== orgId) continue;
+    if (event.id === undefined) {
+      if (seenWithoutId.has(event)) continue;
+      seenWithoutId.add(event);
+    } else {
+      if (learned.has(event.id)) continue;
+      learned.add(event.id);
+    }
     outcomes.push(await learnFromItem(systemCtx(orgId), itemToLearnSchema.parse(event.data)));
   }
   return outcomes;
 }
 
-export async function withCredits(orgId: string): Promise<void> {
+/** Grants the org credits, without starting memory: it learns nothing yet. */
+export async function grantOnly(orgId: string): Promise<void> {
   await grantCredits(systemCtx(orgId), 1000);
+}
+
+/** Grants the org credits, and starts memory with a budget it won't reach, as an admin would. */
+export async function withCredits(orgId: string): Promise<void> {
+  await grantOnly(orgId);
+  await startMemory(systemCtx(orgId), { monthlyBudget: 1000 });
 }
 
 const LABELS = ["business", "newsletter", "marketing", "notification", "personal"];
 
 /** The classify call's answer: Jev picks `label` (business, newsletter, …). */
-export function classifiedAs(label: string): void {
+export function classifiedAs(label: string, options: { costUsd?: number } = {}): void {
   const probabilities = Object.fromEntries(
     LABELS.map((other) => [other, other === label ? 0.92 : 0.02]),
   );
-  fakeAiGateway.decision({ choice: label, probabilities });
+  fakeAiGateway.decision({ choice: label, probabilities }, options);
 }
 
 /** What the extraction model answers, in the shape memory's structured output asks for. */

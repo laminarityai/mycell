@@ -8,3 +8,14 @@ export { readObject } from "./lib/read";
 // Ranks what the caller can see by keywords, keys, links and stored embeddings, with no model
 // call: the query itself is never embedded.
 export { searchMemory } from "./lib/search";
+
+// Admins' control of what memory costs and learns from: the estimate, starting memory with a
+// monthly budget, changing it, and company-wide exclusions. Members get ForbiddenError.
+export { getMemorySettings } from "./lib/settings";
+export { setMemoryBudget, startMemory } from "./lib/budget";
+export { addExclusion, removeExclusion } from "./lib/exclusions";
+// Called only by memory's jobs (and tests), as the org's system ctx: queueing what discovery
+// stored once memory starts, the items postponed for the budget when they're due again, and
+// forgetting what a new exclusion covers.
+export { queueStoredItems, resumePostponed } from "./lib/budget";
+export { forgetExcluded } from "./lib/exclusions";

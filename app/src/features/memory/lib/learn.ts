@@ -1,11 +1,13 @@
 // Learning from one item discovery stored, as the org's system ctx (ADR-0009), in two steps.
-// The first reads the item and decides: learned already, a copy of an item another mailbox
-// taught (linked to its facts there and then), or else, once the injection screen has passed it
-// (an item it flags, or one nothing could screen, is skipped before any model reads it),
-// whether it's business (`classify`). The second, for business mail, reads it again, extracts
-// objects and facts, embeds the statements and stores them. The item's content is fetched inside each step and never leaves
-// it (invariant 8): a step returns only what it decided. A connection or item that's gone ends
-// learning quietly.
+// The first decides: nothing before an admin started memory, and nothing once the month's
+// budget is spent (the item is postponed to next month); then learned already, covered by an
+// exclusion, a copy of an item another mailbox taught (linked to its facts there and then), or
+// else, once the injection screen has passed it (an item it flags, or one nothing could screen,
+// is skipped before any model reads it), whether it's business (`classify`). The second, for
+// business mail, reads it again, extracts objects and facts, embeds the statements and stores
+// them. Every model call is tagged `memory` in the ledger. The item's content is fetched inside
+// each step and never leaves it (invariant 8): a step returns only what it decided. A
+// connection or item that's gone ends learning quietly.
 import { isForeignKeyViolation } from "@/db/errors";
 import { getConnection } from "@/features/connections/server";
 import { embed, screenForInjection } from "@/features/models/server";
@@ -13,6 +15,8 @@ import { getWorkspaceDomain } from "@/features/orgs/server";
 import type { Ctx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import type { ItemToLearn, LearnOutcome } from "../types";
+import { gate, MEMORY_USAGE } from "./budget";
+import { isExcluded } from "./exclusions";
 import { extract, isBusiness } from "./extract";
 import { readEmail, type EmailToLearn } from "./gmail";
 import { isKnown, storeCopy, storeLearned, type Stored } from "./store";
@@ -29,10 +33,22 @@ const CONNECTION_FOREIGN_KEYS = [
   "source_records_connection_fk",
   "access_list_entries_connection_fk",
   "fact_sources_connection_fk",
+  "memory_postponed_items_connection_fk",
 ];
 
 type Decision =
-  | { decision: "gone" | "known" | "flagged" | "unscreened" | "not_business" | "business" }
+  | {
+      decision:
+        | "gone"
+        | "not_started"
+        | "postponed"
+        | "excluded"
+        | "known"
+        | "flagged"
+        | "unscreened"
+        | "not_business"
+        | "business";
+    }
   | ({ decision: "copy" } & Stored);
 
 export async function learnFromItem(
@@ -45,6 +61,9 @@ export async function learnFromItem(
   switch (decided.decision) {
     case "gone":
       return { outcome: "gone" };
+    case "not_started":
+    case "postponed":
+    case "excluded":
     case "known":
     case "flagged":
     case "unscreened":
@@ -68,15 +87,19 @@ export async function learnFromItem(
 }
 
 async function decide(ctx: Ctx, item: ItemToLearn): Promise<Decision> {
+  // Not before an admin starts memory, nor once the month's budget is spent.
+  const gated = await gate(ctx, item);
+  if (gated !== "open") return { decision: gated };
   if (await isKnown(ctx, item.connectionId, item.app, item.sourceRef)) {
     return { decision: "known" };
   }
   const source = await read(ctx, item);
   if (source === null) return { decision: "gone" };
+  if (await isExcluded(ctx, item.connectionId, source.email)) return { decision: "excluded" };
   const copy = await storeCopy(ctx, source);
   if (copy !== null) return { decision: "copy", ...copy };
   // Before any model reads it. Gmail never changes a message, so step two reads what this saw.
-  const { verdict } = await screenForInjection(ctx, { text: source.email.text });
+  const { verdict } = await screenForInjection(ctx, { text: source.email.text, ...MEMORY_USAGE });
   if (verdict === "flagged") return { decision: "flagged" };
   if (verdict === "unavailable") return { decision: "unscreened" };
   return { decision: (await isBusiness(ctx, source.email)) ? "business" : "not_business" };
@@ -92,6 +115,7 @@ async function extractAndStore(ctx: Ctx, item: ItemToLearn): Promise<Learned> {
   if (extracted.facts.length === 0) return { decision: "nothing_stated" };
   const { output: embeddings } = await embed(ctx, {
     values: extracted.facts.map((fact) => fact.statement),
+    ...MEMORY_USAGE,
   });
   const stored = await storeLearned(ctx, source, extracted, embeddings);
   return stored === null ? { decision: "known" } : { decision: "stored", ...stored };

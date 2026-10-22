@@ -11,6 +11,7 @@ import {
   customType,
   foreignKey,
   index,
+  numeric,
   pgTable,
   primaryKey,
   text,
@@ -21,7 +22,7 @@ import {
 // The one table outside memory its tables reference: derived data cascades from its connection
 // (docs/conventions.md, "Derived data cascades from its connection").
 import { connections } from "@/features/connections/lib/schema";
-import { MEMORY_APPS, OBJECT_KEY_KINDS, OBJECT_KINDS } from "../types";
+import { EXCLUSION_KINDS, MEMORY_APPS, OBJECT_KEY_KINDS, OBJECT_KINDS } from "../types";
 
 /** The `embed` role's default model's dimensions (openai/text-embedding-3-small). */
 export const EMBEDDING_DIMENSIONS = 1536;
@@ -217,6 +218,64 @@ export const factSources = pgTable(
       name: "fact_sources_source_record_fk",
       columns: [table.orgId, table.sourceRecordId],
       foreignColumns: [sourceRecords.orgId, sourceRecords.id],
+    }).onDelete("cascade"),
+  ],
+);
+
+/**
+ * Memory's settings for an org, one row once an admin confirmed the estimate and started it:
+ * nothing is learned before then. The monthly budget caps the credits learning spends.
+ */
+export const memorySettings = pgTable("memory_settings", {
+  orgId: text("org_id").primaryKey(),
+  // Credits a calendar month (UTC) of learning may spend.
+  monthlyBudget: numeric("monthly_budget", { mode: "number" }).notNull(),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+  // The admin who confirmed the estimate, or `system` for our team's scripts.
+  startedByUserId: text("started_by_user_id").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
+ * Something an admin keeps out of memory for the whole company (ADR-0023): a Gmail label (by
+ * name, since each mailbox has its own label IDs), a Drive folder (by ID), an address or a
+ * domain. Settings, not data from a connection.
+ */
+export const exclusions = pgTable(
+  "memory_exclusions",
+  {
+    id: text("id").primaryKey(),
+    orgId: text("org_id").notNull(),
+    kind: text("kind", { enum: EXCLUSION_KINDS }).notNull(),
+    // A label's name as the admin typed it; a lowercased address or domain; a folder ID.
+    value: text("value").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    unique("memory_exclusions_org_id_kind_value_unique").on(table.orgId, table.kind, table.value),
+  ],
+);
+
+/**
+ * An item memory put off learning because the month's budget was spent, learned when the next
+ * month starts. A pointer only, cascading from its connection (invariant 3).
+ */
+export const postponedItems = pgTable(
+  "memory_postponed_items",
+  {
+    orgId: text("org_id").notNull(),
+    connectionId: text("connection_id").notNull(),
+    app: text("app", { enum: MEMORY_APPS }).notNull(),
+    sourceRef: text("source_ref").notNull(),
+    postponedAt: timestamp("postponed_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.connectionId, table.app, table.sourceRef] }),
+    index("memory_postponed_items_org_id_idx").on(table.orgId),
+    foreignKey({
+      name: "memory_postponed_items_connection_fk",
+      columns: [table.orgId, table.connectionId],
+      foreignColumns: [connections.orgId, connections.id],
     }).onDelete("cascade"),
   ],
 );

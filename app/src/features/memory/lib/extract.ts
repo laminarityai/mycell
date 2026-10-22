@@ -7,6 +7,7 @@ import { z } from "zod";
 import { callModel, classify } from "@/features/models/server";
 import type { Ctx } from "@/lib/ctx";
 import { OBJECT_KINDS, type ObjectKeyKind, type ObjectKind } from "../types";
+import { MEMORY_USAGE } from "./budget";
 import { addressesIn, type EmailToLearn } from "./gmail";
 
 const BUSINESS = "business";
@@ -39,6 +40,7 @@ export async function isBusiness(ctx: Ctx, email: EmailToLearn): Promise<boolean
       "and personal mail are not.",
     labels: LABELS,
     state: email.text,
+    ...MEMORY_USAGE,
   });
   return label === BUSINESS;
 }
@@ -94,6 +96,7 @@ export async function extract(ctx: Ctx, email: EmailToLearn, domain: string): Pr
     system: instructions(domain),
     prompt: `<email>\n${email.text}\n</email>`,
     schema: extractionSchema,
+    ...MEMORY_USAGE,
   });
   return grounded(output, email, domain);
 }

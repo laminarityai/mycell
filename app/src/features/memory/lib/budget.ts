@@ -1,0 +1,169 @@
+// What memory costs, and the admin's control of it (ADR-0022): nothing is learned until an admin
+// has seen the estimate, made from the items discovery stored, and started memory with a
+// monthly budget. Every model call learning makes is tagged `memory` in the ledger, and once a
+// calendar month's (UTC) tagged spending reaches the budget, each item is postponed until the
+// next month starts, or the budget changes.
+import { lte, sql } from "drizzle-orm";
+import { forOrg } from "@/db/for-org";
+import { getSpending } from "@/features/credits/server";
+import { countStoredItems, listStoredItems } from "@/features/discovery/server";
+import { CREDIT_ESTIMATES, estimateScreenCredits } from "@/features/models/server";
+import type { Ctx } from "@/lib/ctx";
+import { ConflictError, ForbiddenError, ValidationError } from "@/lib/errors";
+import {
+  memoryBudgetSchema,
+  type ItemToLearn,
+  type MemoryBudget,
+  type MemoryEstimate,
+} from "../types";
+import { sendItemsQueued, sendMemoryStarted, sendPostponedDue } from "./events";
+import { MAX_TEXT_CHARS } from "./gmail";
+import { memorySettings, postponedItems } from "./schema";
+
+/** What memory's ledger entries are tagged with: pass it to every model call learning makes. */
+export const MEMORY_USAGE = { purpose: "memory" } as const;
+
+/** The start of this calendar month, UTC: when this month's budget began. */
+export function monthStart(now = new Date()): Date {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+}
+
+/** The most learning one item costs: its screen, `classify`, extraction and embedding. */
+export function creditsPerItem(): number {
+  return (
+    estimateScreenCredits(MAX_TEXT_CHARS) +
+    CREDIT_ESTIMATES.classify +
+    CREDIT_ESTIMATES.fast +
+    CREDIT_ESTIMATES.embed
+  );
+}
+
+export async function estimate(ctx: Ctx): Promise<MemoryEstimate> {
+  const items = await countStoredItems(ctx);
+  const perItem = creditsPerItem();
+  return { items, creditsPerItem: perItem, credits: items * perItem };
+}
+
+export async function settingsOf(ctx: Ctx) {
+  const rows = await forOrg(ctx).select(memorySettings);
+  return rows.at(0) ?? null;
+}
+
+export async function spentThisMonth(ctx: Ctx): Promise<number> {
+  return getSpending(ctx, { purpose: "memory", since: monthStart() });
+}
+
+/**
+ * Starts memory with a monthly budget, once an admin has seen the estimate: what discovery has
+ * stored so far is queued for learning, and new items are learned as they're stored.
+ */
+export async function startMemory(ctx: Ctx, input: MemoryBudget): Promise<void> {
+  if (ctx.role === "member") throw new ForbiddenError();
+  const monthlyBudget = budgetOf(input);
+  const inserted = await forOrg(ctx).insert(
+    memorySettings,
+    { monthlyBudget, startedAt: new Date(), startedByUserId: ctx.userId },
+    { onConflictDoNothing: true },
+  );
+  if (inserted.length === 0) throw new ConflictError("Memory has already started.");
+  await sendMemoryStarted(ctx.orgId);
+}
+
+/** Changes the monthly budget. Items postponed under the old one are tried again. */
+export async function setMemoryBudget(ctx: Ctx, input: MemoryBudget): Promise<void> {
+  if (ctx.role === "member") throw new ForbiddenError();
+  const monthlyBudget = budgetOf(input);
+  const updated = await forOrg(ctx).update(memorySettings, {
+    monthlyBudget,
+    updatedAt: new Date(),
+  });
+  if (updated.length === 0) throw new ConflictError("Memory hasn't started yet.");
+  await sendPostponedDue([ctx.orgId]);
+}
+
+function budgetOf(input: MemoryBudget): number {
+  const parsed = memoryBudgetSchema.safeParse(input);
+  if (!parsed.success) throw new ValidationError("A budget is a positive number of credits.");
+  return parsed.data.monthlyBudget;
+}
+
+/**
+ * Whether learning may spend now: not before memory started, and not once this month's
+ * spending reached the budget, when the item is postponed.
+ */
+export async function gate(
+  ctx: Ctx,
+  item: ItemToLearn,
+): Promise<"open" | "not_started" | "postponed"> {
+  const settings = await settingsOf(ctx);
+  if (settings === null) return "not_started";
+  if ((await spentThisMonth(ctx)) < settings.monthlyBudget) return "open";
+  await forOrg(ctx).insert(postponedItems, item, { onConflictDoNothing: true });
+  return "postponed";
+}
+
+const PAGE = 1000;
+
+/**
+ * Queues every item discovery stored for learning, a page a step: what memory's start job
+ * runs. Items learned already are skipped when they're learned.
+ */
+export async function queueStoredItems(
+  ctx: Ctx,
+  runStep: <T extends Record<string, string | number | boolean | null>>(
+    id: string,
+    run: () => Promise<T>,
+  ) => Promise<T>,
+): Promise<{ queued: number }> {
+  if (ctx.role !== "system") throw new ForbiddenError();
+  let after: string | null = null;
+  let queued = 0;
+  for (let page = 0; ; page += 1) {
+    const from: string | null = after;
+    const done = await runStep(`queue-${String(page)}`, async () => {
+      const { items, next } = await listStoredItems(ctx, {
+        ...(from === null ? {} : { after: from }),
+        limit: PAGE,
+      });
+      await sendItemsQueued(ctx.orgId, items, "memory-start");
+      return { next, count: items.length };
+    });
+    queued += done.count;
+    if (done.next === null) return { queued };
+    after = done.next;
+  }
+}
+
+/**
+ * Queues the items postponed for the budget again, and forgets they were postponed. One the
+ * budget still doesn't cover is postponed again when it's learned, so only those postponed
+ * before this began are taken.
+ */
+export async function resumePostponed(ctx: Ctx): Promise<{ queued: number }> {
+  if (ctx.role !== "system") throw new ForbiddenError();
+  const db = forOrg(ctx);
+  const began = new Date();
+  let queued = 0;
+  for (;;) {
+    const items = await db.select(postponedItems, {
+      where: lte(postponedItems.postponedAt, began),
+      limit: PAGE,
+    });
+    if (items.length === 0) return { queued };
+    const keys = items.map((item) => sql`(${item.connectionId}, ${item.app}, ${item.sourceRef})`);
+    await db.delete(
+      postponedItems,
+      sql`(${postponedItems.connectionId}, ${postponedItems.app}, ${postponedItems.sourceRef}) in (${sql.join(keys, sql`, `)})`,
+    );
+    await sendItemsQueued(
+      ctx.orgId,
+      items.map(({ connectionId, app, sourceRef }) => ({ connectionId, app, sourceRef })),
+    );
+    queued += items.length;
+  }
+}
+
+/** How many items wait for the budget. */
+export async function countPostponed(ctx: Ctx): Promise<number> {
+  return forOrg(ctx).count(postponedItems);
+}

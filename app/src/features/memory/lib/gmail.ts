@@ -11,6 +11,9 @@ const GMAIL = "/gmail/v1/users/me";
 // quoted history.
 const MAX_BODY_CHARS = 12_000;
 
+/** About the most text of one email a model reads: its body, and its headers. */
+export const MAX_TEXT_CHARS = MAX_BODY_CHARS + 1_000;
+
 type Part = {
   mimeType?: string | undefined;
   filename?: string | undefined;

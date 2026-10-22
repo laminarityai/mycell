@@ -46,10 +46,13 @@ export const httpMethodSchema = z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]
 export type HttpMethod = z.infer<typeof httpMethodSchema>;
 
 /**
- * The call a custom action makes, as far as its risk level goes (ADR-0018): an HTTP method and
- * a path on its app, or a GraphQL operation document sent to a path. It never names a host.
+ * The call a custom action makes, as far as its risk level goes (ADR-0018): an HTTP method, a
+ * path on its app and the body fields it fills, or a GraphQL operation document sent to a path.
+ * It never names a host.
  */
-export type CustomCall = { method: HttpMethod; path: string } | { graphql: string; path: string };
+export type CustomCall =
+  | { method: HttpMethod; path: string; body?: Readonly<Record<string, string>> }
+  | { graphql: string; path: string };
 
 /**
  * A custom action's call with where its inputs go and where its result fields come from: what

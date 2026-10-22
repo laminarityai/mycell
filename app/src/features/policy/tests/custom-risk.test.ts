@@ -2,6 +2,7 @@
 // nothing a model says about the level reaches it.
 import { describe, expect, it } from "vitest";
 import { customActionRisk } from "../custom-risk";
+import type { CustomCall } from "../types";
 
 const app = { accountingOrPayments: false };
 const accounting = { accountingOrPayments: true };
@@ -76,6 +77,41 @@ describe("a custom action's risk level", () => {
     }
     const graphql = "mutation { issueArchive(id: $id) { success } }";
     expect(customActionRisk({ graphql, path: "/graphql" }, app)).toMatchObject({ ok: false });
+  });
+
+  it("refuses a call that trashes or moves, by its path or a body field's name", () => {
+    const calls: CustomCall[] = [
+      { method: "POST", path: "/gmail/v1/users/me/messages/{id}/trash" },
+      { method: "POST", path: "/v1.0/me/messages/{id}/move" },
+      { method: "PATCH", path: "/drive/v3/files/{fileId}", body: { trashed: "trashed" } },
+      { method: "PATCH", path: "/v1.0/me/events/{id}", body: { "event.isCancelled": "flag" } },
+    ];
+    for (const call of calls) {
+      expect(customActionRisk(call, app), call.path).toMatchObject({ ok: false });
+    }
+  });
+
+  it("checks only a GraphQL mutation's own fields, not what a query or the result reads", () => {
+    const query = "query { issues { nodes { title cancelledAt archivedAt } } }";
+    expect(customActionRisk({ graphql: query, path: "/graphql" }, app)).toEqual({
+      ok: true,
+      risk: "read",
+    });
+    const update =
+      "mutation Update($id: String!) { issueUpdate(id: $id, input: { removedLabelIds: [] }) { issue { cancelledAt } } }";
+    expect(customActionRisk({ graphql: update, path: "/graphql" }, app)).toEqual({
+      ok: true,
+      risk: "external_send",
+    });
+    for (const graphql of [
+      "mutation { ok: issueDelete(id: $id) { success } }",
+      "mutation { issueUpdate(id: $id) { success } issueTrash(id: $id) { success } }",
+      "mutation { ... on Mutation { issueDelete(id: $id) { success } } }",
+    ]) {
+      expect(customActionRisk({ graphql, path: "/graphql" }, app), graphql).toMatchObject({
+        ok: false,
+      });
+    }
   });
 
   it("allows names that only look alike", () => {

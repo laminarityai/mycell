@@ -43,7 +43,8 @@ const messageSchema = z.object({
 /**
  * One email, read to learn from. Its item key is the Message-ID header, lowercased without its
  * angle brackets: the same in every copy. Its access list and `addresses` are everyone on it
- * (From, To, Cc, and Bcc as this copy shows it), and `text` its headers and body.
+ * (From, To, Cc, and Bcc as this copy shows it), `senders` its From, and `text` its headers and
+ * body.
  */
 export type EmailToLearn = SourceItem & { kind: "email"; labelIds: string[] };
 
@@ -93,6 +94,7 @@ export async function readEmail(
     labelIds: message.labelIds,
     access: addresses.map((value) => ({ kind: "address", value })),
     addresses,
+    senders: [...new Set(addressesIn(header("From")))],
     text: `${shown.join("\n")}\n\n${body}`,
   };
 }

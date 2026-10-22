@@ -6,6 +6,7 @@ import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import * as server from "../server";
 import { byEmail, DANA, seedOrgB } from "./isolation-seed";
 import { withCredits } from "./memory-helpers";
+import { retentionIsolationCases } from "./retention-isolation-cases";
 import { settingsIsolationCases } from "./settings-isolation-cases";
 
 const STAFF = "sam@mycel.example";
@@ -100,6 +101,7 @@ export const isolationCases = defineIsolationCases(server, {
   },
 
   ...settingsIsolationCases,
+  ...retentionIsolationCases,
 
   summarizeObject: async (orgs) => {
     const { object, snapshot } = await seedOrgB(orgs);

@@ -82,6 +82,7 @@ export async function readDoc(
     access: accessList(file.permissions ?? []),
     parentIds: file.parents ?? [],
     addresses: [],
+    senders: [],
     text: text.slice(0, MAX_DOC_CHARS),
   };
 }

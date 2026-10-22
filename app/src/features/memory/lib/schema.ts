@@ -11,6 +11,7 @@ import {
   customType,
   foreignKey,
   index,
+  integer,
   numeric,
   pgTable,
   primaryKey,
@@ -25,6 +26,7 @@ import { connections } from "@/features/connections/lib/schema";
 import {
   ACCESS_LOG_READER_KINDS,
   EXCLUSION_KINDS,
+  MAX_RETENTION_MONTHS,
   MEMORY_APPS,
   MEMORY_READ_OPERATIONS,
   OBJECT_KEY_KINDS,
@@ -248,12 +250,15 @@ export const factSources = pgTable(
 
 /**
  * Memory's settings for an org, one row once an admin confirmed the estimate and started it:
- * nothing is learned before then. The monthly budget caps the credits learning spends.
+ * nothing is learned before then. The monthly budget caps the credits learning spends, and the
+ * retention window how long memory keeps what a source taught (ADR-0024).
  */
 export const memorySettings = pgTable("memory_settings", {
   orgId: text("org_id").primaryKey(),
   // Credits a calendar month (UTC) of learning may spend.
   monthlyBudget: numeric("monthly_budget", { mode: "number" }).notNull(),
+  // Source records older than this many months are deleted nightly, with what only they taught.
+  retentionMonths: integer("retention_months").notNull().default(MAX_RETENTION_MONTHS),
   startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
   // The admin who confirmed the estimate, or `system` for our team's scripts.
   startedByUserId: text("started_by_user_id").notNull(),
@@ -278,6 +283,21 @@ export const exclusions = pgTable(
   (table) => [
     unique("memory_exclusions_org_id_kind_value_unique").on(table.orgId, table.kind, table.value),
   ],
+);
+
+/**
+ * The do-not-learn list (ADR-0024): the people an admin asked memory to forget, each as a keyed
+ * hash of their address under the org's hashing key (the key store), never the address itself.
+ * New mail is checked by hashing its addresses the same way. An org setting, with no connection.
+ */
+export const doNotLearn = pgTable(
+  "memory_do_not_learn",
+  {
+    orgId: text("org_id").notNull(),
+    addressHash: text("address_hash").notNull(),
+    forgottenAt: timestamp("forgotten_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.orgId, table.addressHash] })],
 );
 
 /**

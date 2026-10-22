@@ -56,7 +56,8 @@ export type AccessReread = { outcome: "rewritten" | "removed" | "unknown" | "unr
 
 /**
  * Why learning skipped an item: no admin has started memory yet; the month's budget is spent,
- * so it waits for next month (`postponed`); an exclusion covers it; learned already (for a
+ * so it waits for next month (`postponed`); an exclusion covers it; it's from a person an admin
+ * asked memory to forget (`forgotten`); learned already (for a
  * Drive file, this version or a newer one); not a kind of item memory reads (a Drive file that
  * isn't a Google Doc); changed since (a Drive file's newer version is learned on its own); the
  * injection screen flagged it, or no screen is configured, so no model read it; not business;
@@ -66,6 +67,7 @@ export type SkipReason =
   | "not_started"
   | "postponed"
   | "excluded"
+  | "forgotten"
   | "known"
   | "unsupported"
   | "outdated"
@@ -211,6 +213,30 @@ export const exclusionInputSchema = z.discriminatedUnion("kind", [
 ]);
 export type ExclusionInput = z.input<typeof exclusionInputSchema>;
 
+/**
+ * How long memory keeps what a source taught, in months (ADR-0024): 24 by default, the longest,
+ * and admins may shorten it.
+ */
+export const MAX_RETENTION_MONTHS = 24;
+
+/** A retention window as an admin sets it: whole months, 1 to 24. */
+export const retentionWindowSchema = z.object({
+  months: z.coerce.number().int().min(1).max(MAX_RETENTION_MONTHS),
+});
+export type RetentionWindow = z.input<typeof retentionWindowSchema>;
+
+/** A person an admin asks memory to forget, by email address (lowercased). */
+export const forgetPersonSchema = z.object({
+  email: z.string().trim().toLowerCase().max(320).pipe(z.email()),
+});
+export type ForgetPersonInput = z.input<typeof forgetPersonSchema>;
+
+/** What forgetting a person did: how many facts went. Nothing else is shown (ADR-0024). */
+export type Forgotten = { facts: number };
+
+/** What a night's retention removed: source records past the window, and what only they taught. */
+export type RetentionApplied = { sourceRecords: number; facts: number; objects: number };
+
 /** A monthly memory budget, in credits. */
 export const memoryBudgetSchema = z.object({
   monthlyBudget: z.coerce.number().positive().max(10_000_000),
@@ -226,16 +252,20 @@ export type MemoryBudget = z.input<typeof memoryBudgetSchema>;
 export type MemoryEstimate = { items: number; creditsPerItem: number; credits: number };
 
 /**
- * Memory's settings as an admin sees them: whether it started, and with what budget; what this
- * month's learning spent (since `monthStart`, UTC); the estimate; and the exclusions.
+ * Memory's settings as an admin sees them: whether it started, with what budget and retention
+ * window; what this month's learning spent (since `monthStart`, UTC); the estimate; the
+ * exclusions and company-wide lists; and how many people were forgotten.
  */
 export type MemorySettings = {
-  started: { startedAt: Date; monthlyBudget: number } | null;
+  started: { startedAt: Date; monthlyBudget: number; retentionMonths: number } | null;
   monthStart: Date;
   spentThisMonth: number;
   postponedItems: number;
   estimate: MemoryEstimate;
   exclusions: Exclusion[];
+  companyWideLists: CompanyWideList[];
+  // How many people are on the do-not-learn list: never who.
+  forgottenPeople: number;
 };
 
 /**

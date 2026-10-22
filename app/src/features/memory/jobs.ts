@@ -8,12 +8,17 @@ import {
   exclusionAdded,
   itemQueued,
   memoryStarted,
+  personForgotten,
   postponedDue,
+  retentionDue,
   sendPostponedDue,
+  sendRetentionDue,
 } from "./lib/events";
 import {
+  applyRetention,
   deleteRemovedItem,
   forgetExcluded,
+  forgetPersonAgain,
   learnFromItem,
   pruneAccessLog,
   queueStoredItems,
@@ -29,8 +34,8 @@ const stepRunner =
     step.run(id, run) as Promise<T>;
 
 // One of these jobs at a time per org, across them (scope "env"): learning, deletions, sharing
-// changes, an exclusion's forgetting and resuming postponed items never race each other, and
-// one org's backfill leaves other orgs unblocked.
+// changes, an exclusion's forgetting, forgetting a person, retention and resuming postponed
+// items never race each other, and one org's backfill leaves other orgs unblocked.
 const PER_ORG = [{ scope: "env", key: '"memory-org-" + event.data.orgId', limit: 1 }] as const;
 
 /**
@@ -149,4 +154,36 @@ export const rereadDriveAccessJob = inngest.createFunction(
     }
     return { orgs: orgIds.length, files };
   },
+);
+
+/**
+ * Deletes the objects keyed by an address an admin forgot, again: once any item being learned
+ * when it was forgotten is stored (they share the per-org key), whatever it taught about the
+ * person goes too.
+ */
+export const forgetPersonAgainJob = inngest.createFunction(
+  { id: "memory-forget-person-again", triggers: [personForgotten], concurrency: [...PER_ORG] },
+  async ({ event, step }) =>
+    step.run("forget-again", () =>
+      forgetPersonAgain(systemCtx(event.data.orgId), event.data.address),
+    ),
+);
+
+/** Every night at 03:30 UTC, each org's retention is due. */
+export const retentionCron = inngest.createFunction(
+  { id: "memory-retention-nightly", triggers: [cron("TZ=UTC 30 3 * * *")] },
+  async ({ step }) => {
+    const orgIds = await step.run("list-orgs", () => listOrgIds());
+    await step.run("fan-out", () => sendRetentionDue(orgIds));
+    return { orgs: orgIds.length };
+  },
+);
+
+/**
+ * Deletes the org's source records past its retention window, and the facts and objects they
+ * leave unsupported (ADR-0024).
+ */
+export const applyRetentionJob = inngest.createFunction(
+  { id: "memory-apply-retention", triggers: [retentionDue], concurrency: [...PER_ORG] },
+  async ({ event, step }) => step.run("apply", () => applyRetention(systemCtx(event.data.orgId))),
 );

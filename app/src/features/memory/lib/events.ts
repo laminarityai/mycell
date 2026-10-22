@@ -1,6 +1,7 @@
 // The Inngest events memory sends itself: an admin started it, so it learns what discovery had
 // stored already; an item to learn, queued then or when a postponed item's month comes; an
-// exclusion was added, so what it covers is forgotten; postponed items are due again.
+// exclusion was added, so what it covers is forgotten; postponed items are due again; a person
+// was forgotten, so they're swept again; a night's retention is due.
 import { eventType } from "inngest";
 import { z } from "zod";
 import { inngest } from "@/lib/inngest";
@@ -28,6 +29,17 @@ export const exclusionAdded = eventType("memory/exclusion.added", {
 
 /** Items postponed for the budget are due again: a new month began, or the budget changed. */
 export const postponedDue = eventType("memory/postponed.due", { schema: org });
+
+/**
+ * An admin forgot a person: the objects keyed by their address are deleted again once learning
+ * in progress is done. The address is encrypted for the org (the key store), never plain.
+ */
+export const personForgotten = eventType("memory/person.forgotten", {
+  schema: z.object({ orgId: z.string().min(1), address: z.string().min(1) }),
+});
+
+/** A night's retention is due for the org: what's past its window goes. */
+export const retentionDue = eventType("memory/retention.due", { schema: org });
 
 // Inngest takes up to 5,000 events a send; fewer keeps each request small.
 const BATCH = 500;
@@ -63,6 +75,16 @@ export async function sendMemoryStarted(orgId: string): Promise<void> {
 
 export async function sendExclusionAdded(orgId: string, exclusionId: string): Promise<void> {
   await inngest.send(exclusionAdded.create({ orgId, exclusionId }));
+}
+
+export async function sendPersonForgotten(orgId: string, address: string): Promise<void> {
+  await inngest.send(personForgotten.create({ orgId, address }));
+}
+
+export async function sendRetentionDue(orgIds: string[]): Promise<void> {
+  for (let i = 0; i < orgIds.length; i += BATCH) {
+    await inngest.send(orgIds.slice(i, i + BATCH).map((orgId) => retentionDue.create({ orgId })));
+  }
 }
 
 export async function sendPostponedDue(orgIds: string[]): Promise<void> {

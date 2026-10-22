@@ -253,6 +253,13 @@
       "when": 1792660841660,
       "tag": "0035_held-sends",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1792662053310,
+      "tag": "0036_memory-retention-and-forgetting",
+      "breakpoints": true
     }
   ]
 }

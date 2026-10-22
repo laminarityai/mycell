@@ -38,6 +38,11 @@ export { addExclusion, removeExclusion } from "./lib/exclusions";
 // forgetting what a new exclusion covers.
 export { queueStoredItems, resumePostponed } from "./lib/budget";
 export { forgetExcluded } from "./lib/exclusions";
+// How long memory keeps things (ADR-0024): admins set the retention window, and a nightly job
+// applies it as the org's system ctx.
+export { applyRetention, setRetentionWindow } from "./lib/retention";
+// Forgetting a person (ADR-0024): admins only; the sweep after it is the org's system ctx's.
+export { forgetPerson, forgetPersonAgain } from "./lib/forget";
 // Group addresses an admin marks company-wide. Admins only.
 export {
   listCompanyWideLists,

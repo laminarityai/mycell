@@ -2,11 +2,13 @@
 // system ctx (ADR-0009), in two steps. The first decides: nothing before an admin started
 // memory, and nothing once the month's budget is spent (the item is postponed to next month);
 // then learned already, not a kind memory reads (a Drive file that isn't a Google Doc), changed
-// since (a newer Drive version is learned on its own), covered by an exclusion, a copy of an
-// item another connection taught (linked to its facts there and then), or else, once the
-// injection screen has passed it (an item it flags, or one nothing could screen, is skipped
-// before any model reads it), whether it's business (`classify`). The second, for a business
-// item, reads it again, extracts objects and facts, embeds the statements and stores them.
+// since (a newer Drive version is learned on its own), covered by an exclusion, sent by someone
+// on the do-not-learn list (`forgotten`), a copy of an item another connection taught (linked
+// to its facts there and then), or else, once the injection screen has passed it (an item it
+// flags, or one nothing could screen, is skipped before any model reads it), whether it's
+// business (`classify`). The second, for a business
+// item, reads it again, extracts objects and facts, drops any object keyed by a forgotten
+// address with the facts about it or linking to it, embeds the statements and stores them.
 // Every model call is tagged `memory` in the ledger. The item's content is fetched inside each
 // step and never leaves it (invariant 8): a step returns only what it decided. A connection or
 // item that's gone ends learning quietly.
@@ -22,6 +24,7 @@ import { gate, MEMORY_USAGE } from "./budget";
 import { readDoc } from "./drive";
 import { isExcluded } from "./exclusions";
 import { extract, isBusiness } from "./extract";
+import { forgottenAmong, withoutForgotten } from "./forget";
 import { readEmail } from "./gmail";
 import { matchObjects } from "./match";
 import type { SourceItem } from "./source-item";
@@ -56,6 +59,7 @@ type Decision =
         | "not_started"
         | "postponed"
         | "excluded"
+        | "forgotten"
         | "known"
         | "flagged"
         | "unscreened"
@@ -77,6 +81,7 @@ export async function learnFromItem(
     case "not_started":
     case "postponed":
     case "excluded":
+    case "forgotten":
     case "known":
     case "unsupported":
     case "outdated":
@@ -119,6 +124,7 @@ async function decide(ctx: Ctx, item: ItemToLearn): Promise<Decision> {
     await retireOlderVersions(ctx, source);
     return { decision: "excluded" };
   }
+  if ((await forgottenAmong(ctx, source.item.senders)).size > 0) return { decision: "forgotten" };
   const copy = await storeCopy(ctx, source);
   if (copy !== null) return { decision: "copy", ...copy };
   // Before any model reads it.
@@ -143,7 +149,10 @@ async function extractAndStore(ctx: Ctx, item: ItemToLearn): Promise<Learned> {
       return { decision: screened };
     }
   }
-  const extracted = await extract(ctx, source.item, await getWorkspaceDomain(ctx));
+  const extracted = await withoutForgotten(
+    ctx,
+    await extract(ctx, source.item, await getWorkspaceDomain(ctx)),
+  );
   if (extracted.facts.length === 0) {
     await retireOlderVersions(ctx, source);
     return { decision: "nothing_stated" };

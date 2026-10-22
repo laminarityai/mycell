@@ -19,6 +19,8 @@ export type SourceItem = {
   access: AccessEntry[];
   // The addresses the item shows besides those in its text, lowercased: everyone on an email.
   addresses: string[];
+  // Who sent it, lowercased: an email's From. None for a doc.
+  senders: string[];
   // As a model reads it. In memory only.
   text: string;
   // Where its app files it, for exclusions: an email's label IDs, a doc's parent folder IDs.

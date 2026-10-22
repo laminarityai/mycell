@@ -2,14 +2,17 @@ import { serve } from "inngest/next";
 import { reconcileJob } from "@/features/connections/jobs";
 import { backfillJob, pollCron, pollJob } from "@/features/discovery/jobs";
 import {
+  applyRetentionJob,
   deleteRemovedItemJob,
   forgetExcludedJob,
+  forgetPersonAgainJob,
   learnJob,
   newMonthCron,
   pruneAccessLogJob,
   rereadAccessJob,
   rereadDriveAccessJob,
   resumePostponedJob,
+  retentionCron,
   startJob,
 } from "@/features/memory/jobs";
 import { checkWaitingReviewsJob, endedInGmailJob } from "@/features/reviews/jobs";
@@ -40,5 +43,8 @@ export const { GET, POST, PUT } = serve({
     deleteRemovedItemJob,
     rereadAccessJob,
     rereadDriveAccessJob,
+    forgetPersonAgainJob,
+    retentionCron,
+    applyRetentionJob,
   ],
 });

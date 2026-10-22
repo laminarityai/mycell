@@ -205,7 +205,7 @@ The org's prepaid balance, drawn down by every model call, discovery job, and ev
 _Avoid_: Tokens, usage, points
 
 **Budget**:
-An admin-set monthly credit cap on a single workflow.
+An admin-set monthly credit cap on a single workflow, or on what memory spends learning.
 _Avoid_: Limit, quota
 
 ### Memory

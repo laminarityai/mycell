@@ -5,7 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { listUsers } from "@/features/orgs/server";
 import type { Ctx } from "@/lib/ctx";
-import { ConflictError, ForbiddenError, NotFoundError } from "@/lib/errors";
+import { ConflictError, ForbiddenError, NangoRequestError, NotFoundError } from "@/lib/errors";
 import { deleteNangoConnection } from "./nango";
 import { connections } from "./schema";
 import { integrationOf } from "./apps";
@@ -72,13 +72,15 @@ export function mayManage(ctx: Ctx, connection: Pick<Connection, "kind" | "owner
 
 /**
  * Revokes Mycel's access at Nango, then deletes the row, and the cascade everything derived
- * from it. A failed Nango delete doesn't keep the row: Mycel forgets the connection either
- * way, and reconciliation deletes the Nango connection it no longer has a row for.
+ * from it. Nango failing the delete, or not answering, doesn't keep the row: Mycel forgets the
+ * connection either way, and reconciliation deletes the Nango connection it no longer has a row
+ * for. Any other error is Mycel's own (a bug, or how it's set up): it's thrown, and the row stays.
  */
 export async function deleteConnection(ctx: Ctx, connection: Connection): Promise<void> {
   try {
     await deleteNangoConnection(connection.nangoConnectionId, integrationOf(connection.source));
   } catch (error) {
+    if (!(error instanceof NangoRequestError)) throw error;
     console.warn(
       `Deleting Nango connection ${connection.nangoConnectionId} failed; reconciliation will retry.`,
       error,

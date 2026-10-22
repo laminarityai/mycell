@@ -1,21 +1,26 @@
-// Learning from one item discovery stored, as the org's system ctx (ADR-0009), in two steps.
-// The first reads the item and decides: learned already, a copy of an item another mailbox
-// taught (linked to its facts there and then), or else, once the injection screen has passed it
-// (an item it flags, or one nothing could screen, is skipped before any model reads it),
-// whether it's business (`classify`). The second, for business mail, reads it again, extracts
-// objects and facts, embeds the statements and stores them. The item's content is fetched inside each step and never leaves
-// it (invariant 8): a step returns only what it decided. A connection or item that's gone ends
-// learning quietly.
+// Learning from one item discovery stored (a Gmail message or a Drive file version), as the org's
+// system ctx (ADR-0009), in two steps. The first reads the item and decides: learned already, not
+// a kind memory reads (a Drive file that isn't a Google Doc), changed since (a newer Drive
+// version is learned on its own), a copy of an item another connection taught (linked to its
+// facts there and then), or else, once the injection screen has passed it (an item it flags, or
+// one nothing could screen, is skipped before any model reads it), whether it's business
+// (`classify`). The second, for a business item, reads it again, extracts objects and facts,
+// embeds the statements and stores them. The item's content is fetched inside each step and
+// never leaves it (invariant 8): a step returns only what it decided. A connection or item
+// that's gone ends learning quietly.
 import { isForeignKeyViolation } from "@/db/errors";
 import { getConnection } from "@/features/connections/server";
+import type { ConnectionDetails } from "@/features/connections/types";
 import { embed, screenForInjection } from "@/features/models/server";
 import { getWorkspaceDomain } from "@/features/orgs/server";
 import type { Ctx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
-import type { ItemToLearn, LearnOutcome } from "../types";
+import type { ItemToLearn, LearnOutcome, MemoryApp } from "../types";
+import { readDoc } from "./drive";
 import { extract, isBusiness } from "./extract";
-import { readEmail, type EmailToLearn } from "./gmail";
-import { isKnown, storeCopy, storeLearned, type Stored } from "./store";
+import { readEmail } from "./gmail";
+import type { SourceItem } from "./source-item";
+import { isKnown, retireOlderVersions, storeCopy, storeLearned, type Stored } from "./store";
 
 /** A step result: JSON, since Inngest stores it and replays it instead of re-running. */
 type StepResult = Record<string, string | number | boolean | null>;
@@ -31,8 +36,17 @@ const CONNECTION_FOREIGN_KEYS = [
   "fact_sources_connection_fk",
 ];
 
+// Whether an app's items can change between the two steps' reads. A Gmail message never
+// changes, so the second step reads what the first one screened; a Drive doc can be edited at
+// any moment, so the second step screens what it read again before a model reads it.
+const CAN_CHANGE: Record<MemoryApp, boolean> = { gmail: false, drive: true };
+
+type Unread = "gone" | "unsupported" | "outdated";
+
 type Decision =
-  | { decision: "gone" | "known" | "flagged" | "unscreened" | "not_business" | "business" }
+  | {
+      decision: Unread | "known" | "flagged" | "unscreened" | "not_business" | "business";
+    }
   | ({ decision: "copy" } & Stored);
 
 export async function learnFromItem(
@@ -46,6 +60,8 @@ export async function learnFromItem(
     case "gone":
       return { outcome: "gone" };
     case "known":
+    case "unsupported":
+    case "outdated":
     case "flagged":
     case "unscreened":
     case "not_business":
@@ -59,6 +75,10 @@ export async function learnFromItem(
   switch (learned.decision) {
     case "gone":
       return { outcome: "gone" };
+    case "unsupported":
+    case "outdated":
+    case "flagged":
+    case "unscreened":
     case "known":
     case "nothing_stated":
       return { outcome: "skipped", reason: learned.decision };
@@ -72,24 +92,36 @@ async function decide(ctx: Ctx, item: ItemToLearn): Promise<Decision> {
     return { decision: "known" };
   }
   const source = await read(ctx, item);
-  if (source === null) return { decision: "gone" };
+  if (typeof source === "string") return { decision: source };
   const copy = await storeCopy(ctx, source);
   if (copy !== null) return { decision: "copy", ...copy };
-  // Before any model reads it. Gmail never changes a message, so step two reads what this saw.
-  const { verdict } = await screenForInjection(ctx, { text: source.email.text });
-  if (verdict === "flagged") return { decision: "flagged" };
-  if (verdict === "unavailable") return { decision: "unscreened" };
-  return { decision: (await isBusiness(ctx, source.email)) ? "business" : "not_business" };
+  // Before any model reads it.
+  const screened = await screen(ctx, source.item);
+  const decision = screened ?? ((await isBusiness(ctx, source.item)) ? "business" : "not_business");
+  // What a newer version no longer teaches goes, whatever this one teaches.
+  if (decision !== "business") await retireOlderVersions(ctx, source);
+  return { decision };
 }
 
 type Learned =
-  { decision: "gone" | "known" | "nothing_stated" } | ({ decision: "stored" } & Stored);
+  | { decision: Unread | "flagged" | "unscreened" | "known" | "nothing_stated" }
+  | ({ decision: "stored" } & Stored);
 
 async function extractAndStore(ctx: Ctx, item: ItemToLearn): Promise<Learned> {
   const source = await read(ctx, item);
-  if (source === null) return { decision: "gone" };
-  const extracted = await extract(ctx, source.email, await getWorkspaceDomain(ctx));
-  if (extracted.facts.length === 0) return { decision: "nothing_stated" };
+  if (typeof source === "string") return { decision: source };
+  if (CAN_CHANGE[item.app]) {
+    const screened = await screen(ctx, source.item);
+    if (screened !== null) {
+      await retireOlderVersions(ctx, source);
+      return { decision: screened };
+    }
+  }
+  const extracted = await extract(ctx, source.item, await getWorkspaceDomain(ctx));
+  if (extracted.facts.length === 0) {
+    await retireOlderVersions(ctx, source);
+    return { decision: "nothing_stated" };
+  }
   const { output: embeddings } = await embed(ctx, {
     values: extracted.facts.map((fact) => fact.statement),
   });
@@ -97,10 +129,23 @@ async function extractAndStore(ctx: Ctx, item: ItemToLearn): Promise<Learned> {
   return stored === null ? { decision: "known" } : { decision: "stored", ...stored };
 }
 
-async function read(ctx: Ctx, item: ItemToLearn) {
+// The injection screen's verdict on the item: null when it passed.
+async function screen(ctx: Ctx, item: SourceItem): Promise<"flagged" | "unscreened" | null> {
+  const { verdict } = await screenForInjection(ctx, { text: item.text });
+  if (verdict === "flagged") return "flagged";
+  if (verdict === "unavailable") return "unscreened";
+  return null;
+}
+
+type Source = { connection: ConnectionDetails; app: MemoryApp; item: SourceItem };
+
+async function read(ctx: Ctx, item: ItemToLearn): Promise<Source | Unread> {
   const connection = await getConnection(ctx, item.connectionId);
-  const email: EmailToLearn | null = await readEmail(ctx, connection.id, item.sourceRef);
-  return email === null ? null : { connection, app: item.app, email };
+  const read =
+    item.app === "drive"
+      ? await readDoc(ctx, connection.id, item.sourceRef)
+      : ((await readEmail(ctx, connection.id, item.sourceRef)) ?? "gone");
+  return typeof read === "string" ? read : { connection, app: item.app, item: read };
 }
 
 // "The connection is gone" as a decision rather than an error: a missing connection is

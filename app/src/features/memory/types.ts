@@ -2,8 +2,8 @@
 // it (ADR-0022).
 import { z } from "zod";
 
-/** The apps memory learns from. Drive and Calendar join with their tickets. */
-export const MEMORY_APPS = ["gmail"] as const;
+/** The apps memory learns from: Gmail messages and Drive docs. Calendar joins with its ticket. */
+export const MEMORY_APPS = ["gmail", "drive"] as const;
 export type MemoryApp = (typeof MEMORY_APPS)[number];
 
 /** The kinds of object memory holds. */
@@ -26,10 +26,19 @@ export const itemToLearnSchema = z.object({
 export type ItemToLearn = z.infer<typeof itemToLearnSchema>;
 
 /**
- * Why learning skipped an item: learned already; the injection screen flagged it, or no screen
- * is configured, so no model read it; not business; or it stated no fact memory keeps.
+ * Why learning skipped an item: learned already (for a Drive file, this version or a newer one);
+ * not a kind of item memory reads (a Drive file that isn't a Google Doc); changed since (a Drive
+ * file's newer version is learned on its own); the injection screen flagged it, or no screen is
+ * configured, so no model read it; not business; or it stated no fact memory keeps.
  */
-export type SkipReason = "known" | "flagged" | "unscreened" | "not_business" | "nothing_stated";
+export type SkipReason =
+  | "known"
+  | "unsupported"
+  | "outdated"
+  | "flagged"
+  | "unscreened"
+  | "not_business"
+  | "nothing_stated";
 
 /**
  * What learning from one item did: stored facts about objects (a copy of an item learned

@@ -12,6 +12,7 @@ import {
   customActionDescriptionSchema,
   type CustomActionDescription,
   type CustomActionRecord,
+  type CustomActionWords,
   type CustomValueType,
 } from "./types";
 
@@ -165,6 +166,18 @@ function valueSchema(type: CustomValueType, choices: readonly string[] = []): z.
   if (type === "yes_no") return z.boolean();
   if (type === "choice") return z.enum(choices as [string, ...string[]]);
   return z.string().min(1);
+}
+
+/** The action in plain words: its app's name, its sentence, its call and its level. */
+export function customActionWords(record: CustomActionRecord): CustomActionWords {
+  const { call } = record;
+  return {
+    name: record.name,
+    app: REGISTERED_APPS[record.app].name,
+    description: record.description,
+    call: "graphql" in call ? `GraphQL ${call.path}` : `${call.method} ${call.path}`,
+    risk: record.risk,
+  };
 }
 
 /** The catalog, then the company's custom actions: an action set. */

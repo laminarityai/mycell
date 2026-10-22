@@ -148,7 +148,8 @@ export async function readSetup(ctx: Ctx): Promise<OrgSetup> {
   return { ownConnections: listing.connections, orgConnections: listing.orgConnections };
 }
 
-function requiredActions(spec: Spec): string[] {
+/** The actions the spec names, at any depth, each once, in the order a run reaches them. */
+export function requiredActions(spec: Spec): string[] {
   const names = eachStep(spec).flatMap(({ step }) =>
     step.type === "tool" ? [step.action] : step.type === "draft" ? [step.output] : [],
   );

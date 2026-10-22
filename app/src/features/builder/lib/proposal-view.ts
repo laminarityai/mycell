@@ -1,8 +1,7 @@
 // A stored proposal as the conversation shows it: what it changes, grouped by path, in plain
 // words: each path's condition, each step with its fixed risk level and whether it waits for
 // a review.
-import { REGISTERED_APPS } from "@/features/connections/registered-apps";
-import type { CustomActionRecord } from "@/features/custom-actions/types";
+import { customActionWords } from "@/features/custom-actions/description";
 import { applyPolicy } from "@/features/policy/engine";
 import type { ActionSet, InsertedApproval, RiskLevel } from "@/features/policy/types";
 import type { SubjectWords } from "@/features/spec/conditions";
@@ -16,13 +15,7 @@ import {
 import { diffSpecs, type PathDiff, type StepDiff } from "@/features/spec/diff";
 import { readStoredSpec } from "@/features/spec/stored";
 import type { Path, Spec } from "@/features/spec/types";
-import type {
-  Proposal,
-  ProposalGroup,
-  ProposalPath,
-  ProposalStep,
-  ProposedCustomAction,
-} from "../types";
+import type { Proposal, ProposalGroup, ProposalPath, ProposalStep } from "../types";
 import type { builderProposals } from "./schema";
 
 type ProposalRow = typeof builderProposals.$inferSelect;
@@ -69,7 +62,7 @@ export function toProposal(row: ProposalRow, actions: ActionSet): Proposal {
     settings: diff.settings,
     spec,
     baseSpec,
-    customActions: row.customActions.map(proposedCustomAction),
+    customActions: row.customActions.map((record) => customActionWords(record)),
     customActionRecords: row.customActions,
     createdAt: row.createdAt,
     decidedAt: row.decidedAt,
@@ -176,15 +169,4 @@ function actionInfo(name: string, actions: ActionSet): ActionInfo<RiskLevel> | u
   if (action === undefined) return undefined;
   const { risk, description, conditionFields } = action;
   return { risk, description, conditionFields };
-}
-
-function proposedCustomAction(record: CustomActionRecord): ProposedCustomAction {
-  const { call } = record;
-  return {
-    name: record.name,
-    app: REGISTERED_APPS[record.app].name,
-    description: record.description,
-    call: "graphql" in call ? `GraphQL ${call.path}` : `${call.method} ${call.path}`,
-    risk: record.risk,
-  };
 }

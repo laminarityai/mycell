@@ -1,7 +1,7 @@
 // Checking a custom action's description (ADR-0018): the call stays on its registered app, names
 // only its own inputs, and gets its level from the fixed rule, never from the description.
 import { describe, expect, it } from "vitest";
-import { checkCustomAction } from "../description";
+import { checkCustomAction, customActionWords } from "../description";
 import { readOutlookMessage, REPLY_PATH, replyToOutlookMessage } from "@/db/testing/custom-actions";
 
 const withCall = (call: Record<string, unknown>) =>
@@ -111,6 +111,21 @@ describe("checking a custom action's description", () => {
     expect(checkCustomAction(readOutlookMessage({ name: "google-mail.read-message" }))).toEqual({
       ok: false,
       issues: ['"google-mail.read-message" is a catalog action\'s name. Choose another.'],
+    });
+  });
+});
+
+describe("a custom action in plain words", () => {
+  it("names its app as admins do, its sentence, its method and path, and its level", () => {
+    const check = checkCustomAction(readOutlookMessage());
+    if (!check.ok) throw new Error(check.issues.join(" "));
+
+    expect(customActionWords(check.action)).toEqual({
+      name: "microsoft.read-message",
+      app: "Microsoft 365",
+      description: "Read one Outlook message: its subject, sender and whether it was read.",
+      call: "GET /v1.0/me/messages/{messageId}",
+      risk: "read",
     });
   });
 });

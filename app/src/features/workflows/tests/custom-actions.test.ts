@@ -5,16 +5,18 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { readOutlookMessage, storeCustomAction } from "@/db/testing/custom-actions";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
-import { ValidationError } from "@/lib/errors";
+import { ForbiddenError, ValidationError } from "@/lib/errors";
 import { connectApp, connectGoogle } from "@/testing/connect-helpers";
 import { publishTo, tagUsers } from "@/testing/visibility-helpers";
 import {
+  archiveWorkflow,
   enable,
   getVisibleWorkflow,
   getWorkflow,
   listEnablements,
   publishWorkflow,
   saveWorkflow,
+  workflowsUsingActions,
 } from "../server";
 import { labelSpec } from "./specs";
 
@@ -101,5 +103,79 @@ describe("a custom read in a workflow", () => {
     await expect(enable(member.ctx, workflowId)).rejects.toThrow(ValidationError);
     await connectApp(member.ctx, "microsoft", member.email);
     expect(await enable(member.ctx, workflowId)).toEqual({ enabled: true });
+  });
+});
+
+describe("which workflows use an action", () => {
+  // On the otherwise path of a branch on the message's kind.
+  const onAPath = labelSpec({
+    id: "sorted",
+    specVersion: 2,
+    steps: [
+      {
+        id: "kind",
+        type: "classify",
+        role: "classify",
+        question: "What kind of message is this?",
+        labels: ["pricing", "other"],
+      },
+      {
+        id: "route",
+        type: "branch",
+        mode: "first",
+        paths: [
+          {
+            id: "pricing",
+            name: "Pricing",
+            condition: { combine: "all", checks: [{ classify: "kind", is: "pricing", minP: 0.8 }] },
+            steps: [label],
+          },
+        ],
+        otherwise: { id: "rest", steps: [outlook] },
+      },
+    ],
+  });
+
+  it("names each workflow whose working spec or published version uses it, at any depth", async () => {
+    const { admin, workflowId: labels } = await memberEnabled();
+    // Labels: published without it, then its working spec starts using it.
+    await saveWorkflow(admin.ctx, {
+      workflowId: labels,
+      name: "Labels",
+      spec: withSteps([outlook, label]),
+    });
+    // Sorted: published using it on a path.
+    const sorted = await saveWorkflow(admin.ctx, { name: "Sorted", spec: onAPath });
+    await publishWorkflow(admin.ctx, sorted.id);
+    // Old: published using it, then its working spec stops, then it's archived.
+    const old = await saveWorkflow(admin.ctx, {
+      name: "Old",
+      spec: labelSpec({ id: "old", steps: [outlook] }),
+    });
+    await publishWorkflow(admin.ctx, old.id);
+    const stopped = labelSpec({ id: "old" });
+    await saveWorkflow(admin.ctx, { workflowId: old.id, name: "Old", spec: stopped });
+    await archiveWorkflow(admin.ctx, old.id);
+
+    const uses = await workflowsUsingActions(admin.ctx, [
+      "microsoft.read-message",
+      "microsoft.read-mail",
+    ]);
+
+    const use = (workflowId: string, name: string) => ({ workflowId, name, archived: false });
+    expect(uses.get("microsoft.read-message")).toEqual([
+      { ...use(labels, "Labels"), inWorkingSpec: true, publishedVersion: null },
+      { ...use(old.id, "Old"), archived: true, inWorkingSpec: false, publishedVersion: 1 },
+      { ...use(sorted.id, "Sorted"), inWorkingSpec: true, publishedVersion: 1 },
+    ]);
+    expect(uses.get("microsoft.read-mail")).toEqual([]);
+  });
+
+  it("is for admins only, since working specs are", async () => {
+    const { member } = await memberEnabled();
+
+    await expect(workflowsUsingActions(member.ctx, ["microsoft.read-message"])).rejects.toThrow(
+      ForbiddenError,
+    );
   });
 });

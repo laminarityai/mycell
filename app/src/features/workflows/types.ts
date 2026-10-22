@@ -50,6 +50,19 @@ export type PublishSettings = {
  */
 export type ReviewSharing = { seen: boolean; handOff: boolean; tags: string[] };
 
+/**
+ * A workflow that uses an action, as the custom actions page lists it: in its working spec, in
+ * its latest version (the one that runs), or both.
+ */
+export type ActionUse = {
+  workflowId: string;
+  name: string;
+  inWorkingSpec: boolean;
+  /** The latest version's number when that version uses it; null when it doesn't or none is. */
+  publishedVersion: number | null;
+  archived: boolean;
+};
+
 /** An immutable snapshot of a workflow's spec, after the policy engine ran on it. */
 export type WorkflowVersion = {
   id: string;

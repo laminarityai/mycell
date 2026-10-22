@@ -1,8 +1,8 @@
 // The model calls learning makes (ADR-0022): `classify` decides whether an item (an email or a
 // doc) is business, and a structured-output call on `fast` extracts objects and short facts
 // from it. What the model answers is then checked against the item itself, deterministically:
-// an object's key must appear in it, each fact must quote it, and a personal fact about someone
-// outside the company is dropped. The quotes are checked here and never stored (invariant 8).
+// an object's key must appear in it, each fact must quote it, a fact that copies a long run of
+// it word for word is dropped, and so is a personal fact about someone outside the company. The quotes are checked here and never stored (invariant 8).
 import { z } from "zod";
 import { callModel, classify } from "@/features/models/server";
 import type { Ctx } from "@/lib/ctx";
@@ -33,6 +33,10 @@ const BUSINESS_QUESTIONS: Record<SourceItem["kind"], { question: string; labels:
 
 // A statement longer than this isn't a short fact: it's dropped rather than stored.
 const MAX_STATEMENT_CHARS = 280;
+
+// A statement holding this many words in a row as the item has them copies the item rather
+// than stating a fact about it, and is dropped (invariant 8: memory keeps no source text).
+const MAX_COPIED_WORDS = 8;
 
 // Webmail domains: an address there says nothing about a company.
 const WEBMAIL_DOMAINS = new Set([
@@ -140,6 +144,7 @@ function instructions(kind: SourceItem["kind"], domain: string): string {
 // Keeps what the item itself supports, and the objects a kept fact needs.
 function grounded(extraction: Extraction, item: SourceItem, domain: string): Extracted {
   const text = normalized(item.text);
+  const runs = wordRuns(item.text);
   const addresses = new Set([...item.addresses, ...addressesIn(item.text)]);
   const objects = new Map<string, ExtractedObject & { insider: boolean }>();
   for (const object of extraction.objects) {
@@ -162,6 +167,7 @@ function grounded(extraction: Extraction, item: SourceItem, domain: string): Ext
       return [];
     }
     if (evidence === "" || !text.includes(evidence)) return [];
+    if ([...wordRuns(statement)].some((run) => runs.has(run))) return [];
     if (fact.kind === "personal" && !subject.insider) return [];
     const linked = fact.object === null ? undefined : objects.get(fact.object);
     return [
@@ -206,6 +212,16 @@ function keysOf(
     if (!WEBMAIL_DOMAINS.has(domain)) keys.push({ kind: "domain", value: domain });
   }
   return keys;
+}
+
+// Every run of MAX_COPIED_WORDS words in a row in the text, lowercased, letters and digits only.
+function wordRuns(text: string): Set<string> {
+  const words = text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+  const runs = new Set<string>();
+  for (let i = 0; i + MAX_COPIED_WORDS <= words.length; i += 1) {
+    runs.add(words.slice(i, i + MAX_COPIED_WORDS).join(" "));
+  }
+  return runs;
 }
 
 function normalized(text: string): string {

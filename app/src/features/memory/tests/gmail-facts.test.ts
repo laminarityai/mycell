@@ -153,6 +153,35 @@ describe("learning from a Gmail message", () => {
     );
   });
 
+  it("drops a fact that copies a long run of the email word for word", async () => {
+    const { orgA, danaEmail } = await setup();
+    const text =
+      "I lead procurement at Acme. " +
+      `Please wire the deposit to account ${MARKER} at the usual bank before Friday.`;
+    const mailbox = await connectMailbox(orgA.member.ctx, orgA.member.email, [danaEmail({ text })]);
+    await backfillConnection(orgA.member.ctx, mailbox.id);
+    scriptLearning(
+      {
+        objects: [{ ref: "dana", kind: "person", name: "Dana Ruiz", email: DANA }],
+        facts: [
+          { about: "dana", statement: ROLE, evidence: "I lead procurement at Acme" },
+          // The source's own sentence, with a few words changed around it.
+          {
+            about: "dana",
+            statement: `Dana asks us to wire the deposit to account ${MARKER} at the usual bank.`,
+            evidence: `Please wire the deposit to account ${MARKER} at the usual bank before Friday`,
+          },
+        ],
+      },
+      1,
+    );
+
+    expect(await learnStoredItems(orgA.id)).toEqual([{ outcome: "learned", objects: 1, facts: 1 }]);
+    const dana = await readObject(orgA.member.ctx, byEmail(DANA));
+    expect(dana.facts.map((fact) => fact.statement)).toEqual([ROLE]);
+    expect(await tablesHolding(MARKER)).toEqual([]);
+  });
+
   it("attaches facts about the same address from two emails to one object", async () => {
     const { orgA, danaEmail } = await setup();
     const mailbox = await connectMailbox(orgA.member.ctx, orgA.member.email, [danaEmail()]);

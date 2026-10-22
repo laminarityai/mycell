@@ -195,7 +195,7 @@ Code the builder chat drafts when a custom action can't do the job, sent to our 
 _Avoid_: Feature request
 
 **Builder chat**:
-The admin-only agent that turns descriptions and suggestions into proposed spec changes.
+The admin-only agent that turns descriptions and suggestions into proposed spec changes. It reads only company-wide memory, since its conversations are shared among admins.
 _Avoid_: Copilot, assistant
 
 **Builder conversation**:
@@ -252,7 +252,7 @@ The check that content fetched from a company's apps doesn't try to give a model
 _Avoid_: Guardrail, filter, firewall
 
 **Do-not-learn list**:
-The addresses of people an admin asked Mycel to forget, which memory never learns about again.
+The addresses of people an admin asked Mycel to forget. Memory never learns from their mail or about anyone with their address again, but mail that names them without their address can still teach it about them.
 
 **Retention window**:
 How long memory keeps what it learned from an email or doc after it was sent or saved: 24 months, or less if an admin shortens it. Past it, the item and every fact only it supported are deleted.

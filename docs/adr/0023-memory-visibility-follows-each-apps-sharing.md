@@ -6,6 +6,7 @@ Replaces automatic promotion. A fact is visible to anyone who can see at least o
 
 - **Company-wide** means the app's own sharing (a doc shared with the domain, a shared drive), a group list an admin marks as company-wide (such as all@), or any org connection (such as support@). Google tells only admins who is in a group, which we don't use (ADR-0008), so for other groups only confirmed recipients count: people whose own connected mailbox holds the item.
 - **Each person's own view.** The agent and the MCP server see exactly what the person using them can see. A summary of an object is built when asked, from only the facts that person can see; nothing merged is stored.
+- **The builder chat reads company-wide memory only, because builder conversations are shared among admins** (M14 review): it stores the agent's replies whole, so a fact from one admin's private mail could reach another admin. It reads in the view an org-credential run has, each read still logged as the builder's with the admin as the person reading.
 - **Acting:** the agent and MCP clients read memory and act only through workflows and the Reviews page. "Remember this" creates a fact owned by that person. Everything they retrieve is screened for prompt injection, as Google's restricted-scope rules require.
 - **Company policy.** Memory is on for every connection; members can't switch it off and don't see its contents. Admins set company-wide exclusions, such as Gmail labels or Drive folders.
 - ADR-0001 still governs evidence shown with suggestions.

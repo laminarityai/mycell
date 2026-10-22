@@ -102,8 +102,8 @@ Planned in this order, each its own milestone or part of one, after M12:
 - Objects, links and facts built from Gmail, Drive docs and Calendar, in Postgres with pgvector: facts and pointers only, stated facts only, business items only within a monthly extraction budget (ADR-0022).
 - Each source record keeps its app's access list; a fact is visible to anyone who can see one of its sources; company-wide lists and org connections (ADR-0023). Admin exclusions.
 - Retention (with its source, at most 24 months), forget a person and the do-not-learn list, an access log of every read, a key per company in a KMS (ADR-0024). Slack and similar apps are searched live (ADR-0025).
-- Memory feeds workflows and the builder chat's context.
-- **Done when:** a workflow on one of our inboxes uses a fact about a customer drawn from another source its member can see, a member never sees a fact from a source they can't, and forgetting a person removes every trace of them from memory.
+- Memory feeds workflows and the builder chat's context (company-wide memory only, since builder conversations are shared among admins).
+- **Done when:** a workflow on one of our inboxes uses a fact about a customer drawn from another source its member can see, a member never sees a fact from a source they can't, and forgetting a person removes everything memory keyed by their address and learns nothing more from their mail (by address only: facts that name them without it stay, ADR-0024).
 
 ## M7: Credits and budgets
 

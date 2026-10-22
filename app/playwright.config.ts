@@ -66,14 +66,14 @@ export default defineConfig({
       stderr: "pipe",
     },
     {
-      command: `node --disable-warning=DEP0205 --import tsx e2e/fake-ai-gateway-server.ts ${String(fakeAiGatewayPort)}`,
+      command: `node --disable-warning=DEP0205 --import tsx --import ./prompt-hooks.cjs e2e/fake-ai-gateway-server.ts ${String(fakeAiGatewayPort)}`,
       url: `http://localhost:${String(fakeAiGatewayPort)}/health`,
       reuseExistingServer: false,
       stdout: "ignore",
       stderr: "pipe",
     },
     {
-      command: `node --disable-warning=DEP0205 --import tsx e2e/fake-nango-server.ts ${String(fakeNangoPort)}`,
+      command: `node --disable-warning=DEP0205 --import tsx --import ./prompt-hooks.cjs e2e/fake-nango-server.ts ${String(fakeNangoPort)}`,
       url: `http://localhost:${String(fakeNangoPort)}/health`,
       // It runs the Vitest fake, which reads the API key and signing key from src/env.
       env: e2eEnv,

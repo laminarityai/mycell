@@ -101,12 +101,13 @@ export function requirementsGained(
   return Object.keys(gained).length === 0 ? null : gained;
 }
 
-// Each catalog action's scopes, any one of which allows it. A custom action needs no scope on
-// the run's own connection: it reaches its app through a connection to that app, a new app.
+// Each action's scopes, any one of which allows it: a catalog action's, or a custom Google
+// action's Google app's. A custom action in another app needs none on the run's own connection:
+// it reaches its app through a connection to that app, a new app.
 function scopeSets(actionNames: readonly string[], actions: ActionSet): (readonly string[])[] {
   return actionNames.flatMap((name) => {
-    const action = actions.find(name);
-    return action?.kind === "catalog" ? [action.scopes] : [];
+    const scopes = actions.find(name)?.scopes ?? [];
+    return scopes.length === 0 ? [] : [scopes];
   });
 }
 

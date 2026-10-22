@@ -1,28 +1,29 @@
 // What a workflow version needs from the Google connection it runs on: the apps it uses
-// (ADR-0014) and the scope of each catalog action it calls; and, for each custom action in a
-// registered app other than Google, a connection to that app (ADR-0018). All come from the
-// company's action set, never from a model.
-import { REGISTERED_APPS } from "@/features/connections/registered-apps";
+// (ADR-0014) and the scope of each action it calls there, catalog or custom; and, for each custom
+// action in a registered app other than Google, a connection to that app (ADR-0018). All come
+// from the org's action set, never from a model.
+import { googleAppOf, REGISTERED_APPS } from "@/features/connections/registered-apps";
 import {
+  GOOGLE_APP_NAMES,
   GOOGLE_APP_SCOPES,
   registeredAppIdSchema,
   type ConnectionSummary,
   type GoogleApp,
 } from "@/features/connections/types";
 import { appsUsed } from "@/features/policy/action-set";
-import type { ActionSet, CatalogAction } from "@/features/policy/types";
+import type { Action, ActionSet, CatalogAction } from "@/features/policy/types";
 import type { WorkflowVersion } from "../types";
 import { scopeName } from "./scope-check";
 
 /** Each catalog app as connections name it. */
-const GOOGLE_APPS: Record<CatalogAction["app"], GoogleApp> = { Gmail: "gmail", Sheets: "sheets" };
+const CATALOG_APPS: Record<CatalogAction["app"], GoogleApp> = { Gmail: "gmail", Sheets: "sheets" };
 
-/** What a connection is short of: apps as the catalog names them, scopes by short name. */
+/** What a connection is short of: Google apps as the UI names them, scopes by short name. */
 export type MissingAccess = { apps: string[]; scopes: string[] };
 
 /**
  * The apps the version uses, as admins name them: Gmail for the trigger, then each app an
- * action it calls belongs to, each once, from the company's action set.
+ * action it calls belongs to, each once, from the org's action set.
  */
 export function requiredApps(
   version: Pick<WorkflowVersion, "requiredActions">,
@@ -33,8 +34,9 @@ export function requiredApps(
 
 /**
  * What `granted` lacks for the version: each Google app it uses that wasn't granted (by app, as
- * the consent screen offers them), and the scopes those apps and the version's catalog actions
- * need. A connection that lacks nothing gives empty lists; no connection lacks everything.
+ * the consent screen offers them: Gmail for the trigger, each catalog action's, and each custom
+ * Google action's, by its path), and the scopes those apps and the version's actions need. A
+ * connection that lacks nothing gives empty lists; no connection lacks everything.
  */
 export function missingAccess(
   version: Pick<WorkflowVersion, "requiredActions">,
@@ -43,25 +45,29 @@ export function missingAccess(
 ): MissingAccess {
   const apps = granted?.apps ?? [];
   const scopes = granted?.grantedScopes ?? [];
-  const googleApps = version.requiredActions.flatMap((name) => {
-    const action = actions.find(name);
-    return action?.kind === "catalog" ? [action.app] : [];
-  });
-  const missingApps = [...new Set<CatalogAction["app"]>(["Gmail", ...googleApps])].filter(
-    (app) => !apps.includes(GOOGLE_APPS[app]),
+  const used = version.requiredActions.flatMap((name) => googleAppsOf(actions.find(name)));
+  const missingApps = [...new Set<GoogleApp>(["gmail", ...used])].filter(
+    (app) => !apps.includes(app),
   );
   const actionScopes = version.requiredActions.flatMap((name) => {
-    const action = actions.find(name);
-    if (action?.kind !== "catalog" || action.scopes.some((scope) => scopes.includes(scope))) {
-      return [];
-    }
-    return action.scopes.slice(0, 1);
+    const needed = actions.find(name)?.scopes ?? [];
+    return needed.some((scope) => scopes.includes(scope)) ? [] : needed.slice(0, 1);
   });
-  const missingScopes = [
-    ...missingApps.map((app) => GOOGLE_APP_SCOPES[GOOGLE_APPS[app]]),
-    ...actionScopes,
-  ].map(scopeName);
-  return { apps: missingApps, scopes: [...new Set(missingScopes)] };
+  const missingScopes = [...missingApps.map((app) => GOOGLE_APP_SCOPES[app]), ...actionScopes].map(
+    scopeName,
+  );
+  return {
+    apps: missingApps.map((app) => GOOGLE_APP_NAMES[app]),
+    scopes: [...new Set(missingScopes)],
+  };
+}
+
+// The Google app an action acts in: a catalog action's, or a custom Google action's by its path.
+function googleAppsOf(action: Action | undefined): GoogleApp[] {
+  if (action?.kind === "catalog") return [CATALOG_APPS[action.app]];
+  if (action?.kind !== "custom" || action.registeredApp !== "google") return [];
+  const app = googleAppOf(action.request.path);
+  return app === undefined ? [] : [app];
 }
 
 /**

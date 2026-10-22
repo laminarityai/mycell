@@ -82,6 +82,12 @@ export type CustomAction = {
   readonly pendingForm?: undefined;
   /** The registered app's ID, as `connections` names it. */
   readonly registeredApp: string;
+  /**
+   * Granted OAuth scopes, any one of which allows it, on the connection it runs through: on
+   * Google, the run's own connection, so the scope of the Google app its path reaches; none for
+   * another app, which its own connection to that app allows.
+   */
+  readonly scopes: readonly string[];
   readonly input: z.ZodType;
   readonly output: z.ZodType;
   readonly conditionFields?: readonly ConditionField[];

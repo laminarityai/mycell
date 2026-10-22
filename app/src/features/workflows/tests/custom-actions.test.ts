@@ -11,6 +11,7 @@ import {
 import { heldReplySpec } from "@/db/testing/held-sends";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
+import { GOOGLE_APP_SCOPES } from "@/features/connections/types";
 import { ForbiddenError, ValidationError } from "@/lib/errors";
 import { connectApp, connectGoogle } from "@/testing/connect-helpers";
 import { publishTo, tagUsers } from "@/testing/visibility-helpers";
@@ -109,6 +110,88 @@ describe("a custom read in a workflow", () => {
     await expect(enable(member.ctx, workflowId)).rejects.toThrow(ValidationError);
     await connectApp(member.ctx, "microsoft", member.email);
     expect(await enable(member.ctx, workflowId)).toEqual({ enabled: true });
+  });
+});
+
+describe("a custom Google read in a workflow", () => {
+  // Custom reads in Gmail and in Calendar, both through the run's own Google connection.
+  const googleRead = (name: string, path: string) => ({
+    name,
+    app: "google",
+    description: "Read one thing.",
+    call: { method: "GET", path },
+    inputs: { id: { type: "text", description: "Its ID." } },
+    outputs: { title: { type: "text", label: "Its title", path: "summary" } },
+  });
+  const step = (id: string, action: string) => ({
+    id,
+    type: "tool",
+    action,
+    input: { id: "x-1" },
+  });
+  const gmailRead = step("label-info", "google.read-label");
+  const calendarRead = step("event", "google.read-event");
+
+  it("isn't saved when the connection it would run on wasn't allowed its Google app", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const { admin } = orgA;
+    await connectGoogle(admin.ctx, admin.email, { scopes: [GOOGLE_APP_SCOPES.gmail] });
+    await storeCustomAction(
+      admin.ctx,
+      googleRead("google.read-event", "/calendar/v3/calendars/primary/events/{id}"),
+    );
+
+    await expect(
+      saveWorkflow(admin.ctx, { name: "Events", spec: labelSpec({ steps: [calendarRead] }) }),
+    ).rejects.toMatchObject({
+      issues: [
+        {
+          path: ["steps", 0, "action"],
+          message: `google.read-event needs the calendar.events scope, which ${admin.email} wasn't granted. Reconnect it to grant it.`,
+        },
+      ],
+    });
+  });
+
+  it("needs its Google app's permission: a version adding one pauses members, who reconnect", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const { admin, member } = orgA;
+    await connectGoogle(admin.ctx, admin.email);
+    await storeCustomAction(
+      admin.ctx,
+      googleRead("google.read-label", "/gmail/v1/users/me/labels/{id}"),
+    );
+    await storeCustomAction(
+      admin.ctx,
+      googleRead("google.read-event", "/calendar/v3/calendars/primary/events/{id}"),
+    );
+    // The member allowed Gmail only.
+    const own = await connectGoogle(member.ctx, member.email, {
+      scopes: [GOOGLE_APP_SCOPES.gmail],
+    });
+    await tagUsers(admin.ctx, "sales", [member]);
+    const { workflowId } = await publishTo(admin.ctx, "Labels", withSteps([label, gmailRead]), [
+      "sales",
+    ]);
+    expect(await enable(member.ctx, workflowId)).toEqual({ enabled: true });
+
+    await saveWorkflow(admin.ctx, {
+      workflowId,
+      name: "Labels",
+      spec: withSteps([label, gmailRead, calendarRead]),
+    });
+    await publishWorkflow(admin.ctx, workflowId);
+
+    expect((await getVisibleWorkflow(member.ctx, workflowId)).switch).toMatchObject({
+      status: "paused",
+      pausedChange: { newScopes: ["calendar.events"] },
+    });
+    expect(await enable(member.ctx, workflowId)).toEqual({
+      needs: "reconnect",
+      connectionId: own.id,
+      apps: ["Calendar"],
+      scopes: ["calendar.events"],
+    });
   });
 });
 

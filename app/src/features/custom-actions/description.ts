@@ -2,7 +2,8 @@
 // set. Pure: no IO and no ctx, so the browser builds the org's action set from the same plain
 // records the server stores (`ActionSetProvider` in `workflows`).
 import { z } from "zod";
-import { appUrl, REGISTERED_APPS } from "@/features/connections/registered-apps";
+import { appUrl, googleAppOf, REGISTERED_APPS } from "@/features/connections/registered-apps";
+import { GOOGLE_APP_SCOPES } from "@/features/connections/types";
 import { actionSetOf } from "@/features/policy/action-set";
 import { catalogActionSet } from "@/features/policy/catalog";
 import { customActionRisk } from "@/features/policy/custom-risk";
@@ -144,11 +145,13 @@ export function customActionOf(record: CustomActionRecord): CustomAction {
     "graphql" in call
       ? { graphql: call.graphql, path: call.path, query: {}, body: call.variables, outputs: {} }
       : { method: call.method, path: call.path, query: call.query, body: call.body, outputs: {} };
+  const googleApp = record.app === "google" ? googleAppOf(call.path) : undefined;
   return {
     kind: "custom",
     name: record.name,
     app: REGISTERED_APPS[record.app].name,
     registeredApp: record.app,
+    scopes: googleApp === undefined ? [] : [GOOGLE_APP_SCOPES[googleApp]],
     description: record.description,
     risk: record.risk,
     input: z.strictObject(

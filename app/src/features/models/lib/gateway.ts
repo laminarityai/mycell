@@ -1,6 +1,8 @@
 // The AI Gateway client. Every model call goes through it (#33): one gateway provider per call,
-// whose fetch reads the cost and generation ID off the gateway's response, so a call that fails
-// after the gateway answered (an off-schema output, a refusal, a billed error) still has them.
+// whose fetch reads the cost and generation ID off the gateway's responses, so a call that fails
+// after the gateway answered (an off-schema output, a refusal, a billed error) still has them. A
+// call that takes several requests (embedding more texts than one request holds) adds up their
+// costs.
 import { createGateway } from "ai";
 import { z } from "zod";
 import { env } from "@/env";
@@ -10,7 +12,10 @@ export type Metering = { costUsd: number; generationId: string | undefined };
 
 export type MeteredGateway = {
   provider: ReturnType<typeof createGateway>;
-  /** The cost and generation ID of the last response; cost 0 if none reported one. */
+  /**
+   * The summed cost of the call's responses so far (0 if none reported one), and the last
+   * generation ID one reported.
+   */
   metering(): Metering;
 };
 
@@ -50,7 +55,7 @@ function parseMetering(answer: unknown): Metering | undefined {
 }
 
 export function meteredGateway(): MeteredGateway {
-  let last: Metering = { costUsd: 0, generationId: undefined };
+  const total: Metering = { costUsd: 0, generationId: undefined };
 
   const meteringFetch: typeof fetch = async (input, init) => {
     const response = await fetch(input, init);
@@ -58,7 +63,11 @@ export function meteredGateway(): MeteredGateway {
       .clone()
       .json()
       .catch(() => undefined);
-    last = parseMetering(body) ?? last;
+    const metering = parseMetering(body);
+    if (metering !== undefined) {
+      total.costUsd += metering.costUsd;
+      total.generationId = metering.generationId ?? total.generationId;
+    }
     return response;
   };
 
@@ -68,6 +77,6 @@ export function meteredGateway(): MeteredGateway {
       baseURL: env.AI_GATEWAY_BASE_URL,
       fetch: meteringFetch,
     }),
-    metering: () => last,
+    metering: () => ({ ...total }),
   };
 }

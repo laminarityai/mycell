@@ -10,7 +10,7 @@ import * as server from "../server";
 // Org B points every role at its own models and has credits; org A has neither, so a call as
 // org A that read org B's rows would use org B's model or pass on org B's balance.
 async function seedOrgB({ orgB }: TwoOrgs) {
-  for (const role of ["classify", "fast", "smart", "judge"] as const) {
+  for (const role of ["classify", "fast", "smart", "judge", "embed"] as const) {
     await server.setModelRole(orgB.admin.ctx, role, `org-b/${role}`);
   }
   await grantCredits(systemCtx(orgB.id), 500);
@@ -76,6 +76,21 @@ export const isolationCases = defineIsolationCases(server, {
 
     expect(fakeAiGateway.requests().map((request) => request.modelId)).toEqual([
       "typesafe-ai/jev-1.14.0",
+    ]);
+    expect(await listLedger(orgs.orgB.admin.ctx)).toEqual(ledgerBefore);
+  },
+
+  embed: async (orgs) => {
+    const { ledgerBefore } = await seedOrgB(orgs);
+    const ctxA = systemCtx(orgs.orgA.id);
+
+    await expect(server.embed(ctxA, { values: ["Hi"] })).rejects.toThrow(OutOfCreditsError);
+    await grantCredits(ctxA, 100);
+    fakeAiGateway.embeddings([[0.5]], { costUsd: 0.0001 });
+    await server.embed(ctxA, { values: ["Hi"] });
+
+    expect(fakeAiGateway.requests().map((request) => request.modelId)).toEqual([
+      "test/embed-default",
     ]);
     expect(await listLedger(orgs.orgB.admin.ctx)).toEqual(ledgerBefore);
   },

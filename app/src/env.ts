@@ -45,6 +45,9 @@ const envSchema = z.object({
   MODEL_FAST: modelIdSchema,
   MODEL_SMART: modelIdSchema,
   MODEL_JUDGE: modelIdSchema,
+  // The embed role has a default, so existing .env files keep working. Its vectors have 1536
+  // dimensions, and stored vectors must keep one size: change it only together with them.
+  MODEL_EMBED: modelIdSchema.default("openai/text-embedding-3-small"),
   // Credits (ADR-0010): how many credits one US dollar of gateway cost uses up, and the per-role
   // estimate a call must find in the balance before it is made. Placeholders until M7's pricing.
   CREDITS_PER_USD: positiveNumber("1000"),
@@ -52,6 +55,7 @@ const envSchema = z.object({
   CREDIT_ESTIMATE_FAST: positiveNumber("5"),
   CREDIT_ESTIMATE_SMART: positiveNumber("50"),
   CREDIT_ESTIMATE_JUDGE: positiveNumber("50"),
+  CREDIT_ESTIMATE_EMBED: positiveNumber("1"),
 });
 
 export const env = envSchema

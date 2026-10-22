@@ -30,6 +30,9 @@ export type TextRequest = CallAttribution & {
 /** A structured-output call: the answer must parse with `schema`. */
 export type ObjectRequest<T> = TextRequest & { schema: z.ZodType<T> };
 
+/** An embedding call: the texts to turn into vectors, one vector each. */
+export type EmbedRequest = CallAttribution & { values: string[] };
+
 /** A model call's answer, the model the role resolved to, and what the gateway charged. */
 export type ModelResult<T> = { output: T; modelId: string; costUsd: number };
 

@@ -32,6 +32,7 @@ const e2eEnv = {
   MODEL_FAST: "e2e/fast",
   MODEL_SMART: "e2e/smart",
   MODEL_JUDGE: "e2e/judge",
+  MODEL_EMBED: "e2e/embed",
 };
 // The test workers seed that database and sign cookies through src/env, like the app does.
 Object.assign(process.env, e2eEnv);

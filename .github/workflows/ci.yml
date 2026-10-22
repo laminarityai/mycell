@@ -23,6 +23,7 @@ jobs:
       MODEL_FAST: ci/fast
       MODEL_SMART: ci/smart
       MODEL_JUDGE: ci/judge
+      MODEL_EMBED: ci/embed
     # The same image as docker-compose.yml, so database tests run against the same Postgres.
     services:
       postgres:

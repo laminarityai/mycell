@@ -28,6 +28,7 @@ export const CREDIT_ESTIMATES: Record<ModelRole, number> = {
   fast: env.CREDIT_ESTIMATE_FAST,
   smart: env.CREDIT_ESTIMATE_SMART,
   judge: env.CREDIT_ESTIMATE_JUDGE,
+  embed: env.CREDIT_ESTIMATE_EMBED,
 };
 
 /** Calls the role's model for text, or for structured output when the request has a schema. */

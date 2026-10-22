@@ -23,6 +23,15 @@ describe("resolveModel", () => {
     expect(await resolveModel(orgA.admin.ctx, "smart")).toBe("test/smart-default");
   });
 
+  it("resolves the embed role from config, or the org's own row, like the others", async () => {
+    const { orgA, orgB } = await seedTwoOrgs();
+
+    await setModelRole(orgB.admin.ctx, "embed", "openai/text-embedding-3-large");
+
+    expect(await resolveModel(orgA.admin.ctx, "embed")).toBe("test/embed-default");
+    expect(await resolveModel(orgB.admin.ctx, "embed")).toBe("openai/text-embedding-3-large");
+  });
+
   it("replaces an org's row when the role is set again", async () => {
     const { orgA } = await seedTwoOrgs();
 

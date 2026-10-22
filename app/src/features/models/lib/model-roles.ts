@@ -13,6 +13,7 @@ const DEFAULT_MODELS: Record<ModelRole, string> = {
   fast: env.MODEL_FAST,
   smart: env.MODEL_SMART,
   judge: env.MODEL_JUDGE,
+  embed: env.MODEL_EMBED,
 };
 
 /** The gateway model ID the role names in the caller's org. */

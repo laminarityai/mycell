@@ -25,6 +25,7 @@ process.env.MODEL_CLASSIFY = "typesafe-ai/jev-1.14.0";
 process.env.MODEL_FAST = "test/fast-default";
 process.env.MODEL_SMART = "test/smart-default";
 process.env.MODEL_JUDGE = "test/judge-default";
+process.env.MODEL_EMBED = "test/embed-default";
 
 export default defineConfig({
   resolve: { tsconfigPaths: true },

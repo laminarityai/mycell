@@ -3,5 +3,7 @@
 export { backfillConnection, markBackfillFailed } from "./lib/backfill";
 export { findEventsByObject } from "./lib/find";
 export { pollConnection } from "./lib/poll";
+// The items it stored, listed again: memory counts them for its estimate and learns from them.
+export { countStoredItems, listStoredItems } from "./lib/stored-items";
 // Called only by the polling cron, which has no ctx until it picks an org (ADR-0009).
 export { pollAllConnections } from "./lib/poll-all";

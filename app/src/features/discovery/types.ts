@@ -63,3 +63,17 @@ export type PollOutcome =
 
 /** One connection the polling cron fans out a poll to, with the org its job acts in. */
 export type ConnectionToPoll = { orgId: string; connectionId: string };
+
+/**
+ * An item discovery stored, as `discovery/item.stored` points at it: for now each Gmail message
+ * but drafts. `sourceRef` is how it's re-fetched.
+ */
+export type StoredItem = {
+  connectionId: string;
+  app: "gmail";
+  sourceRef: string;
+  occurredAt: Date;
+};
+
+/** One page of stored items; `next` names the page after it, or is null after the last. */
+export type StoredItemsPage = { items: StoredItem[]; next: string | null };

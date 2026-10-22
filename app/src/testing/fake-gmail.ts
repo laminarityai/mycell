@@ -76,15 +76,18 @@ export class FakeMailbox implements WritableMailbox {
   }
 
   /**
-   * users.messages.list: newest first, filtered by `q=after:<epoch seconds>`, paged. Like
-   * Gmail, it leaves out spam and trash unless `includeSpamTrash=true`, and lists drafts.
+   * users.messages.list: newest first, filtered by `q=after:<epoch seconds>` and to messages
+   * with every label in `labelIds`, paged. Like Gmail, it leaves out spam and trash unless
+   * `includeSpamTrash=true`, and lists drafts.
    */
   list(params: URLSearchParams) {
     const after = /after:(\d+)/.exec(params.get("q") ?? "")?.[1];
     const spamTrash = params.get("includeSpamTrash") === "true";
+    const labelIds = params.getAll("labelIds");
     const matching = this.messages
       .filter((m) => spamTrash || !m.labelIds.some((l) => l === "SPAM" || l === "TRASH"))
       .filter((m) => after === undefined || Number(m.internalDate) > Number(after) * 1000)
+      .filter((m) => labelIds.every((id) => m.labelIds.includes(id)))
       .sort((a, b) => Number(b.internalDate) - Number(a.internalDate));
     const pageSize = Math.min(Number(params.get("maxResults") ?? 100), 500);
     const offset = Number(params.get("pageToken") ?? 0);

@@ -55,5 +55,9 @@ export default defineConfig({
     setupFiles: ["src/db/testing/reset-before-each-file.ts", "src/testing/fake-services-setup.ts"],
     // Test files share one database and each starts by emptying it, so they run one at a time.
     fileParallelism: false,
+    // The tests run against real Postgres, so a busy machine (several checkouts verifying at
+    // once) can take a test past Vitest's 5-second default without anything being wrong.
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
   },
 });

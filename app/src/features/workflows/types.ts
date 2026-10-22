@@ -31,6 +31,18 @@ export type SavedWorkflow = {
   inserted: InsertedApproval[];
 };
 
+/** A save read and validated before its transaction (checkWorkflowSave), ready to write. */
+export type CheckedSave = {
+  workflowId: string | undefined;
+  /** The revision an existing workflow's working spec must still be at. */
+  baseRevision: number;
+  values: { name: string; specId: string; workingSpec: Spec };
+  /** The custom actions it brings, checked again, and the proposal they came from. */
+  newCustomActions: { actions: CustomActionRecord[]; proposalId: string } | undefined;
+  maxRisk: RiskLevel;
+  inserted: InsertedApproval[];
+};
+
 /**
  * What the publish dialog chose, saved into the working spec as it's published. A setting left
  * out keeps what the working spec says.

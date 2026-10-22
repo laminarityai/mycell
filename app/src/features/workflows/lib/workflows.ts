@@ -2,7 +2,7 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { isUniqueViolation } from "@/db/errors";
-import { forOrg } from "@/db/for-org";
+import { forOrg, type OrgScopedDb } from "@/db/for-org";
 import { actionSetWith, checkedCustomActions } from "@/features/custom-actions/description";
 import {
   getActionSet,
@@ -16,6 +16,7 @@ import { readStoredSpec } from "@/features/spec/stored";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { ConflictError, ValidationError } from "@/lib/errors";
 import type {
+  CheckedSave,
   SavedWorkflow,
   WorkflowDetails,
   WorkflowInput,
@@ -38,6 +39,15 @@ type Version = typeof workflowVersions.$inferSelect;
  * with ConflictError, never merged.
  */
 export async function saveWorkflow(ctx: Ctx, input: WorkflowInput): Promise<SavedWorkflow> {
+  const checked = await checkWorkflowSave(ctx, input);
+  return forOrg(ctx).transaction((tx) => saveWorkflowIn(ctx, tx, checked));
+}
+
+/**
+ * Everything saveWorkflow reads and checks, without writing: a caller saving inside its own
+ * transaction (accepting a proposal) calls it before the transaction, then saveWorkflowIn in it.
+ */
+export async function checkWorkflowSave(ctx: Ctx, input: WorkflowInput): Promise<CheckedSave> {
   requireAdmin(ctx);
   const name = input.name.trim();
   if (name === "") throw new ValidationError("Give the workflow a name.");
@@ -49,39 +59,51 @@ export async function saveWorkflow(ctx: Ctx, input: WorkflowInput): Promise<Save
   const bringing = checkedCustomActions(brought?.actions ?? []);
   const actions = actionSetWith([...(await listCustomActions(ctx)), ...bringing]);
   const validated = await validateWorkflowSpec(ctx, input.spec, actions);
+  return {
+    workflowId: input.workflowId,
+    baseRevision: input.baseRevision ?? existing?.revision ?? 1,
+    values: { name, specId: validated.working.id, workingSpec: validated.working },
+    newCustomActions:
+      brought === undefined ? undefined : { actions: bringing, proposalId: brought.proposalId },
+    maxRisk: validated.maxRisk,
+    inserted: validated.inserted,
+  };
+}
 
-  const values = { name, specId: validated.working.id, workingSpec: validated.working };
-  const { workflowId } = input;
+/**
+ * Writes a checked save through the caller's transaction `tx`, querying nothing else: its
+ * custom actions first, which stay only if the spec saves too. ConflictError when the working
+ * spec moved on from `baseRevision`, or another workflow has the spec ID.
+ */
+export async function saveWorkflowIn(
+  ctx: Ctx,
+  tx: OrgScopedDb,
+  checked: CheckedSave,
+): Promise<SavedWorkflow> {
+  requireAdmin(ctx);
+  const { workflowId, baseRevision: base, values, newCustomActions, maxRisk, inserted } = checked;
+  if (newCustomActions !== undefined) {
+    const { actions, proposalId } = newCustomActions;
+    await storeCustomActions(ctx, actions, { proposalId }, tx);
+  }
   try {
-    // The custom actions it brings are stored first, and stay only if the spec saves too.
-    return await forOrg(ctx).transaction(async (db) => {
-      if (brought !== undefined) {
-        await storeCustomActions(ctx, bringing, { proposalId: brought.proposalId }, db);
-      }
-      if (workflowId === undefined) {
-        const id = randomUUID();
-        await db.insert(workflows, { ...values, id, createdBy: ctx.userId });
-        return { id, revision: 1, maxRisk: validated.maxRisk, inserted: validated.inserted };
-      }
-      const base = input.baseRevision ?? existing?.revision ?? 1;
-      // One conditional update: it saves only while the working spec is still at `base`.
-      const updated = await db.update(
-        workflows,
-        { ...values, revision: base + 1, updatedAt: new Date() },
-        and(eq(workflows.id, workflowId), eq(workflows.revision, base)),
+    if (workflowId === undefined) {
+      const id = randomUUID();
+      await tx.insert(workflows, { ...values, id, createdBy: ctx.userId });
+      return { id, revision: 1, maxRisk, inserted };
+    }
+    // One conditional update: it saves only while the working spec is still at `base`.
+    const updated = await tx.update(
+      workflows,
+      { ...values, revision: base + 1, updatedAt: new Date() },
+      and(eq(workflows.id, workflowId), eq(workflows.revision, base)),
+    );
+    if (updated.length === 0) {
+      throw new ConflictError(
+        "The working spec was saved again since you opened it, by another admin or an accepted proposal, so your changes weren't saved. Reload to see the current one.",
       );
-      if (updated.length === 0) {
-        throw new ConflictError(
-          "The working spec was saved again since you opened it, by another admin or an accepted proposal, so your changes weren't saved. Reload to see the current one.",
-        );
-      }
-      return {
-        id: workflowId,
-        revision: base + 1,
-        maxRisk: validated.maxRisk,
-        inserted: validated.inserted,
-      };
-    });
+    }
+    return { id: workflowId, revision: base + 1, maxRisk, inserted };
   } catch (error) {
     if (isUniqueViolation(error, "workflows_org_id_spec_id_unique")) {
       throw new ConflictError(`Another workflow already has the spec ID "${values.specId}".`);

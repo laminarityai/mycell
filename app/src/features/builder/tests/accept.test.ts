@@ -3,13 +3,16 @@ import { eachStep } from "@/features/spec/tree";
 import { upgradeSpec } from "@/features/spec/upgrade";
 import { specV1Schema } from "@/features/spec/v1";
 import { validateSpec } from "@/features/spec/validate";
+import { failWrites } from "@/db/testing/fail-writes";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedV1Proposal } from "@/db/testing/seed-proposal";
 import { seedV1Workflow, storedWorkingSpec } from "@/db/testing/seed-workflow";
+import { queriesOnOtherConnections } from "@/db/testing/transaction-queries";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import {
   getWorkflow,
   getWorkflowVersion,
+  listWorkflows,
   publishWorkflow,
   saveWorkflow,
 } from "@/features/workflows/server";
@@ -134,6 +137,61 @@ describe("acceptProposal", () => {
     await rejectProposal(admin, proposal.id);
 
     await expect(acceptProposal(admin, proposal.id)).rejects.toThrow(ConflictError);
+  });
+});
+
+// Accepting writes the workflow, the decision and the conversation's link in one transaction.
+describe("an accept whose last write fails", () => {
+  it("saves no workflow and leaves the proposal open, so accepting again saves it", async () => {
+    const { admin } = await setUp();
+    const { id: conversationId } = await startConversation(admin, {});
+    await proposeInTurn(admin, conversationId, [draftSpec()]);
+    const proposal = (await listProposals(admin, conversationId)).at(0);
+    const links = await failWrites("builder_conversations", "update");
+
+    await expect(acceptProposal(admin, proposal?.id ?? "")).rejects.toThrow();
+
+    expect(await listWorkflows(admin)).toEqual([]);
+    expect((await listProposals(admin, conversationId)).at(0)?.status).toBe("proposed");
+    expect((await getConversation(admin, conversationId)).workflowId).toBeNull();
+
+    await links.restore();
+    const { workflowId } = await acceptProposal(admin, proposal?.id ?? "");
+
+    expect((await listWorkflows(admin)).map((workflow) => workflow.id)).toEqual([workflowId]);
+    expect(await listProposals(admin, conversationId)).toEqual([
+      expect.objectContaining({ status: "accepted", workflowId }),
+    ]);
+    expect((await getConversation(admin, conversationId)).workflowId).toBe(workflowId);
+  });
+
+  it("leaves the working spec as it was, so accepting again isn't refused as stale", async () => {
+    const { admin, workflowId, proposal, conversationId } = await proposedChange();
+    const before = await getWorkflow(admin, workflowId);
+    const decisions = await failWrites("builder_proposals", "update");
+
+    await expect(acceptProposal(admin, proposal.id)).rejects.toThrow();
+
+    expect(await getWorkflow(admin, workflowId)).toEqual(before);
+    expect((await listProposals(admin, conversationId)).at(0)?.status).toBe("proposed");
+
+    await decisions.restore();
+    await acceptProposal(admin, proposal.id);
+
+    expect((await getWorkflow(admin, workflowId)).revision).toBe(before.revision + 1);
+    expect((await listProposals(admin, conversationId)).at(0)?.status).toBe("accepted");
+  });
+
+  it("reads and checks before the transaction, which then queries only its own connection", async () => {
+    const { admin } = await setUp();
+    const { id: conversationId } = await startConversation(admin, {});
+    await proposeInTurn(admin, conversationId, [draftSpec()]);
+    const proposal = (await listProposals(admin, conversationId)).at(0);
+
+    const stray = await queriesOnOtherConnections(() => acceptProposal(admin, proposal?.id ?? ""));
+
+    expect(stray).toEqual([]);
+    expect((await listProposals(admin, conversationId)).at(0)?.status).toBe("accepted");
   });
 });
 

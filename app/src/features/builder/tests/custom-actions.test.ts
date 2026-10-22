@@ -3,7 +3,9 @@
 // proposal, together with the spec. A rejected or stale proposal stores neither.
 import { beforeEach, describe, expect, it } from "vitest";
 import { readOutlookMessage } from "@/db/testing/custom-actions";
+import { failWrites } from "@/db/testing/fail-writes";
 import { resetDatabase } from "@/db/testing/reset";
+import { queriesOnOtherConnections } from "@/db/testing/transaction-queries";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { listCustomActions } from "@/features/custom-actions/server";
 import { getWorkflow, listWorkflows, saveWorkflow } from "@/features/workflows/server";
@@ -142,6 +144,30 @@ describe("a custom read in a proposal", () => {
 
     expect(await listCustomActions(admin)).toEqual([]);
     expect(await listWorkflows(admin)).toEqual([]);
+  });
+
+  it("stores neither when accepting fails at its last write, and both when accepted again", async () => {
+    const { admin, conversationId } = await setUp();
+    await describeAndPropose(admin, conversationId, readOutlookMessage());
+    const proposal = await onlyProposal(admin, conversationId);
+    // Linking the conversation to the new workflow is the last write.
+    const links = await failWrites("builder_conversations", "update");
+
+    await expect(acceptProposal(admin, proposal.id)).rejects.toThrow();
+
+    expect(await listCustomActions(admin)).toEqual([]);
+    expect(await listWorkflows(admin)).toEqual([]);
+
+    await links.restore();
+    // Its transaction stores them through its own connection alone.
+    expect(await queriesOnOtherConnections(() => acceptProposal(admin, proposal.id))).toEqual([]);
+
+    expect((await listCustomActions(admin)).map((action) => action.name)).toEqual([
+      "microsoft.read-message",
+    ]);
+    expect((await listWorkflows(admin)).map((workflow) => workflow.name)).toEqual([
+      "Outlook check",
+    ]);
   });
 
   it("stores neither when the proposal went stale", async () => {

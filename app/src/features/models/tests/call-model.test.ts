@@ -8,6 +8,7 @@ import { OutOfCreditsError } from "@/lib/errors";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import { callModel, setModelRole } from "../server";
 import { ModelCallError } from "../types";
+import { testPrompts } from "./requests";
 
 beforeEach(resetDatabase);
 
@@ -27,7 +28,7 @@ describe("callModel", () => {
     fakeAiGateway.text("Thanks, we'll be in touch.", { costUsd: 0.002 });
 
     const result = await callModel(ctx, "fast", {
-      prompt: "Write a reply.",
+      prompt: testPrompts.writeAReply(),
       workflowId: "wf_1",
       runId: "run_1",
     });
@@ -55,7 +56,7 @@ describe("callModel", () => {
     fakeAiGateway.object({ name: "Ada", quantity: 3 }, { costUsd: 0.001 });
 
     const result = await callModel(ctx, "smart", {
-      prompt: "Extract the order.",
+      prompt: testPrompts.extractTheOrder(),
       schema: z.object({ name: z.string(), quantity: z.number() }),
     });
 
@@ -68,7 +69,9 @@ describe("callModel", () => {
     await setModelRole(orgA.admin.ctx, "fast", "openai/org-choice");
     fakeAiGateway.text("ok", { costUsd: 0.001, model: "openai/org-choice" });
 
-    expect((await callModel(ctx, "fast", { prompt: "Hi" })).modelId).toBe("openai/org-choice");
+    expect((await callModel(ctx, "fast", { prompt: testPrompts.hi() })).modelId).toBe(
+      "openai/org-choice",
+    );
     expect((await usages(ctx))[0]?.modelId).toBe("openai/org-choice");
   });
 
@@ -76,7 +79,9 @@ describe("callModel", () => {
     // The fast estimate is 5 credits.
     const { ctx } = await orgWithCredits(4);
 
-    await expect(callModel(ctx, "fast", { prompt: "Hi" })).rejects.toThrow(OutOfCreditsError);
+    await expect(callModel(ctx, "fast", { prompt: testPrompts.hi() })).rejects.toThrow(
+      OutOfCreditsError,
+    );
 
     expect(fakeAiGateway.requests()).toEqual([]);
     expect(await usages(ctx)).toEqual([]);
@@ -86,7 +91,9 @@ describe("callModel", () => {
     const { ctx } = await orgWithCredits();
     fakeAiGateway.fail("language", { status: 503, generationId: "gen_42" });
 
-    const error = await callModel(ctx, "fast", { prompt: "Hi" }).catch((e: unknown) => e);
+    const error = await callModel(ctx, "fast", { prompt: testPrompts.hi() }).catch(
+      (e: unknown) => e,
+    );
 
     expect(error).toBeInstanceOf(ModelCallError);
     expect(error).toMatchObject({ code: "gateway_error", role: "fast", status: 503 });
@@ -102,7 +109,7 @@ describe("callModel", () => {
     fakeAiGateway.object({ secret: "Dear Ada, your order 1234" }, { costUsd: 0.003 });
 
     const error = await callModel(ctx, "smart", {
-      prompt: "Extract the order.",
+      prompt: testPrompts.extractTheOrder(),
       schema: z.object({ name: z.string() }),
     }).catch((e: unknown) => e);
 

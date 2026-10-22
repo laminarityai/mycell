@@ -1,0 +1,31 @@
+# What the builder chat's agent is told about each of its tools (builder/lib/tools.ts and a file
+# per tool), and about the fields of their inputs. `apps` lists the registered apps, each as
+# `app` below, comma-separated.
+
+app: |-
+  "{{id}}" ({{name}})
+
+describeCustomAction: |-
+  Describe a custom action: one call to a registered app, for when no catalog action does what the admin needs. `action` holds: name (like "microsoft.read-message"), app (one of {{apps}}), description (one plain sentence), call ({ method: "GET" | "POST" | "PUT" | "PATCH", path, query, body } where path is the path on the app with no host, such as "/v1.0/me/messages/{messageId}", with each {placeholder} an input, and query and body map each query parameter or body field to an input; a nested body field is a dotted path of property names and list indexes, such as "message.toRecipients.0.emailAddress.address"), inputs (each name to { type: "text" | "number" | "yes_no" | "choice", description, choices for a choice, optional }), outputs (for a read, each result field's name to { type: "text" | "number" | "yes_no", label, path }, path being property names and list indexes joined by dots into the response, such as from.emailAddress.address) and, for a write, editable (the text inputs a person may edit before it's sent). Mycel sets its risk level by a fixed rule; you may not choose one. A read runs on its own; any other call is a write, which waits for a person to approve it every time it runs. On success, use it by name in a tool step of the spec you send to propose_spec in this turn. It is stored only if the admin accepts that proposal, and a stored custom action never changes: a changed one needs a new name.
+
+fileCapabilityRequest: |-
+  Ask Mycel's team for something the action catalog can't do and one call can't either, so they can build it into the catalog. Use it after telling the admin plainly what you can't do. app is a registered app's ID ({{apps}}) or the name of any other app. Describe the operation in a few plain words, its inputs and outputs, why one call can't do it, and, when you can, a codeDraft: the call sequence or code it would need. Never quote the content of a message or file in it. Asking again for the same app and operation counts as one more ask on the same request.
+
+getWorkflow: |-
+  Read one of the org's workflows: its name, whether it is published, and its current working spec, including edits an admin made by hand since you last looked.
+
+lookUpAppApi: |-
+  Search a registered app's published API description: app is one of {{apps}}. Pass search, a few plain words for what the call does ("outlook message", "append rows spreadsheet"), and optionally method ("GET" for reads) to get the best matching operations: each one's method and path (the path a custom action calls, its {placeholders} already named as inputs), summary, path and query parameters, the fields of its request body and response, and what Mycel's fixed rule makes of it (a read, a write that waits for approval every time, or refused). Query parameters starting with $ are Microsoft Graph's OData options ($select, $filter, $top, …). A field whose type names another type is described by passing type (its name) instead of search. Use it before describe_custom_action, so the call you describe is real. It reads only the vendor's public description, never anyone's data.
+
+proposeSpec: |-
+  Propose a whole workflow spec for the admin to accept or reject: for a new workflow, or a change to an existing one (the conversation's workflow unless you pass another's workflowId). Send the complete spec (specVersion 2), not a patch. It is validated as saving would; when it fails you get every issue to fix and call again. Nothing is saved until an admin accepts it, and nothing is ever published by you.
+proposeSpecSummary: |-
+  One or two plain sentences on what it does or changes.
+
+readExamples: |-
+  Search the mail of one connection listed under Connections, with Gmail's search syntax (from:, subject:, newer_than:7d, free words), and read up to 5 of the newest matches: sender, date, subject and the start of the body. Only for grounding a workflow in real messages; you won't see them again later in the conversation unless you search again.
+
+searchMemory: |-
+  Search the company's memory: short facts about the people, companies, deals, projects and documents in the company's mail and files, each from a source everyone in the company can see (no one's private mail). Use it to learn how the company works before proposing a workflow. It finds facts by their words, by a name, or by an email address or domain in the query.
+searchMemoryQuery: |-
+  Words to find, a name, an email address or a company's domain.

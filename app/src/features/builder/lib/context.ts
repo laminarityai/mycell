@@ -1,8 +1,9 @@
 // Context providers: what the agent knows about the org when a turn starts. Each is a function
 // of the admin's ctx (and the turn) returning one titled section of the agent's instructions,
-// so a new source of context (company memory; discovery's suggestions in M2) is one more entry
-// in `contextProviders`, and the turn loop doesn't change. Each reads through another
-// feature's entry functions with the admin's ctx, so it sees only what the admin may.
+// worded in builder/prompts/context.prompt.yml, so a new source of context (company memory;
+// discovery's suggestions in M2) is one more entry in `contextProviders`, and the turn loop
+// doesn't change. Each reads through another feature's entry functions with the admin's ctx, so
+// it sees only what the admin may.
 import { z } from "zod";
 import { registeredAppOf, registeredApps } from "@/features/connections/registered-apps";
 import { gmailConnections, listConnections } from "@/features/connections/server";
@@ -12,17 +13,19 @@ import { getOrgSettings } from "@/features/orgs/server";
 import type { ActionSet } from "@/features/policy/types";
 import { operatorsFor, type ValueType } from "@/features/spec/conditions";
 import { formatSpec } from "@/features/spec/format";
-import type { Spec, Step } from "@/features/spec/types";
+import type { Step } from "@/features/spec/types";
 import { listTags } from "@/features/tags/server";
 import { getWorkflow, listWorkflows } from "@/features/workflows/server";
 import type { Ctx } from "@/lib/ctx";
+import { joinPrompts, type PromptText } from "@/lib/prompts";
 import type { ProposalStatus } from "../types";
 import { declaredFieldLines } from "./condition-fields-context";
+import { contextPrompts } from "./prompts";
 import { listProposals } from "./proposals";
 import { memorySection } from "./search-memory";
 import type { TurnInfo } from "./tools";
 
-export type ContextSection = { title: string; content: string };
+export type ContextSection = { title: PromptText; content: PromptText };
 
 /**
  * One section of context, from the admin's ctx, the turn and the company's action set, which
@@ -37,84 +40,91 @@ export type ContextProvider = (
 /** Every action a spec may use, catalog and custom: its app, what it does, its fixed risk and its pending form. */
 const actionCatalog: ContextProvider = (_ctx, _turn, actions) => {
   const lines = actions.actions.map((action) =>
-    [
-      `- ${action.name} (${action.app}${action.kind === "custom" ? ", the company's custom action, its level set by Mycel's rule" : ""}): ${action.description}`,
-      `  Risk level: ${action.risk}.` +
-        (action.pendingForm === undefined
-          ? " Runs on its own."
-          : ` Never sends: it waits as ${action.pendingForm} for a person's review.`),
-      `  Inputs: ${JSON.stringify(z.toJSONSchema(action.input))}`,
-      `  Outputs: ${JSON.stringify(z.toJSONSchema(action.output))}`,
-    ].join("\n"),
+    (action.kind === "custom" ? contextPrompts.customAction : contextPrompts.action)({
+      name: action.name,
+      app: action.app,
+      description: action.description,
+      risk: action.risk,
+      runs:
+        action.pendingForm === undefined
+          ? contextPrompts.runsOnItsOwn()
+          : contextPrompts.waitsAsPendingForm({ pendingForm: action.pendingForm }),
+      inputs: JSON.stringify(z.toJSONSchema(action.input)),
+      outputs: JSON.stringify(z.toJSONSchema(action.output)),
+    }),
   );
-  return Promise.resolve({ title: "Action catalog", content: lines.join("\n") });
+  return Promise.resolve({
+    title: contextPrompts.actionCatalogTitle(),
+    content: joinPrompts(lines, "\n"),
+  });
 };
 
-/** How an extract field's declared type reads, and the type of value a check sees. */
-const FIELD_TYPES: { reads: string; type: ValueType }[] = [
-  { reads: "string field (text)", type: "text" },
-  { reads: "number field", type: "number" },
-  { reads: "boolean field (yes/no)", type: "yesNo" },
-];
+/** The checks a value of the type allows, as a check names them. */
+const checksFor = (type: ValueType) => operatorsFor(type).join(", ");
 
 /**
  * Every kind of value a path's condition may test, and the checks each allows: classify answers,
  * extract fields, the trigger's declared facts and catalog actions' declared result fields.
  */
 const conditionFields: ContextProvider = (_ctx, _turn, actions) => {
-  const lines = [
-    "A path's condition tests values from the steps above its branch on its own path. Each check is one of:",
-    '- A classify step\'s answer: { "classify": "<classify step id>", "is": "<label>", "minP": 0.85 }. ' +
-      "It holds when the step picked that label with at least that probability.",
-    '- An extract step\'s field: { "subject": { "from": "<extract step id>.<field>" }, "op": "<check>", "value": <value> }. ' +
-      "The checks a field allows come from the type it declares. Text checks ignore upper and lower " +
-      "case and take a string, number checks take a number, and is_yes, is_no, is_empty and " +
-      "is_not_empty take no value.",
-    ...FIELD_TYPES.map(({ reads, type }) => `  - ${reads}: ${operatorsFor(type).join(", ")}`),
-    "Trigger facts and tool step results take the same checks for their type:",
-    ...declaredFieldLines(actions),
-  ];
-  return Promise.resolve({ title: "Fields a condition may test", content: lines.join("\n") });
+  const checks = contextPrompts.conditionChecks({
+    textChecks: checksFor("text"),
+    numberChecks: checksFor("number"),
+    yesNoChecks: checksFor("yesNo"),
+  });
+  return Promise.resolve({
+    title: contextPrompts.conditionFieldsTitle(),
+    content: joinPrompts([checks, ...declaredFieldLines(actions)], "\n"),
+  });
 };
 
 /** The org's workflows with a summary of each working spec; the whole one for this turn's. */
 const workflows: ContextProvider = async (ctx, turn, actions) => {
+  const title = contextPrompts.workflowsTitle();
   const summaries = await listWorkflows(ctx);
-  if (summaries.length === 0) return { title: "Workflows", content: "The org has none yet." };
-  const lines: string[] = [];
+  if (summaries.length === 0) return { title, content: contextPrompts.noWorkflows() };
+  const lines: PromptText[] = [];
   for (const summary of summaries) {
     const workflow = await getWorkflow(ctx, summary.id, actions);
-    const state =
-      summary.latestVersion === null
-        ? "not published"
-        : `published, version ${String(summary.latestVersion.number)}`;
+    const line = {
+      name: workflow.name,
+      id: workflow.id,
+      state:
+        summary.latestVersion === null
+          ? contextPrompts.notPublished()
+          : contextPrompts.published({ version: String(summary.latestVersion.number) }),
+      credentials: workflow.workingSpec.credentials,
+      steps: listOf(workflow.workingSpec.steps),
+    };
     lines.push(
-      `- "${workflow.name}" (workflow ID ${workflow.id}, ${state}): ${stepsOf(workflow.workingSpec)}`,
+      workflow.id === turn.workflowId
+        ? contextPrompts.conversationWorkflow({ ...line, spec: formatSpec(workflow.workingSpec) })
+        : contextPrompts.workflow(line),
     );
-    if (workflow.id === turn.workflowId) {
-      lines.push(
-        `  This conversation is about it. Its working spec:\n${formatSpec(workflow.workingSpec)}`,
-      );
-    }
   }
-  return { title: "Workflows", content: lines.join("\n") };
+  return { title, content: joinPrompts(lines, "\n") };
 };
 
-function stepsOf(spec: Spec): string {
-  return `${spec.credentials} credentials, steps ${listOf(spec.steps)}`;
-}
-
 /** A list of steps in order, each branch with its paths' steps in turn. */
-function listOf(steps: Step[]): string {
-  return steps.length === 0 ? "stops" : steps.map(stepOf).join(", ");
+function listOf(steps: Step[]): PromptText {
+  return steps.length === 0 ? contextPrompts.noSteps() : joinPrompts(steps.map(stepOf), ", ");
 }
 
-function stepOf(step: Step): string {
-  if (step.type === "tool") return `${step.id} (tool ${step.action})`;
-  if (step.type !== "branch") return `${step.id} (${step.type})`;
-  const paths = step.paths.map((path) => `path ${path.id} "${path.name}": ${listOf(path.steps)}`);
-  const otherwise = `otherwise ${step.otherwise.id}: ${listOf(step.otherwise.steps)}`;
-  return `${step.id} (branch, ${step.mode} match: ${[...paths, otherwise].join("; ")})`;
+function stepOf(step: Step): PromptText {
+  if (step.type === "tool") return contextPrompts.toolStep({ id: step.id, action: step.action });
+  if (step.type !== "branch") return contextPrompts.step({ id: step.id, type: step.type });
+  const paths = step.paths.map((path) =>
+    contextPrompts.branchPath({ id: path.id, name: path.name, steps: listOf(path.steps) }),
+  );
+  const otherwise = contextPrompts.otherwisePath({
+    id: step.otherwise.id,
+    steps: listOf(step.otherwise.steps),
+  });
+  return contextPrompts.branchStep({
+    id: step.id,
+    mode: step.mode,
+    paths: joinPrompts([...paths, otherwise], "; "),
+  });
 }
 
 /**
@@ -123,12 +133,18 @@ function stepOf(step: Step): string {
  */
 const connections: ContextProvider = async (ctx) => {
   const listing = await listConnections(ctx);
-  const line = (connection: ConnectionSummary, whose: string) =>
-    `- ${connection.accountEmail}, ${whose} (connection ID ${connection.id}): ` +
-    (connection.apps.length === 0 ? "no apps granted" : `apps ${connection.apps.join(", ")}`) +
-    (connection.missingApps.length === 0
-      ? ""
-      : `; not granted ${connection.missingApps.join(", ")}`);
+  const line = (connection: ConnectionSummary) => ({
+    email: connection.accountEmail,
+    id: connection.id,
+    apps:
+      connection.apps.length === 0
+        ? contextPrompts.noAppsGranted()
+        : contextPrompts.appsGranted({ apps: connection.apps.join(", ") }),
+    notGranted:
+      connection.missingApps.length === 0
+        ? ""
+        : contextPrompts.notGranted({ apps: connection.missingApps.join(", ") }),
+  });
   const members = listing.memberConnections.length;
   // Exactly the connections read_examples accepts.
   const searchable = gmailConnections({
@@ -136,15 +152,16 @@ const connections: ContextProvider = async (ctx) => {
     org: listing.orgConnections,
   }).map((connection) => connection.id);
   const lines = [
-    ...listing.connections.map((connection) => line(connection, "your own connection")),
-    ...listing.orgConnections.map((connection) => line(connection, "an org connection")),
-    `Other members have ${String(members)} member connection${members === 1 ? "" : "s"}, ` +
-      "which you can't read.",
+    ...listing.connections.map((connection) => contextPrompts.ownConnection(line(connection))),
+    ...listing.orgConnections.map((connection) => contextPrompts.orgConnection(line(connection))),
+    members === 1
+      ? contextPrompts.memberConnection()
+      : contextPrompts.memberConnections({ count: String(members) }),
     searchable.length === 0
-      ? "read_examples can search none of them: none was granted Gmail."
-      : `read_examples can search the mail of: ${searchable.join(", ")}.`,
+      ? contextPrompts.noSearchableMail()
+      : contextPrompts.searchableMail({ connectionIds: searchable.join(", ") }),
   ];
-  return { title: "Connections", content: lines.join("\n") };
+  return { title: contextPrompts.connectionsTitle(), content: joinPrompts(lines, "\n") };
 };
 
 /**
@@ -158,71 +175,72 @@ const registeredAppsContext: ContextProvider = async (ctx) => {
     const connected = [
       ...listing.connections
         .filter(to)
-        .map(({ accountEmail, id }) => `${accountEmail}, your own (connection ID ${id})`),
+        .map(({ accountEmail, id }) =>
+          contextPrompts.appOwnConnection({ email: accountEmail, id }),
+        ),
       ...listing.orgConnections
         .filter(to)
-        .map(({ accountEmail, id }) => `${accountEmail}, an org connection (connection ID ${id})`),
+        .map(({ accountEmail, id }) =>
+          contextPrompts.appOrgConnection({ email: accountEmail, id }),
+        ),
     ];
-    return (
-      `- ${app.id} (${app.name}): ` +
-      (connected.length === 0
-        ? "neither you nor the org has connected it yet. A workflow using it needs a connection " +
-          "to it, made on the Connections page: your own for member credentials, the org's for " +
-          "org credentials."
-        : `connected as ${connected.join("; ")}.`)
-    );
+    return connected.length === 0
+      ? contextPrompts.appNotConnected({ id: app.id, name: app.name })
+      : contextPrompts.appConnected({
+          id: app.id,
+          name: app.name,
+          connections: joinPrompts(connected, "; "),
+        });
   });
   return {
-    title: "Registered apps",
-    content: [
-      "The apps Mycel's team has registered. When no catalog action fits, a custom action may " +
-        "make one call to one of them: find the call with look_up_app_api, then describe it " +
-        "with describe_custom_action. Any other app isn't registered: say so, and file a " +
-        "capability request for it.",
-      ...lines,
-    ].join("\n"),
+    title: contextPrompts.registeredAppsTitle(),
+    content: joinPrompts([contextPrompts.registeredApps(), ...lines], "\n"),
   };
 };
 
 const tags: ContextProvider = async (ctx) => {
   const all = await listTags(ctx);
+  const lines = all.map((tag) =>
+    contextPrompts.tag({ name: tag.name, count: String(tag.userIds.length) }),
+  );
   return {
-    title: "Tags",
-    content:
-      all.length === 0
-        ? "The org has none yet."
-        : all.map((tag) => `- ${tag.name} (${String(tag.userIds.length)} people)`).join("\n"),
+    title: contextPrompts.tagsTitle(),
+    content: all.length === 0 ? contextPrompts.noTags() : joinPrompts(lines, "\n"),
   };
 };
 
 const orgSettings: ContextProvider = async (ctx) => {
   const settings = await getOrgSettings(ctx);
   return {
-    title: "Organization",
-    content: `Name: ${settings.name}\nWorkspace domain: ${settings.workspaceDomain}`,
+    title: contextPrompts.organizationTitle(),
+    content: contextPrompts.organization({
+      name: settings.name,
+      domain: settings.workspaceDomain,
+    }),
   };
 };
 
-const PROPOSAL_STATES: Record<ProposalStatus, string> = {
-  proposed: "waiting for the admin to accept or reject it",
-  accepted: "accepted: it is now the workflow's working spec",
-  rejected: "rejected by the admin",
-  stale:
-    "the workflow's working spec changed after it was made, so accepting it was refused and " +
-    "nothing was saved; read the current spec with get_workflow and propose again if it's still wanted",
+const PROPOSAL_STATES: Record<ProposalStatus, PromptText> = {
+  proposed: contextPrompts.proposalProposed(),
+  accepted: contextPrompts.proposalAccepted(),
+  rejected: contextPrompts.proposalRejected(),
+  stale: contextPrompts.proposalStale(),
 };
 
 /** What became of this conversation's proposals, so the agent knows what was saved. */
 const proposals: ContextProvider = async (ctx, turn) => {
   const all = await listProposals(ctx, turn.conversationId);
+  const lines = all.map((p) =>
+    contextPrompts.proposal({
+      id: p.id,
+      status: p.status,
+      name: p.name,
+      state: PROPOSAL_STATES[p.status],
+    }),
+  );
   return {
-    title: "Proposals in this conversation",
-    content:
-      all.length === 0
-        ? "None yet."
-        : all
-            .map((p) => `- ${p.id} (${p.status}, "${p.name}"): ${PROPOSAL_STATES[p.status]}`)
-            .join("\n"),
+    title: contextPrompts.proposalsTitle(),
+    content: all.length === 0 ? contextPrompts.noProposals() : joinPrompts(lines, "\n"),
   };
 };
 

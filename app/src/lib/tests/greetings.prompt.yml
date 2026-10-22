@@ -1,0 +1,6 @@
+# A prompt file for definePrompts' own tests (prompts.test.ts).
+
+greet: |-
+  Hello, {{name}}. Welcome to {{place}}.
+farewell: |-
+  Goodbye.

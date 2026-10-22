@@ -2,8 +2,8 @@
 // discovery sends gmail.message_received, and runtime's fan-out triggers on it; discovery sends
 // gmail.message_sent, and reviews ends a review its person finished in Gmail; discovery sends
 // item.stored, and memory learns from the item; discovery sends item.removed and item.changed,
-// and memory deletes what it learned from the item or re-reads who may see it; credits sends
-// credits.granted, and memory learns what it postponed for want of credits.
+// and memory deletes what it learned from the item or re-reads who may see it; granting credits
+// sends credits.granted, and memory learns what it postponed for want of credits.
 import { eventType } from "inngest";
 import { z } from "zod";
 import { inngest } from "./inngest";
@@ -150,7 +150,10 @@ export async function sendItemsRemovedAndChanged(
   ]);
 }
 
-/** Credits were granted to an org: work that stopped for want of credits can go on. */
+/**
+ * Credits were granted to an org (`pnpm credits:grant`, our team's way to grant them): work that
+ * stopped for want of credits can go on.
+ */
 export const creditsGranted = eventType("credits/granted", {
   schema: z.object({ orgId: z.string().min(1) }),
 });

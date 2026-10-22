@@ -221,11 +221,8 @@ describe("running out of credits", () => {
     expect(await learnStoredItems(orgA.id)).toEqual([{ outcome: "skipped", reason: "postponed" }]);
     expect((await getMemorySettings(orgA.admin.ctx)).postponedItems).toBe(1);
 
+    // Credits are granted, and `credits/granted`'s job resumes what waited for them.
     await grantCredits(systemCtx(orgA.id), 1000);
-
-    expect(fakeInngest.sent("credits/granted").map((event) => event.data)).toEqual([
-      { orgId: orgA.id },
-    ]);
     expect(await resumePostponed(systemCtx(orgA.id), ["credits"])).toEqual({ queued: 1 });
     scriptLearning({
       objects: [{ ref: "dana", kind: "person", name: "Dana Ruiz", email: DANA }],

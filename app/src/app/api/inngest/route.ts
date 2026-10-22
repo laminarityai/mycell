@@ -1,7 +1,7 @@
 import { serve } from "inngest/next";
 import { reconcileJob } from "@/features/connections/jobs";
 import { backfillJob, pollCron, pollJob } from "@/features/discovery/jobs";
-import { learnJob } from "@/features/memory/jobs";
+import { learnJob, pruneAccessLogJob } from "@/features/memory/jobs";
 import { checkWaitingReviewsJob, endedInGmailJob } from "@/features/reviews/jobs";
 import { fanOutMessageJob, runWorkflowJob } from "@/features/runtime/jobs";
 import { assignmentRemovedJob, tagDeletedJob, tagRenamedJob } from "@/features/workflows/jobs";
@@ -22,5 +22,6 @@ export const { GET, POST, PUT } = serve({
     endedInGmailJob,
     checkWaitingReviewsJob,
     learnJob,
+    pruneAccessLogJob,
   ],
 });

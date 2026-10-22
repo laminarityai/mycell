@@ -99,3 +99,89 @@ export type FoundFact = MemoryFact & { subject: { id: string; kind: ObjectKind; 
 
 /** What a search found that its caller can see, best match first. */
 export type MemorySearchResult = { objects: FoundObject[]; facts: FoundFact[] };
+
+/**
+ * Who or what is reading memory, which every read logs (ADR-0024). The ctx says whose view it
+ * reads in; this says on whose behalf: the person acting directly (the default), the builder
+ * chat for the admin using it, or a workflow run, as its enablement's member (member
+ * credentials) or company-wide only (org credentials, the system ctx).
+ */
+export const memoryReaderSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("person") }),
+  z.object({ kind: z.literal("builder") }),
+  z.object({
+    kind: z.literal("workflow_run"),
+    runId: z.string().min(1),
+    workflowId: z.string().min(1),
+  }),
+]);
+export type MemoryReader = z.infer<typeof memoryReaderSchema>;
+
+/** The readers the access log names: as above, plus our staff and Mycel itself (system ctx). */
+export const ACCESS_LOG_READER_KINDS = [
+  "person",
+  "builder",
+  "workflow_run",
+  "staff",
+  "system",
+] as const;
+export type AccessLogReaderKind = (typeof ACCESS_LOG_READER_KINDS)[number];
+
+/** The reads the access log records. */
+export const MEMORY_READ_OPERATIONS = ["search", "read_object"] as const;
+export type MemoryReadOperation = (typeof MEMORY_READ_OPERATIONS)[number];
+
+/** How long the access log keeps an entry (ADR-0024 asks for at least 90 days). */
+export const ACCESS_LOG_RETENTION_DAYS = 365;
+
+/**
+ * One read of memory as the access log shows it: who or what read, when, and which objects and
+ * how many facts, never the query or what the facts say. An object's name shows only when its
+ * viewer can see a fact about it (otherwise it's null), so the log widens no one's view.
+ */
+export type AccessLogEntry = {
+  id: string;
+  readAt: Date;
+  operation: MemoryReadOperation;
+  reader: {
+    kind: AccessLogReaderKind;
+    // The person, the builder's admin, a member-credential run's member, or the admin whose
+    // consent our staff read under; null for Mycel itself and an org-credential run.
+    userId: string | null;
+    name: string | null;
+    runId: string | null;
+    workflowId: string | null;
+    staff: { email: string; reason: string } | null;
+  };
+  objects: { id: string; name: string | null }[];
+  factCount: number;
+};
+
+/** The longest an admin can let our staff read memory for one case. */
+export const MAX_STAFF_CONSENT_DAYS = 30;
+
+/** An admin's consent for one of our staff to read memory for one case (ADR-0024). */
+export const staffConsentInputSchema = z.object({
+  staffEmail: z.string().trim().toLowerCase().max(320).pipe(z.email()),
+  // The case: what the staff member is looking into, in the admin's words.
+  reason: z.string().trim().min(1).max(500),
+  days: z.coerce.number().int().min(1).max(MAX_STAFF_CONSENT_DAYS),
+});
+export type StaffConsentInput = z.input<typeof staffConsentInputSchema>;
+
+/**
+ * A staff consent as admins see it. Our staff read in the view of the admin who granted it, so
+ * a consent never shows them more than that admin can see.
+ */
+export type StaffConsent = {
+  id: string;
+  staffEmail: string;
+  reason: string;
+  grantedBy: { userId: string; name: string };
+  createdAt: Date;
+  expiresAt: Date;
+  revokedAt: Date | null;
+};
+
+/** Which consent a staff read goes through, and who at Mycel is reading. */
+export type StaffAccess = { consentId: string; staffEmail: string };

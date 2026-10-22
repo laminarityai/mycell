@@ -9,22 +9,20 @@ import {
   type CapabilityRequestInput,
   type FiledCapabilityRequest,
 } from "@/features/custom-actions/types";
+import { joinPrompts } from "@/lib/prompts";
+import { toolPrompts } from "./prompts";
 import type { ToolDefinition } from "./tools";
 
-const appIds = registeredApps.map((app) => `"${app.id}" (${app.name})`).join(", ");
+const apps = joinPrompts(
+  registeredApps.map((app) => toolPrompts.app({ id: app.id, name: app.name })),
+  ", ",
+);
 
 export const fileCapabilityRequestTool: ToolDefinition<
   CapabilityRequestInput,
   FiledCapabilityRequest
 > = {
-  description:
-    "Ask Mycel's team for something the action catalog can't do and one call can't either, " +
-    "so they can build it into the catalog. Use it after telling the admin plainly what you " +
-    `can't do. app is a registered app's ID (${appIds}) or the name of any other app. ` +
-    "Describe the operation in a few plain words, its inputs and outputs, why one call can't " +
-    "do it, and, when you can, a codeDraft: the call sequence or code it would need. Never " +
-    "quote the content of a message or file in it. Asking again for the same app and " +
-    "operation counts as one more ask on the same request.",
+  description: toolPrompts.fileCapabilityRequest({ apps }),
   inputSchema: capabilityRequestInputSchema,
   execute: (ctx, input, turn) =>
     fileCapabilityRequest(ctx, input, { conversationId: turn.conversationId }),

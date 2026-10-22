@@ -7,6 +7,7 @@ import { requireBuildableConnection } from "@/features/connections/server";
 import { SourceRequestError } from "@/features/connections/types";
 import { readMessage, searchMessages } from "@/features/runtime/server";
 import { ValidationError } from "@/lib/errors";
+import { toolPrompts } from "./prompts";
 import type { ToolDefinition } from "./tools";
 
 /** How much of each body the model reads. */
@@ -30,11 +31,7 @@ type Example = {
 type Examples = { connectionId: string; examples: Example[] };
 
 export const readExamples: ToolDefinition<z.infer<typeof inputSchema>, Examples> = {
-  description:
-    "Search the mail of one connection listed under Connections, with Gmail's search syntax " +
-    "(from:, subject:, newer_than:7d, free words), and read up to 5 of the newest matches: " +
-    "sender, date, subject and the start of the body. Only for grounding a workflow in real " +
-    "messages; you won't see them again later in the conversation unless you search again.",
+  description: toolPrompts.readExamples(),
   inputSchema,
   async execute(ctx, { connectionId, query, limit }) {
     // NotFoundError for any other member's connection or another org's (ADR-0001).

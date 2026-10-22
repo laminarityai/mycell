@@ -9,22 +9,18 @@ import { callModel } from "@/features/models/server";
 import { catalog } from "@/features/policy/catalog";
 import { findStep, stepsAbove } from "@/features/spec/tree";
 import type { Step } from "@/features/spec/types";
+import { joinPrompts, type PromptText } from "@/lib/prompts";
 import type { Json } from "../types";
 import { RunStepError } from "./failures";
 import { messageRef, messageText, threadText } from "./gmail";
 import { lookupText, MEMORY_LOOKUP } from "./memory-lookup";
+import { draftPrompts } from "./prompts";
 import { resolveInput } from "./references";
 import { runAction } from "./run-action";
 import { rangeText } from "./sheets";
 import type { StepContext, StepExecution } from "./step-context";
 
 type StepOf<T extends Step["type"]> = Extract<Step, { type: T }>;
-
-const SYSTEM = [
-  "You write the body of an email reply on behalf of the mailbox's owner.",
-  "Write only the reply's text: no subject line, no headers, no placeholders.",
-  "Follow these instructions:",
-].join(" ");
 
 export async function draftStep(
   step: StepOf<"draft">,
@@ -35,7 +31,7 @@ export async function draftStep(
   // Called by the action only when the step hasn't made its draft yet.
   const compose = async () => {
     const result = await callModel(ctx, step.role, {
-      system: `${SYSTEM}\n\n${step.instructions}`,
+      system: draftPrompts.system({ instructions: step.instructions }),
       prompt: await contextText(step, context),
       ...context.attribution,
     });
@@ -49,16 +45,17 @@ export async function draftStep(
 }
 
 /** The step's context, as the model reads it, fetched inside the step and held in memory. */
-async function contextText(step: StepOf<"draft">, context: StepContext): Promise<string> {
+async function contextText(step: StepOf<"draft">, context: StepContext): Promise<PromptText> {
   const { ctx, run } = context;
-  const parts: string[] = [];
+  const parts: PromptText[] = [];
   for (const name of step.context) {
     if (name === "trigger.message") {
-      const text = await messageText(ctx, run.connectionId, run.sourceRef);
-      parts.push(`The message you're replying to:\n\n${text}`);
+      const message = await messageText(ctx, run.connectionId, run.sourceRef);
+      parts.push(draftPrompts.triggerMessage({ message }));
     } else if (name === "trigger.thread") {
       const { threadId } = await messageRef(ctx, run.connectionId, run.sourceRef);
-      parts.push(`The thread so far:\n\n${await threadText(ctx, run.connectionId, threadId)}`);
+      const thread = await threadText(ctx, run.connectionId, threadId);
+      parts.push(draftPrompts.triggerThread({ thread }));
     } else {
       const output = context.outputs[name] as Json | undefined;
       if (output === undefined) {
@@ -66,10 +63,12 @@ async function contextText(step: StepOf<"draft">, context: StepContext): Promise
       }
       const sheet = await sheetText(name, context);
       const lookup = isLookup(name, context) ? lookupText(name, output) : undefined;
-      parts.push(sheet ?? lookup ?? `What the step "${name}" found: ${JSON.stringify(output)}`);
+      parts.push(
+        sheet ?? lookup ?? draftPrompts.stepOutput({ step: name, output: JSON.stringify(output) }),
+      );
     }
   }
-  return parts.join("\n\n");
+  return joinPrompts(parts, "\n\n");
 }
 
 /** Whether the step `name` is a memory lookup, whose facts read as a list. */
@@ -84,7 +83,7 @@ const RANGE_READ = catalog["google-sheet.read-range"];
  * The values an earlier read-range step read, re-read here: that step handed on only the
  * range's counts, so the values never crossed a step boundary. Undefined for any other step.
  */
-async function sheetText(name: string, context: StepContext): Promise<string | undefined> {
+async function sheetText(name: string, context: StepContext): Promise<PromptText | undefined> {
   const step = findStep(context.spec, name);
   if (step?.type !== "tool" || step.action !== RANGE_READ.name) {
     return undefined;
@@ -95,7 +94,7 @@ async function sheetText(name: string, context: StepContext): Promise<string | u
   }
   const range = input.data as { spreadsheetId: string; range: string };
   const values = await rangeText(context.ctx, context.run.connectionId, range);
-  return `What the sheet range ${range.range} holds, one row per line, cells separated by tabs:\n\n${values}`;
+  return draftPrompts.sheetRange({ range: range.range, values });
 }
 
 // Whether the step is a tool step calling a custom write, whose output is its held send.

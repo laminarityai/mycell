@@ -5,6 +5,7 @@ import { z } from "zod";
 import { registeredAppIdSchema, type RegisteredAppId } from "@/features/connections/types";
 import { httpMethodSchema, riskLevelSchema, type RiskLevel } from "@/features/policy/types";
 import type { ApiField, ApiOperation } from "./lib/api-index-types";
+import { capabilityRequestPrompts } from "./lib/prompts";
 
 /** `microsoft.read-message`: the app's word, a dot, then what it does. Unique in the org. */
 export const customActionNameSchema = z
@@ -139,39 +140,21 @@ export type CapabilityRequestField = z.infer<typeof capabilityRequestFieldSchema
  * builder tool's input, validated at that boundary.
  */
 export const capabilityRequestInputSchema = z.object({
-  app: z
-    .string()
-    .trim()
-    .min(1)
-    .max(100)
-    .describe("A registered app's ID, or the name of an app that isn't registered."),
-  operation: z
-    .string()
-    .trim()
-    .min(1)
-    .max(200)
-    .describe("What Mycel would need to do there, in a few plain words: 'Merge two contacts'."),
-  inputs: z
-    .array(capabilityRequestFieldSchema)
-    .max(20)
-    .describe("What it would take, each with a description."),
+  app: z.string().trim().min(1).max(100).describe(capabilityRequestPrompts.app()),
+  operation: z.string().trim().min(1).max(200).describe(capabilityRequestPrompts.operation()),
+  inputs: z.array(capabilityRequestFieldSchema).max(20).describe(capabilityRequestPrompts.inputs()),
   outputs: z
     .array(capabilityRequestFieldSchema)
     .max(20)
-    .describe("What it would give back to later steps."),
-  reason: z
-    .string()
-    .trim()
-    .min(1)
-    .max(2000)
-    .describe("Why a catalog action or one call can't do it, in plain words."),
+    .describe(capabilityRequestPrompts.outputs()),
+  reason: z.string().trim().min(1).max(2000).describe(capabilityRequestPrompts.reason()),
   codeDraft: z
     .string()
     .trim()
     .min(1)
     .max(20_000)
     .optional()
-    .describe("The call sequence or code it would need, as a starting point for our team."),
+    .describe(capabilityRequestPrompts.codeDraft()),
 });
 export type CapabilityRequestInput = z.infer<typeof capabilityRequestInputSchema>;
 

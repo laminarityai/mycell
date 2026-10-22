@@ -1,24 +1,26 @@
 // A try-it result as the conversation keeps it, for the agent to react to: one line per step
 // saying what it did, in words built from the spec's own literals (labels, step IDs, ranges)
-// and counts only. No message content, draft text, row value or extracted value reaches it
-// (invariant 8): those stay on the admin's page. A tool input the spec fills from a reference
-// is named by its reference, never by the value it resolved to, which may come from the email.
+// and counts only, worded in builder/prompts/try-it.prompt.yml. No message content, draft text,
+// row value or extracted value reaches it (invariant 8): those stay on the admin's page. A tool
+// input the spec fills from a reference is named by its reference, never by the value it
+// resolved to, which may come from the email.
 import { checkWords } from "@/features/policy/condition-fields";
 import type { ActionSet } from "@/features/policy/types";
 import type { BranchPath, DryRunResult, DryRunStep } from "@/features/runtime/types";
 import { describeCheck } from "@/features/spec/conditions";
 import { findStep } from "@/features/spec/tree";
 import type { Spec } from "@/features/spec/types";
+import { joinPrompts, type PromptText } from "@/lib/prompts";
 import type { TryItSummary } from "../types";
 import { isRecord } from "@/lib/utils";
+import { tryItPrompts } from "./prompts";
 
-const ENDINGS: Record<DryRunResult["ended"], string> = {
-  succeeded: "It ran to the end.",
-  skipped: "It stopped at a branch: the workflow would do nothing more with this message.",
-  escalated: "It escalated: the workflow would hand this message to a person.",
-  failed: "It failed at the step above.",
-  partly_failed:
-    "It partly failed: a step above failed and ended its own path, and the other paths ran on.",
+const ENDINGS: Record<DryRunResult["ended"], PromptText> = {
+  succeeded: tryItPrompts.succeeded(),
+  skipped: tryItPrompts.skipped(),
+  escalated: tryItPrompts.escalated(),
+  failed: tryItPrompts.failed(),
+  partly_failed: tryItPrompts.partlyFailed(),
 };
 
 /** Summarizes a dry run of `spec`, whose actions are in the company's action set `actions`. */
@@ -32,48 +34,64 @@ export function summarizeTryIt(result: DryRunResult, spec: Spec, actions: Action
   };
 }
 
-function lineOf(step: DryRunStep, spec: Spec): string {
-  const name = `${step.stepId} (${step.type})`;
-  if (step.error !== null) return `${name}: failed, ${step.error.code}: ${step.error.message}`;
-  const input = (field: string) => specInput(spec, step.stepId, field);
-  const effect = step.effect;
+function lineOf(dryRunStep: DryRunStep, spec: Spec): PromptText {
+  const step = tryItPrompts.step({ id: dryRunStep.stepId, type: dryRunStep.type });
+  const { error, effect, output } = dryRunStep;
+  if (error !== null) {
+    return tryItPrompts.stepFailed({ step, code: error.code, message: error.message });
+  }
+  const input = (field: string) => specInput(spec, dryRunStep.stepId, field);
   switch (effect?.kind) {
     case "review":
-      return `${name}: would wait for a review${step.insertedByPolicy ? " (required by policy)" : ""}.`;
+      return dryRunStep.insertedByPolicy
+        ? tryItPrompts.wouldReviewByPolicy({ step })
+        : tryItPrompts.wouldReview({ step });
     case "draft":
-      return `${name}: drafted a reply (not saved).`;
+      return tryItPrompts.drafted({ step });
     case "label":
-      return `${name}: would add ${input("label")}.`;
+      return tryItPrompts.wouldLabel({ step, label: input("label") });
     case "row":
-      return `${name}: would append a row to ${input("range")}.`;
+      return tryItPrompts.wouldAppendRow({ step, range: input("range") });
     case "rows_read":
-      return `${name}: read ${String(effect.rows.length)} rows from ${input("range")}.`;
+      return tryItPrompts.readRows({
+        step,
+        count: String(effect.rows.length),
+        range: input("range"),
+      });
     case undefined:
       break;
   }
-  const output = step.output;
-  if (step.type === "classify" && isRecord(output)) {
-    return `${name}: chose ${JSON.stringify(output.label)} with probability ${JSON.stringify(output.p)}.`;
+  if (dryRunStep.type === "classify" && isRecord(output)) {
+    return tryItPrompts.chose({
+      step,
+      label: JSON.stringify(output.label),
+      p: JSON.stringify(output.p),
+    });
   }
-  if (step.type === "branch" && isRecord(output)) {
-    const branch = findStep(spec, step.stepId);
+  if (dryRunStep.type === "branch" && isRecord(output)) {
+    const branch = findStep(spec, dryRunStep.stepId);
     const taken = Array.isArray(output.taken) ? output.taken : [];
     const paths = branch?.type === "branch" ? branch.paths.filter((p) => taken.includes(p.id)) : [];
-    if (paths.length === 0) return `${name}: no path applied, so it took the otherwise path.`;
-    return `${name}: went on along ${paths.map((path) => JSON.stringify(path.name)).join(", ")}.`;
+    if (paths.length === 0) return tryItPrompts.tookOtherwise({ step });
+    return tryItPrompts.wentOn({
+      step,
+      paths: paths.map((path) => JSON.stringify(path.name)).join(", "),
+    });
   }
-  if (step.type === "extract" && isRecord(output)) {
+  if (dryRunStep.type === "extract" && isRecord(output)) {
     const filled = Object.entries(output).filter(([, value]) => value !== null && value !== "");
-    return `${name}: filled ${filled.map(([field]) => field).join(", ") || "no fields"}.`;
+    return filled.length === 0
+      ? tryItPrompts.filledNone({ step })
+      : tryItPrompts.filled({ step, fields: filled.map(([field]) => field).join(", ") });
   }
-  return `${name}: done.`;
+  return tryItPrompts.done({ step });
 }
 
-const PATH_WORDS: Record<BranchPath["status"], string> = {
-  taken: "ran",
-  not_taken: "didn't apply",
-  not_checked: "not checked, since an earlier path ran",
-  not_needed: "not needed, since another path applied",
+const PATH_WORDS: Record<BranchPath["status"], PromptText> = {
+  taken: tryItPrompts.pathTaken(),
+  not_taken: tryItPrompts.pathNotTaken(),
+  not_checked: tryItPrompts.pathNotChecked(),
+  not_needed: tryItPrompts.pathNotNeeded(),
 };
 
 /**
@@ -82,7 +100,7 @@ const PATH_WORDS: Record<BranchPath["status"], string> = {
  * with whether it passed: never its reason, which may quote the value it tested. The branch's
  * own line already says whether it took the otherwise path.
  */
-function pathLines(step: DryRunStep, spec: Spec, actions: ActionSet): string[] {
+function pathLines(step: DryRunStep, spec: Spec, actions: ActionSet): PromptText[] {
   const branch = findStep(spec, step.stepId);
   if (branch?.type !== "branch" || step.paths === undefined) return [];
   const words = checkWords(spec, actions);
@@ -91,34 +109,45 @@ function pathLines(step: DryRunStep, spec: Spec, actions: ActionSet): string[] {
     if (path === undefined) return [];
     const checks = path.condition.checks.flatMap((check, index) => {
       const passed = result.checks.at(index)?.passed;
-      return passed === undefined
-        ? []
-        : [`${describeCheck(check, words)}: ${passed ? "passed" : "failed"}`];
+      if (passed === undefined) return [];
+      const described = describeCheck(check, words);
+      return [
+        passed
+          ? tryItPrompts.checkPassed({ check: described })
+          : tryItPrompts.checkFailed({ check: described }),
+      ];
     });
-    const said = checks.length === 0 ? "" : ` ${checks.join("; ")}.`;
+    const line = {
+      branch: step.stepId,
+      name: JSON.stringify(path.name),
+      status: PATH_WORDS[result.status],
+    };
     return [
-      `${step.stepId}, path ${JSON.stringify(path.name)}: ${PATH_WORDS[result.status]}.${said}`,
+      checks.length === 0
+        ? tryItPrompts.path(line)
+        : tryItPrompts.pathWithChecks({ ...line, checks: joinPrompts(checks, "; ") }),
     ];
   });
 }
 
 // A tool step's input as the spec writes it: `the label "Pricing"` for a literal, `a label from
 // details.city` for a reference.
-function specInput(spec: Spec, stepId: string, field: string): string {
+function specInput(spec: Spec, stepId: string, field: string): PromptText {
   const step = findStep(spec, stepId);
   const value = step?.type === "tool" ? step.input[field] : undefined;
-  if (typeof value === "string") return `the ${field} ${JSON.stringify(value)}`;
-  if (value !== null && typeof value === "object" && !Array.isArray(value)) {
-    return `a ${field} from ${value.from}`;
+  if (typeof value === "string") {
+    return tryItPrompts.literalInput({ field, value: JSON.stringify(value) });
   }
-  return `the ${field} the spec names`;
+  if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+    return tryItPrompts.referenceInput({ field, reference: value.from });
+  }
+  return tryItPrompts.unknownInput({ field });
 }
 
 /** The summary as the agent reads it, in the admin's turn. */
-export function tryItText(summary: TryItSummary): string {
-  return [
-    "[I tried the workflow's working spec on one real message (Try it). Nothing was written " +
-      "to any app. What each step did:]",
-    ...summary.lines.map((line) => `- ${line}`),
-  ].join("\n");
+export function tryItText(summary: TryItSummary): PromptText {
+  return joinPrompts(
+    [tryItPrompts.summary(), ...summary.lines.map((line) => tryItPrompts.summaryLine({ line }))],
+    "\n",
+  );
 }

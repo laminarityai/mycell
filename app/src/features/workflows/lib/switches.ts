@@ -96,7 +96,7 @@ export async function listSwitchedOn(ctx: Ctx, connectionId: string): Promise<Sw
         switch: by,
         versionId: version.id,
         since,
-        labelIds: version.spec.trigger.labelIds,
+        trigger: version.spec.trigger,
       },
     ];
   };

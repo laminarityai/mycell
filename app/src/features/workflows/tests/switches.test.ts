@@ -68,7 +68,7 @@ describe("switching a member workflow on", () => {
         switch: { kind: "member", enablementId: expect.any(String) as string },
         versionId: latest.id,
         since: workflow.switch?.since,
-        labelIds: ["INBOX"],
+        trigger: { type: "gmail.message_received", labelIds: ["INBOX"] },
       },
     ]);
   });
@@ -146,7 +146,7 @@ describe("switching an org workflow on", () => {
         switch: { kind: "org", workflowId },
         versionId: workflow.versions[0].id,
         since: workflow.switch?.since,
-        labelIds: ["INBOX"],
+        trigger: { type: "gmail.message_received", labelIds: ["INBOX"] },
       },
     ]);
   });

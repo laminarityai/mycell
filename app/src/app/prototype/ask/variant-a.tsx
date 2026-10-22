@@ -82,7 +82,7 @@ function Rail({ chat }: { chat: AskChat }) {
   );
 }
 
-function Thread({ chat }: { chat: AskChat }) {
+export function Thread({ chat }: { chat: AskChat }) {
   const scroller = useRef<HTMLDivElement>(null);
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
@@ -143,7 +143,7 @@ function Thread({ chat }: { chat: AskChat }) {
   );
 }
 
-function Composer({ chat }: { chat: AskChat }) {
+export function Composer({ chat }: { chat: AskChat }) {
   const [input, setInput] = useState("");
   const submit = () => {
     const text = input.trim();

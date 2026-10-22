@@ -95,6 +95,8 @@ export function useAskChat(google: string) {
     /** False when the viewer hasn't connected Google: message search and runs need it. */
     googleConnected: google !== "none",
     conversations,
+    /** Every conversation's messages, by id, for searching across them. */
+    threads,
     active,
     activeId,
     setActiveId,

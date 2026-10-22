@@ -1,6 +1,6 @@
 // PROTOTYPE, throwaway: the Credits page's own fixtures on top of the shared company: this
-// month's daily usage (so balances can be drawn), each workflow's last 7 days, the month by group
-// with the injection screen added, and running balances for the latest ledger entries.
+// month's daily usage (so balances can be drawn), each workflow's last 7 days, the month by group,
+// and running balances for the latest ledger entries. The day-by-day series live in series.ts.
 import {
   CREDITS,
   LEDGER,
@@ -9,17 +9,12 @@ import {
   type LedgerEntry,
   type Workflow,
 } from "../_shared/fixtures";
+import { DAY_MS, MONTH_START, OK_SCENARIO, WORKFLOW_DAILY } from "./series";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-/** The first of this month, UTC: what "this month" counts from. */
-export const MONTH_START = new Date(Date.UTC(NOW.getUTCFullYear(), NOW.getUTCMonth(), 1));
+export { MONTH_START };
 
 /** Credits used each day this month, Oct 1 to today. The last 7 average 371 (CREDITS). */
-export const DAILY_USAGE = [
-  182, 175, 190, 205, 168, 160, 201, 214, 188, 197, 226, 210, 189, 204, 238, 312, 344, 358, 390,
-  402, 421, 370,
-];
+export const DAILY_USAGE = OK_SCENARIO.daily;
 
 /** The balance just after the October allowance landed. */
 export const BALANCE_AFTER_GRANT = CREDITS.balance + DAILY_USAGE.reduce((a, b) => a + b, 0);
@@ -71,7 +66,12 @@ export const MONTH_GROUPS: Group[] = [
     credits: CREDITS.monthByGroup.try_it,
     help: "Test runs while editing",
   },
-  { key: "screen", label: "Mail screening", credits: 38, help: "Checking incoming mail is safe" },
+  {
+    key: "injection_screen",
+    label: "Mail screening",
+    credits: CREDITS.monthByGroup.injection_screen,
+    help: "Checking incoming mail is safe",
+  },
 ];
 
 export const MONTH_TOTAL = MONTH_GROUPS.reduce((sum, g) => sum + g.credits, 0);
@@ -83,17 +83,16 @@ export const GROUP_COLOR: Record<string, string> = {
   builder: "bg-[#1baf7a] dark:bg-[#199e70]",
   agent: "bg-[#eda100] dark:bg-[#c98500]",
   try_it: "bg-[#e87ba4] dark:bg-[#d55181]",
-  screen: "bg-[#008300] dark:bg-[#008300]",
+  injection_screen: "bg-[#008300] dark:bg-[#008300]",
 };
 
 /** Each workflow's live-run usage over the last 7 days. */
-const BURN_7D: Record<string, number> = {
-  "wf-quotes": 820,
-  "wf-calls": 240,
-  "wf-invoices": 150,
-  "wf-followups": 90,
-  "wf-status": 30,
-};
+const BURN_7D: Record<string, number> = Object.fromEntries(
+  Object.entries(WORKFLOW_DAILY).map(([id, daily]) => [
+    id,
+    daily.slice(-7).reduce((a, b) => a + b, 0),
+  ]),
+);
 
 export type WorkflowSpend = Workflow & { burn7d: number; perDay: number };
 

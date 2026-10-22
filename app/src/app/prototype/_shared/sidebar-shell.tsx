@@ -25,6 +25,7 @@ export function SidebarShell({
   subtitle,
   actions,
   width = "default",
+  counts = {},
   children,
 }: {
   params: Record<string, string>;
@@ -37,6 +38,8 @@ export function SidebarShell({
   actions?: ReactNode;
   /** `default` is a reading column, `wide` fills the content area, `bleed` drops the padding. */
   width?: "default" | "wide" | "bleed";
+  /** Counts that differ from the fixtures', by nav key: `{ alerts: 0 }` when every alert clears. */
+  counts?: Partial<Record<string, number>>;
   children: ReactNode;
 }) {
   const admin = params.as !== "member";
@@ -62,6 +65,10 @@ export function SidebarShell({
                 {links.map((item) => {
                   const Icon = item.icon;
                   const here = item.key === current;
+                  const count =
+                    item.count === undefined
+                      ? undefined
+                      : { ...item.count, value: counts[item.key] ?? item.count.value };
                   return (
                     <Link
                       key={item.key}
@@ -77,9 +84,7 @@ export function SidebarShell({
                       {item.key === "credits" && out ? (
                         <span className="size-2 rounded-full bg-destructive" aria-label="out" />
                       ) : null}
-                      {item.count === undefined || item.count.value === 0 ? null : (
-                        <NavCount {...item.count} />
-                      )}
+                      {count === undefined || count.value === 0 ? null : <NavCount {...count} />}
                     </Link>
                   );
                 })}

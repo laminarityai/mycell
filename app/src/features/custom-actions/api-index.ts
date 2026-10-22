@@ -4,6 +4,7 @@
 // the script reads, parses and writes the files.
 import { REGISTERED_APPS } from "@/features/connections/registered-apps";
 import type { RegisteredAppId } from "@/features/connections/types";
+import { InvariantError } from "@/lib/errors";
 import type { ApiIndex } from "./lib/api-index-types";
 import { indexGoogleDiscovery } from "./lib/discovery-index";
 import { indexOpenApi } from "./lib/openapi-index";
@@ -43,5 +44,5 @@ function mergeIndexes(indexes: Pick<ApiIndex, "operations" | "types">[]) {
 }
 
 function unsupported(format: string): never {
-  throw new Error(`Indexing a ${format} API description isn't built yet.`);
+  throw new InvariantError(`Indexing a ${format} API description isn't built yet.`);
 }

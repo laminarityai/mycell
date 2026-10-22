@@ -9,7 +9,7 @@ import { forOrg } from "@/db/for-org";
 import type { CustomValue, RenderedRequest } from "@/features/custom-actions/description";
 import { decryptForOrg, encryptForOrg } from "@/features/key-store/server";
 import type { Ctx } from "@/lib/ctx";
-import { NotFoundError } from "@/lib/errors";
+import { InvariantError, NotFoundError } from "@/lib/errors";
 import { heldSends, runs } from "./schema";
 
 /** What a held send holds: the rendered request, and the checked inputs it was rendered from. */
@@ -61,7 +61,7 @@ export async function holdRequest(
     { onConflictDoNothing: true },
   );
   const row = (await db.select(heldSends, { where: ofStep })).at(0);
-  if (row === undefined) throw new Error("The held send wasn't stored.");
+  if (row === undefined) throw new InvariantError("The held send wasn't stored.");
   return row.id;
 }
 

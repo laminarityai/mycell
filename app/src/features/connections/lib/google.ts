@@ -1,6 +1,7 @@
 // What a Google connection needs beyond Nango itself: the API host each Google API path is on,
 // which apps its granted scopes allow, and how to read which account it reached.
 import { z } from "zod";
+import { InvariantError } from "@/lib/errors";
 import { GOOGLE_API_PREFIXES } from "@/lib/google";
 import { GOOGLE_APP_SCOPES, googleAppSchema, type GoogleApp } from "../types";
 import { NangoConnectionGoneError, nangoProxyGet, type ProxyTarget } from "./nango";
@@ -10,12 +11,12 @@ export type GoogleSource = "google" | "gmail" | "drive";
 
 /**
  * Where a Google API path is served: its host, found from the path's prefix. Our own code
- * builds every path, so one no API serves is a bug, not a user's mistake: it's a plain Error,
- * which the action boundary rethrows (src/lib/errors.ts, actionError).
+ * builds every path, so one no API serves is a bug, not a user's mistake: InvariantError, which
+ * the action boundary rethrows (src/lib/errors.ts, actionError).
  */
 export function proxyTarget(path: string): ProxyTarget {
   const api = GOOGLE_API_PREFIXES.find(({ prefix }) => path.startsWith(prefix));
-  if (api === undefined) throw new Error(`No Google API serves ${path}`);
+  if (api === undefined) throw new InvariantError(`No Google API serves ${path}`);
   return { baseUrl: api.host, path };
 }
 

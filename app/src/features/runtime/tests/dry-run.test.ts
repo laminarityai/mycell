@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { failQueries } from "@/db/testing/fail-queries";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { getBalance, grantCredits, listLedger } from "@/features/credits/server";
@@ -7,6 +8,7 @@ import { systemCtx } from "@/lib/ctx";
 import { NotFoundError, OutOfCreditsError } from "@/lib/errors";
 import { connectGoogle, daysAgo } from "@/testing/connect-helpers";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
+import { fakeNango } from "@/testing/fake-nango";
 import { dryRun, listRuns, recentMessages } from "../server";
 import { pricingQuestion } from "./run-helpers";
 
@@ -123,6 +125,55 @@ describe("recentMessages", () => {
     const listing = await recentMessages(admin, "org");
 
     expect(listing.map((connection) => connection.connectionId)).toEqual([support.id]);
+  });
+
+  it("says a connection is unavailable when Gmail refuses it or Nango no longer has it", async () => {
+    const { admin, google } = await tryItSetup();
+    const gone = await connectGoogle(admin, "sales@org-a.test", { kind: "org" });
+    const support = await connectGoogle(admin, "support@org-a.test", {
+      kind: "org",
+      messages: [pricingQuestion({ subject: "Shared inbox question" })],
+    });
+    fakeNango.revokeAccess(google.nangoConnectionId);
+    fakeNango.deleteWithoutWebhook(gone.nangoConnectionId);
+
+    const listing = await recentMessages(admin);
+
+    expect(listing.map(({ connectionId, unavailable }) => ({ connectionId, unavailable }))).toEqual(
+      [
+        { connectionId: google.id, unavailable: true },
+        { connectionId: gone.id, unavailable: true },
+        { connectionId: support.id, unavailable: false },
+      ],
+    );
+    expect(listing[2]?.messages.map((m) => m.subject)).toEqual(["Shared inbox question"]);
+  });
+
+  it("says a connection is unavailable when Nango doesn't answer", async () => {
+    const { admin, google } = await tryItSetup();
+    fakeNango.stopAnswering();
+
+    const listing = await recentMessages(admin);
+
+    expect(listing).toMatchObject([{ connectionId: google.id, messages: [], unavailable: true }]);
+  });
+
+  it("lets a database error through rather than reading it as Gmail unavailable", async () => {
+    const { admin } = await tryItSetup();
+    // The database goes once Gmail has listed the inbox, before each message is read.
+    let restore: (() => void) | undefined;
+    fakeNango.beforeProxy(() => {
+      restore ??= failQueries();
+    });
+
+    try {
+      await expect(recentMessages(admin)).rejects.toHaveProperty(
+        "cause.message",
+        "The database is unavailable.",
+      );
+    } finally {
+      restore?.();
+    }
   });
 });
 

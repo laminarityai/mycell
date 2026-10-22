@@ -47,6 +47,7 @@ class FakeNango {
   private sessions = new FakeSessions();
   private connections = new Map<string, FakeConnection>();
   private deletesFail = false;
+  private answering = true;
   private rateLimitsLeft = 0;
   private rateLimitsServed = 0;
   private writeFailuresLeft = 0;
@@ -63,6 +64,7 @@ class FakeNango {
     this.sessions.reset();
     this.connections.clear();
     this.deletesFail = false;
+    this.answering = true;
     this.rateLimitsLeft = 0;
     this.rateLimitsServed = 0;
     this.writeFailuresLeft = 0;
@@ -121,6 +123,14 @@ class FakeNango {
   /** Makes Nango's connection delete endpoint answer 500, until `failDeletes(false)` or reset. */
   failDeletes(failing = true): void {
     this.deletesFail = failing;
+  }
+
+  /**
+   * Nango stops answering (an outage, or a network fault on the way to it): every request to its
+   * API, the proxy's included, fails as fetch does when nothing answers, until the next reset.
+   */
+  stopAnswering(): void {
+    this.answering = false;
   }
 
   /** Serves at most `size` connections per page of the list endpoint, whatever is asked. */
@@ -269,6 +279,8 @@ class FakeNango {
   }
 
   readonly handlers = [
+    // Checked first; a resolver that returns nothing hands the request on to the next.
+    http.all(`${NANGO_API}/*`, () => (this.answering ? undefined : HttpResponse.error())),
     ...connectionsApiHandlers(
       () => [...this.connections.values()],
       () => this.listing,

@@ -1,5 +1,6 @@
-// The typed errors server functions throw. Server Actions and routes turn them into messages;
-// nothing else catches them (docs/conventions.md, "Errors").
+// The typed errors server functions throw. Server Actions and routes turn the ones a user can act
+// on into messages, and rethrow the rest; nothing else catches them, except a caller expecting
+// one by name (docs/conventions.md, "Errors").
 
 /** A personal Google account tried to sign in: Mycel needs a Workspace domain (ADR-0002). */
 export class WorkspaceAccountRequiredError extends Error {
@@ -67,7 +68,8 @@ export class ItemGoneError extends Error {
  * An approved item Mycel held was handed to its app, but the app never confirmed it: an error
  * or a lost answer after the request may have reached it (ADR-0020). The held-send adapter
  * throws it once the item is no longer held, so nothing sends it again; acting on a review
- * ends the review `unconfirmed` and turns this into a ConflictError.
+ * ends the review `unconfirmed` and turns this into a ConflictError. It's never shown: only that
+ * ConflictError's message tells the user what to check, and one reaching a boundary is a bug.
  */
 export class SendUnconfirmedError extends Error {
   constructor() {
@@ -111,6 +113,36 @@ export class OutOfCreditsError extends Error {
   constructor() {
     super("Your organization is out of credits.");
     this.name = "OutOfCreditsError";
+  }
+}
+
+/**
+ * A request to Nango's own API failed (a connect session, or reading, listing or deleting a
+ * connection): Nango answered an error `status`, or didn't answer at all. A call through its
+ * proxy that the app refused is SourceRequestError (in `connections`) instead. Nothing a user can
+ * act on, so it's never shown; a caller that can carry on without Nango catches it by name.
+ */
+export class NangoRequestError extends Error {
+  /** Nango's HTTP status, or undefined when it didn't answer. */
+  readonly status: number | undefined;
+
+  constructor(call: string, status?: number) {
+    super(`Nango ${call} failed: ${status === undefined ? "no answer" : String(status)}`);
+    this.name = "NangoRequestError";
+    this.status = status;
+  }
+}
+
+/**
+ * A state that can't happen did: an insert returned no row, a path Mycel built isn't on its
+ * app, or an API answered against its own documentation (Nango repeating a page of its
+ * listing). It's a bug, never something a user can act on: Server Actions and routes rethrow it
+ * like any untyped error, and its message, which says what broke, is never shown.
+ */
+export class InvariantError extends Error {
+  constructor(what: string) {
+    super(what);
+    this.name = "InvariantError";
   }
 }
 

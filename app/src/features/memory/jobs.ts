@@ -5,11 +5,21 @@ import { systemCtx } from "@/lib/ctx";
 import { itemChanged, itemRemoved, itemStored } from "@/lib/events";
 import { inngest } from "@/lib/inngest";
 import {
+  exclusionAdded,
+  itemQueued,
+  memoryStarted,
+  postponedDue,
+  sendPostponedDue,
+} from "./lib/events";
+import {
   deleteRemovedItem,
+  forgetExcluded,
   learnFromItem,
   pruneAccessLog,
+  queueStoredItems,
   rereadAccess,
   rereadDriveAccess,
+  resumePostponed,
 } from "./server";
 
 // Step results are plain JSON already, so Inngest's serialized type is the same type.
@@ -18,16 +28,17 @@ const stepRunner =
   <T>(id: string, run: () => Promise<T>) =>
     step.run(id, run) as Promise<T>;
 
-// One of these jobs at a time per org, across them (scope "env"): learning, deletions and
-// sharing changes never race each other, and one org's backfill leaves other orgs unblocked.
+// One of these jobs at a time per org, across them (scope "env"): learning, deletions, sharing
+// changes, an exclusion's forgetting and resuming postponed items never race each other, and
+// one org's backfill leaves other orgs unblocked.
 const PER_ORG = [{ scope: "env", key: '"memory-org-" + event.data.orgId', limit: 1 }] as const;
 
 /**
- * Learns from each item discovery stores. One item at a time per org, so two items never race
- * to create the same object.
+ * Learns from each item discovery stores, and each item memory queues itself. One item at a
+ * time per org, so two items never race to create the same object.
  */
 export const learnJob = inngest.createFunction(
-  { id: "memory-learn-item", triggers: [itemStored], concurrency: [...PER_ORG] },
+  { id: "memory-learn-item", triggers: [itemStored, itemQueued], concurrency: [...PER_ORG] },
   async ({ event, step }) =>
     learnFromItem(
       systemCtx(event.data.orgId),
@@ -38,6 +49,35 @@ export const learnJob = inngest.createFunction(
       },
       stepRunner(step),
     ),
+);
+
+/** Once an admin starts memory, queues everything discovery stored before. */
+export const startJob = inngest.createFunction(
+  { id: "memory-start", triggers: [memoryStarted] },
+  async ({ event, step }) => queueStoredItems(systemCtx(event.data.orgId), stepRunner(step)),
+);
+
+/** Forgets what memory learned from the items a new exclusion covers. */
+export const forgetExcludedJob = inngest.createFunction(
+  { id: "memory-forget-excluded", triggers: [exclusionAdded], concurrency: [...PER_ORG] },
+  async ({ event, step }) =>
+    forgetExcluded(systemCtx(event.data.orgId), event.data.exclusionId, stepRunner(step)),
+);
+
+/** Queues the items postponed for the budget again. */
+export const resumePostponedJob = inngest.createFunction(
+  { id: "memory-resume-postponed", triggers: [postponedDue], concurrency: [...PER_ORG] },
+  async ({ event, step }) => step.run("resume", () => resumePostponed(systemCtx(event.data.orgId))),
+);
+
+/** At the start of each month (UTC), every org's budget is new: postponed items are due. */
+export const newMonthCron = inngest.createFunction(
+  { id: "memory-new-month", triggers: [cron("TZ=UTC 0 0 1 * *")] },
+  async ({ step }) => {
+    const orgIds = await step.run("list-orgs", () => listOrgIds());
+    await step.run("fan-out", () => sendPostponedDue(orgIds));
+    return { orgs: orgIds.length };
+  },
 );
 
 /**

@@ -80,9 +80,12 @@ function confirms(same: boolean) {
   fakeAiGateway.object({ same });
 }
 
+// How many `fast` calls the org's ledger records, each tagged as memory's (its budget counts it).
 async function fastCalls(orgId: string) {
   const usage = (await listLedger(systemCtx(orgId))).filter((e) => e.kind === "usage");
-  return usage.filter((entry) => entry.role === "fast").length;
+  const fast = usage.filter((entry) => entry.role === "fast");
+  expect(fast.every((entry) => entry.purpose === "memory")).toBe(true);
+  return fast.length;
 }
 
 describe("matching an object without an exact key", () => {

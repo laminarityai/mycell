@@ -10,6 +10,7 @@
 import { randomUUID } from "node:crypto";
 import { HttpResponse } from "msw";
 import { parseFields, project } from "./fake-drive-fields";
+import { permission, type DrivePermission, type FakeShareInput } from "./fake-drive-sharing";
 
 /** A file to seed, described the way a test thinks about it. */
 export type FakeFileInput = {
@@ -27,27 +28,11 @@ export type FakeFileInput = {
   text?: string;
   // Who it's shared with, besides its owners.
   sharedWith?: FakeShareInput[];
+  // The folders it's in, by ID. A folder is a file too, with its own parents.
+  parents?: string[];
 };
 
-/** One entry on a file's sharing list, besides its owners: a person, a group, a domain or anyone. */
-export type FakeShareInput =
-  | { type: "user" | "group"; emailAddress: string; role?: ShareRole }
-  | { type: "domain"; domain: string; role?: ShareRole }
-  | { type: "anyone"; role?: ShareRole };
-
-type ShareRole = "writer" | "commenter" | "reader";
-
-/** A permissions resource, as Drive gives it. */
-export type DrivePermission = {
-  kind: "drive#permission";
-  id: string;
-  type: "user" | "group" | "domain" | "anyone";
-  role: "owner" | ShareRole;
-  emailAddress?: string;
-  domain?: string;
-  allowFileDiscovery?: boolean;
-  deleted?: boolean;
-};
+export type { DrivePermission, FakeShareInput };
 
 const GOOGLE_DOC = "application/vnd.google-apps.document";
 
@@ -73,6 +58,7 @@ export type DriveFileResource = {
   owners: ReturnType<typeof user>[];
   // Shown only to an account that may share the file (see FakeDrive's view).
   permissions?: DrivePermission[];
+  parents?: string[];
 };
 
 // One entry in the changes feed: the file changed at `time`, or left the account's Drive.
@@ -107,6 +93,7 @@ export class FakeDrive {
       modifiedTime: time,
       trashed: false,
       ...(input.sharedDrive === true ? { driveId: "0AsharedDrive" } : {}),
+      ...(input.parents === undefined ? {} : { parents: input.parents }),
       lastModifyingUser: user(by, by === this.emailAddress),
       owners: owners.map((o) => user(o, o === this.emailAddress)),
       permissions: [
@@ -285,20 +272,6 @@ function fileFields(params: URLSearchParams) {
   const fields = required(params, "fields");
   if (/\bname\b/.test(fields)) throw new Error(`Mycel asked Drive for file names: ${fields}`);
   return parseFields(fields);
-}
-
-function permission(share: FakeShareInput, role: DrivePermission["role"]): DrivePermission {
-  const id = randomUUID().replaceAll("-", "").slice(0, 20);
-  const base = { kind: "drive#permission" as const, id, role };
-  switch (share.type) {
-    case "user":
-    case "group":
-      return { ...base, type: share.type, emailAddress: share.emailAddress, deleted: false };
-    case "domain":
-      return { ...base, type: "domain", domain: share.domain, allowFileDiscovery: true };
-    case "anyone":
-      return { ...base, type: "anyone", allowFileDiscovery: false };
-  }
 }
 
 function required(params: URLSearchParams, name: string): string {

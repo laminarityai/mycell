@@ -55,12 +55,17 @@ export type ChangedItem = z.infer<typeof changedItemSchema>;
 export type AccessReread = { outcome: "rewritten" | "removed" | "unknown" | "unreachable" };
 
 /**
- * Why learning skipped an item: learned already (for a Drive file, this version or a newer one);
- * not a kind of item memory reads (a Drive file that isn't a Google Doc); changed since (a Drive
- * file's newer version is learned on its own); the injection screen flagged it, or no screen is
- * configured, so no model read it; not business; or it stated no fact memory keeps.
+ * Why learning skipped an item: no admin has started memory yet; the month's budget is spent,
+ * so it waits for next month (`postponed`); an exclusion covers it; learned already (for a
+ * Drive file, this version or a newer one); not a kind of item memory reads (a Drive file that
+ * isn't a Google Doc); changed since (a Drive file's newer version is learned on its own); the
+ * injection screen flagged it, or no screen is configured, so no model read it; not business;
+ * or it stated no fact memory keeps.
  */
 export type SkipReason =
+  | "not_started"
+  | "postponed"
+  | "excluded"
   | "known"
   | "unsupported"
   | "outdated"
@@ -157,6 +162,81 @@ export type FoundFact = MemoryFact & { subject: { id: string; kind: ObjectKind; 
 
 /** What a search found that its caller can see, best match first. */
 export type MemorySearchResult = { objects: FoundObject[]; facts: FoundFact[] };
+
+/**
+ * What an exclusion keeps out of memory for the whole company (ADR-0023): every email with a
+ * Gmail label (by name), every doc in a Drive folder or a folder under it (by ID), and every
+ * item an address, or an address at a domain, is on.
+ */
+export const EXCLUSION_KINDS = ["gmail_label", "drive_folder", "address", "domain"] as const;
+export type ExclusionKind = (typeof EXCLUSION_KINDS)[number];
+
+/** What each kind of exclusion is called on the settings page. */
+export const EXCLUSION_KIND_NAMES: Record<ExclusionKind, string> = {
+  gmail_label: "Gmail label",
+  drive_folder: "Drive folder",
+  address: "Address",
+  domain: "Domain",
+};
+
+/** An exclusion as an admin sees it. */
+export type Exclusion = { id: string; kind: ExclusionKind; value: string; createdAt: Date };
+
+const DOMAIN = /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/;
+
+/**
+ * A new exclusion, as an admin types it: a label's name; a Drive folder's ID or link; an address;
+ * a domain (an `@` or `www.` in front is dropped). Addresses and domains are lowercased.
+ */
+export const exclusionInputSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("gmail_label"), value: z.string().trim().min(1).max(225) }),
+  z.object({
+    kind: z.literal("drive_folder"),
+    value: z
+      .string()
+      .trim()
+      .transform((value) => /\/folders\/([\w-]+)/.exec(value)?.[1] ?? value)
+      .pipe(z.string().regex(/^[\w-]{10,}$/, "Expected a Drive folder's link or ID.")),
+  }),
+  z.object({ kind: z.literal("address"), value: z.string().trim().toLowerCase().pipe(z.email()) }),
+  z.object({
+    kind: z.literal("domain"),
+    value: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .transform((value) => value.replace(/^@/, "").replace(/^www\./, ""))
+      .pipe(z.string().regex(DOMAIN, "Expected a domain, such as example.com.")),
+  }),
+]);
+export type ExclusionInput = z.input<typeof exclusionInputSchema>;
+
+/** A monthly memory budget, in credits. */
+export const memoryBudgetSchema = z.object({
+  monthlyBudget: z.coerce.number().positive().max(10_000_000),
+});
+export type MemoryBudget = z.input<typeof memoryBudgetSchema>;
+
+/**
+ * What learning from what's stored so far would cost: the items discovery stored, and the most
+ * one item costs (its injection screen, `classify`, extraction and embedding, at each call's
+ * credit estimate), so `credits` is an upper bound: items that aren't business stop after
+ * `classify`.
+ */
+export type MemoryEstimate = { items: number; creditsPerItem: number; credits: number };
+
+/**
+ * Memory's settings as an admin sees them: whether it started, and with what budget; what this
+ * month's learning spent (since `monthStart`, UTC); the estimate; and the exclusions.
+ */
+export type MemorySettings = {
+  started: { startedAt: Date; monthlyBudget: number } | null;
+  monthStart: Date;
+  spentThisMonth: number;
+  postponedItems: number;
+  estimate: MemoryEstimate;
+  exclusions: Exclusion[];
+};
 
 /**
  * A summary of one object, built when asked from only the facts its caller can see, and never

@@ -1,13 +1,15 @@
 // Learning from one item discovery stored (a Gmail message or a Drive file version), as the org's
-// system ctx (ADR-0009), in two steps. The first reads the item and decides: learned already, not
-// a kind memory reads (a Drive file that isn't a Google Doc), changed since (a newer Drive
-// version is learned on its own), a copy of an item another connection taught (linked to its
-// facts there and then), or else, once the injection screen has passed it (an item it flags, or
-// one nothing could screen, is skipped before any model reads it), whether it's business
-// (`classify`). The second, for a business item, reads it again, extracts objects and facts,
-// embeds the statements and stores them. The item's content is fetched inside each step and
-// never leaves it (invariant 8): a step returns only what it decided. A connection or item
-// that's gone ends learning quietly.
+// system ctx (ADR-0009), in two steps. The first decides: nothing before an admin started
+// memory, and nothing once the month's budget is spent (the item is postponed to next month);
+// then learned already, not a kind memory reads (a Drive file that isn't a Google Doc), changed
+// since (a newer Drive version is learned on its own), covered by an exclusion, a copy of an
+// item another connection taught (linked to its facts there and then), or else, once the
+// injection screen has passed it (an item it flags, or one nothing could screen, is skipped
+// before any model reads it), whether it's business (`classify`). The second, for a business
+// item, reads it again, extracts objects and facts, embeds the statements and stores them.
+// Every model call is tagged `memory` in the ledger. The item's content is fetched inside each
+// step and never leaves it (invariant 8): a step returns only what it decided. A connection or
+// item that's gone ends learning quietly.
 import { isForeignKeyViolation } from "@/db/errors";
 import { getConnection } from "@/features/connections/server";
 import type { ConnectionDetails } from "@/features/connections/types";
@@ -16,7 +18,9 @@ import { getWorkspaceDomain } from "@/features/orgs/server";
 import type { Ctx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import type { ItemToLearn, LearnOutcome, MemoryApp } from "../types";
+import { gate, MEMORY_USAGE } from "./budget";
 import { readDoc } from "./drive";
+import { isExcluded } from "./exclusions";
 import { extract, isBusiness } from "./extract";
 import { readEmail } from "./gmail";
 import { matchObjects } from "./match";
@@ -35,6 +39,7 @@ const CONNECTION_FOREIGN_KEYS = [
   "source_records_connection_fk",
   "access_list_entries_connection_fk",
   "fact_sources_connection_fk",
+  "memory_postponed_items_connection_fk",
 ];
 
 // Whether an app's items can change between the two steps' reads. A Gmail message never
@@ -46,7 +51,16 @@ type Unread = "gone" | "unsupported" | "outdated";
 
 type Decision =
   | {
-      decision: Unread | "known" | "flagged" | "unscreened" | "not_business" | "business";
+      decision:
+        | Unread
+        | "not_started"
+        | "postponed"
+        | "excluded"
+        | "known"
+        | "flagged"
+        | "unscreened"
+        | "not_business"
+        | "business";
     }
   | ({ decision: "copy" } & Stored);
 
@@ -60,6 +74,9 @@ export async function learnFromItem(
   switch (decided.decision) {
     case "gone":
       return { outcome: "gone" };
+    case "not_started":
+    case "postponed":
+    case "excluded":
     case "known":
     case "unsupported":
     case "outdated":
@@ -89,11 +106,19 @@ export async function learnFromItem(
 }
 
 async function decide(ctx: Ctx, item: ItemToLearn): Promise<Decision> {
+  // Not before an admin starts memory, nor once the month's budget is spent.
+  const gated = await gate(ctx, item);
+  if (gated !== "open") return { decision: gated };
   if (await isKnown(ctx, item.connectionId, item.app, item.sourceRef)) {
     return { decision: "known" };
   }
   const source = await read(ctx, item);
   if (typeof source === "string") return { decision: source };
+  if (await isExcluded(ctx, item.connectionId, source.item)) {
+    // What its older versions taught goes too.
+    await retireOlderVersions(ctx, source);
+    return { decision: "excluded" };
+  }
   const copy = await storeCopy(ctx, source);
   if (copy !== null) return { decision: "copy", ...copy };
   // Before any model reads it.
@@ -125,6 +150,7 @@ async function extractAndStore(ctx: Ctx, item: ItemToLearn): Promise<Learned> {
   }
   const { output: embeddings } = await embed(ctx, {
     values: extracted.facts.map((fact) => fact.statement),
+    ...MEMORY_USAGE,
   });
   const matches = await matchObjects(ctx, extracted, embeddings);
   const stored = await storeLearned(ctx, source, extracted, embeddings, matches);
@@ -133,7 +159,7 @@ async function extractAndStore(ctx: Ctx, item: ItemToLearn): Promise<Learned> {
 
 // The injection screen's verdict on the item: null when it passed.
 async function screen(ctx: Ctx, item: SourceItem): Promise<"flagged" | "unscreened" | null> {
-  const { verdict } = await screenForInjection(ctx, { text: item.text });
+  const { verdict } = await screenForInjection(ctx, { text: item.text, ...MEMORY_USAGE });
   if (verdict === "flagged") return "flagged";
   if (verdict === "unavailable") return "unscreened";
   return null;

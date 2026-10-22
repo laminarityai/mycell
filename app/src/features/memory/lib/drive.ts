@@ -19,16 +19,17 @@ const FILES = "/drive/v3/files";
 export const GOOGLE_DOC = "application/vnd.google-apps.document";
 
 // How much of a doc the models read: a long policy or contract's opening sections.
-const MAX_DOC_CHARS = 24_000;
+export const MAX_DOC_CHARS = 24_000;
 
 const FIELDS =
-  "id, mimeType, modifiedTime, trashed, permissions(type, emailAddress, domain, deleted)";
+  "id, mimeType, modifiedTime, trashed, parents, permissions(type, emailAddress, domain, deleted)";
 
 const fileSchema = z.object({
   id: z.string(),
   mimeType: z.string(),
   modifiedTime: z.string(),
   trashed: z.boolean().optional(),
+  parents: z.array(z.string()).optional(),
   permissions: z
     .array(
       z.object({
@@ -79,6 +80,7 @@ export async function readDoc(
     itemKey: fileId,
     occurredAt: modifiedAt,
     access: accessList(file.permissions ?? []),
+    parentIds: file.parents ?? [],
     addresses: [],
     text: text.slice(0, MAX_DOC_CHARS),
   };

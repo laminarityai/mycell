@@ -21,4 +21,7 @@ export type SourceItem = {
   addresses: string[];
   // As a model reads it. In memory only.
   text: string;
+  // Where its app files it, for exclusions: an email's label IDs, a doc's parent folder IDs.
+  labelIds?: string[];
+  parentIds?: string[];
 };

@@ -4,7 +4,8 @@ import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { systemCtx } from "@/lib/ctx";
 import { connectGoogle, connectMailbox, daysAgo } from "@/testing/connect-helpers";
 import { fakeInngest } from "@/testing/fake-inngest";
-import { backfillConnection, pollConnection } from "../server";
+import { ForbiddenError } from "@/lib/errors";
+import { backfillConnection, countStoredItems, listStoredItems, pollConnection } from "../server";
 
 beforeEach(resetDatabase);
 
@@ -82,6 +83,41 @@ describe("discovery/item.stored", () => {
         occurredAt: edited.toISOString(),
       },
     ]);
+  });
+});
+
+describe("the stored items, listed again", () => {
+  it("are the items discovery announced, in pages, and counted", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const me = orgA.member.email;
+    const connection = await connectMailbox(orgA.member.ctx, me, []);
+    for (const day of [3, 2, 1])
+      connection.mailbox.add({ from: CUSTOMER, to: [me], at: daysAgo(day) });
+    connection.mailbox.add({ from: me, at: daysAgo(1), labelIds: ["DRAFT"] });
+    await backfillConnection(orgA.member.ctx, connection.id);
+    const ctx = systemCtx(orgA.id);
+
+    const first = await listStoredItems(ctx, { limit: 2 });
+    const second = await listStoredItems(ctx, { after: first.next ?? "", limit: 2 });
+
+    expect(second.next).toBeNull();
+    const announced = fakeInngest.sent(STORED).map(({ data }) => ({
+      ...data,
+      occurredAt: new Date(String(data.occurredAt)),
+    }));
+    expect(
+      [...first.items, ...second.items]
+        .map((item) => ({ orgId: orgA.id, ...item }))
+        .sort(bySourceRef),
+    ).toEqual(announced.sort(bySourceRef));
+    expect(await countStoredItems(orgA.admin.ctx)).toBe(3);
+  });
+
+  it("are out of a member's reach", async () => {
+    const { orgA } = await seedTwoOrgs();
+
+    await expect(listStoredItems(orgA.member.ctx, { limit: 10 })).rejects.toThrow(ForbiddenError);
+    await expect(countStoredItems(orgA.member.ctx)).rejects.toThrow(ForbiddenError);
   });
 });
 

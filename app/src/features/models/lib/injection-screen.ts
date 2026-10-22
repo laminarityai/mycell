@@ -31,11 +31,16 @@ function configuredScreen(): InjectionScreen | null {
   return modelArmorScreen({ template, workloadIdentityProvider, serviceAccountEmail });
 }
 
+/** What screening a text of `characters` characters costs, in credits; 0 with no screen. */
+export function estimateScreenCredits(characters: number): number {
+  return (configuredScreen()?.costUsd(characters) ?? 0) * env.CREDITS_PER_USD;
+}
+
 /** Screens `text` for prompt injection, metered against the org. */
 export async function screenForInjection(ctx: Ctx, request: ScreenRequest): Promise<ScreenResult> {
   const screen = configuredScreen();
   if (screen === null) return { verdict: "unavailable", costUsd: 0 };
-  const costUsd = screen.costUsd(request.text);
+  const costUsd = screen.costUsd(request.text.length);
   await checkCredits(ctx, costUsd * env.CREDITS_PER_USD);
 
   const usage = {
@@ -44,6 +49,7 @@ export async function screenForInjection(ctx: Ctx, request: ScreenRequest): Prom
     workflowId: request.workflowId,
     runId: request.runId,
     dryRun: request.dryRun,
+    purpose: request.purpose,
   };
   let flagged: boolean;
   try {

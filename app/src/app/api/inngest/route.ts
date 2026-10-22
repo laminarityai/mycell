@@ -3,10 +3,14 @@ import { reconcileJob } from "@/features/connections/jobs";
 import { backfillJob, pollCron, pollJob } from "@/features/discovery/jobs";
 import {
   deleteRemovedItemJob,
+  forgetExcludedJob,
   learnJob,
+  newMonthCron,
   pruneAccessLogJob,
   rereadAccessJob,
   rereadDriveAccessJob,
+  resumePostponedJob,
+  startJob,
 } from "@/features/memory/jobs";
 import { checkWaitingReviewsJob, endedInGmailJob } from "@/features/reviews/jobs";
 import { fanOutMessageJob, runWorkflowJob } from "@/features/runtime/jobs";
@@ -28,6 +32,10 @@ export const { GET, POST, PUT } = serve({
     endedInGmailJob,
     checkWaitingReviewsJob,
     learnJob,
+    startJob,
+    forgetExcludedJob,
+    resumePostponedJob,
+    newMonthCron,
     pruneAccessLogJob,
     deleteRemovedItemJob,
     rereadAccessJob,

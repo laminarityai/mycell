@@ -1,5 +1,5 @@
 import { expect } from "vitest";
-import { defineIsolationCases } from "@/db/testing/isolation";
+import { defineIsolationCases, notTenantScoped } from "@/db/testing/isolation";
 import type { TwoOrgs } from "@/db/testing/two-org-fixture";
 import { grantCredits, listLedger } from "@/features/credits/server";
 import { systemCtx } from "@/lib/ctx";
@@ -20,6 +20,10 @@ async function seedOrgB({ orgB }: TwoOrgs) {
 const question = { question: "Which?", labels: ["a", "b"], state: "text" };
 
 export const isolationCases = defineIsolationCases(server, {
+  estimateScreenCredits: notTenantScoped(
+    "a price worked out from config: it takes no ctx and reads no org's data",
+  ),
+
   resolveModel: async (orgs) => {
     await seedOrgB(orgs);
 

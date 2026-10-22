@@ -9,6 +9,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { GrantStaffConsentForm, RevokeStaffConsentButton } from "./lib/staff-consent-controls";
+
+// The admin's memory settings: the estimate and start, the budget, and the exclusions.
+export { MemorySettingsPanel } from "./lib/settings-panel";
 import {
   ACCESS_LOG_RETENTION_DAYS,
   type AccessLogEntry,

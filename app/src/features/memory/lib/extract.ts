@@ -7,6 +7,7 @@ import { z } from "zod";
 import { callModel, classify } from "@/features/models/server";
 import type { Ctx } from "@/lib/ctx";
 import { OBJECT_KINDS, type ObjectKeyKind, type ObjectKind } from "../types";
+import { MEMORY_USAGE } from "./budget";
 import { addressesIn } from "./gmail";
 import type { SourceItem } from "./source-item";
 
@@ -53,7 +54,11 @@ const WEBMAIL_DOMAINS = new Set([
  * or personal mail; a doc about the company's work rather than a personal one or a template.
  */
 export async function isBusiness(ctx: Ctx, item: SourceItem): Promise<boolean> {
-  const { label } = await classify(ctx, { ...BUSINESS_QUESTIONS[item.kind], state: item.text });
+  const { label } = await classify(ctx, {
+    ...BUSINESS_QUESTIONS[item.kind],
+    state: item.text,
+    ...MEMORY_USAGE,
+  });
   return label === BUSINESS;
 }
 
@@ -108,6 +113,7 @@ export async function extract(ctx: Ctx, item: SourceItem, domain: string): Promi
     system: instructions(item.kind, domain),
     prompt: `<${item.kind}>\n${item.text}\n</${item.kind}>`,
     schema: extractionSchema,
+    ...MEMORY_USAGE,
   });
   return grounded(output, item, domain);
 }

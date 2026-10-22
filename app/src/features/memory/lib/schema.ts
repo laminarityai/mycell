@@ -11,6 +11,7 @@ import {
   customType,
   foreignKey,
   index,
+  numeric,
   pgTable,
   primaryKey,
   text,
@@ -23,6 +24,7 @@ import {
 import { connections } from "@/features/connections/lib/schema";
 import {
   ACCESS_LOG_READER_KINDS,
+  EXCLUSION_KINDS,
   MEMORY_APPS,
   MEMORY_READ_OPERATIONS,
   OBJECT_KEY_KINDS,
@@ -134,7 +136,7 @@ export const memoryObjects = pgTable(
   },
   (table) => [
     unique("memory_objects_org_id_id_unique").on(table.orgId, table.id),
-    // Matching's name candidates (`%`, trigram similarity; pg_trgm, migration 0029).
+    // Matching's name candidates (`%`, trigram similarity; pg_trgm, migration 0030).
     index("memory_objects_name_trgm_idx").using("gin", table.name.op("gin_trgm_ops")),
   ],
 );
@@ -208,7 +210,7 @@ export const facts = pgTable(
       foreignColumns: [memoryObjects.orgId, memoryObjects.id],
     }).onDelete("cascade"),
     // `superseded_by_id` has no foreign key: when the fact it points to is deleted, a trigger
-    // (migration 0031) points it at that fact's own replacement, or makes it current again.
+    // (migration 0032) points it at that fact's own replacement, or makes it current again.
     index("facts_superseded_by_id_idx").on(table.supersededById),
   ],
 );
@@ -245,6 +247,40 @@ export const factSources = pgTable(
 );
 
 /**
+ * Memory's settings for an org, one row once an admin confirmed the estimate and started it:
+ * nothing is learned before then. The monthly budget caps the credits learning spends.
+ */
+export const memorySettings = pgTable("memory_settings", {
+  orgId: text("org_id").primaryKey(),
+  // Credits a calendar month (UTC) of learning may spend.
+  monthlyBudget: numeric("monthly_budget", { mode: "number" }).notNull(),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+  // The admin who confirmed the estimate, or `system` for our team's scripts.
+  startedByUserId: text("started_by_user_id").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
+ * Something an admin keeps out of memory for the whole company (ADR-0023): a Gmail label (by
+ * name, since each mailbox has its own label IDs), a Drive folder (by ID), an address or a
+ * domain. Settings, not data from a connection.
+ */
+export const exclusions = pgTable(
+  "memory_exclusions",
+  {
+    id: text("id").primaryKey(),
+    orgId: text("org_id").notNull(),
+    kind: text("kind", { enum: EXCLUSION_KINDS }).notNull(),
+    // A label's name as the admin typed it; a lowercased address or domain; a folder ID.
+    value: text("value").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    unique("memory_exclusions_org_id_kind_value_unique").on(table.orgId, table.kind, table.value),
+  ],
+);
+
+/**
  * The access log (ADR-0024): one row per read of memory, saying who or what read, when, and
  * which objects and facts, by ID only: never the query or what a fact says. It isn't derived
  * from any connection, so it has none and outlives the facts it names, for
@@ -273,6 +309,30 @@ export const accessLogEntries = pgTable(
   (table) => [
     index("access_log_entries_org_id_read_at_idx").on(table.orgId, table.readAt),
     index("access_log_entries_source_owner_ids_idx").using("gin", table.sourceOwnerIds),
+  ],
+);
+
+/**
+ * An item memory put off learning because the month's budget was spent, learned when the next
+ * month starts. A pointer only, cascading from its connection (invariant 3).
+ */
+export const postponedItems = pgTable(
+  "memory_postponed_items",
+  {
+    orgId: text("org_id").notNull(),
+    connectionId: text("connection_id").notNull(),
+    app: text("app", { enum: MEMORY_APPS }).notNull(),
+    sourceRef: text("source_ref").notNull(),
+    postponedAt: timestamp("postponed_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.connectionId, table.app, table.sourceRef] }),
+    index("memory_postponed_items_org_id_idx").on(table.orgId),
+    foreignKey({
+      name: "memory_postponed_items_connection_fk",
+      columns: [table.orgId, table.connectionId],
+      foreignColumns: [connections.orgId, connections.id],
+    }).onDelete("cascade"),
   ],
 );
 

@@ -6,8 +6,8 @@ import { tablesHolding } from "@/db/testing/content-scan";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs, type FixtureOrg } from "@/db/testing/two-org-fixture";
 import { backfillConnection } from "@/features/discovery/server";
-import { listAccessLog } from "@/features/memory/server";
-import type { Ctx } from "@/lib/ctx";
+import { listAccessLog, startMemory } from "@/features/memory/server";
+import { systemCtx, type Ctx } from "@/lib/ctx";
 import { connectMailbox, daysAgo } from "@/testing/connect-helpers";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import {
@@ -53,6 +53,8 @@ async function learnFrom(
 async function setup() {
   const { orgA } = await seedTwoOrgs();
   await fundOrg(orgA.id);
+  // Memory learns nothing until an admin starts it.
+  await startMemory(systemCtx(orgA.id), { monthlyBudget: 1000 });
   await learnFrom(orgA, orgA.admin.ctx, orgA.admin.email, "Hi, I lead procurement at Acme.", role);
   await learnFrom(
     orgA,

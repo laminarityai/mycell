@@ -2,7 +2,12 @@
 // learning makes (classify, extraction, embeddings): for memory's tests, and for any feature's
 // tests that read memory (workflows, the builder).
 import { grantCredits } from "@/features/credits/server";
-import { deleteRemovedItem, learnFromItem, rereadAccess } from "@/features/memory/server";
+import {
+  deleteRemovedItem,
+  learnFromItem,
+  rereadAccess,
+  startMemory,
+} from "@/features/memory/server";
 import {
   changedItemSchema,
   itemToLearnSchema,
@@ -17,16 +22,25 @@ import { fakeInngest } from "./fake-inngest";
 // the events learned from, and those followed.
 const learned = new Set<string>();
 
+const TO_LEARN = new Set(["discovery/item.stored", "memory/item.queued"]);
+// Events sent without an ID (memory's own queued items) are told apart by when they were sent.
+const seenWithoutId = new WeakSet<object>();
+
 /**
- * Learns every item discovery announced since the last call, in order, as memory's job does:
- * as the org's system ctx. Returns each item's outcome.
+ * Learns every item discovery announced, or memory queued, since the last call, in order, as
+ * memory's job does: as the org's system ctx. Returns each item's outcome.
  */
 export async function learnStoredItems(orgId: string): Promise<LearnOutcome[]> {
   const outcomes: LearnOutcome[] = [];
-  for (const event of fakeInngest.sent("discovery/item.stored")) {
-    const key = event.id ?? JSON.stringify(event.data);
-    if (learned.has(key) || event.data.orgId !== orgId) continue;
-    learned.add(key);
+  for (const event of fakeInngest.sent()) {
+    if (!TO_LEARN.has(event.name) || event.data.orgId !== orgId) continue;
+    if (event.id === undefined) {
+      if (seenWithoutId.has(event)) continue;
+      seenWithoutId.add(event);
+    } else {
+      if (learned.has(event.id)) continue;
+      learned.add(event.id);
+    }
     outcomes.push(await learnFromItem(systemCtx(orgId), itemToLearnSchema.parse(event.data)));
   }
   return outcomes;
@@ -50,8 +64,15 @@ export async function followAppChanges(orgId: string): Promise<void> {
   }
 }
 
-export async function withCredits(orgId: string): Promise<void> {
+/** Grants the org credits, without starting memory: it learns nothing yet. */
+export async function grantOnly(orgId: string): Promise<void> {
   await grantCredits(systemCtx(orgId), 1000);
+}
+
+/** Grants the org credits, and starts memory with a budget it won't reach, as an admin would. */
+export async function withCredits(orgId: string): Promise<void> {
+  await grantOnly(orgId);
+  await startMemory(systemCtx(orgId), { monthlyBudget: 1000 });
 }
 
 // The labels classify chooses from, for each kind of item.
@@ -60,14 +81,21 @@ const LABELS = {
   document: ["business", "personal", "template", "other"],
 };
 
-/** The classify call's answer about an email (or a doc): Jev picks `label` (business, …). */
-export function classifiedAs(label: string, kind: keyof typeof LABELS = "email"): void {
+/**
+ * The classify call's answer about an email (or a doc): Jev picks `label` (business, …), at the
+ * cost the gateway reports, if any.
+ */
+export function classifiedAs(
+  label: string,
+  kind: keyof typeof LABELS = "email",
+  options: { costUsd?: number } = {},
+): void {
   // They sum to 1, as Jev's do.
   const others = LABELS[kind].length - 1;
   const probabilities = Object.fromEntries(
     LABELS[kind].map((other) => [other, other === label ? 1 - others * 0.02 : 0.02]),
   );
-  fakeAiGateway.decision({ choice: label, probabilities });
+  fakeAiGateway.decision({ choice: label, probabilities }, options);
 }
 
 /** What the extraction model answers, in the shape memory's structured output asks for. */

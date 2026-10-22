@@ -11,6 +11,7 @@ import { z } from "zod";
 import { forOrg, type OrgScopedDb } from "@/db/for-org";
 import { callModel } from "@/features/models/server";
 import type { Ctx } from "@/lib/ctx";
+import { MEMORY_USAGE } from "./budget";
 import type { Extracted, ExtractedObject } from "./extract";
 import { facts, memoryObjects, objectKeys } from "./schema";
 
@@ -151,6 +152,7 @@ async function isSameObject(
       ),
     ].join("\n"),
     schema: confirmationSchema,
+    ...MEMORY_USAGE,
   });
   return output.same;
 }

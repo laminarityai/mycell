@@ -30,7 +30,13 @@ export function ReviewActions({ reviewId, draftText }: { reviewId: string; draft
         <input type="hidden" name="reviewId" value={reviewId} />
         <label className="flex flex-col gap-1 text-sm font-medium">
           Your reply
-          <Textarea name="text" defaultValue={draftText} rows={10} required />
+          {/* React resets the form after its action: a refused send starts from what it sent. */}
+          <Textarea
+            name="text"
+            defaultValue={approveResult.values?.text ?? draftText}
+            rows={10}
+            required
+          />
         </label>
         <div className="flex gap-2">
           <Button type="submit" disabled={busy}>
@@ -108,7 +114,13 @@ export function HeldSendActions({
         {editable.map((field) => (
           <label key={field.name} className="flex flex-col gap-1 text-sm font-medium">
             {field.description}
-            <Textarea name={`field:${field.name}`} defaultValue={field.value} rows={6} required />
+            {/* React resets the form after its action: a refused send starts from what it sent. */}
+            <Textarea
+              name={`field:${field.name}`}
+              defaultValue={approveResult.values?.[`field:${field.name}`] ?? field.value}
+              rows={6}
+              required
+            />
           </label>
         ))}
         <div className="flex gap-2">
@@ -198,7 +210,7 @@ export function HandOffForm({
           <select
             name="toUserId"
             required
-            defaultValue=""
+            defaultValue={result.values?.toUserId ?? ""}
             className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm dark:bg-input/30"
           >
             <option value="" disabled>

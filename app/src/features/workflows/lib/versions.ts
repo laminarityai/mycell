@@ -9,7 +9,7 @@ import { sameValue } from "@/features/spec/diff";
 import type { Spec } from "@/features/spec/types";
 import { findTagsByName } from "@/features/tags/server";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
-import { ConflictError, ForbiddenError, NotFoundError } from "@/lib/errors";
+import { ConflictError, ForbiddenError, InvariantError, NotFoundError } from "@/lib/errors";
 import type { PublishSettings, WorkflowVersion } from "../types";
 import { workflows, workflowVersions, workflowVersionTags } from "./schema";
 import { validateWorkflowSpec } from "./validation";
@@ -79,9 +79,8 @@ export async function publishWorkflow(
           publishedBy: ctx.userId,
         })
       ).at(0);
-      // An insert returns its row, so this is a bug, not something a user can act on: it's
-      // left a plain Error for the action boundary to rethrow (src/lib/errors.ts, actionError).
-      if (inserted === undefined) throw new Error("insert returned no version");
+      // An insert returns its row, so this is a bug, not something a user can act on.
+      if (inserted === undefined) throw new InvariantError("insert returned no version");
       await tx.insert(
         workflowVersionTags,
         tags.map((tag) => ({ workflowVersionId: inserted.id, tagId: tag.id })),

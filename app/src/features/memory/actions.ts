@@ -2,9 +2,9 @@
 
 import { refresh } from "next/cache";
 import { z } from "zod";
-import { getCtx } from "@/features/orgs/server";
+import { runFormAction } from "@/features/orgs/form-action";
 import type { Ctx } from "@/lib/ctx";
-import { actionError, type ActionResult } from "@/lib/errors";
+import type { ActionResult } from "@/lib/errors";
 import {
   addExclusion,
   forgetPerson,
@@ -72,16 +72,12 @@ export async function forgetPersonAction(
   _previous: ForgetResult,
   form: FormData,
 ): Promise<ForgetResult> {
-  const ctx = await getCtx();
-  const input = forgetInput.parse(Object.fromEntries(form));
-  let facts: number;
-  try {
-    ({ facts } = await forgetPerson(ctx, input));
-  } catch (error) {
-    return actionError(error);
-  }
-  refresh();
-  return { facts };
+  return runFormAction(form, forgetInput, (ctx, input) => forgetPerson(ctx, input), {
+    after: ({ facts }) => {
+      refresh();
+      return { facts };
+    },
+  });
 }
 
 /** An admin lets one of our staff read memory for one case. */
@@ -96,20 +92,11 @@ export async function revokeStaffConsentAction(_previous: ActionResult, form: Fo
   return run(form, revokeInput, (ctx, { consentId }) => revokeStaffConsent(ctx, consentId));
 }
 
-// Parse the form, run one server function as the signed-in user, then refresh the page or
-// return the typed error's message.
-async function run<T>(
+// Runs one server function on the form as the signed-in user, then refreshes the page.
+function run<T>(
   form: FormData,
   schema: z.ZodType<T>,
   write: (ctx: Ctx, input: T) => Promise<unknown>,
 ): Promise<ActionResult> {
-  const ctx = await getCtx();
-  const input = schema.parse(Object.fromEntries(form));
-  try {
-    await write(ctx, input);
-  } catch (error) {
-    return actionError(error);
-  }
-  refresh();
-  return {};
+  return runFormAction(form, schema, write, { after: refresh });
 }

@@ -2,6 +2,7 @@ import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
 import prettier from "eslint-config-prettier/flat";
+import jsxA11y from "eslint-plugin-jsx-a11y";
 import tseslint from "typescript-eslint";
 
 // Next.js files that must use a default export.
@@ -27,6 +28,53 @@ const driverImports = {
   message: "Database drivers belong in src/db. Query org data through forOrg(ctx).",
 };
 
+// The server renders dates in its own time zone and the browser in the reader's, so formatting
+// one anywhere but <DateTime> risks a hydration error and a time the reader can't place.
+const dateFormatting = [
+  {
+    selector: "CallExpression[callee.property.name=/^toLocale(Date|Time)?String$/]",
+    message:
+      "Show dates with <DateTime> (src/components/date-time.tsx): the server's time zone isn't the reader's.",
+  },
+  {
+    selector:
+      ":matches(NewExpression, CallExpression)[callee.object.name='Intl'][callee.property.name='DateTimeFormat']",
+    message:
+      "Show dates with <DateTime> (src/components/date-time.tsx): the server's time zone isn't the reader's.",
+  },
+];
+
+// A plain Error can't be told from a bug, so a caller couldn't catch only the failures it
+// expects. src/db and tests may throw one.
+const plainErrors = [
+  {
+    selector: "ThrowStatement > NewExpression[callee.name='Error']",
+    message: "Throw a typed error from @/lib/errors (InvariantError for a can't-happen state).",
+  },
+];
+const PLAIN_ERRORS_ALLOWED = [
+  "src/db/**",
+  "src/testing/**",
+  "src/**/tests/**",
+  "src/**/*.test.{ts,tsx}",
+];
+
+// A Server Action goes through runFormAction (or runValueAction), which parses its input inside
+// the `try`, turns typed errors into messages and hands a failed form back what it sent.
+const ACTION_HELPER =
+  "Go through runFormAction or runValueAction from @/features/orgs/form-action.";
+const actionImports = [
+  { name: "@/features/orgs/server", importNames: ["getCtx"], message: ACTION_HELPER },
+  { name: "./server", importNames: ["getCtx"], message: ACTION_HELPER },
+  { name: "@/lib/forms", importNames: ["parseForm", "parseValue"], message: ACTION_HELPER },
+  { name: "@/lib/errors", importNames: ["actionError"], message: ACTION_HELPER },
+];
+const actionParsing = {
+  selector:
+    "CallExpression[callee.property.name=/^(safeParse|parse)(Async)?$/][callee.object.name!='JSON']",
+  message: `Don't parse an action's input by hand: a ZodError would reach the user. ${ACTION_HELPER}`,
+};
+
 export default defineConfig([
   ...nextVitals,
   ...nextTs,
@@ -39,6 +87,19 @@ export default defineConfig([
   {
     files: ["**/*.{js,mjs,cjs}"],
     extends: [tseslint.configs.disableTypeChecked],
+  },
+  {
+    // eslint-config-next registers the plugin but turns on few of its rules; these are the rest.
+    files: ["**/*.tsx"],
+    rules: {
+      ...jsxA11y.flatConfigs.recommended.rules,
+      // Our ui components that render a form control, so a label wrapping one is tied to it, and
+      // a label's text may sit in a span holding its name and hint.
+      "jsx-a11y/label-has-associated-control": [
+        "error",
+        { controlComponents: ["Input", "Textarea", "Checkbox", "Switch"], depth: 3 },
+      ],
+    },
   },
   {
     files: ["src/**/*.{ts,tsx}", "e2e/**/*.ts", "scripts/**/*.ts"],
@@ -74,6 +135,34 @@ export default defineConfig([
     ignores: ["src/features/orgs/lib/**"],
     rules: {
       "no-restricted-imports": ["error", { patterns: [rawClientImport, driverImports] }],
+    },
+  },
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/components/date-time.tsx"],
+    rules: { "no-restricted-syntax": ["error", ...dateFormatting, ...plainErrors] },
+  },
+  {
+    // A rule's options replace, not merge: here the date rule is repeated without plainErrors.
+    files: PLAIN_ERRORS_ALLOWED,
+    rules: { "no-restricted-syntax": ["error", ...dateFormatting] },
+  },
+  {
+    files: ["src/components/date-time.tsx"],
+    rules: { "no-restricted-syntax": ["error", ...plainErrors] },
+  },
+  {
+    // A rule's options replace, not merge, so the restrictions above are repeated here.
+    files: ["src/features/*/actions.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: actionImports,
+          patterns: [rawClientImport, authSchemaImport, driverImports],
+        },
+      ],
+      "no-restricted-syntax": ["error", ...dateFormatting, ...plainErrors, actionParsing],
     },
   },
   { files: ["src/env.ts"], rules: { "no-restricted-properties": "off" } },

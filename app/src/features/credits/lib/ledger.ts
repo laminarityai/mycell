@@ -5,12 +5,13 @@ import { and, desc, eq, gte } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { env } from "@/env";
 import type { Ctx } from "@/lib/ctx";
-import { ForbiddenError, OutOfCreditsError, ValidationError } from "@/lib/errors";
+import { ForbiddenError, InvariantError, OutOfCreditsError, ValidationError } from "@/lib/errors";
 import type { LedgerEntry, SpendingQuery, Usage } from "../types";
 import { creditLedger } from "./schema";
 
 /** The org's credits left. */
 export async function getBalance(ctx: Ctx): Promise<number> {
+  // Summed in the database: every model call checks it, and the ledger grows by one row per call.
   return forOrg(ctx).sum(creditLedger, creditLedger.amount);
 }
 
@@ -53,9 +54,8 @@ export async function recordUsage(ctx: Ctx, usage: Usage): Promise<LedgerEntry> 
     purpose: usage.purpose ?? null,
   });
   const row = inserted.at(0);
-  // An insert returns its row, so this is a bug, not something a user can act on: it's left a
-  // plain Error for the action boundary to rethrow (src/lib/errors.ts, actionError).
-  if (row === undefined) throw new Error("The usage entry wasn't recorded.");
+  // An insert returns its row, so this is a bug, not something a user can act on.
+  if (row === undefined) throw new InvariantError("The usage entry wasn't recorded.");
   return toEntry(row);
 }
 
@@ -72,7 +72,7 @@ export async function grantCredits(ctx: Ctx, amount: number): Promise<LedgerEntr
   });
   const row = inserted.at(0);
   // A bug, as above.
-  if (row === undefined) throw new Error("The grant wasn't recorded.");
+  if (row === undefined) throw new InvariantError("The grant wasn't recorded.");
   return toEntry(row);
 }
 

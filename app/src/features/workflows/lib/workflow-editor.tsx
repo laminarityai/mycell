@@ -55,6 +55,10 @@ export function PublishDialog({
   );
   const names = new Set(tags.map((tag) => tag.name));
   const gone = chosen.filter((name) => !names.has(name));
+  // React resets the form after its action, and Radix's checkbox and switch reset to how they
+  // mounted, so each is keyed by how it starts: after a refusal, it mounts again as it was sent.
+  const ticked = new Set(result.lists?.tag ?? chosen);
+  const handoffOn = result.values === undefined ? handoff : result.values.handoff === "on";
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <div>
@@ -83,9 +87,10 @@ export function PublishDialog({
               tags.map((tag) => (
                 <label key={tag.id} className="flex items-center gap-2 text-sm">
                   <Checkbox
+                    key={String(ticked.has(tag.name))}
                     name="tag"
                     value={tag.name}
-                    defaultChecked={chosen.includes(tag.name)}
+                    defaultChecked={ticked.has(tag.name)}
                   />
                   {tag.name}
                 </label>
@@ -99,7 +104,12 @@ export function PublishDialog({
             )}
           </fieldset>
           <label className="flex items-start gap-2 text-sm">
-            <Switch name="handoff" defaultChecked={handoff} className="mt-0.5" />
+            <Switch
+              key={String(handoffOn)}
+              name="handoff"
+              defaultChecked={handoffOn}
+              className="mt-0.5"
+            />
             <span>
               Reviews can be handed on
               <span className="block text-muted-foreground">

@@ -3,7 +3,9 @@
 // through the proxy for display only, every time, and never stored (invariant 8).
 import { z } from "zod";
 import { buildableConnections, proxyGet } from "@/features/connections/server";
+import { SourceRequestError } from "@/features/connections/types";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
+import { NangoRequestError, NotFoundError } from "@/lib/errors";
 import type { RecentMessages } from "../types";
 import { GMAIL } from "./gmail";
 
@@ -45,8 +47,9 @@ export async function recentMessages(
     tryable.map(async (connection) => {
       try {
         return { connection, messages: await newest(ctx, connection.id), unavailable: false };
-      } catch {
-        // Gmail or Nango refused; the picker says so for this connection alone.
+      } catch (error) {
+        // The picker says so for this connection alone; anything else is for the error page.
+        if (!isUnavailable(error)) throw error;
         return { connection, messages: [], unavailable: true };
       }
     }),
@@ -75,6 +78,17 @@ export async function recentMessages(
       unavailable,
     };
   });
+}
+
+// Why a connection's inbox couldn't be read, when the picker can say so: Gmail or Nango refused
+// (SourceRequestError), Nango didn't answer (NangoRequestError), or the connection is gone
+// (NotFoundError). A database error or a bug is none of these.
+function isUnavailable(error: unknown): boolean {
+  return (
+    error instanceof SourceRequestError ||
+    error instanceof NangoRequestError ||
+    error instanceof NotFoundError
+  );
 }
 
 async function newest(ctx: Ctx, connectionId: string): Promise<Recent[]> {

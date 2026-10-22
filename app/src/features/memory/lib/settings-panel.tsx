@@ -1,3 +1,4 @@
+import { DateTime } from "@/components/date-time";
 import {
   Table,
   TableBody,
@@ -11,7 +12,6 @@ import { AddExclusionForm, BudgetForm, RemoveExclusionButton } from "./settings-
 import { EXCLUSION_KIND_NAMES, type MemorySettings } from "../types";
 
 const credits = new Intl.NumberFormat("en", { maximumFractionDigits: 1 });
-const day = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeZone: "UTC" });
 
 /**
  * The admin's memory screen: the estimate and the start, the monthly budget and this month's
@@ -57,7 +57,7 @@ function Learning({ settings }: { settings: MemorySettings }) {
       ) : (
         <>
           <p className="text-sm">
-            Started {day.format(started.startedAt)}. This month memory has spent{" "}
+            Started <DateTime value={started.startedAt} day />. This month memory has spent{" "}
             {credits.format(settings.spentThisMonth)} of its {credits.format(started.monthlyBudget)}{" "}
             credits.
             {settings.postponedItems > 0

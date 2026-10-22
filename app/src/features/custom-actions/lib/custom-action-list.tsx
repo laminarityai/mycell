@@ -1,6 +1,7 @@
 // The custom actions page's list (ADR-0018): each custom action the company's admins accepted, in
 // plain words, who accepted it and when, and the workflows that use it.
 import Link from "next/link";
+import { DateTime } from "@/components/date-time";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { UserNames } from "@/features/orgs/types";
@@ -68,8 +69,7 @@ function ActionCard({
           rule.
         </p>
         <p className="text-muted-foreground">
-          Accepted by {acceptedBy} on{" "}
-          {action.acceptedAt.toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}
+          Accepted by {acceptedBy} on <DateTime value={action.acceptedAt} />
         </p>
         <WorkflowUses uses={uses} />
       </CardContent>

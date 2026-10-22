@@ -1,5 +1,7 @@
 "use client";
 
+// React resets a form after its action, even a refused one, so each field starts from what a
+// refused form sent (`values`).
 import { useActionState, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,6 +26,7 @@ export function CreateTagForm() {
       <div className="flex gap-2">
         <input
           name="name"
+          defaultValue={result.values?.name ?? ""}
           required
           maxLength={40}
           placeholder="support-team"
@@ -41,9 +44,16 @@ export function CreateTagForm() {
 
 /** Rename and delete controls for one tag. */
 export function TagNameControls({ tagId, name }: { tagId: string; name: string }) {
-  const [renameResult, rename, renaming] = useActionState(renameTagAction, {});
-  const [deleteResult, remove, deleting] = useActionState(deleteTagAction, {});
   const [editing, setEditing] = useState(false);
+  const [renameResult, rename, renaming] = useActionState(
+    async (previous: ActionResult, form: FormData) => {
+      const renamed = await renameTagAction(previous, form);
+      if (renamed.error === undefined) setEditing(false);
+      return renamed;
+    },
+    {},
+  );
+  const [deleteResult, remove, deleting] = useActionState(deleteTagAction, {});
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   return (
@@ -54,7 +64,7 @@ export function TagNameControls({ tagId, name }: { tagId: string; name: string }
             <input type="hidden" name="tagId" value={tagId} />
             <input
               name="name"
-              defaultValue={name}
+              defaultValue={renameResult.values?.name ?? name}
               required
               maxLength={40}
               aria-label={`New name for ${name}`}
@@ -162,7 +172,12 @@ export function TagUsersControls({
       {others.length === 0 ? null : (
         <form action={assign} className="flex gap-2">
           <input type="hidden" name="tagId" value={tagId} />
-          <select name="userId" aria-label="User to tag" className={fieldClass}>
+          <select
+            name="userId"
+            defaultValue={assignResult.values?.userId}
+            aria-label="User to tag"
+            className={fieldClass}
+          >
             {others.map((user) => (
               <option key={user.id} value={user.id}>
                 {user.name}

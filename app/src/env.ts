@@ -58,11 +58,11 @@ const envSchema = z.object({
   CREDIT_ESTIMATE_SMART: positiveNumber("50"),
   CREDIT_ESTIMATE_JUDGE: positiveNumber("50"),
   // The key store (ADR-0020, ADR-0024): AWS KMS holds one key per org, made on first use under
-  // the alias `alias/<KMS_ALIAS_PREFIX>/org/<org ID>`. The key store needs KMS_REGION; without
-  // it, encrypting or decrypting fails. The access key pair is an IAM user's; leave both unset to
-  // use the AWS SDK's own credential chain (a role) instead. Vercel reserves AWS_REGION and the
-  // AWS_* key names, hence the KMS_ prefix. KMS_ENDPOINT points at a KMS other than AWS's
-  // regional one, such as LocalStack.
+  // the alias `alias/<KMS_ALIAS_PREFIX>/org/<org ID>`. The key store needs KMS_REGION, which is
+  // required unless INNGEST_DEV=1, like the Inngest keys. The access key pair is an IAM user's;
+  // leave both unset to use the AWS SDK's own credential chain (a role) instead. Vercel reserves
+  // AWS_REGION and the AWS_* key names, hence the KMS_ prefix. KMS_ENDPOINT points at a KMS other
+  // than AWS's regional one, such as LocalStack.
   KMS_REGION: z.string().min(1).optional(),
   KMS_ACCESS_KEY_ID: z.string().min(1).optional(),
   KMS_SECRET_ACCESS_KEY: z.string().min(1).optional(),
@@ -73,24 +73,39 @@ const envSchema = z.object({
   KMS_ENDPOINT: z.url().optional(),
 });
 
-export const env = envSchema
-  .superRefine((parsed, context) => {
-    if (parsed.INNGEST_DEV) return;
-    for (const key of [
-      "INNGEST_EVENT_KEY",
-      "INNGEST_SIGNING_KEY",
-      "INNGEST_ENCRYPTION_KEY",
-    ] as const) {
-      if (parsed[key] === undefined) {
-        context.addIssue({ code: "custom", path: [key], message: "Required unless INNGEST_DEV=1" });
-      }
+/**
+ * Away from the local Inngest dev server (production, and CI's build and the e2e tests, which
+ * run as production does), what production needs is required at boot rather than found missing
+ * when a job or a held send first uses it.
+ */
+const REQUIRED_UNLESS_DEV = [
+  "INNGEST_EVENT_KEY",
+  "INNGEST_SIGNING_KEY",
+  "INNGEST_ENCRYPTION_KEY",
+  "KMS_REGION",
+] as const;
+
+const checkedEnvSchema = envSchema.superRefine((parsed, context) => {
+  if ((parsed.KMS_ACCESS_KEY_ID === undefined) !== (parsed.KMS_SECRET_ACCESS_KEY === undefined)) {
+    context.addIssue({
+      code: "custom",
+      path: ["KMS_SECRET_ACCESS_KEY"],
+      message: "KMS_ACCESS_KEY_ID and KMS_SECRET_ACCESS_KEY are set together or not at all",
+    });
+  }
+  if (parsed.INNGEST_DEV) return;
+  for (const key of REQUIRED_UNLESS_DEV) {
+    if (parsed[key] === undefined) {
+      context.addIssue({ code: "custom", path: [key], message: "Required unless INNGEST_DEV=1" });
     }
-    if ((parsed.KMS_ACCESS_KEY_ID === undefined) !== (parsed.KMS_SECRET_ACCESS_KEY === undefined)) {
-      context.addIssue({
-        code: "custom",
-        path: ["KMS_SECRET_ACCESS_KEY"],
-        message: "KMS_ACCESS_KEY_ID and KMS_SECRET_ACCESS_KEY are set together or not at all",
-      });
-    }
-  })
-  .parse(process.env);
+  }
+});
+
+export type Env = z.output<typeof checkedEnvSchema>;
+
+/** The environment `source` describes, checked; throws with every issue. */
+export function parseEnv(source: Readonly<Record<string, string | undefined>>): Env {
+  return checkedEnvSchema.parse(source);
+}
+
+export const env = parseEnv(process.env);

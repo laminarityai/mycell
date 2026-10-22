@@ -27,6 +27,8 @@ const e2eEnv = {
   INNGEST_EVENT_KEY: "e2e-inngest-event-key",
   INNGEST_SIGNING_KEY: "signkey-e2e-00000000000000000000000000000000",
   INNGEST_ENCRYPTION_KEY: "e2e-inngest-encryption-key-of-32-chars-at-least",
+  // Required away from the Inngest dev server; no e2e test encrypts, so it's never reached.
+  KMS_REGION: "us-east-1",
   AI_GATEWAY_API_KEY: "e2e-ai-gateway-api-key",
   AI_GATEWAY_BASE_URL: `http://localhost:${String(fakeAiGatewayPort)}/v4/ai`,
   MODEL_CLASSIFY: "typesafe-ai/jev-1.14.0",

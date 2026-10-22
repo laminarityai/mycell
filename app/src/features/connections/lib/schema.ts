@@ -1,5 +1,6 @@
 // Connections, where each ingested app stands on them, and the connect attempts that lead to
 // them. All three tables are tenant-owned.
+import "server-only";
 import {
   boolean,
   foreignKey,

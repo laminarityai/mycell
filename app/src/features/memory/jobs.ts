@@ -1,4 +1,5 @@
 // Memory's Inngest functions. Thin: each calls server.ts, as the org's system ctx (ADR-0009).
+import "server-only";
 import { cron } from "inngest";
 import { listOrgIds } from "@/features/orgs/server";
 import { systemCtx } from "@/lib/ctx";

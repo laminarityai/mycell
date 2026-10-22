@@ -54,7 +54,12 @@ process.env.KMS_ACCESS_KEY_ID = "test-kms-access-key-id";
 process.env.KMS_SECRET_ACCESS_KEY = "test-kms-secret-access-key";
 
 export default defineConfig({
-  resolve: { tsconfigPaths: true },
+  resolve: {
+    tsconfigPaths: true,
+    // Server code imports `server-only`, which throws unless bundled for the server (the
+    // react-server condition). Tests run it on the server, so it gets that empty module here too.
+    alias: { "server-only": `${import.meta.dirname}/node_modules/server-only/empty.js` },
+  },
   // Prompt files load as Turbopack bundles them (next.config.ts).
   plugins: [
     {

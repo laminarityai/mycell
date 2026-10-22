@@ -1,6 +1,7 @@
 // Runtime's tables. runs and run_steps record what each run did: derived data only, never
 // message content or generated text (invariant 8). Both cascade from their connection
 // (invariant 3).
+import "server-only";
 import {
   doublePrecision,
   foreignKey,

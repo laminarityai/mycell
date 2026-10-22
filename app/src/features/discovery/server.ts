@@ -1,5 +1,6 @@
 // The discovery feature. For now it is ingest only: connectors, backfill, polling, events and
 // object refs. Mining, ranking and shadow eval join it in M2.
+import "server-only";
 export { backfillConnection, markBackfillFailed } from "./lib/backfill";
 export { findEventsByObject } from "./lib/find";
 export { pollConnection } from "./lib/poll";

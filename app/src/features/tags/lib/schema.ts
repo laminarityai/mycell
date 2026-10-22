@@ -1,5 +1,6 @@
 // Tags and who has them. Both tables are tenant-owned; composite foreign keys keep a tag and
 // the member it's assigned to in the same org as the assignment.
+import "server-only";
 import { foreignKey, pgTable, primaryKey, text, timestamp, unique } from "drizzle-orm/pg-core";
 import { member } from "@/db/auth-schema";
 

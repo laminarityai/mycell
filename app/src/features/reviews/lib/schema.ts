@@ -1,6 +1,7 @@
 // Reviews: one row per item a run left waiting for a person in its app's pending form
 // (ADR-0013). Pointers only: never the message, the draft or an edit (invariant 8). A review
 // goes with its connection and its run's (invariant 3), and with its owner's membership.
+import "server-only";
 import { foreignKey, index, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
 import { member } from "@/db/auth-schema";
 import { connections } from "@/features/connections/lib/schema";

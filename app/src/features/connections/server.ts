@@ -1,6 +1,7 @@
 // The connections feature: links from a user or the org to an external account, made through
 // Nango. It is the only feature that talks to Nango.
 // Which connection a run reaches another registered app through, for custom actions.
+import "server-only";
 export { connectionToApp } from "./lib/app-connection";
 export { startConnect } from "./lib/connect";
 export { deleteMemberConnectionsOf, disconnect } from "./lib/disconnect";

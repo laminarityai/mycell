@@ -1,3 +1,4 @@
+import "server-only";
 import { z } from "zod";
 
 // The only place that reads process.env. Everything else imports `env`.

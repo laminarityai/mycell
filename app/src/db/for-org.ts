@@ -1,6 +1,7 @@
 // The org-scoped handle (ADR-0003): the only way feature code reaches tenant tables.
 // Every read, count, update, and delete is filtered to ctx.orgId, and every insert takes its
 // org_id from ctx. A caller can't name another org: org_id isn't accepted as input.
+import "server-only";
 import {
   and,
   count,

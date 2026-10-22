@@ -1,5 +1,6 @@
 // The credit ledger (ADR-0010): one row per grant or model call. The balance is the sum of
 // `amount`. Usage rows stay when a workflow, run or connection goes: they are the org's bill.
+import "server-only";
 import { boolean, index, numeric, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { modelRoleSchema, type ModelRole } from "@/features/spec/types";
 import { CREDIT_PURPOSES } from "../types";

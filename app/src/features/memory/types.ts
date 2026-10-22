@@ -136,8 +136,9 @@ export const ACCESS_LOG_RETENTION_DAYS = 365;
 
 /**
  * One read of memory as the access log shows it: who or what read, when, and which objects and
- * how many facts, never the query or what the facts say. An object's name shows only when its
- * viewer can see a fact about it (otherwise it's null), so the log widens no one's view.
+ * how many facts, never the query or what the facts say. An object's name shows only when the
+ * log's viewer can see one of the facts read that is about it or links to it (otherwise it's
+ * null), so the log widens no one's view.
  */
 export type AccessLogEntry = {
   id: string;

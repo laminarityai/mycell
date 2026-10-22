@@ -13,7 +13,7 @@ import type { PendingItem } from "@/features/runtime/adapters";
 import type { ReviewSharing } from "@/features/workflows/types";
 import { reviewSharing, workflowNames } from "@/features/workflows/server";
 import type { Ctx } from "@/lib/ctx";
-import { ForbiddenError, NotFoundError } from "@/lib/errors";
+import { ForbiddenError, InvariantError, NotFoundError } from "@/lib/errors";
 import type { HandOff, NewReview, Review, ReviewSummary } from "../types";
 import { reviews } from "./schema";
 
@@ -42,7 +42,7 @@ export async function createReview(ctx: Ctx, review: NewReview): Promise<string>
   );
   const ofItem = and(eq(reviews.runId, review.runId), eq(reviews.itemRef, review.itemRef));
   const row = (await db.select(reviews, { where: ofItem })).at(0);
-  if (row === undefined) throw new Error("The review wasn't stored.");
+  if (row === undefined) throw new InvariantError("The review wasn't stored.");
   return row.id;
 }
 

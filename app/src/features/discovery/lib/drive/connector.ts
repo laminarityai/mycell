@@ -4,6 +4,7 @@
 // changes feed also reports files removed: deleted, no longer shared with the account (Drive's
 // `removed`), or put in the trash.
 import { SourceRequestError } from "@/features/connections/types";
+import { InvariantError } from "@/lib/errors";
 import type { Connector, NormalizedEvent, SourceClient } from "../connector";
 import {
   blamesPageToken,
@@ -22,7 +23,7 @@ const PAGE_SIZE = 1000;
 export const driveConnector: Connector = {
   async readStartCursor(client) {
     const token = await client.get("/drive/v3/changes/startPageToken", startPageTokenSchema);
-    if (token === null) throw new Error("Drive has no start page token for this account");
+    if (token === null) throw new InvariantError("Drive has no start page token for this account");
     return token.startPageToken;
   },
 
@@ -71,7 +72,7 @@ export const driveConnector: Connector = {
         continue;
       }
       if (page.newStartPageToken === undefined) {
-        throw new Error("Drive's last changes page had no newStartPageToken");
+        throw new InvariantError("Drive's last changes page had no newStartPageToken");
       }
       // The last page's token: the next poll starts where this one ended.
       return {

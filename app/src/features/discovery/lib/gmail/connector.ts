@@ -3,6 +3,7 @@
 // does, and messages deleted for good or moved to the trash, which it reports removed. Deleting
 // in Gmail's own app moves a message to the trash, where it stays 30 days before it's deleted
 // for good, so a trashed message counts as removed: what Mycel learned from it goes at once.
+import { InvariantError } from "@/lib/errors";
 import type { Connector, NormalizedEvent, SourceClient } from "../connector";
 import { historyListSchema, messageListSchema, messageSchema, profileSchema } from "./api";
 import { normalizeMessage } from "./normalize";
@@ -25,7 +26,7 @@ const EXCLUDED_LABELS = ["SPAM", "TRASH", "DRAFT"];
 export const gmailConnector: Connector = {
   async readStartCursor(client) {
     const profile = await client.get("/gmail/v1/users/me/profile", profileSchema);
-    if (profile === null) throw new Error("Gmail has no profile for this mailbox");
+    if (profile === null) throw new InvariantError("Gmail has no profile for this mailbox");
     return profile.historyId;
   },
 

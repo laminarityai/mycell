@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { DateTime } from "@/components/date-time";
 import { Button } from "@/components/ui/button";
 import { switchWorkflowOffAction, switchWorkflowOnAction } from "../actions";
 import type { WorkflowSwitch } from "../types";
@@ -37,9 +38,14 @@ export function SwitchForm({
       <form action={switchOff} className="flex flex-col gap-2 text-sm">
         <input type="hidden" name="workflowId" value={workflowId} />
         <p>
-          {compact
-            ? `On for ${label}`
-            : `On for ${label} since ${current.since.toLocaleString("en-US")}. It runs on each new inbound message from then on.`}
+          {compact ? (
+            `On for ${label}`
+          ) : (
+            <>
+              On for {label} since <DateTime value={current.since} />. It runs on each new inbound
+              message from then on.
+            </>
+          )}
         </p>
         <div>
           <Button type="submit" variant="outline" disabled={switchingOff}>
@@ -70,7 +76,7 @@ export function SwitchForm({
         <select
           name="connectionId"
           className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
-          defaultValue={connections[0]?.id}
+          defaultValue={onResult.values?.connectionId ?? connections[0]?.id}
         >
           {connections.map((connection) => (
             <option key={connection.id} value={connection.id}>

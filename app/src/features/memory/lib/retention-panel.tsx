@@ -1,6 +1,7 @@
 // The settings page's sections on who sees what and how long it's kept: company-wide lists, the
 // retention window, forgetting a person, and the way to the access log.
 import Link from "next/link";
+import { DateTime } from "@/components/date-time";
 import {
   Table,
   TableBody,
@@ -16,8 +17,6 @@ import {
   RetentionForm,
   UnmarkCompanyWideListButton,
 } from "./retention-controls";
-
-const day = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeZone: "UTC" });
 
 export function CompanyWideLists({ settings }: { settings: MemorySettings }) {
   return (
@@ -46,7 +45,9 @@ export function CompanyWideLists({ settings }: { settings: MemorySettings }) {
             {settings.companyWideLists.map((list) => (
               <TableRow key={list.address}>
                 <TableCell className="font-medium">{list.address}</TableCell>
-                <TableCell>{day.format(list.markedAt)}</TableCell>
+                <TableCell>
+                  <DateTime value={list.markedAt} day />
+                </TableCell>
                 <TableCell className="text-right">
                   <UnmarkCompanyWideListButton address={list.address} />
                 </TableCell>

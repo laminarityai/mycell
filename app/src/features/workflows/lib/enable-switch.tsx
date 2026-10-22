@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { ConnectButton, ReconnectButton } from "@/features/connections/ui";
+import type { ActionResult } from "@/lib/errors";
 import { disableWorkflowAction, enableWorkflowAction } from "../actions";
 import type { EnableResult, WorkflowSwitch } from "../types";
 
@@ -37,7 +38,7 @@ export function EnableSwitch({
   const on = current?.kind === "member" && current.status === "on";
   const paused = current?.kind === "member" && current.status === "paused";
 
-  function show(result: EnableResult | { error: string }) {
+  function show(result: EnableResult | ActionResult) {
     if ("error" in result) {
       setError(result.error);
       return;

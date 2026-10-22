@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DateTime } from "@/components/date-time";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -24,9 +25,6 @@ const OPERATIONS: Record<MemoryReadOperation, string> = {
   search: "Searched",
   read_object: "Read",
 };
-
-const when = (at: Date) =>
-  `${at.toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" })} UTC`;
 
 /**
  * The access log (ADR-0024): who or what read memory, when, and which objects, never what it
@@ -63,7 +61,9 @@ export function AccessLog({
           <TableBody>
             {entries.map((entry) => (
               <TableRow key={entry.id} className="align-top">
-                <TableCell className="whitespace-nowrap">{when(entry.readAt)}</TableCell>
+                <TableCell className="whitespace-nowrap">
+                  <DateTime value={entry.readAt} />
+                </TableCell>
                 <TableCell className="whitespace-normal">
                   <Reader reader={entry.reader} workflowNames={workflowNames} />
                 </TableCell>
@@ -170,11 +170,15 @@ export function StaffConsents({ consents, now }: { consents: StaffConsent[]; now
                   <TableCell className="whitespace-normal">{consent.reason}</TableCell>
                   <TableCell>{consent.grantedBy.name}</TableCell>
                   <TableCell className="whitespace-normal">
-                    {consent.revokedAt !== null
-                      ? `Revoked ${when(consent.revokedAt)}`
-                      : active
-                        ? `Until ${when(consent.expiresAt)}`
-                        : `Expired ${when(consent.expiresAt)}`}
+                    {consent.revokedAt !== null ? (
+                      <>
+                        Revoked <DateTime value={consent.revokedAt} />
+                      </>
+                    ) : (
+                      <>
+                        {active ? "Until" : "Expired"} <DateTime value={consent.expiresAt} />
+                      </>
+                    )}
                   </TableCell>
                   <TableCell>
                     {active ? <RevokeStaffConsentButton consentId={consent.id} /> : null}

@@ -87,14 +87,18 @@ export class ValidationError extends Error {
 /** One reason a spec was refused, at the path of the field it's about (`SpecIssue` in `spec`). */
 export type SpecInvalidIssue = { path: (string | number)[]; message: string };
 
-/** A spec failed save-time validation. It carries every issue at once, not just the first. */
+/**
+ * A spec failed save-time validation. It carries every issue at once, not just the first, and a
+ * message counting them unless one says better what's wrong (a spec that isn't JSON).
+ */
 export class SpecInvalidError extends Error {
-  constructor(readonly issues: SpecInvalidIssue[]) {
-    super(
-      issues.length === 1
-        ? "The spec has 1 issue."
-        : `The spec has ${String(issues.length)} issues.`,
-    );
+  constructor(
+    readonly issues: SpecInvalidIssue[],
+    message = issues.length === 1
+      ? "The spec has 1 issue."
+      : `The spec has ${String(issues.length)} issues.`,
+  ) {
+    super(message);
     this.name = "SpecInvalidError";
   }
 }
@@ -112,9 +116,16 @@ export class OutOfCreditsError extends Error {
 
 /**
  * What a Server Action returns: `error` holds a message for the user when the write failed,
- * and `issues` every reason a spec was refused.
+ * and `issues` every reason a spec was refused. A failed form also gets back the fields it sent
+ * (`values`, and `lists` for those read as lists), since React empties a form after its action
+ * even when it failed: the form starts its fields from them to keep what the user typed.
  */
-export type ActionResult = { error?: string; issues?: SpecInvalidIssue[] };
+export type ActionResult = {
+  error?: string;
+  issues?: SpecInvalidIssue[];
+  values?: Record<string, string>;
+  lists?: Record<string, string[]>;
+};
 
 /**
  * The action-boundary half of the error rule: a typed error becomes its user-facing message,

@@ -2,7 +2,11 @@
 // like catalog actions, and a custom action in a registered app other than Google needs a
 // connection to that app of the kind the credentials name.
 import { beforeEach, describe, expect, it } from "vitest";
-import { readOutlookMessage, storeCustomAction } from "@/db/testing/custom-actions";
+import {
+  readOutlookMessage,
+  replyToOutlookMessage,
+  storeCustomAction,
+} from "@/db/testing/custom-actions";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { ForbiddenError, ValidationError } from "@/lib/errors";
@@ -103,6 +107,46 @@ describe("a custom read in a workflow", () => {
     await expect(enable(member.ctx, workflowId)).rejects.toThrow(ValidationError);
     await connectApp(member.ctx, "microsoft", member.email);
     expect(await enable(member.ctx, workflowId)).toEqual({ enabled: true });
+  });
+});
+
+describe("a custom write in a workflow", () => {
+  const reply = {
+    id: "reply",
+    type: "tool",
+    action: "microsoft.reply-to-message",
+    input: { messageId: "AAMk-1", comment: "Thanks, we'll be in touch." },
+  };
+
+  it("pauses members' enablements when a new version starts using it in an app they have", async () => {
+    const { admin, member, workflowId } = await memberEnabled();
+    await connectApp(member.ctx, "microsoft", member.email);
+    await saveWorkflow(admin.ctx, {
+      workflowId,
+      name: "Labels",
+      spec: withSteps([outlook, label]),
+    });
+    await publishWorkflow(admin.ctx, workflowId);
+    expect(await enable(member.ctx, workflowId)).toEqual({ enabled: true });
+    await storeCustomAction(admin.ctx, replyToOutlookMessage());
+
+    await saveWorkflow(admin.ctx, {
+      workflowId,
+      name: "Labels",
+      spec: withSteps([outlook, label, reply]),
+    });
+    await publishWorkflow(admin.ctx, workflowId);
+
+    expect((await listEnablements(admin.ctx, workflowId)).map((one) => one.status)).toEqual([
+      "paused",
+    ]);
+    expect((await getVisibleWorkflow(member.ctx, workflowId)).switch).toMatchObject({
+      status: "paused",
+      pausedChange: { maxRiskRaised: { to: "external_send" } },
+    });
+    expect(
+      (await getVisibleWorkflow(member.ctx, workflowId)).switch?.pausedChange?.newApps,
+    ).toBeUndefined();
   });
 });
 

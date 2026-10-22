@@ -229,3 +229,11 @@ A Gmail label, Drive folder or similar that an admin keeps out of memory for the
 
 **Do-not-learn list**:
 The addresses of people an admin asked Mycel to forget, which memory never learns about again.
+
+**Access log**:
+The record of every read of memory: who or what read it (a person, the builder chat, a workflow run, our staff), when, and which objects and facts, never what they say. Admins see their company's; members see the reads of facts from their own sources.
+_Avoid_: Audit trail, history
+
+**Staff consent**:
+An admin's permission for one person at Mycel to read the company's memory for one case, for a few days, in that admin's view. Our staff can't read memory without one.
+_Avoid_: Access grant, support access

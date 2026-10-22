@@ -4,7 +4,7 @@ import { seedTwoOrgs, seedUser } from "@/db/testing/two-org-fixture";
 import { removeUser } from "@/features/orgs/server";
 import { backfillConnection } from "@/features/discovery/server";
 import { systemCtx } from "@/lib/ctx";
-import { ForbiddenError, NotFoundError } from "@/lib/errors";
+import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import { connectMailbox, daysAgo } from "@/testing/connect-helpers";
 import {
   grantStaffConsent,
@@ -179,9 +179,15 @@ describe("staff consents", () => {
     const grant = (input: { staffEmail: string; reason: string; days: number }) =>
       grantStaffConsent(orgA.admin.ctx, input);
 
-    await expect(grant({ staffEmail: STAFF, reason: CASE, days: 31 })).rejects.toThrow();
-    await expect(grant({ staffEmail: STAFF, reason: " ", days: 7 })).rejects.toThrow();
-    await expect(grant({ staffEmail: "sam", reason: CASE, days: 7 })).rejects.toThrow();
+    await expect(grant({ staffEmail: STAFF, reason: CASE, days: 31 })).rejects.toThrow(
+      ValidationError,
+    );
+    await expect(grant({ staffEmail: STAFF, reason: " ", days: 7 })).rejects.toThrow(
+      ValidationError,
+    );
+    await expect(grant({ staffEmail: "sam", reason: CASE, days: 7 })).rejects.toThrow(
+      ValidationError,
+    );
     expect(await listStaffConsents(orgA.admin.ctx)).toEqual([]);
   });
 });

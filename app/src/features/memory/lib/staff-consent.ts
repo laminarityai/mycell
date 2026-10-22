@@ -8,8 +8,9 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { listUsers, userNames } from "@/features/orgs/server";
 import { type Ctx, requireAdmin } from "@/lib/ctx";
-import { ForbiddenError, NotFoundError } from "@/lib/errors";
+import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import {
+  MAX_STAFF_CONSENT_DAYS,
   staffConsentInputSchema,
   type MemoryObject,
   type MemorySearch,
@@ -29,7 +30,13 @@ type ConsentRow = typeof staffConsents.$inferSelect;
 /** An admin lets one of our staff read memory, in that admin's view, for one case. */
 export async function grantStaffConsent(ctx: Ctx, input: StaffConsentInput): Promise<StaffConsent> {
   requireAdmin(ctx);
-  const { staffEmail, reason, days } = staffConsentInputSchema.parse(input);
+  const parsed = staffConsentInputSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new ValidationError(
+      `Name the person at Mycel by email address, say what the case is, and allow 1 to ${String(MAX_STAFF_CONSENT_DAYS)} days.`,
+    );
+  }
+  const { staffEmail, reason, days } = parsed.data;
   const now = new Date();
   const [row] = await forOrg(ctx).insert(staffConsents, {
     id: randomUUID(),

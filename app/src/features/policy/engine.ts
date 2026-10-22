@@ -1,5 +1,5 @@
 // The policy engine (invariant 4): a spec's risk comes only from the fixed levels of the actions
-// in the company's action set, which the caller resolves and hands in (ADR-0018).
+// in the org's action set, which the caller resolves and hands in (ADR-0018).
 // Pure: no IO, no ctx.
 import { z } from "zod";
 import { eachStep, mapStepLists, type PlacedStep } from "@/features/spec/tree";
@@ -37,7 +37,7 @@ export function maxRisk(spec: Spec, actions: ActionSet): RiskLevel {
       throw new SpecInvalidError([
         {
           path,
-          message: `"${used.name}" isn't a catalog action or one of the company's custom actions.`,
+          message: `"${used.name}" isn't a catalog action or one of the org's custom actions.`,
         },
       ]);
     }
@@ -170,7 +170,7 @@ function actionIssues(spec: Spec, actions: ActionSet): SpecIssue[] {
     if (action === undefined) {
       issues.push({
         path,
-        message: `"${name}" isn't a catalog action or one of the company's custom actions.`,
+        message: `"${name}" isn't a catalog action or one of the org's custom actions.`,
       });
     } else if (
       step.type === "tool" &&

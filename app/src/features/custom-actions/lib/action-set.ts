@@ -1,4 +1,4 @@
-// A company's custom actions and its action set (ADR-0018): every action its workflows may use.
+// An org's custom actions and its action set (ADR-0018): every action its workflows may use.
 // Saving, checking and publishing a workflow, running it, Try it and the builder chat each
 // resolve the set once and hand it to the policy engine and everything else that looks an action
 // up. Custom actions are only ever inserted: a changed one is a new one, with a new name.
@@ -8,18 +8,18 @@ import { forOrg, type OrgScopedDb } from "@/db/for-org";
 import type { ActionSet } from "@/features/policy/types";
 import { sameValue } from "@/features/spec/diff";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
-import { ConflictError, ValidationError } from "@/lib/errors";
-import { actionSetWith, checkCustomAction } from "../description";
+import { ConflictError } from "@/lib/errors";
+import { actionSetWith, checkedCustomActions } from "../description";
 import type { CustomActionRecord, StoredCustomAction } from "../types";
 import { customActions } from "./schema";
 
-/** The actions the caller's company may use: the catalog, then its custom actions. */
+/** The actions the caller's org may use: the catalog, then its custom actions. */
 export async function getActionSet(ctx: Ctx): Promise<ActionSet> {
   return actionSetWith(await listCustomActions(ctx));
 }
 
 /**
- * The company's custom actions, oldest first, for any of its users: they're as much a part of
+ * The org's custom actions, oldest first, for any of its users: they're as much a part of
  * its workflows as the catalog is, and hold nothing from anyone's account.
  */
 export async function listCustomActions(ctx: Ctx): Promise<StoredCustomAction[]> {
@@ -38,7 +38,7 @@ export async function listCustomActions(ctx: Ctx): Promise<StoredCustomAction[]>
 
 /**
  * Stores the custom actions an admin accepted, as accepted by them from `proposalId`. Each is
- * checked again, and its level set again by the fixed rule. One the company already has, the
+ * checked again, and its level set again by the fixed rule. One the org already has, the
  * same, is left as it is; one with a taken name that does something else is ConflictError,
  * since a stored action never changes. `db` is a transaction to store them in, when the caller
  * stores them together with what uses them.
@@ -51,11 +51,7 @@ export async function storeCustomActions(
 ): Promise<void> {
   requireAdmin(ctx);
   if (records.length === 0) return;
-  const checked = records.map((record) => {
-    const check = checkCustomAction(record);
-    if (!check.ok) throw new ValidationError(check.issues.join(" "));
-    return check.action;
-  });
+  const checked = checkedCustomActions(records);
   const existing = await db.select(customActions, {
     where: inArray(
       customActions.name,
@@ -90,6 +86,6 @@ export async function storeCustomActions(
 
 function takenName(name: string): ConflictError {
   return new ConflictError(
-    `The company already has a custom action named "${name}" that does something else. A stored custom action never changes: a changed one needs a new name, such as "${name}-v2".`,
+    `This org already has a custom action named "${name}" that does something else. A stored custom action never changes: a changed one needs a new name, such as "${name}-v2".`,
   );
 }

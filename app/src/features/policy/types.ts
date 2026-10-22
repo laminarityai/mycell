@@ -68,7 +68,7 @@ export type CustomRequest = CustomCall & {
 };
 
 /**
- * A company's custom action (ADR-0018): one call to a registered app that the builder chat
+ * An org's custom action (ADR-0018): one call to a registered app that the builder chat
  * described, with its risk level set by the fixed rule (`custom-risk.ts`). It is looked up and
  * checked like a catalog action.
  */
@@ -88,13 +88,13 @@ export type CustomAction = {
   readonly request: CustomRequest;
 };
 
-/** Any action in an action set: our catalog's, or one of the company's custom actions. */
+/** Any action in an action set: our catalog's, or one of the org's custom actions. */
 export type Action = CatalogAction | CustomAction;
 
 /**
- * The actions one company's workflows may use, resolved once per company (ADR-0018) and handed
+ * The actions one org's workflows may use, resolved once per org (ADR-0018) and handed
  * to the policy engine and to everything else that looks an action up: the catalog, then the
- * company's custom actions.
+ * org's custom actions.
  */
 export type ActionSet = {
   /** Every action in the set, in order: the catalog's first. */

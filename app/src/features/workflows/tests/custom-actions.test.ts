@@ -2,7 +2,13 @@
 // like catalog actions, and a custom action in a registered app other than Google needs a
 // connection to that app of the kind the credentials name.
 import { beforeEach, describe, expect, it } from "vitest";
-import { readOutlookMessage, storeCustomAction } from "@/db/testing/custom-actions";
+import {
+  checkedCustomAction,
+  readOutlookMessage,
+  replyToOutlookMessage,
+  storeCustomAction,
+} from "@/db/testing/custom-actions";
+import { heldReplySpec } from "@/db/testing/held-sends";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { ForbiddenError, ValidationError } from "@/lib/errors";
@@ -103,6 +109,45 @@ describe("a custom read in a workflow", () => {
     await expect(enable(member.ctx, workflowId)).rejects.toThrow(ValidationError);
     await connectApp(member.ctx, "microsoft", member.email);
     expect(await enable(member.ctx, workflowId)).toEqual({ enabled: true });
+  });
+});
+
+describe("custom actions a save brings, as accepting a proposal does", () => {
+  async function adminWithApps() {
+    const { orgA } = await seedTwoOrgs();
+    await connectGoogle(orgA.admin.ctx, orgA.admin.email);
+    await connectApp(orgA.admin.ctx, "microsoft", orgA.admin.email);
+    return orgA.admin.ctx;
+  }
+
+  it("are checked again, so the spec is validated at the level the rule sets now", async () => {
+    const admin = await adminWithApps();
+    // The proposal row's stored level, from before a rule change or simply wrong.
+    const stale = { ...checkedCustomAction(replyToOutlookMessage()), risk: "read" as const };
+
+    const saved = await saveWorkflow(admin, {
+      name: "Outlook replies",
+      spec: heldReplySpec(),
+      newCustomActions: { actions: [stale], proposalId: "proposal-1" },
+    });
+
+    expect(saved.maxRisk).toBe("external_send");
+    expect(saved.inserted).toEqual([
+      { stepId: "reply-approval", after: "reply", action: "microsoft.reply-to-message" },
+    ]);
+  });
+
+  it("are refused when the stored record isn't a custom action", async () => {
+    const admin = await adminWithApps();
+    const malformed = { name: "microsoft.reply-to-message", risk: "read" } as never;
+
+    await expect(
+      saveWorkflow(admin, {
+        name: "Outlook replies",
+        spec: heldReplySpec(),
+        newCustomActions: { actions: [malformed], proposalId: "proposal-1" },
+      }),
+    ).rejects.toThrow(ValidationError);
   });
 });
 

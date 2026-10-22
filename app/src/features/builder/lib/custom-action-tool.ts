@@ -57,7 +57,7 @@ export const describeCustomActionTool: ToolDefinition<
         return {
           ok: false,
           issues: [
-            `The company already has a custom action named "${name}" that does something else, and a stored custom action never changes. Give the changed one a new name, such as "${name}-v2".`,
+            `This org already has a custom action named "${name}" that does something else, and a stored custom action never changes. Give the changed one a new name, such as "${name}-v2".`,
           ],
           message: NOT_ADDED,
         };
@@ -66,7 +66,7 @@ export const describeCustomActionTool: ToolDefinition<
         ok: true,
         name,
         risk,
-        message: "The company already has this custom action: use it by name in propose_spec.",
+        message: "This org already has this custom action: use it by name in propose_spec.",
       };
     }
     turn.customActions = [...turn.customActions.filter((each) => each.name !== name), check.action];

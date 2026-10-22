@@ -1,5 +1,5 @@
 // A custom action's description (ADR-0018): its checks, and the action it makes for an action
-// set. Pure: no IO and no ctx, so the browser builds the company's action set from the same plain
+// set. Pure: no IO and no ctx, so the browser builds the org's action set from the same plain
 // records the server stores (`ActionSetProvider` in `workflows`).
 import { z } from "zod";
 import { appUrl, REGISTERED_APPS } from "@/features/connections/registered-apps";
@@ -8,6 +8,7 @@ import { catalogActionSet } from "@/features/policy/catalog";
 import { customActionRisk } from "@/features/policy/custom-risk";
 import type { ActionSet, CustomAction, CustomRequest } from "@/features/policy/types";
 import type { ConditionField, ValueType } from "@/features/spec/types";
+import { ValidationError } from "@/lib/errors";
 import { bodyOf, bodyPathIssues } from "./lib/body-paths";
 import {
   customActionDescriptionSchema,
@@ -51,6 +52,20 @@ export function checkCustomAction(input: unknown): CustomActionCheck {
   }
   if (issues.length > 0 || !risk.ok) return { ok: false, issues };
   return { ok: true, action: { ...description, risk: risk.risk } };
+}
+
+/**
+ * Each record checked again, as if the builder chat had just described it: parsed, and its
+ * level set by the rule as it is now, whatever level the record carries. A proposal's custom
+ * actions are stored as JSON, so accepting one checks them with this before anything uses them.
+ * ValidationError, with every issue, when one fails.
+ */
+export function checkedCustomActions(records: readonly unknown[]): CustomActionRecord[] {
+  return records.map((record) => {
+    const check = checkCustomAction(record);
+    if (!check.ok) throw new ValidationError(check.issues.join(" "));
+    return check.action;
+  });
 }
 
 const PLACEHOLDER = /\{([^{}]*)\}/g;
@@ -195,7 +210,7 @@ export function customActionWords(record: CustomActionRecord): CustomActionWords
   };
 }
 
-/** The catalog, then the company's custom actions: an action set. */
+/** The catalog, then the org's custom actions: an action set. */
 export function actionSetWith(records: readonly CustomActionRecord[]): ActionSet {
   return actionSetOf([...catalogActionSet.actions, ...records.map(customActionOf)]);
 }

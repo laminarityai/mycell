@@ -9,7 +9,7 @@ The builder chat is primary (ADR-0007), so it comes before mining. Milestones ke
 | Milestone | State       | Spec | Notes                                                                                                                                         |
 | --------- | ----------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | M0        | Done        | #1   |                                                                                                                                               |
-| M1        | In progress | #11  | Merged: connect, org connections, disconnect cascade, Gmail backfill. Open: polling #15, reconciliation #16 (PR #31), Drive #17, dogfood #19. |
+| M1        | In progress | #11  | Merged: connect, org connections, disconnect cascade, Gmail backfill, polling #15, reconciliation #16, Drive #17 (PR #59). Open: dogfood #19. |
 | M3        | Done        | #33  | Spec, policy and runtime (PR #74). Open: dogfood check #42. Decisions in ADR-0010 to ADR-0012 and ADR-0014.                                   |
 | M6        | Done        | #43  | Builder chat (PR #76). Open: dogfood check #50. Capability requests moved to M13 (#101).                                                      |
 | M12       | Done        | #77  | Branches and the workflow graph (PR #88). Open: dogfood check #87. Decisions in ADR-0015.                                                     |

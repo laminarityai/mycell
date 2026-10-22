@@ -1,7 +1,7 @@
-// The one way runtime calls a model. Each call resolves its role to the org's model (invariant
-// 6), passes the credit check before anything is sent, and records exactly one usage entry
-// with the gateway's cost once the gateway answers, whether the call succeeded or not
-// (invariant 7). Errors leave as ModelCallError, with no content in them (invariant 8).
+// The one way to call a model. Each call resolves its role to the org's model (invariant 6),
+// passes the credit check before anything is sent, and records exactly one usage entry with the
+// gateway's cost once the gateway answers, whether the call succeeded or not (invariant 7).
+// Errors leave as ModelCallError, with no content in them (invariant 8).
 import {
   Experimental_DecisionRefusalError,
   generateText,

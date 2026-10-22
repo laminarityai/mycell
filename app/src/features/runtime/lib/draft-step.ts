@@ -5,11 +5,11 @@
 // review of it, which the person approves, edits or declines on the Reviews page (or finishes in
 // Gmail), and the run goes on to its later steps.
 import { z } from "zod";
+import { callModel } from "@/features/models/server";
 import { findAction } from "@/features/policy/catalog";
 import { findStep, stepsAbove } from "@/features/spec/tree";
 import type { Step } from "@/features/spec/types";
 import type { Json } from "../types";
-import { callModel } from "./call-model";
 import { RunStepError } from "./failures";
 import { messageRef, messageText, threadText } from "./gmail";
 import { resolveInput } from "./references";

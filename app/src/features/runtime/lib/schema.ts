@@ -1,7 +1,6 @@
-// Runtime's tables. model_roles holds an org's own choice of model for a model role; a role with
-// no row uses the global default from config (invariant 6). runs and run_steps record what each
-// run did: derived data only, never message content or generated text (invariant 8). Both
-// cascade from their connection (invariant 3).
+// Runtime's tables. runs and run_steps record what each run did: derived data only, never
+// message content or generated text (invariant 8). Both cascade from their connection
+// (invariant 3).
 import {
   doublePrecision,
   foreignKey,
@@ -9,7 +8,6 @@ import {
   integer,
   jsonb,
   pgTable,
-  primaryKey,
   text,
   timestamp,
   unique,
@@ -22,18 +20,6 @@ import { enablements, workflowVersions } from "@/features/workflows/lib/schema";
 import { runStatuses, runStepStatuses, type Json } from "../types";
 
 const modelRoleEnum = modelRoleSchema.options as [ModelRole, ...ModelRole[]];
-
-export const modelRoles = pgTable(
-  "model_roles",
-  {
-    orgId: text("org_id").notNull(),
-    role: text("role", { enum: modelRoleEnum }).notNull(),
-    // A gateway `provider/model` ID.
-    modelId: text("model_id").notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-  },
-  (table) => [primaryKey({ columns: [table.orgId, table.role] })],
-);
 
 /** One run of a pinned workflow version on one triggering message. */
 export const runs = pgTable(

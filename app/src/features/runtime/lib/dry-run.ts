@@ -7,6 +7,7 @@
 // check and are recorded, marked as a dry run's (invariant 7).
 import { randomUUID } from "node:crypto";
 import { requireBuildableConnection } from "@/features/connections/server";
+import { CREDIT_ESTIMATES } from "@/features/models/server";
 import { eachStep } from "@/features/spec/tree";
 import type { Spec } from "@/features/spec/types";
 import { checkWorkflowSpec } from "@/features/workflows/server";
@@ -14,7 +15,6 @@ import { checkCredits } from "@/features/credits/server";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { OutOfCreditsError, SpecInvalidError } from "@/lib/errors";
 import type { DryRunEffect, DryRunResult, DryRunStep } from "../types";
-import { CREDIT_ESTIMATES } from "./call-model";
 import { dryRunActions } from "./dry-run-actions";
 import { attemptStep } from "./executors";
 import { describeFailure } from "./failures";

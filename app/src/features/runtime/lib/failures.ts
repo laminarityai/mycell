@@ -3,8 +3,8 @@
 // another attempt could help, and how the run ends if it was the last.
 import { isForeignKeyViolation } from "@/db/errors";
 import { SourceRequestError } from "@/features/connections/types";
+import { ModelCallError } from "@/features/models/types";
 import { NotFoundError, OutOfCreditsError } from "@/lib/errors";
-import { ModelCallError } from "../types";
 import { StepCheckError, type StepCheck } from "./checks";
 
 export const runStepErrorCodes = [

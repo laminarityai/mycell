@@ -2,7 +2,8 @@
 import type { ActionName } from "@/features/policy/catalog";
 import type { ModelRole, Spec, Step } from "@/features/spec/types";
 import type { Ctx } from "@/lib/ctx";
-import type { BranchPath, CallAttribution, Json } from "../types";
+import type { CallAttribution } from "@/features/models/types";
+import type { BranchPath, Json } from "../types";
 
 /**
  * What a step sees: the run it's in, the version's spec (so a draft can re-read a range an

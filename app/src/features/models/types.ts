@@ -1,0 +1,94 @@
+// The models feature's public types: what a model call takes and returns, and the error it
+// throws.
+import type { LanguageModel } from "ai";
+import type { z } from "zod";
+import type { ModelRole } from "@/features/spec/types";
+
+/** What a model call is for; recorded on its ledger entry. */
+export type CallAttribution = { workflowId?: string; runId?: string; dryRun?: boolean };
+
+/** A streamed call's model and its metering (`openMeteredStream`). */
+export type MeteredStream = {
+  modelId: string;
+  model: LanguageModel;
+  /** Adds one finished model step's cost, read from its `providerMetadata.gateway`. */
+  meterStep(providerMetadata: unknown): void;
+  /**
+   * Records the call's usage: the cost of every step metered so far. Only the first call
+   * records; later ones do nothing, so every way a stream can end may call it.
+   */
+  finish(outcome: "succeeded" | "failed"): Promise<void>;
+};
+
+/** A text call. */
+export type TextRequest = CallAttribution & {
+  system?: string;
+  prompt: string;
+  maxOutputTokens?: number;
+};
+
+/** A structured-output call: the answer must parse with `schema`. */
+export type ObjectRequest<T> = TextRequest & { schema: z.ZodType<T> };
+
+/** A model call's answer, the model the role resolved to, and what the gateway charged. */
+export type ModelResult<T> = { output: T; modelId: string; costUsd: number };
+
+/** A classify answer, normalized: Jev's own format never leaves the adapter. */
+export type Classification = {
+  label: string;
+  p: number;
+  modelId: string;
+  costUsd: number;
+  /**
+   * True when Jev failed (or the classify model isn't a decision model) and the `fast` role
+   * answered with a structured output instead; `p` is then the model's stated confidence.
+   */
+  fallback: boolean;
+};
+
+/** A classify request: which label, of 2 to 10, fits `state` best. */
+export type ClassifyRequest = CallAttribution & {
+  question: string;
+  labels: string[];
+  /** What to classify, such as the message's sender, subject and text, held in memory only. */
+  state: string;
+};
+
+export const modelCallErrorCodes = [
+  // The gateway answered with an error, or couldn't be reached.
+  "gateway_error",
+  // The answer didn't match the request's schema.
+  "off_schema",
+  // Jev refused to answer the question.
+  "refused",
+  // Jev answered without probabilities, so there is no confidence to gate on.
+  "no_probabilities",
+  // Jev chose something that isn't one of the labels.
+  "unknown_label",
+] as const;
+export type ModelCallErrorCode = (typeof modelCallErrorCodes)[number];
+
+/**
+ * A model call failed. Its message is built from codes only and it carries no `cause`, because
+ * Inngest stores a step's thrown error, and the AI SDK's errors quote the model's output
+ * (invariant 8).
+ */
+export class ModelCallError extends Error {
+  readonly code: ModelCallErrorCode;
+  readonly role: ModelRole;
+  readonly modelId: string;
+  /** The gateway's HTTP status, when it answered with an error. */
+  readonly status: number | undefined;
+
+  constructor(code: ModelCallErrorCode, role: ModelRole, modelId: string, status?: number) {
+    super(
+      `The ${role} model call to ${modelId} failed: ${code}` +
+        (status === undefined ? "." : ` (${String(status)}).`),
+    );
+    this.name = "ModelCallError";
+    this.code = code;
+    this.role = role;
+    this.modelId = modelId;
+    this.status = status;
+  }
+}

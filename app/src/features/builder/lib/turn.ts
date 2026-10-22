@@ -13,8 +13,8 @@ import {
   type TextStreamPart,
   type ToolSet,
 } from "ai";
-import { openMeteredStream } from "@/features/runtime/server";
-import type { MeteredStream } from "@/features/runtime/types";
+import { openMeteredStream } from "@/features/models/server";
+import type { MeteredStream } from "@/features/models/types";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { OutOfCreditsError, typedErrorMessage, ValidationError } from "@/lib/errors";
 import type { BuilderUIMessage, Notice, StoredPart } from "../types";

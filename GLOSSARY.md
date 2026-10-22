@@ -171,8 +171,12 @@ An app's own way of holding an action until a person approves it, such as a Gmai
 _Avoid_: Staged action, preview
 
 **Review**:
-One action waiting for a person's decision, shown on their Reviews page, which points at the waiting item in its app, or holds it when the app can't (ADR-0020). Its kind names the step that made it: `approval` (a draft an approval step left waiting) or `escalation` (a message an escalate step handed over).
+One action waiting for a person's decision, shown on their Reviews page, which points at the waiting item in its app, or holds it when the app can't (ADR-0020). Its kind names what it waits on: `approval` (a draft an approval step left waiting), `escalation` (a message an escalate step handed over) or `held_send` (a held send).
 _Avoid_: Approval for the review itself (it's the step, and the kind of review that step makes), task (a Google Tasks item), notification
+
+**Held send**:
+A custom write's request, which Mycel holds, encrypted with the company's key, until a person approves or declines its review, or for 30 days, when it expires (ADR-0020). Approving sends it once, with any edits to its editable text.
+_Avoid_: Queued message, outbox, staged send
 
 **Shared review**:
 A review from an org connection's run, seen by everyone who can see its workflow through its tags and by every admin. The first to act on it wins.

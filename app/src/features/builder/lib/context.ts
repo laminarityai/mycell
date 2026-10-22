@@ -4,6 +4,7 @@
 // entry in `contextProviders`, and the turn loop doesn't change. Each reads through another
 // feature's entry functions with the admin's ctx, so it sees only what the admin may.
 import { z } from "zod";
+import { registeredAppOf, registeredApps } from "@/features/connections/registered-apps";
 import { gmailConnections, listConnections } from "@/features/connections/server";
 import { getActionSet } from "@/features/custom-actions/server";
 import type { ConnectionSummary } from "@/features/connections/types";
@@ -145,6 +146,43 @@ const connections: ContextProvider = async (ctx) => {
   return { title: "Connections", content: lines.join("\n") };
 };
 
+/**
+ * The apps Mycel's team registered, which a custom action may call, each with the admin's own
+ * and the org's connections to it. Other members' connections are never listed (ADR-0001).
+ */
+const registeredAppsContext: ContextProvider = async (ctx) => {
+  const listing = await listConnections(ctx);
+  const lines = registeredApps.map((app) => {
+    const to = (connection: ConnectionSummary) => registeredAppOf(connection.source) === app.id;
+    const connected = [
+      ...listing.connections
+        .filter(to)
+        .map(({ accountEmail, id }) => `${accountEmail}, your own (connection ID ${id})`),
+      ...listing.orgConnections
+        .filter(to)
+        .map(({ accountEmail, id }) => `${accountEmail}, an org connection (connection ID ${id})`),
+    ];
+    return (
+      `- ${app.id} (${app.name}): ` +
+      (connected.length === 0
+        ? "neither you nor the org has connected it yet. A workflow using it needs a connection " +
+          "to it, made on the Connections page: your own for member credentials, the org's for " +
+          "org credentials."
+        : `connected as ${connected.join("; ")}.`)
+    );
+  });
+  return {
+    title: "Registered apps",
+    content: [
+      "The apps Mycel's team has registered. When no catalog action fits, a custom action may " +
+        "make one call to one of them: find the call with look_up_app_api, then describe it " +
+        "with describe_custom_action. Any other app isn't registered: say so, and file a " +
+        "capability request for it.",
+      ...lines,
+    ].join("\n"),
+  };
+};
+
 const tags: ContextProvider = async (ctx) => {
   const all = await listTags(ctx);
   return {
@@ -193,6 +231,7 @@ export const contextProviders: ContextProvider[] = [
   conditionFields,
   workflows,
   connections,
+  registeredAppsContext,
   tags,
   proposals,
 ];

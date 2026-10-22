@@ -2,20 +2,22 @@
 
 Build order for the v1 full loop, dogfooded on our own Google Workspace. Every milestone ends with something we can actually use ourselves. `docs/architecture.md` holds the architecture and invariants. This file only covers sequencing.
 
-The builder chat is primary (ADR-0007), so it comes before mining. Milestones keep their numbers as stable names and are listed in build order: **M0 → M1 → M3 → M6 → M12 → M5 → M11 → M2 → M4 → M7 → M8 → M9 → M10.**
+The builder chat is primary (ADR-0007), so it comes before mining. Milestones keep their numbers as stable names and are listed in build order: **M0 → M1 → M3 → M6 → M12 → M5 → M11 → M13 → M14 → M7 → M8 → M9 → M2 → M4 → M10.**
 
-## Status (2026-10-20)
+## Status (2026-10-21)
 
-| Milestone | State       | Spec | Notes                                                                                                                                                                       |
-| --------- | ----------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M0        | Done        | #1   |                                                                                                                                                                             |
-| M1        | In progress | #11  | Merged: connect, org connections, disconnect cascade, Gmail backfill. Open: polling #15, reconciliation #16 (PR #31), Drive #17, dogfood #19.                               |
-| M3        | Ready       | #33  | Grilled; tickets ready for agents. Decisions in ADR-0010 (credits slice), ADR-0011 (write access up front), ADR-0012 (what runs keep) and ADR-0014 (one Google connection). |
-| M6        | Ready       | #43  | Grilled; tickets ready for agents. Capability requests moved to M10.                                                                                                        |
-| M12       | Grilling    |      | Branches and the workflow graph. Decisions in ADR-0015 (paths that never join); research in `docs/research/workflow-builders.md`.                                           |
-| M5        | Ready       | #51  | Grilled; tickets ready for agents. Adds the Reviews page (ADR-0013), whose outcomes measure the builder ship bar in `docs/intent.md`.                                       |
-| M11       | Ready       | #67  | Calendar, Docs and Tasks, each through its pending form (ADR-0013); tickets ready for agents.                                                                               |
-| M2 onward | Not started |      |                                                                                                                                                                             |
+| Milestone | State       | Spec | Notes                                                                                                                                         |
+| --------- | ----------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| M0        | Done        | #1   |                                                                                                                                               |
+| M1        | In progress | #11  | Merged: connect, org connections, disconnect cascade, Gmail backfill. Open: polling #15, reconciliation #16 (PR #31), Drive #17, dogfood #19. |
+| M3        | Done        | #33  | Spec, policy and runtime (PR #74). Open: dogfood check #42. Decisions in ADR-0010 to ADR-0012 and ADR-0014.                                   |
+| M6        | Done        | #43  | Builder chat (PR #76). Open: dogfood check #50. Capability requests moved to M13 (#101).                                                      |
+| M12       | Done        | #77  | Branches and the workflow graph (PR #88). Open: dogfood check #87. Decisions in ADR-0015.                                                     |
+| M5        | Done        | #51  | Publish, tags, member toggles and the Reviews page (PR #89). Open: dogfood check #57.                                                         |
+| M11       | Ready       | #67  | Calendar, Docs and Tasks, each through its pending form (ADR-0013); tickets ready for agents.                                                 |
+| M13       | Ready       | #91  | Custom actions made by the builder chat. Decisions in ADR-0018 to ADR-0021; research in `docs/research/integrations/`. Tickets to cut.        |
+| M14       | Ready       | #92  | Memory foundation. Decisions in ADR-0022 to ADR-0025; research in `docs/research/memory-layer.md`. Tickets to cut.                            |
+| M7 onward | Not started |      | Build order after M14: M7, M8, M9 (the agent), then M2 (discovery) and M4, then M10.                                                          |
 
 ## M0: Scaffold and tenancy
 
@@ -28,7 +30,7 @@ The builder chat is primary (ADR-0007), so it comes before mining. Milestones ke
 ## Alongside M1: the discovery-lens experiment
 
 - Blind lists from everyone, a minimal synthetic generator seeded from them, and both lenses run in `experiments/discovery-lenses/` (`docs/research/discovery-multi-app.md`).
-- It doesn't block any milestone. A new ADR records its result against ADR-0008's decision rule.
+- It doesn't block any milestone, and no longer gates objects: ADR-0022 replaced that gate. M2's synthetic generator measures discovery instead.
 
 ## M1: Connect and ingest
 
@@ -86,18 +88,22 @@ Planned in this order, each its own milestone or part of one, after M12:
 - No new connection: the one Google connection already asks for them (ADR-0014). Mining them stays gated by ADR-0008.
 - **Done when:** a workflow that reads an email and books a meeting runs on one of our inboxes, and its guests are invited only after approval.
 
-## M2: Mining and suggestions
+## M13: Custom actions
 
-- **Entry task:** the eval-grade synthetic company generator (planted workflows and decoys), to measure discovery's recall and precision.
-- Embeddings, clustering, cluster labeling, template detection, request→response pairs.
-- Ranking, rung mapping, a suggestions UI with evidence (re-fetched via the proxy; visibility per ADR-0001). Suggestions and mined patterns feed the builder chat's context.
-- **Done when:** at least 3 of the top 5 suggestions on our own data are rated real and worth automating.
+- When no catalog action fits, the builder chat describes one call to a registered app as a custom action of the org, with its risk set by a fixed rule; anything but a read waits for a person every time (ADR-0018, ADR-0019).
+- Where an app can't hold a waiting send, Mycel holds it until its review ends (ADR-0020).
+- Capability requests (moved from M10): code the builder drafts, reviewed by our team into the catalog.
+- Our team registers apps in `docs/research/integrations/ranking.md`'s order.
+- **To revisit:** letting admins connect a vendor's MCP server by its address alone, once those servers leave preview and their terms allow apps like ours.
+- **Done when:** an admin describes a workflow in an app with no catalog actions, and it runs with each of its writes approved on the Reviews page.
 
-## M4: Shadow eval
+## M14: Memory foundation
 
-- Replay specs on held-out past cases; judge plus edit distance; show the results on suggestions.
-- Compare `classify` models on our own mail, e.g. Jev against Laya (`convaiinnovations/laya`), before changing an org's role table.
-- **Done when:** every suggestion shows "would have handled X of Y correctly".
+- Objects, links and facts built from Gmail, Drive docs and Calendar, in Postgres with pgvector: facts and pointers only, stated facts only, business items only within a monthly extraction budget (ADR-0022).
+- Each source record keeps its app's access list; a fact is visible to anyone who can see one of its sources; company-wide lists and org connections (ADR-0023). Admin exclusions.
+- Retention (with its source, at most 24 months), forget a person and the do-not-learn list, an access log of every read, a key per company in a KMS (ADR-0024). Slack and similar apps are searched live (ADR-0025).
+- Memory feeds workflows and the builder chat's context.
+- **Done when:** a workflow on one of our inboxes uses a fact about a customer drawn from another source its member can see, a member never sees a fact from a source they can't, and forgetting a person removes every trace of them from memory.
 
 ## M7: Credits and budgets
 
@@ -107,17 +113,32 @@ Planned in this order, each its own milestone or part of one, after M12:
 
 - Admin runs/traces view, retries, auto-pause after 3 consecutive failures, admin alerts in the app (Mycel sends no email in v1 unless decided otherwise), member "paused" badge.
 
-## M9: Continuous discovery and memory
+## M9: The agent
 
+- A Mycel agent in each person's own view of memory (ADR-0023): it reads memory, acts only through workflows and the Reviews page, and turns "remember this" into a fact owned by that person. **To grill when scoping M9.**
+
+## M2: Mining and suggestions
+
+- **Entry task:** the eval-grade synthetic company generator (planted workflows and decoys), to measure discovery's recall and precision.
+- Embeddings, clustering, cluster labeling, template detection, request→response pairs, built on M14's objects (ADR-0022).
+- Ranking, rung mapping, a suggestions UI with evidence (re-fetched via the proxy; visibility per ADR-0001). Suggestions and mined patterns feed the builder chat's context.
 - Nightly incremental mining; the dismissed-suggestion resurfacing rule.
 - Mine our own run logs (runs, approvals, edits, overrides) as a discovery source.
-- Memory extraction, dedupe/supersede, promotion; org memories added to builder chat context.
-- **To scope when grilling M9:** a company agent that draws on org memory. Settle what it can see and do (especially around member-scoped data) before building; `docs/intent.md` non-goal 5 rules out a personal agent for v1.
+- **Done when:** at least 3 of the top 5 suggestions on our own data are rated real and worth automating.
+
+## M4: Shadow eval
+
+- Replay specs on held-out past cases; judge plus edit distance; show the results on suggestions.
+- Compare `classify` models on our own mail, e.g. Jev against Laya (`convaiinnovations/laya`), before changing an org's role table.
+- **Done when:** every suggestion shows "would have handled X of Y correctly".
 
 ## M10: External readiness (first outside customer)
 
 - Google OAuth verification and the restricted-scope security assessment.
 - Outlook and the rest of Microsoft, and Slack once it has a pending form, through the same four parts (ADR-0013).
-- Capability requests: a structured ask for a new catalog action, raised by the builder chat (moved from M6).
 - Onboarding flow tuned for non-technical admins.
 - Revisit admin-level data access if a customer needs it (ADR-0008).
+
+## After M10: Memory over MCP
+
+- An MCP server giving each person's own view of memory to other AI tools, with the same access log and prompt-injection screening (ADR-0023, ADR-0024). **To grill when scoping:** how clients sign in and which tools it offers.

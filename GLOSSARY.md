@@ -42,8 +42,9 @@ _Avoid_: Shared connection
 **Owner scope**:
 Whether a piece of data belongs to one member or to the whole org.
 
-**Promotion**:
-The step by which a member-scoped fact becomes org-scoped.
+**Access list**:
+Who the source app says can see an item, kept on Mycel's record of it; a fact is visible to anyone who can see one of its sources.
+_Avoid_: Promotion (replaced), ACL, permissions
 
 **Event**:
 One normalized thing that happened in a source, such as an email received or sent or a Drive file created or modified, kept as its provenance and shape (time, people, thread, attachment metadata, MIME type) without its content. The code's type is `IngestedEvent`, to stay clear of the DOM's `Event`.
@@ -166,7 +167,7 @@ An app's own way of holding an action until a person approves it, such as a Gmai
 _Avoid_: Staged action, preview
 
 **Review**:
-One action waiting for a person's decision, shown on their Reviews page, which points at the waiting item in its app. Its kind names the step that made it: `approval` (a draft an approval step left waiting) or `escalation` (a message an escalate step handed over).
+One action waiting for a person's decision, shown on their Reviews page, which points at the waiting item in its app, or holds it when the app can't (ADR-0020). Its kind names the step that made it: `approval` (a draft an approval step left waiting) or `escalation` (a message an escalate step handed over).
 _Avoid_: Approval for the review itself (it's the step, and the kind of review that step makes), task (a Google Tasks item), notification
 
 **Shared review**:
@@ -177,8 +178,12 @@ _Avoid_: Team review, group review
 Giving one review to a colleague, who then sees it and acts on it from the review's own connection. A workflow allows it or not; a member's own review is handed on only by that member.
 _Avoid_: Delegation (that's connection access, ADR-0016), forwarding (that's sending the email on), reassign
 
+**Custom action**:
+An action one company's builder chat described as a single call to an app, usable only by that company, with its risk set by a fixed rule.
+_Avoid_: Builder-made action, integration, tool
+
 **Capability request**:
-A structured ask, raised when no catalog action fits, for our team to build a new one.
+Code the builder chat drafts when a custom action can't do the job, sent to our team to review into the catalog.
 _Avoid_: Feature request
 
 **Builder chat**:
@@ -206,5 +211,11 @@ _Avoid_: Limit, quota
 ### Memory
 
 **Fact**:
-A piece of business knowledge extracted from source data, carrying its source ref and owner scope.
-_Avoid_: Memory (for a single item), note, insight
+A short statement about an object that a source states or a person told Mycel, linked to the sources it came from.
+_Avoid_: Memory (for a single item), note, insight, inference
+
+**Exclusion**:
+A Gmail label, Drive folder or similar that an admin keeps out of memory for the whole company.
+
+**Do-not-learn list**:
+The addresses of people an admin asked Mycel to forget, which memory never learns about again.

@@ -13,7 +13,7 @@ An **admin** connects Google Workspace and describes workflows to the **builder 
 - First customer: our own company (dogfood). Mycel **reads** Gmail and Sheets/Drive and **acts** in Gmail, Sheets, Calendar, Docs and Tasks, all through one Google connection per account (ADR-0014). Slack, Outlook and the rest of Microsoft come after v1, through the same four parts (see Adding an app). Discord is not a source.
 - The full loop, kept thin at every stage: builder chat (fed by discovery and suggestions) → publish to tags → member toggles → run → observability.
 - No admin-level data access: no Admin SDK Reports API and no domain-wide delegation (ADR-0008).
-- Workflows may act **autonomously only on read and internal-reversible actions** (e.g. labels). Anything that reaches other people waits in its app's **pending form** (a Gmail draft, a Calendar event with no guests) until a human approves it on the Reviews page. Financial and destructive actions don't exist in v1.
+- Workflows may act **autonomously only on read and internal-reversible actions** (e.g. labels, task changes). Anything said in someone's name waits in its app's **pending form** (a Gmail draft, a Calendar event with no guests), or, where the app has none, is held by Mycel (ADR-0020), until a human approves it on the Reviews page (ADR-0019). Financial and destructive actions don't exist in v1.
 
 ## Stack
 
@@ -67,16 +67,18 @@ The eight invariants live in `AGENTS.md`, which is always loaded, so they have a
 
 - Raw email and file content is processed in memory and **not persisted**. We keep derived data: cleaned features, entities, cluster assignments, templates (with slots), embeddings, extracted memories, plus `source_ref` pointers (Gmail message/thread IDs, Drive file IDs).
 - When raw content is needed later (evidence view, shadow eval), it is **re-fetched through the Nango proxy**. Handle rate limits, and handle deleted sources (evidence goes stale and drops out).
-- Embeddings and memories count as sensitive. They are encrypted, scoped, and deleted with their connection.
+- Embeddings and memory count as sensitive. They are encrypted at rest by the database (Neon: AES-256, keys in a KMS), with a key per company only for what is never searched (ADR-0024); visible through their sources' access lists, and deleted with their source or connection, or after 24 months without a supporting source (ADR-0024). Backups and Inngest's run state age out within 30 days.
+- Every read of memory is logged (who, when, which object, never content); admins see their company's log, and our staff read memory only with the customer's documented consent (ADR-0024).
 - **Never use Nango syncs.** All content, including the 90-day backfill, goes through the Nango proxy, which doesn't store response bodies. Syncs would keep copies at Nango for up to 60 days that we can't purge.
 - Google: dogfood with an **Internal** OAuth app (no verification needed). Before the first external customer, complete Google OAuth verification and the restricted-scope security assessment.
 
-## Scopes and promotion
+## Scopes and visibility
 
 - Data from a member's personal connection is `owner_scope: member`. Data from org connections is `org`.
-- Org-visible surfaces (suggestions, builder chat, org memory) may show **aggregates and promoted items** from member scope: counts, cluster labels, slot-redacted templates, and business facts that pass the promotion step.
+- **Memory (ADR-0023):** each source record keeps the app's access list (a Drive file's sharing list, the people on an email or invite), checked whenever someone asks and re-read on the app's change events and nightly. A fact is visible to anyone who can see one of its sources. Company-wide means the app's own sharing, a group list an admin marked company-wide, or an org connection; for other groups only people whose own connected mailbox holds the item count.
+- Org-visible surfaces (suggestions, builder chat) may show **aggregates** from member scope: counts, cluster labels and slot-redacted templates.
 - **Evidence visibility (ADR-0001):** admins never see raw evidence from a member's mailbox unless that member shares specific examples. Evidence from org connections is shown raw to admins.
-- A personal agent (future) reads the member's own scope plus org scope. Org memory never contains un-promoted member facts.
+- The agent and the MCP server see exactly what the person using them can see.
 
 ## Discovery pipeline (`features/discovery`)
 
@@ -92,7 +94,7 @@ The eight invariants live in `AGENTS.md`, which is always loaded, so they have a
    - Each ingested app's state lives in `connections`' `ingest_states` (one row per app the connection may use, cascading from it): `backfilling` with a count of stored messages or file versions, then `active` or `failed`, the cursor, and when it last polled. The connections page shows one row per account, with its apps and the furthest-behind app's status. Nango's `auth` / `refresh` webhook with `success: false` sets the connection's `needs_reauth`, which polling skips; reconnecting (a Nango reconnect session, then its `override` webhook, if it reached the same account) or a later successful refresh clears it.
    - **Ingest persists no text.** Events and object refs hold no subject, body, snippet or file name; the decoded body exists only while its object refs are extracted, and Drive is never asked for names or content.
 2. **Normalize** into one event schema: `event_id, source, type, timestamp, actor, counterparty, direction, thread_id, text (cleaned, in memory only), object_refs, attachments_meta`. Strip quoted replies, signatures, and disclaimers.
-3. **Object refs** (ADR-0008): deterministic links only. Structured fields (addresses, attendees, file IDs) and regex for IDs, merged on exact keys. No LLM entity pass and no fuzzy matching. An entity backbone (free-text extraction, resolution, lifecycle mining) comes after v1, and only if the discovery-lens experiment passes.
+3. **Object refs** (ADR-0008): deterministic links from structured fields (addresses, attendees, file IDs) and regex for IDs, merged on exact keys. Memory (ADR-0022) builds objects on top of them, adding fuzzy and similarity candidates that a model confirms.
 4. **Mine**: embed and cluster into intent clusters. For v1, clustering links events whose pgvector similarity is above a threshold and takes each connected group as a cluster. It sits behind one `clusterEvents` function so the method can change (ADR-0004). Have an LLM label only a few representatives per cluster. Detect templates (near-duplicate outbound messages with their slots), request→response pairs, periodic tasks, and chasing/follow-up patterns.
 5. **Rank**: value = frequency × est. minutes × people. Feasibility = trigger type, variance, blast radius, context availability, write-API availability. Map to a starting rung.
 6. **Shadow eval**: replay the candidate on held-out past cases (re-fetched) and compare with what the human actually did, using a `judge` model plus edit distance. Show the result on the suggestion.
@@ -193,7 +195,7 @@ Specs are JSON, validated by zod, and run by our own interpreter in `features/ru
 - Reviews already waiting outlive a removed enablement and an archive: the draft is still in the member's mailbox, so the review stays until it ends. Deleting the connection deletes them (the cascade).
 - Storing and sending are separate steps. The poll step (or a recovery's page step) hands on the inbound, non-draft Gmail messages its insert newly created, as IDs, times and labels only; the step after it (`gmail-poll-announce`, or `<prefix>page-<n>-announce`) sends them. A failed send is retried with the memoized messages, so none is lost, and only newly inserted rows are ever sent.
 
-**Capability requests:** when no catalog action fits, the builder emits a structured `capability_request` (API, operation, inputs, outputs) to an internal queue. Our team builds the Nango function. The interface stays the same so an auto-builder can take over later.
+**Custom actions** (ADR-0018): when no catalog action fits, the builder describes one call to a registered app (address, where each input goes, which results come back) as a custom action of the admin's org. Mycel's runtime makes the call through Nango; a fixed rule sets its risk (a read is `read`, any other call at least `external_send`; deletes, refunds, voids and writes in accounting or payments apps are refused). When one call can't do the job, the builder drafts code and sends it to our team as a **capability request**; it reaches workflows only once we review it into the catalog.
 
 ## Adding an app (ADR-0013)
 
@@ -204,14 +206,14 @@ Every app plugs in through the same four parts, so a new app is mostly catalog w
 3. **Catalog actions:** what a workflow may do in the app, each with a fixed risk level.
 4. **Pending form:** where an `external_send` action waits for a person, inside the app itself. Mycel's **review** stores only a pointer to it and fetches it live.
 
-| App      | Pending form                                               | Approving in Mycel                      |
-| -------- | ---------------------------------------------------------- | --------------------------------------- |
-| Gmail    | A draft                                                    | Sends the draft (or edit it, then send) |
-| Calendar | The event on the person's calendar, with no guests yet     | Adds the guests and sends invitations   |
-| Docs     | Suggested edits in the doc                                 | Not possible; the review links to Docs  |
-| Tasks    | None needed: tasks on the person's own list are reversible |                                         |
+| App      | Pending form                                                                  | Approving in Mycel                        |
+| -------- | ----------------------------------------------------------------------------- | ----------------------------------------- |
+| Gmail    | A draft                                                                       | Sends the draft (or edit it, then send)   |
+| Calendar | The event on the person's calendar: no guests yet, private, not blocking time | Adds the guests and sends invitations     |
+| Docs     | Suggested edits in the doc                                                    | Accepts the step's suggestions (ADR-0017) |
+| Tasks    | None needed: tasks on the person's own list are reversible                    |                                           |
 
-A review ends as approved, edited and approved, declined (which deletes the waiting item, where the app allows), done in the app, or gone. An app with no natural pending form, such as Slack, waits until we design one.
+A review ends as approved, edited and approved, declined (which deletes the waiting item, where the app allows), done in the app, or gone. Where an app has no pending form (Slack, Teams, Chat, comments), Mycel holds the waiting send itself, encrypted, and deletes it when the review ends; a held send's review ends as expired after 30 days (ADR-0020).
 
 ### Pending-form adapters and reviews (`features/runtime`, `features/reviews`)
 
@@ -242,7 +244,7 @@ Each catalog action has a fixed level: `read` < `internal_reversible` < `externa
 - `external_send`: must wait in the app's pending form for a person's review (ADR-0013). M3 approves by sending the Gmail draft; from M5 on, every review also appears on the Reviews page.
 - `financial`, `destructive`: not available in v1.
 
-The catalog is code (`features/policy/catalog.ts`), each action with its risk level, integration, the API host its proxy calls reach, the scopes that allow it, and input and output schemas. Outputs are derived data and IDs only (ADR-0012).
+The catalog is code (`features/policy/catalog.ts`), each action with its risk level, integration, the API host its proxy calls reach, the scopes that allow it, and input and output schemas. An action's output may carry content to later steps (ADR-0021), but never into its run record.
 
 | Action                     | Risk level            | Host (on the one `google` integration) | Scope needed                             |
 | -------------------------- | --------------------- | -------------------------------------- | ---------------------------------------- |
@@ -315,12 +317,14 @@ A connection that needs reconnecting (`needs_reauth`, when Google refuses its to
 - **Try it** (`runtime`'s `dryRun(ctx, spec, { connectionId, sourceRef, workflowId? })`) runs a working spec on one message in memory: no Inngest, no `runs` or `run_steps`. It validates the spec as saving would and runs the policy-applied spec with the interpreter's own step executors, but with a dry action registry (`runtime/lib/dry-run-actions.ts`, typed so a new catalog action needs an entry): read actions run for real, and `add-label`, `append-row` and `create-draft` read only what they need and report what they would have done (the label, the row, the draft's recipient, subject and generated text), writing nothing. Approvals, the policy engine's included, are reported as "would wait for a review" and the run goes on. The connection must be the admin's own (member credentials) or an org connection (org credentials), granted Gmail; any other member's is `NotFoundError`. Out of credits it's refused before anything runs; each model call passes the usual pre-flight and its ledger entry is marked `dry_run`, with no run ID. The picker (`recentMessages`) lists each such connection's 20 newest inbox messages, their subjects and senders fetched through the proxy for display only, and only once the admin opens the panel (`?try`). The whole result goes back to the page and is never stored; it ends as a run would, `partly_failed` included, and a branch's entry lists its paths (`taken`, `not_taken`, `not_checked` after an earlier path ran, or `not_needed` for an otherwise path another path made unnecessary), each check in words with whether it passed and why, quoting the value it tested. From the chat, `builder`'s `tryInConversation` tries the conversation's workflow's working spec and posts a content-free summary as the admin's message (`try_it` part: labels chosen, the path each branch took, each path's status and its checks in the spec's words with pass or fail, "drafted a reply", rows counted, never message content, draft text, row values or the values a check tested), which the agent reads on the next turn. The workflow page composes its panel in the page, since `workflows` can't import `runtime`.
 - **Conversations hold no source content (invariant 8).** A message stores its text, and each tool call with its input and its result as the tool stores it (`read_examples` keeps only the source refs it returned). Messages carry `org_id` but no `connection_id`, so disconnecting leaves them alone. Reopening a conversation rebuilds the model's context from what's stored.
 
-## Memory (after the core loop; `features/memory`)
+## Memory (M14; `features/memory`; ADR-0022 to ADR-0025)
 
-- **Extraction:** after mining, a `smart` pass over request→response pairs and recurring threads extracts candidate facts ("refund window is 30 days", "Acme's billing contact is Dana"), each with `source_ref`, confidence, and `owner_scope`.
-- **Filtering:** `classify` labels each fact as business knowledge or personal, and personal facts never get promoted.
-- **Dedupe and supersede:** dedupe by embedding similarity. On contradiction, the newer fact supersedes the older one and history is kept.
-- **Promotion:** a fact moves from member scope to org scope only if it is business knowledge and appears in multiple sources, or an admin approves it.
+- **What it is:** objects (people, companies, deals, projects, documents), the links between them, and facts about them, in Postgres with pgvector. A fact is a short statement stated in a source or told by a person ("remember this"), linked to its source records; no source text is stored, and judgements are never stored.
+- **Extraction:** `classify` skips newsletters, marketing, notifications and personal mail; facts are extracted from business items in Gmail, Drive docs and Calendar, within a monthly extraction budget per company. People outside the company keep work facts only. Admins set company-wide exclusions (labels, folders); members can't switch memory off.
+- **Matching:** exact keys (email, domain, CRM ID, file ID) plus fuzzy and similarity candidates, confirmed by a model. Never across companies.
+- **Time:** a contradicted fact is superseded, keeping when it was true and when it was recorded; answers use the newest.
+- **Reading:** embeddings, keyword search and object links, with no model call. Summaries are built per person when asked, from the facts that person can see. Apps whose terms ban stored indexes, such as Slack, are searched live and never stored (ADR-0025).
+- **Retention and erasure:** see Data handling; admins can forget a person, which deletes their object and facts and puts the address on a do-not-learn list.
 
 ## Conventions
 
@@ -330,4 +334,4 @@ The always-on coding rules are in `AGENTS.md`. The detail (feature-directory sha
 
 - Concrete model IDs per role (Jev is available on the AI Gateway; see the research file for pricing).
 - Credit pricing and the free/included allowance.
-- Admin-level data access (Reports API, domain-wide delegation) versus owner scopes: out of v1, revisit at M10 (ADR-0008).
+- Admin-level data access (Reports API, domain-wide delegation): out of v1, revisit at M10 (ADR-0008). Memory's visibility rests on each app's access lists instead (ADR-0023).

@@ -1,5 +1,7 @@
 # Every app holds waiting actions in its own pending form, and members review them in one place
 
+The Docs part is replaced by ADR-0017 (Docs reviews are approved or declined in Mycel), and the rule that an app with no pending form waits until we design one by ADR-0020 (Mycel holds the waiting send). The rest still stands.
+
 v1 acts in Gmail, Calendar, Docs and Tasks, with Slack and Microsoft later, so we wanted one standard rather than rules worked out for email alone. Every app plugs in through four parts: a source (what Mycel reads), triggers (what starts a run), catalog actions (what a workflow may do, each with a fixed risk level), and a **pending form**: the app's own way of holding an action until a person approves it. Gmail holds a draft. Calendar holds an event with no guests yet; approving adds the guests and sends the invitations, because Google warns that saving without notifying can still reach colleagues' calendars. Docs holds suggested edits, which the person accepts or rejects in Docs, since Google offers no way for us to accept them. A Mycel **review** points at the waiting item and fetches it live, never storing its content (invariant 8). Members see every review, and every other step that needs a person, on one Reviews page, which is their main screen. We chose this over holding pending actions in Mycel's own database, which would store content we don't keep, and over approving everything in each app, which scatters a member's work across four apps with no single place to see it.
 
 ## Considered options

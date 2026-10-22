@@ -1,5 +1,7 @@
 # Object refs are deterministic links; an entity backbone waits for the discovery-lens experiment
 
+The gate is replaced by ADR-0022 (memory is objects and facts built from company data), which matches objects with fuzzy and AI-confirmed candidates as well as exact keys. The rule against admin-level data access still stands.
+
 Each normalized event's `object_refs` holds only deterministic links to business objects: exact email addresses, IDs, and file references, merged on exact keys. There is no LLM entity pass and no fuzzy matching. An entity backbone (extracting objects from free text, resolving them into canonical objects, and mining each object's lifecycle across apps) could find multi-step, cross-app workflows that message clustering misses. But no study we found shows that it beats single-source analysis, and a link like "an email mentions X, then a sheet row with X appears" never observes the actual copy. So we only build the backbone after v1, and only if the **discovery-lens experiment** (`docs/research/discovery-multi-app.md`) passes this rule, fixed before it runs:
 
 - At least 25% of the tasks on teammates' blind lists are tagged cross-app, **and**

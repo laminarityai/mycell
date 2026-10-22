@@ -25,6 +25,10 @@ beforeAll(async () => {
       position integer not null default 0
     )
   `);
+  // Every foreign key is indexed (foreign-key-indexes.test.ts), this table's too.
+  await getDb().execute(
+    sql`create index if not exists test_notes_org_id_idx on test_notes (org_id)`,
+  );
 });
 
 beforeEach(async () => {

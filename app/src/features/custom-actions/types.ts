@@ -93,6 +93,20 @@ export type CustomActionDescription = z.output<typeof customActionDescriptionSch
  */
 export type CustomActionRecord = CustomActionDescription & { risk: RiskLevel };
 
+/**
+ * A custom action in plain words, as a proposal card and the custom actions page show it: its
+ * app, what it does, the call it makes and the level the fixed rule set.
+ */
+export type CustomActionWords = {
+  name: string;
+  /** The registered app, as admins name it. */
+  app: string;
+  description: string;
+  /** The method and path, such as "GET /v1.0/me/messages/{messageId}". */
+  call: string;
+  risk: RiskLevel;
+};
+
 /** A company's custom action as its list shows it: who accepted it, when, from which proposal. */
 export type StoredCustomAction = CustomActionRecord & {
   id: string;

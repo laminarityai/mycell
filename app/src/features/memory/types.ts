@@ -6,6 +6,14 @@ import { z } from "zod";
 export const MEMORY_APPS = ["gmail", "drive"] as const;
 export type MemoryApp = (typeof MEMORY_APPS)[number];
 
+/**
+ * Why learning put an item off: the month's budget is spent (it's tried again when the month
+ * starts or the budget changes), the org ran out of credits (tried again when credits are
+ * granted), or the injection screen kept failing (tried again hourly).
+ */
+export const POSTPONE_REASONS = ["budget", "credits", "screen"] as const;
+export type PostponeReason = (typeof POSTPONE_REASONS)[number];
+
 /** The kinds of object memory holds. */
 export const OBJECT_KINDS = ["person", "company", "deal", "project", "document"] as const;
 export type ObjectKind = (typeof OBJECT_KINDS)[number];
@@ -55,8 +63,9 @@ export type ChangedItem = z.infer<typeof changedItemSchema>;
 export type AccessReread = { outcome: "rewritten" | "removed" | "unknown" | "unreachable" };
 
 /**
- * Why learning skipped an item: no admin has started memory yet; the month's budget is spent,
- * so it waits for next month (`postponed`); an exclusion covers it; it's from a person an admin
+ * Why learning skipped an item: no admin has started memory yet; it waits to be tried again
+ * (`postponed`: the month's budget is spent, the org is out of credits, or the injection screen
+ * kept failing); an exclusion covers it; it's from a person an admin
  * asked memory to forget (`forgotten`); learned already (for a
  * Drive file, this version or a newer one); not a kind of item memory reads (a Drive file that
  * isn't a Google Doc); changed since (a Drive file's newer version is learned on its own); the

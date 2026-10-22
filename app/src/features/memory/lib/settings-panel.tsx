@@ -61,7 +61,7 @@ function Learning({ settings }: { settings: MemorySettings }) {
             {credits.format(settings.spentThisMonth)} of its {credits.format(started.monthlyBudget)}{" "}
             credits.
             {settings.postponedItems > 0
-              ? ` The budget is spent: ${credits.format(settings.postponedItems)} items wait for next month.`
+              ? ` ${credits.format(settings.postponedItems)} items wait to be learned, until next month's budget, more credits, or the injection screen is back.`
               : ""}
           </p>
           <BudgetForm started budget={started.monthlyBudget} />

@@ -5,7 +5,7 @@
 import { eventType } from "inngest";
 import { z } from "zod";
 import { inngest } from "@/lib/inngest";
-import { MEMORY_APPS, type ItemToLearn } from "../types";
+import { MEMORY_APPS, POSTPONE_REASONS, type ItemToLearn, type PostponeReason } from "../types";
 
 const org = z.object({ orgId: z.string().min(1) });
 
@@ -27,8 +27,17 @@ export const exclusionAdded = eventType("memory/exclusion.added", {
   schema: z.object({ orgId: z.string().min(1), exclusionId: z.string().min(1) }),
 });
 
-/** Items postponed for the budget are due again: a new month began, or the budget changed. */
-export const postponedDue = eventType("memory/postponed.due", { schema: org });
+/**
+ * Items postponed are due again: for the budget, a new month began or the budget changed (every
+ * reason then); for the injection screen, the hourly retry. Credits granted resume their own
+ * (`credits/granted`).
+ */
+export const postponedDue = eventType("memory/postponed.due", {
+  schema: z.object({
+    orgId: z.string().min(1),
+    reasons: z.array(z.enum(POSTPONE_REASONS)).optional(),
+  }),
+});
 
 /**
  * An admin forgot a person: the objects keyed by their address are deleted again once learning
@@ -87,7 +96,17 @@ export async function sendRetentionDue(orgIds: string[]): Promise<void> {
   }
 }
 
-export async function sendPostponedDue(orgIds: string[]): Promise<void> {
-  if (orgIds.length === 0) return;
-  await inngest.send(orgIds.map((orgId) => postponedDue.create({ orgId })));
+export async function sendPostponedDue(
+  orgIds: string[],
+  reasons?: PostponeReason[],
+): Promise<void> {
+  for (let i = 0; i < orgIds.length; i += BATCH) {
+    await inngest.send(
+      orgIds
+        .slice(i, i + BATCH)
+        .map((orgId) =>
+          postponedDue.create(reasons === undefined ? { orgId } : { orgId, reasons }),
+        ),
+    );
+  }
 }

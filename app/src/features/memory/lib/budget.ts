@@ -3,7 +3,7 @@
 // monthly budget. Every model call learning makes is tagged `memory` in the ledger, and once a
 // calendar month's (UTC) tagged spending reaches the budget, each item is postponed until the
 // next month starts, or the budget changes.
-import { lte, sql } from "drizzle-orm";
+import { and, inArray, lte, sql } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { getSpending } from "@/features/credits/server";
 import { countStoredItems, listStoredItems } from "@/features/discovery/server";
@@ -12,9 +12,11 @@ import type { Ctx } from "@/lib/ctx";
 import { ConflictError, ForbiddenError, ValidationError } from "@/lib/errors";
 import {
   memoryBudgetSchema,
+  POSTPONE_REASONS,
   type ItemToLearn,
   type MemoryBudget,
   type MemoryEstimate,
+  type PostponeReason,
 } from "../types";
 import { sendItemsQueued, sendMemoryStarted, sendPostponedDue } from "./events";
 import { GOOGLE_DOC, MAX_DOC_CHARS } from "./drive";
@@ -106,8 +108,18 @@ export async function gate(
   const settings = await settingsOf(ctx);
   if (settings === null) return "not_started";
   if ((await spentThisMonth(ctx)) < settings.monthlyBudget) return "open";
-  await forOrg(ctx).insert(postponedItems, item, { onConflictDoNothing: true });
+  await postpone(ctx, item, "budget");
   return "postponed";
+}
+
+/** Puts the item off until what stopped it is resolved (`resumePostponed`). */
+export async function postpone(ctx: Ctx, item: ItemToLearn, reason: PostponeReason): Promise<void> {
+  const { connectionId, app, sourceRef } = item;
+  await forOrg(ctx).insert(
+    postponedItems,
+    { connectionId, app, sourceRef, reason },
+    { onConflictDoNothing: true },
+  );
 }
 
 const PAGE = 1000;
@@ -144,18 +156,24 @@ export async function queueStoredItems(
 }
 
 /**
- * Queues the items postponed for the budget again, and forgets they were postponed. One the
- * budget still doesn't cover is postponed again when it's learned, so only those postponed
- * before this began are taken.
+ * Queues the items postponed for `reasons` (every reason by default) again, and forgets they
+ * were postponed. One still stopped is postponed again when it's learned, so only those
+ * postponed before this began are taken.
  */
-export async function resumePostponed(ctx: Ctx): Promise<{ queued: number }> {
+export async function resumePostponed(
+  ctx: Ctx,
+  reasons: readonly PostponeReason[] = POSTPONE_REASONS,
+): Promise<{ queued: number }> {
   if (ctx.role !== "system") throw new ForbiddenError();
   const db = forOrg(ctx);
   const began = new Date();
   let queued = 0;
   for (;;) {
     const items = await db.select(postponedItems, {
-      where: lte(postponedItems.postponedAt, began),
+      where: and(
+        lte(postponedItems.postponedAt, began),
+        inArray(postponedItems.reason, [...reasons]),
+      ),
       limit: PAGE,
     });
     if (items.length === 0) return { queued };
@@ -172,7 +190,7 @@ export async function resumePostponed(ctx: Ctx): Promise<{ queued: number }> {
   }
 }
 
-/** How many items wait for the budget. */
+/** How many items wait to be learned: for the budget, credits or the injection screen. */
 export async function countPostponed(ctx: Ctx): Promise<number> {
   return forOrg(ctx).count(postponedItems);
 }

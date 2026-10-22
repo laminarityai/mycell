@@ -6,6 +6,7 @@ import { forOrg } from "@/db/for-org";
 import { env } from "@/env";
 import type { Ctx } from "@/lib/ctx";
 import { ForbiddenError, OutOfCreditsError, ValidationError } from "@/lib/errors";
+import { sendCreditsGranted } from "@/lib/events";
 import type { LedgerEntry, SpendingQuery, Usage } from "../types";
 import { creditLedger } from "./schema";
 
@@ -73,6 +74,7 @@ export async function grantCredits(ctx: Ctx, amount: number): Promise<LedgerEntr
   const row = inserted.at(0);
   // A bug, as above.
   if (row === undefined) throw new Error("The grant wasn't recorded.");
+  await sendCreditsGranted(ctx.orgId);
   return toEntry(row);
 }
 

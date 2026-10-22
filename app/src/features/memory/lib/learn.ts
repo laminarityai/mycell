@@ -11,16 +11,19 @@
 // address with the facts about it or linking to it, embeds the statements and stores them.
 // Every model call is tagged `memory` in the ledger. The item's content is fetched inside each
 // step and never leaves it (invariant 8): a step returns only what it decided. A connection or
-// item that's gone ends learning quietly.
+// item that's gone ends learning quietly. An item learning can't pay for (the org is out of
+// credits), or can't screen on the job's last attempt (the injection screen keeps failing), is
+// postponed rather than lost, and learned again once credits are granted or the screen recovers.
 import { isForeignKeyViolation } from "@/db/errors";
 import { getConnection } from "@/features/connections/server";
 import type { ConnectionDetails } from "@/features/connections/types";
 import { embed, screenForInjection } from "@/features/models/server";
 import { getWorkspaceDomain } from "@/features/orgs/server";
 import type { Ctx } from "@/lib/ctx";
-import { ForbiddenError, NotFoundError } from "@/lib/errors";
-import type { ItemToLearn, LearnOutcome, MemoryApp } from "../types";
-import { gate, MEMORY_USAGE } from "./budget";
+import { ForbiddenError, NotFoundError, OutOfCreditsError } from "@/lib/errors";
+import { InjectionScreenError } from "@/features/models/types";
+import type { ItemToLearn, LearnOutcome, MemoryApp, PostponeReason } from "../types";
+import { gate, MEMORY_USAGE, postpone } from "./budget";
 import { readDoc } from "./drive";
 import { isExcluded } from "./exclusions";
 import { extract, isBusiness } from "./extract";
@@ -68,13 +71,19 @@ type Decision =
     }
   | ({ decision: "copy" } & Stored);
 
+/** How learning runs: `lastAttempt` when the job won't retry a failure again. */
+export type LearnOptions = { lastAttempt?: boolean };
+
 export async function learnFromItem(
   ctx: Ctx,
   item: ItemToLearn,
   runStep: RunStep = runInline,
+  options: LearnOptions = {},
 ): Promise<LearnOutcome> {
   if (ctx.role !== "system") throw new ForbiddenError();
-  const decided = await runStep("decide", () => untilGone(() => decide(ctx, item)));
+  const guarded = <T extends { decision: string }>(work: () => Promise<T>) =>
+    untilGone(() => untilPostponed(ctx, item, options, work));
+  const decided = await runStep("decide", () => guarded(() => decide(ctx, item)));
   switch (decided.decision) {
     case "gone":
       return { outcome: "gone" };
@@ -94,10 +103,11 @@ export async function learnFromItem(
     case "business":
       break;
   }
-  const learned = await runStep("extract", () => untilGone(() => extractAndStore(ctx, item)));
+  const learned = await runStep("extract", () => guarded(() => extractAndStore(ctx, item)));
   switch (learned.decision) {
     case "gone":
       return { outcome: "gone" };
+    case "postponed":
     case "unsupported":
     case "outdated":
     case "excluded":
@@ -190,6 +200,29 @@ async function read(ctx: Ctx, item: ItemToLearn): Promise<Source | Unread> {
       ? await readDoc(ctx, connection.id, item.sourceRef)
       : ((await readEmail(ctx, connection, item.sourceRef)) ?? "gone");
   return typeof read === "string" ? read : { connection, app: item.app, item: read };
+}
+
+// Postponing the item, rather than failing, when learning can't pay for it or (on the job's last
+// attempt) can't screen it.
+async function untilPostponed<T extends { decision: string }>(
+  ctx: Ctx,
+  item: ItemToLearn,
+  options: LearnOptions,
+  work: () => Promise<T>,
+): Promise<T | { decision: "postponed" }> {
+  try {
+    return await work();
+  } catch (error) {
+    const reason: PostponeReason | null =
+      error instanceof OutOfCreditsError
+        ? "credits"
+        : error instanceof InjectionScreenError && options.lastAttempt === true
+          ? "screen"
+          : null;
+    if (reason === null) throw error;
+    await postpone(ctx, item, reason);
+    return { decision: "postponed" };
+  }
 }
 
 // "The connection is gone" as a decision rather than an error: a missing connection is

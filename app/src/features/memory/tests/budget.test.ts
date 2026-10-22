@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
-import { listLedger } from "@/features/credits/server";
+import { grantCredits, listLedger } from "@/features/credits/server";
 import { backfillConnection, pollConnection } from "@/features/discovery/server";
 import { systemCtx } from "@/lib/ctx";
 import { ConflictError, ForbiddenError } from "@/lib/errors";
@@ -200,6 +200,39 @@ describe("the monthly budget", () => {
     await expect(setMemoryBudget(orgA.admin.ctx, { monthlyBudget: 10 })).rejects.toThrow(
       ConflictError,
     );
+  });
+});
+
+describe("running out of credits", () => {
+  it("postpones the item, and learns it once credits are granted", async () => {
+    const { orgA } = await seedTwoOrgs();
+    // Memory started, with a budget, but the org has no credits at all.
+    await startMemory(systemCtx(orgA.id), { monthlyBudget: 1000 });
+    const mailbox = await connectMailbox(orgA.member.ctx, orgA.member.email, [
+      {
+        from: `Dana Ruiz <${DANA}>`,
+        to: [orgA.member.email],
+        text: "I lead procurement at Acme.",
+        at: daysAgo(2),
+      },
+    ]);
+    await backfillConnection(orgA.member.ctx, mailbox.id);
+
+    expect(await learnStoredItems(orgA.id)).toEqual([{ outcome: "skipped", reason: "postponed" }]);
+    expect((await getMemorySettings(orgA.admin.ctx)).postponedItems).toBe(1);
+
+    await grantCredits(systemCtx(orgA.id), 1000);
+
+    expect(fakeInngest.sent("credits/granted").map((event) => event.data)).toEqual([
+      { orgId: orgA.id },
+    ]);
+    expect(await resumePostponed(systemCtx(orgA.id), ["credits"])).toEqual({ queued: 1 });
+    scriptLearning({
+      objects: [{ ref: "dana", kind: "person", name: "Dana Ruiz", email: DANA }],
+      facts: [{ about: "dana", statement: ROLE, evidence: "I lead procurement at Acme" }],
+    });
+    expect(await learnStoredItems(orgA.id)).toEqual([{ outcome: "learned", objects: 1, facts: 1 }]);
+    expect((await getMemorySettings(orgA.admin.ctx)).postponedItems).toBe(0);
   });
 });
 

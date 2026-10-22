@@ -31,6 +31,7 @@ import {
   MEMORY_APPS,
   MEMORY_READ_OPERATIONS,
   OBJECT_KEY_KINDS,
+  POSTPONE_REASONS,
   OBJECT_KINDS,
 } from "../types";
 
@@ -347,8 +348,10 @@ export const accessLogEntries = pgTable(
 );
 
 /**
- * An item memory put off learning because the month's budget was spent, learned when the next
- * month starts. A pointer only, cascading from its connection (invariant 3).
+ * An item memory put off learning, and why: the month's budget was spent (learned when the next
+ * month starts or the budget changes), the org ran out of credits (when credits are granted), or
+ * the injection screen kept failing (tried hourly). A pointer only, cascading from its
+ * connection (invariant 3).
  */
 export const postponedItems = pgTable(
   "memory_postponed_items",
@@ -357,6 +360,7 @@ export const postponedItems = pgTable(
     connectionId: text("connection_id").notNull(),
     app: text("app", { enum: MEMORY_APPS }).notNull(),
     sourceRef: text("source_ref").notNull(),
+    reason: text("reason", { enum: POSTPONE_REASONS }).notNull().default("budget"),
     postponedAt: timestamp("postponed_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [

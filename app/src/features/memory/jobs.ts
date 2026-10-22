@@ -2,7 +2,7 @@
 import { cron } from "inngest";
 import { listOrgIds } from "@/features/orgs/server";
 import { systemCtx } from "@/lib/ctx";
-import { itemChanged, itemRemoved, itemStored } from "@/lib/events";
+import { creditsGranted, itemChanged, itemRemoved, itemStored } from "@/lib/events";
 import { inngest } from "@/lib/inngest";
 import {
   exclusionAdded,
@@ -41,13 +41,17 @@ const stepRunner =
 // step re-checks the exclusions and the do-not-learn list).
 const PER_ORG = [{ scope: "env", key: '"memory-org-" + event.data.orgId', limit: 1 }] as const;
 
+// How many times Inngest runs a function by default: once, and 4 retries.
+const DEFAULT_ATTEMPTS = 5;
+
 /**
  * Learns from each item discovery stores, and each item memory queues itself. One item at a
- * time per org, so two items never race to create the same object.
+ * time per org, so two items never race to create the same object. On its last attempt, an
+ * item the injection screen still fails on is postponed rather than lost.
  */
 export const learnJob = inngest.createFunction(
   { id: "memory-learn-item", triggers: [itemStored, itemQueued], concurrency: [...PER_ORG] },
-  async ({ event, step }) =>
+  async ({ event, step, attempt, maxAttempts }) =>
     learnFromItem(
       systemCtx(event.data.orgId),
       {
@@ -56,6 +60,7 @@ export const learnJob = inngest.createFunction(
         sourceRef: event.data.sourceRef,
       },
       stepRunner(step),
+      { lastAttempt: attempt + 1 >= (maxAttempts ?? DEFAULT_ATTEMPTS) },
     ),
 );
 
@@ -72,10 +77,28 @@ export const forgetExcludedJob = inngest.createFunction(
     forgetExcluded(systemCtx(event.data.orgId), event.data.exclusionId, stepRunner(step)),
 );
 
-/** Queues the items postponed for the budget again. */
+/** Queues the items postponed again: for the reasons the event names, or every reason. */
 export const resumePostponedJob = inngest.createFunction(
   { id: "memory-resume-postponed", triggers: [postponedDue], concurrency: [...PER_ORG] },
-  async ({ event, step }) => step.run("resume", () => resumePostponed(systemCtx(event.data.orgId))),
+  async ({ event, step }) =>
+    step.run("resume", () => resumePostponed(systemCtx(event.data.orgId), event.data.reasons)),
+);
+
+/** Once credits are granted, queues the items postponed for want of them again. */
+export const resumeOnCreditsJob = inngest.createFunction(
+  { id: "memory-resume-on-credits", triggers: [creditsGranted], concurrency: [...PER_ORG] },
+  async ({ event, step }) =>
+    step.run("resume", () => resumePostponed(systemCtx(event.data.orgId), ["credits"])),
+);
+
+/** Every hour, each org's items postponed while the injection screen kept failing are due. */
+export const retryScreenCron = inngest.createFunction(
+  { id: "memory-retry-screen-hourly", triggers: [cron("TZ=UTC 15 * * * *")] },
+  async ({ step }) => {
+    const orgIds = await step.run("list-orgs", () => listOrgIds());
+    await step.run("fan-out", () => sendPostponedDue(orgIds, ["screen"]));
+    return { orgs: orgIds.length };
+  },
 );
 
 /** At the start of each month (UTC), every org's budget is new: postponed items are due. */

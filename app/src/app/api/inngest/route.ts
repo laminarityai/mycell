@@ -11,8 +11,10 @@ import {
   pruneAccessLogJob,
   rereadAccessJob,
   rereadDriveAccessJob,
+  resumeOnCreditsJob,
   resumePostponedJob,
   retentionCron,
+  retryScreenCron,
   startJob,
 } from "@/features/memory/jobs";
 import { checkWaitingReviewsJob, endedInGmailJob } from "@/features/reviews/jobs";
@@ -38,6 +40,8 @@ export const { GET, POST, PUT } = serve({
     startJob,
     forgetExcludedJob,
     resumePostponedJob,
+    resumeOnCreditsJob,
+    retryScreenCron,
     newMonthCron,
     pruneAccessLogJob,
     deleteRemovedItemJob,

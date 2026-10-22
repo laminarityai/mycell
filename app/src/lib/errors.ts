@@ -36,6 +36,33 @@ export class ConflictError extends Error {
   }
 }
 
+/**
+ * Someone acted on a review before the caller did: the first to act wins, and nothing was
+ * carried out for the caller. Names who handled it, when someone in Mycel did.
+ */
+export class AlreadyHandledError extends Error {
+  constructor(handledBy?: string) {
+    super(
+      handledBy === undefined
+        ? "This review was already handled."
+        : `This review was already handled by ${handledBy}.`,
+    );
+    this.name = "AlreadyHandledError";
+  }
+}
+
+/**
+ * A review's waiting item is no longer in its app: deleted there, or already carried out. The
+ * pending-form adapters throw it; acting on a review turns it into a ConflictError that ends the
+ * review, and opening one ends the review `gone`.
+ */
+export class ItemGoneError extends Error {
+  constructor() {
+    super("The waiting item is no longer in its app.");
+    this.name = "ItemGoneError";
+  }
+}
+
 /** The input breaks a rule the user can fix; the message says which. */
 export class ValidationError extends Error {
   constructor(message: string) {
@@ -95,6 +122,8 @@ export function typedErrorMessage(error: unknown): string | undefined {
   return error instanceof ForbiddenError ||
     error instanceof NotFoundError ||
     error instanceof ConflictError ||
+    error instanceof AlreadyHandledError ||
+    error instanceof ItemGoneError ||
     error instanceof ValidationError ||
     error instanceof OutOfCreditsError ||
     error instanceof SpecInvalidError
@@ -112,13 +141,15 @@ export function routeError(error: unknown): Response {
       ? 403
       : error instanceof NotFoundError
         ? 404
-        : error instanceof ConflictError
+        : error instanceof ConflictError || error instanceof AlreadyHandledError
           ? 409
-          : error instanceof ValidationError
-            ? 400
-            : error instanceof OutOfCreditsError
-              ? 402
-              : undefined;
+          : error instanceof ItemGoneError
+            ? 410
+            : error instanceof ValidationError
+              ? 400
+              : error instanceof OutOfCreditsError
+                ? 402
+                : undefined;
   if (status === undefined || !(error instanceof Error)) throw error;
   return new Response(error.message, { status });
 }

@@ -71,6 +71,14 @@ module.exports = {
       to: { path: `^${R}/[^/]+/tests/` },
     },
     {
+      name: "connection-delegation-only-from-reviews",
+      comment:
+        "Delegated connection access (ADR-0016) lets a ctx reach a connection its user can't read. Only reviews, after its own check that the caller may act on a review, may hand one out (and connections' own tests).",
+      severity: "error",
+      from: { pathNot: [`^${R}/reviews/`, `^${R}/connections/`] },
+      to: { path: `^${R}/connections/delegation\\.ts$` },
+    },
+    {
       name: "no-circular",
       comment:
         "No dependency cycles. Scope to `^${R}/` if you want to allow cycles outside features.",

@@ -1,5 +1,6 @@
-import type { InsertedApproval, RiskLevel } from "@/features/policy/types";
+import type { InsertedApproval, RequirementsGained, RiskLevel } from "@/features/policy/types";
 import type { Spec, SpecIssue } from "@/features/spec/types";
+import type { Tag } from "@/features/tags/types";
 
 /** What an admin saves: a name and the spec as parsed JSON, not yet validated. */
 export type WorkflowInput = {
@@ -22,6 +23,25 @@ export type SavedWorkflow = {
   maxRisk: RiskLevel;
   inserted: InsertedApproval[];
 };
+
+/**
+ * What the publish dialog chose, saved into the working spec as it's published. A setting left
+ * out keeps what the working spec says.
+ */
+export type PublishSettings = {
+  /** The tag names to publish to: the spec's `visibility.tags`. */
+  tags?: readonly string[];
+  /** Whether its reviews may be handed to a colleague: the spec's `review.handoff`. */
+  handoff?: boolean;
+};
+
+/**
+ * What a workflow's reviews need to know of it: whether the caller sees it through its tags
+ * (an admin sees every one), so may see its org reviews; the names of the tags its latest
+ * version is published to that the caller may know (a member's own among them, an admin's every
+ * one), by name; and whether that version lets a review be handed on (`review.handoff`).
+ */
+export type ReviewSharing = { seen: boolean; handOff: boolean; tags: string[] };
 
 /** An immutable snapshot of a workflow's spec, after the policy engine ran on it. */
 export type WorkflowVersion = {
@@ -47,10 +67,40 @@ export type WorkflowSummary = {
   name: string;
   specId: string;
   latestVersion: WorkflowVersionSummary | null;
+  /** Whose connections the latest version runs on; null while not published. */
+  credentials: Spec["credentials"] | null;
   /** The caller's enablement, or the org switch; null while off. */
   switch: WorkflowSwitch | null;
+  /** Who the latest version is published to; null while not published. */
+  audience: Audience | null;
+  /** When an admin archived it, which stops it everywhere; null while not archived. */
+  archivedAt: Date | null;
   updatedAt: Date;
 };
+
+/**
+ * A published workflow as the Workflows page shows it to someone who can see it: what its latest
+ * version does and needs, and the caller's switch.
+ */
+export type VisibleWorkflow = {
+  id: string;
+  name: string;
+  /** What the latest version does, a sentence per step. */
+  description: string[];
+  /** The apps the latest version uses, as the catalog names them ("Gmail", "Sheets"). */
+  requiredApps: string[];
+  maxRisk: RiskLevel;
+  /** `org` runs on a shared inbox that only admins switch on. */
+  credentials: Spec["credentials"];
+  versionNumber: number;
+  /** The caller's enablement, or the org switch; null while off. */
+  switch: WorkflowSwitch | null;
+  /** Who the latest version is published to: admins only, null for members. */
+  audience: Audience | null;
+};
+
+/** The tags a workflow version is published to, and how many users have any of them. */
+export type Audience = { tags: Tag[]; reach: number };
 
 /** A workflow's page: its working spec, what the policy makes of it, and its versions. */
 export type WorkflowDetails = {
@@ -69,15 +119,72 @@ export type WorkflowDetails = {
   versions: WorkflowVersionSummary[];
   /** The caller's enablement, or the org switch; null while off. */
   switch: WorkflowSwitch | null;
+  /** When an admin archived it, which stops it everywhere; null while not archived. */
+  archivedAt: Date | null;
   createdBy: string;
   updatedAt: Date;
 };
 
 /**
  * Where a workflow is switched on: by the caller's own enablement (`member`) or the org switch
- * (`org`), the connection it runs on, and since when.
+ * (`org`), the connection it runs on, since when, and whether it's paused (an enablement only).
+ * `needsReconnect` when Google refused the connection's token: nothing runs on it until its
+ * owner reconnects, though the switch stays as it is (a connection state, not a pause).
  */
-export type WorkflowSwitch = { kind: "member" | "org"; connectionId: string; since: Date };
+export type WorkflowSwitch = {
+  kind: "member" | "org";
+  connectionId: string;
+  since: Date;
+  status: EnablementStatus;
+  /** Why it's paused; null while on. */
+  pausedReason: PausedReason | null;
+  /** What a `needs_reenable` pause is about; null while on. */
+  pausedChange: PausedChange | null;
+  needsReconnect: boolean;
+};
+
+/** An enablement is `on`, or `paused` (always with its reason) until its user enables it again. */
+export type EnablementStatus = "on" | "paused";
+
+/**
+ * Why an enablement is paused. `needs_reenable`: a new version is riskier or needs more of the
+ * connection than the one its user switched on. M7 and M8 add budget and credit reasons.
+ */
+export type PausedReason = "needs_reenable";
+
+/**
+ * What a `needs_reenable` pause is about: what the versions published since its member last
+ * enabled it need that the one they enabled didn't (a higher max risk, new apps, new scopes).
+ */
+export type PausedChange = RequirementsGained;
+
+/**
+ * What publishing a spec would do to the workflow's enablements, for the publish dialog: what it
+ * needs that the latest version didn't (null when nothing, or when it's the first version), and
+ * how many enablements that are on it would pause.
+ */
+export type PublishPreview = { gained: RequirementsGained | null; pauses: number };
+
+/**
+ * What enabling did: switched the enablement on, or what the caller's Google connection must
+ * first be given. `connect` when they have none; `reconnect` (naming it) when it wasn't granted
+ * an app or scope the latest version needs. Apps as the catalog names them ("Gmail"), scopes by
+ * their short name ("gmail.modify").
+ */
+export type EnableResult =
+  | { enabled: true }
+  | { needs: "connect"; apps: string[]; scopes: string[] }
+  | { needs: "reconnect"; connectionId: string; apps: string[]; scopes: string[] };
+
+/** One user's enablement of a workflow, as admins see who has it on or paused. */
+export type EnablementSummary = {
+  userId: string;
+  name: string;
+  status: EnablementStatus;
+  pausedReason: PausedReason | null;
+  pausedChange: PausedChange | null;
+  since: Date;
+};
 
 /** What switched a workflow on: one admin's enablement, or an org workflow's org switch. */
 export type Switch = { kind: "member"; enablementId: string } | { kind: "org"; workflowId: string };

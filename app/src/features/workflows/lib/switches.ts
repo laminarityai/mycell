@@ -1,22 +1,22 @@
 // Switching workflows on and off. A member-credential workflow is switched on by an enablement on
-// the admin's own member connection; an org-credential workflow by its one switch, naming an org
-// connection. Either follows the workflow's latest version. Admin-only in M3 (members toggle in
-// M5); runs read what's on as the system ctx.
-import { randomUUID } from "node:crypto";
-import { and, desc, eq, inArray } from "drizzle-orm";
-import { isUniqueViolation } from "@/db/errors";
+// the user's own member connection; an org-credential workflow by its one switch, naming an org
+// connection. Either follows the workflow's latest version. These are the admin's switches,
+// choosing the connection; members enable from the Workflows page (enablements.ts). Runs read
+// what's on as the system ctx.
+import { and, eq, inArray } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { listConnections } from "@/features/connections/server";
 import type { ConnectionSummary } from "@/features/connections/types";
 import type { Spec, SpecIssue } from "@/features/spec/types";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError, SpecInvalidError, ValidationError } from "@/lib/errors";
-import type { Switch, SwitchedOn, WorkflowSwitch, WorkflowVersion } from "../types";
-import { enablements, workflows, workflowVersions } from "./schema";
+import type { Switch, SwitchedOn, WorkflowSwitch } from "../types";
+import { enablements, workflows } from "./schema";
 import { scopeIssues } from "./scope-check";
 import { reachesGmail } from "./validation";
-import { version } from "./versions";
+import { latestVersions } from "./latest-versions";
 import { findWorkflow } from "./access";
+import { deleteEnablement, switchOnEnablement } from "./enablement-rows";
 
 type Workflow = typeof workflows.$inferSelect;
 
@@ -50,19 +50,15 @@ export async function switchWorkflowOn(
     );
     return;
   }
-  await enable(ctx, workflowId, connectionId);
+  await switchOnEnablement(ctx, workflowId, connectionId);
 }
 
 /** Switches the workflow off: the caller's enablement goes, and so does the org switch. */
 export async function switchWorkflowOff(ctx: Ctx, workflowId: string): Promise<void> {
   requireAdmin(ctx);
   await findWorkflow(ctx, workflowId);
-  const db = forOrg(ctx);
-  await db.delete(
-    enablements,
-    and(eq(enablements.workflowId, workflowId), eq(enablements.userId, ctx.userId)),
-  );
-  await db.update(
+  await deleteEnablement(ctx, workflowId);
+  await forOrg(ctx).update(
     workflows,
     { orgConnectionId: null, orgSwitchedOnAt: null },
     eq(workflows.id, workflowId),
@@ -137,43 +133,56 @@ export async function switchesOf(
           ),
         });
   const ownOf = new Map(own.map((enablement) => [enablement.workflowId, enablement]));
-  return new Map(rows.map((row) => [row.id, switchFrom(row, ownOf.get(row.id))]));
+  const found = rows.map((row) => [row.id, switchFrom(row, ownOf.get(row.id))] as const);
+  const refused = await refusedConnections(
+    ctx,
+    found.map(([, one]) => one),
+  );
+  return new Map(
+    found.map(([id, one]) => [
+      id,
+      one === null ? null : { ...one, needsReconnect: refused.has(one.connectionId) },
+    ]),
+  );
 }
+
+type Found = Omit<WorkflowSwitch, "needsReconnect">;
 
 function switchFrom(
   workflow: Workflow,
   own: typeof enablements.$inferSelect | undefined,
-): WorkflowSwitch | null {
+): Found | null {
   if (own !== undefined) {
-    return { kind: "member", connectionId: own.connectionId, since: own.enabledAt };
+    return {
+      kind: "member",
+      connectionId: own.connectionId,
+      since: own.enabledAt,
+      status: own.status,
+      pausedReason: own.pausedReason,
+      pausedChange: own.pausedChange,
+    };
   }
   if (workflow.orgConnectionId === null || workflow.orgSwitchedOnAt === null) return null;
-  return { kind: "org", connectionId: workflow.orgConnectionId, since: workflow.orgSwitchedOnAt };
+  return {
+    kind: "org",
+    connectionId: workflow.orgConnectionId,
+    since: workflow.orgSwitchedOnAt,
+    status: "on",
+    pausedReason: null,
+    pausedChange: null,
+  };
 }
 
-async function enable(ctx: Ctx, workflowId: string, connectionId: string): Promise<void> {
-  const db = forOrg(ctx);
-  const mine = and(eq(enablements.workflowId, workflowId), eq(enablements.userId, ctx.userId));
-  const existing = (await db.select(enablements, { where: mine, limit: 1 })).at(0);
-  if (existing?.connectionId === connectionId) return;
-  if (existing !== undefined) {
-    await db.update(enablements, { connectionId, enabledAt: new Date() }, mine);
-    return;
-  }
-  try {
-    await db.insert(enablements, {
-      id: randomUUID(),
-      workflowId,
-      userId: ctx.userId,
-      connectionId,
-      // Set here rather than by the column's default: it's compared with messages' times,
-      // which are written from JS too (the column has no time zone).
-      enabledAt: new Date(),
-    });
-  } catch (error) {
-    // Switched on twice at once: the other switch-on won, and it's on.
-    if (!isUniqueViolation(error, "enablements_workflow_id_user_id_unique")) throw error;
-  }
+// The connections among the switches' that Google refused to refresh, as far as the caller can
+// see: their own, and for admins the org's. Read only when something is switched on.
+async function refusedConnections(ctx: Ctx, found: (Found | null)[]): Promise<Set<string>> {
+  if (found.every((one) => one === null)) return new Set();
+  const listing = await listConnections(ctx);
+  return new Set(
+    [...listing.connections, ...listing.orgConnections]
+      .filter((connection) => connection.status === "needs_reauth")
+      .map((connection) => connection.id),
+  );
 }
 
 /**
@@ -211,21 +220,4 @@ function connectionIssues(spec: Spec, connection: ConnectionSummary): SpecIssue[
     ];
   }
   return scopeIssues(spec, [connection]);
-}
-
-/** Each workflow's latest version, by workflow ID; none for a workflow never published. */
-export async function latestVersions(
-  ctx: Ctx,
-  workflowIds: string[],
-): Promise<Map<string, WorkflowVersion>> {
-  const latest = new Map<string, WorkflowVersion>();
-  if (workflowIds.length === 0) return latest;
-  const rows = await forOrg(ctx).select(workflowVersions, {
-    where: inArray(workflowVersions.workflowId, workflowIds),
-    orderBy: [desc(workflowVersions.number)],
-  });
-  for (const row of rows) {
-    if (!latest.has(row.workflowId)) latest.set(row.workflowId, version(row));
-  }
-  return latest;
 }

@@ -129,3 +129,12 @@ export function actionsAllowedBy(grantedScopes: readonly string[]): CatalogActio
 export function findAction(name: string): CatalogAction | undefined {
   return (catalog as Readonly<Record<string, CatalogAction>>)[name];
 }
+
+/**
+ * The apps a workflow calling `actionNames` uses, as admins name them: Gmail, whose new mail
+ * every workflow's trigger watches, then each action's app, each once.
+ */
+export function appsUsed(actionNames: readonly string[]): CatalogAction["app"][] {
+  const apps = actionNames.flatMap((name) => findAction(name)?.app ?? []);
+  return [...new Set<CatalogAction["app"]>(["Gmail", ...apps])];
+}

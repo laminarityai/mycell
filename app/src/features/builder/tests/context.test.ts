@@ -86,6 +86,19 @@ describe("a turn's context", () => {
 /** Text as it reads inside the request's JSON, its quotes and newlines escaped. */
 const inJson = (text: string) => JSON.stringify(text).slice(1, -1);
 
+describe("what the agent is told about who sees a workflow and its reviews", () => {
+  it("explains publishing to tags, and the hand-off setting, off unless asked for", async () => {
+    const { orgA } = await seedTwoOrgs();
+
+    const request = await instructionsOfTurn(orgA);
+
+    expect(request).toContain(inJson('"visibility": { "tags": ["<tag name>"] }'));
+    expect(request).toContain(inJson('"review": { "handoff": true }'));
+    expect(request).toContain("handoff is off");
+    expect(request).toContain("not a risk change");
+  });
+});
+
 describe("what the agent is told about branches", () => {
   it("explains branches, paths, conditions, and proposing one change at a time", async () => {
     const { orgA } = await seedTwoOrgs();

@@ -135,3 +135,28 @@ describe("forOrg(ctx).delete", () => {
     expect(bodies(await forOrg(orgs.orgB.admin.ctx).select(notes))).toEqual(["b1"]);
   });
 });
+
+describe("forOrg(ctx).transaction", () => {
+  it("commits every write together, still inside the caller's org", async () => {
+    const result = await forOrg(orgs.orgA.admin.ctx).transaction(async (tx) => {
+      await tx.insert(notes, { body: "a3" });
+      await tx.update(notes, { body: "b1-hijacked" }, eq(notes.body, "b1"));
+      return (await tx.select(notes)).length;
+    });
+
+    expect(result).toBe(3);
+    expect(bodies(await forOrg(orgs.orgA.admin.ctx).select(notes))).toEqual(["a1", "a2", "a3"]);
+    expect(bodies(await forOrg(orgs.orgB.admin.ctx).select(notes))).toEqual(["b1"]);
+  });
+
+  it("undoes every write when the function throws", async () => {
+    const failing = forOrg(orgs.orgA.admin.ctx).transaction(async (tx) => {
+      await tx.insert(notes, { body: "a3" });
+      await tx.delete(notes, eq(notes.body, "a1"));
+      throw new Error("halfway");
+    });
+
+    await expect(failing).rejects.toThrow("halfway");
+    expect(bodies(await forOrg(orgs.orgA.admin.ctx).select(notes))).toEqual(["a1", "a2"]);
+  });
+});

@@ -19,6 +19,7 @@ import { findWorkflow } from "./access";
 import { workflows, workflowVersions } from "./schema";
 import { switchesOf, switchOf } from "./switches";
 import { validateWorkflowSpec } from "./validation";
+import { audiencesOf } from "./visibility";
 
 type Version = typeof workflowVersions.$inferSelect;
 
@@ -82,6 +83,10 @@ export async function listWorkflows(ctx: Ctx): Promise<WorkflowSummary[]> {
     if (!latest.has(version.workflowId)) latest.set(version.workflowId, version);
   }
   const switches = await switchesOf(ctx, rows);
+  const audiences = await audiencesOf(
+    ctx,
+    [...latest.values()].map((version) => version.id),
+  );
   return rows.map((row) => {
     const version = latest.get(row.id);
     return {
@@ -89,7 +94,10 @@ export async function listWorkflows(ctx: Ctx): Promise<WorkflowSummary[]> {
       name: row.name,
       specId: row.specId,
       latestVersion: version === undefined ? null : versionSummary(version),
+      credentials: version === undefined ? null : version.spec.credentials,
       switch: switches.get(row.id) ?? null,
+      audience: version === undefined ? null : (audiences.get(version.id) ?? null),
+      archivedAt: row.archivedAt,
       updatedAt: row.updatedAt,
     };
   });
@@ -118,6 +126,7 @@ export async function getWorkflow(ctx: Ctx, workflowId: string): Promise<Workflo
     inserted: policy.ok ? policy.inserted : [],
     versions: versions.map(versionSummary),
     switch: await switchOf(ctx, row),
+    archivedAt: row.archivedAt,
     createdBy: row.createdBy,
     updatedAt: row.updatedAt,
   };

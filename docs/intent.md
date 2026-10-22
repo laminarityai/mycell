@@ -19,6 +19,8 @@ Two bars, one for each way of making workflows:
 1. **Builder (the ship bar).** At least one workflow that an admin described in the builder chat (not written by us) runs live on at least two of our own inboxes for **two days and at least 20 reviews, whichever comes later**. At least 80% of its reviews are approved without edits, and the teammates who enabled it never needed our help.
 2. **Discovery.** At least 3 of the top 5 suggestions are rated "real and worth automating" by the people whose work they describe.
 
+The builder bar is measured by the review counts on the Workflows page (`reviewStats`), per workflow and per member: how many reviews were approved, edited and approved, declined, sent from Gmail, or gone, and how many still wait. "Approved without edits" is the share `approved / (approved + edited approved + declined + gone)` of the workflow's draft reviews. Drafts sent straight from Gmail are counted beside it but left out, because Mycel can't tell whether they were edited. Choose "since current version" to judge a new version on its own.
+
 This bar is ours to revise as we learn. Change it here when it changes.
 
 ## Non-goals for v1

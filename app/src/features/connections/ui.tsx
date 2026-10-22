@@ -13,6 +13,11 @@ import { attemptTarget } from "./lib/source-names";
 import { LastPolled, StatusBadge } from "./lib/status-badge";
 import type { ConnectionsListing } from "./types";
 
+// Connecting and reconnecting from another feature's page, with `onDone` as the return target:
+// the enable flow sends a member through Google and then enables again.
+export { ConnectButton } from "./lib/connect-button";
+export { ReconnectButton } from "./lib/reconnect-button";
+
 /**
  * The caller's connections, one row per Google account with the apps it allows, their
  * unfinished connect attempts, and the button to connect. Admins also get the org's

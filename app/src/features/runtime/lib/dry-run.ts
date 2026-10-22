@@ -60,6 +60,8 @@ export async function dryRun(ctx: Ctx, spec: unknown, options: DryRunOptions) {
       spec: validated.applied,
       outputs,
       actions,
+      // Its approvals are reported as reviews it would wait for: nothing is recorded.
+      awaitReview: () => Promise.resolve(),
     };
     const base = { stepId: step.id, type: step.type, insertedByPolicy: inserted.has(step.id) };
     let execution: StepExecution;

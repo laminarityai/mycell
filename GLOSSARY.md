@@ -148,6 +148,10 @@ _Avoid_: Model, model tier
 The state of a workflow or enablement that will not run, always shown together with its reason.
 _Avoid_: Disabled, suspended, stopped
 
+**Archived**:
+A workflow an admin has stopped everywhere and hidden from members. Its enablements and org switch are kept, so restoring it brings them back as they were. It isn't paused: nothing about it waits on anyone else.
+_Avoid_: Deleted, retired
+
 **Catalog action**:
 One operation on an external source that a workflow is allowed to call, with a fixed risk level.
 _Avoid_: Tool, integration, capability
@@ -163,8 +167,16 @@ An app's own way of holding an action until a person approves it, such as a Gmai
 _Avoid_: Staged action, preview
 
 **Review**:
-One action waiting for a person's decision, shown on their Reviews page, which points at the waiting item in its app, or holds it when the app can't.
-_Avoid_: Approval (the step that creates a review), task (a Google Tasks item), notification
+One action waiting for a person's decision, shown on their Reviews page, which points at the waiting item in its app, or holds it when the app can't (ADR-0020). Its kind names the step that made it: `approval` (a draft an approval step left waiting) or `escalation` (a message an escalate step handed over).
+_Avoid_: Approval for the review itself (it's the step, and the kind of review that step makes), task (a Google Tasks item), notification
+
+**Shared review**:
+A review from an org connection's run, seen by everyone who can see its workflow through its tags and by every admin. The first to act on it wins.
+_Avoid_: Team review, group review
+
+**Hand-off**:
+Giving one review to a colleague, who then sees it and acts on it from the review's own connection. A workflow allows it or not; a member's own review is handed on only by that member.
+_Avoid_: Delegation (that's connection access, ADR-0016), forwarding (that's sending the email on), reassign
 
 **Custom action**:
 An action one company's builder chat described as a single call to an app, usable only by that company, with its risk set by a fixed rule.

@@ -92,6 +92,8 @@ export type ConnectionDetails = {
   id: string;
   source: Source;
   kind: ConnectionKind;
+  // The account it reaches, for a link into that account's app (a message in Gmail, say).
+  accountEmail: string;
   ownerUserId: string;
   needsReauth: boolean;
   grantedScopes: string[];

@@ -1,16 +1,24 @@
 // How other features reach a connection's source: read the connection and what it was granted,
 // read and write its source through the Nango proxy, and record where each app's ingest stands.
 // Each checks the connection is in the caller's org and theirs to read, and turns a connection
-// that's gone into NotFoundError.
+// that's gone into NotFoundError. getConnection and the proxy calls also accept a ctx delegated
+// that one connection (delegation.ts, ADR-0016).
 import { and, eq } from "drizzle-orm";
 import type { z } from "zod";
 import { forOrg } from "@/db/for-org";
 import type { Ctx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import type { ConnectionDetails, IngestedApp, IngestStateUpdate } from "../types";
+import { isDelegated } from "./delegation";
 import { grantedApps, INTEGRATIONS, proxyTarget } from "./google";
 import { ingestByApp, ingestStatesOf } from "./ingest-states";
-import { NangoConnectionGoneError, nangoProxyGet, nangoProxyPost } from "./nango";
+import {
+  NangoConnectionGoneError,
+  nangoProxyDelete,
+  nangoProxyGet,
+  nangoProxyPost,
+  nangoProxyPut,
+} from "./nango";
 import { connections, ingestStates } from "./schema";
 
 type Connection = typeof connections.$inferSelect;
@@ -27,9 +35,9 @@ export function isReadableBy(ctx: Ctx, connection: Pick<Connection, "kind" | "ow
     : ctx.role === "admin";
 }
 
-/** One connection the caller may read. */
+/** One connection the caller may read, or was delegated. */
 export async function getConnection(ctx: Ctx, connectionId: string): Promise<ConnectionDetails> {
-  const connection = await readable(ctx, connectionId);
+  const connection = await readable(ctx, connectionId, { delegated: true });
   return details(connection, (await ingestStatesOf(ctx, [connection.id])).get(connection.id));
 }
 
@@ -74,6 +82,7 @@ function details(
     id: connection.id,
     source: connection.source,
     kind: connection.kind,
+    accountEmail: connection.accountEmail,
     ownerUserId: connection.ownerUserId,
     needsReauth: connection.needsReauth,
     grantedScopes: connection.grantedScopes,
@@ -117,12 +126,35 @@ export async function proxyPost<T>(
   );
 }
 
+/** A PUT with a JSON body (Gmail's drafts.update), checked and answered like proxyPost. */
+export async function proxyPut<T>(
+  ctx: Ctx,
+  connectionId: string,
+  path: string,
+  body: unknown,
+  schema: z.ZodType<T>,
+): Promise<T | null> {
+  return proxied(ctx, connectionId, (connection) =>
+    nangoProxyPut(connection, proxyTarget(path), body, schema),
+  );
+}
+
+/**
+ * A DELETE (Gmail's drafts.delete), checked like proxyPost and not retried. False when the
+ * source had no such item.
+ */
+export async function proxyDelete(ctx: Ctx, connectionId: string, path: string): Promise<boolean> {
+  return proxied(ctx, connectionId, (connection) =>
+    nangoProxyDelete(connection, proxyTarget(path)),
+  );
+}
+
 async function proxied<T>(
   ctx: Ctx,
   connectionId: string,
   call: (connection: { connectionId: string; integration: string }) => Promise<T>,
 ): Promise<T> {
-  const connection = await readable(ctx, connectionId);
+  const connection = await readable(ctx, connectionId, { delegated: true });
   try {
     return await call({
       connectionId: connection.nangoConnectionId,
@@ -153,10 +185,18 @@ export async function recordIngestState(
   if (updated.length === 0) throw new NotFoundError("connection");
 }
 
-async function readable(ctx: Ctx, connectionId: string): Promise<Connection> {
+// The connection, if the caller may read it, or (where `delegated` allows it) was delegated it.
+async function readable(
+  ctx: Ctx,
+  connectionId: string,
+  options: { delegated?: boolean } = {},
+): Promise<Connection> {
   const rows = await forOrg(ctx).select(connections, { where: eq(connections.id, connectionId) });
   const connection = rows.at(0);
   if (connection === undefined) throw new NotFoundError("connection");
-  if (!isReadableBy(ctx, connection)) throw new ForbiddenError();
+  const allowed =
+    isReadableBy(ctx, connection) ||
+    (options.delegated === true && isDelegated(ctx, connection.id));
+  if (!allowed) throw new ForbiddenError();
   return connection;
 }

@@ -6,7 +6,7 @@ test("an admin's new tag reaches the member they assign it to", async ({
   signInAs,
 }) => {
   await signInAs(orgA.admin);
-  await page.goto("/");
+  await page.goto("/org");
   await page.getByRole("link", { name: "Manage tags" }).click();
   await expect(page).toHaveURL("/tags");
 
@@ -23,7 +23,7 @@ test("an admin's new tag reaches the member they assign it to", async ({
 
   await page.context().clearCookies();
   await signInAs(orgA.member);
-  await page.goto("/");
+  await page.goto("/org");
   const myTags = page.locator("section").filter({
     has: page.getByRole("heading", { name: "Your tags" }),
   });

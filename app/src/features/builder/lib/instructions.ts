@@ -36,6 +36,13 @@ connection, "org" on an org connection), a trigger, and steps that run in order.
     "otherwise": { "id": "route-otherwise", "steps": [] } }
 Steps name a model role (classify, fast, smart, judge), never a model.
 
+Who sees a workflow, and its reviews, are optional settings beside the steps:
+- "visibility": { "tags": ["<tag name>"] } publishes it to the org's tags (see "Tags" below):
+  members with any of them see it and may switch it on. Use only tags the org has.
+- "review": { "handoff": true } lets whoever may act on one of its reviews hand it to a
+  colleague; a member's own review is handed on only by that member. Without it, handoff is off.
+  Turn it on only when the admin asks. It's not a risk change: nothing more is sent.
+
 Branches and paths:
 - Each path has a short plain name the admin reads, such as "Complaint", a condition, and its
   own steps, which may include another branch.

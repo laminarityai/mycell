@@ -8,15 +8,28 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ArchiveForm } from "./lib/archive-form";
 import { blankSpec } from "./lib/blank-spec";
 import { GraphTraceProvider, useGraphTrace, useShowOnGraph } from "./lib/graph-trace";
 import { RiskBadge } from "./lib/risk-badge";
 import { SpecEditor } from "./lib/spec-editor";
 import { SwitchForm, type SwitchConnectionOption } from "./lib/switch-form";
-import { PublishButton } from "./lib/workflow-editor";
+import type { Tag } from "@/features/tags/types";
+import { PublishDialog } from "./lib/workflow-editor";
 import { WorkflowGraph, type WorkflowGraphProps } from "./lib/workflow-graph";
 import { WorkingSpecEditor, type EditableWorkflow } from "./lib/working-spec-editor";
-import type { WorkflowDetails, WorkflowSummary, WorkflowSwitch } from "./types";
+import { pausedText } from "./lib/paused-text";
+import type {
+  Audience,
+  EnablementSummary,
+  PublishPreview,
+  WorkflowDetails,
+  WorkflowSummary,
+  WorkflowSwitch,
+} from "./types";
+
+export { VisibleWorkflowsList } from "./lib/visible-workflows";
+export type { SwitchConnectionOption };
 
 export {
   GraphTraceProvider,
@@ -58,19 +71,47 @@ export function WorkflowSwitchSection({
   );
 }
 
-/** The admin's workflows: name, latest version, its max risk level, and whether it's on. */
-export function WorkflowsList({ workflows }: { workflows: WorkflowSummary[] }) {
+/** Archiving the workflow, or restoring it while archived. */
+export function WorkflowArchiveSection({ workflow }: { workflow: WorkflowDetails }) {
+  return (
+    <section className="flex flex-col gap-2" aria-label="Archive">
+      <h2 className="text-lg font-semibold">Archive</h2>
+      <ArchiveForm workflowId={workflow.id} archivedAt={workflow.archivedAt} />
+    </section>
+  );
+}
+
+/**
+ * The admin's workflows: name, latest version, its max risk level, the tags it's published to
+ * and how many users they reach, whether it's on for them or the org, who has it on or paused
+ * (`enablements`, by workflow ID), and Archive or Restore. A published org workflow has its org
+ * switch right in the row, over the connections it may run on (`orgConnections`, by workflow
+ * ID), the same form as on its page.
+ */
+export function WorkflowsList({
+  workflows,
+  enablements,
+  orgConnections,
+}: {
+  workflows: WorkflowSummary[];
+  enablements: ReadonlyMap<string, EnablementSummary[]>;
+  orgConnections: ReadonlyMap<string, SwitchConnectionOption[]>;
+}) {
   if (workflows.length === 0) {
     return <p className="text-sm text-muted-foreground">No workflows yet.</p>;
   }
   return (
-    <Table>
+    <Table aria-label="Workflows">
       <TableHeader>
         <TableRow>
           <TableHead>Workflow</TableHead>
           <TableHead>Latest version</TableHead>
           <TableHead>Max risk</TableHead>
+          <TableHead>Published to</TableHead>
+          <TableHead>Reach</TableHead>
           <TableHead>Switch</TableHead>
+          <TableHead>Enabled by</TableHead>
+          <TableHead>Archive</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -83,6 +124,11 @@ export function WorkflowsList({ workflows }: { workflows: WorkflowSummary[] }) {
               >
                 {workflow.name}
               </Link>
+              {workflow.archivedAt === null ? null : (
+                <Badge variant="outline" className="ml-2">
+                  Archived
+                </Badge>
+              )}
             </TableCell>
             <TableCell>
               {workflow.latestVersion === null
@@ -97,13 +143,57 @@ export function WorkflowsList({ workflows }: { workflows: WorkflowSummary[] }) {
               )}
             </TableCell>
             <TableCell>
-              <SwitchBadge current={workflow.switch} />
+              <AudienceTags audience={workflow.audience} />
+            </TableCell>
+            <TableCell>{reach(workflow.audience)}</TableCell>
+            <TableCell className="whitespace-normal">
+              {workflow.credentials === "org" ? (
+                <SwitchForm
+                  compact
+                  workflowId={workflow.id}
+                  current={workflow.switch}
+                  connections={orgConnections.get(workflow.id) ?? []}
+                  published
+                />
+              ) : (
+                <SwitchBadge current={workflow.switch} />
+              )}
+            </TableCell>
+            <TableCell className="whitespace-normal">
+              <EnabledBy enablements={enablements.get(workflow.id) ?? []} />
+            </TableCell>
+            <TableCell>
+              {workflow.latestVersion === null ? (
+                "—"
+              ) : (
+                <ArchiveForm compact workflowId={workflow.id} archivedAt={workflow.archivedAt} />
+              )}
             </TableCell>
           </TableRow>
         ))}
       </TableBody>
     </Table>
   );
+}
+
+/** The tags a published workflow is published to, or a dash. */
+function AudienceTags({ audience }: { audience: Audience | null }) {
+  if (audience === null) return "—";
+  if (audience.tags.length === 0) return <span className="text-muted-foreground">No tags</span>;
+  return (
+    <span className="flex flex-wrap gap-1">
+      {audience.tags.map((tag) => (
+        <Badge key={tag.id} variant="outline">
+          {tag.name}
+        </Badge>
+      ))}
+    </span>
+  );
+}
+
+function reach(audience: Audience | null): string {
+  if (audience === null) return "—";
+  return audience.reach === 1 ? "1 user" : `${String(audience.reach)} users`;
 }
 
 /** Whether the workflow is on: for the admin's own connection, for the org's, or off. */
@@ -116,11 +206,37 @@ function SwitchBadge({ current }: { current: WorkflowSwitch | null }) {
   );
 }
 
+/** Who has the workflow switched on, each marked when paused. */
+function EnabledBy({ enablements }: { enablements: EnablementSummary[] }) {
+  if (enablements.length === 0) return <span className="text-muted-foreground">Nobody</span>;
+  return (
+    <ul className="flex flex-col gap-1">
+      {enablements.map((enablement) => (
+        <li key={enablement.userId}>
+          {enablement.name}
+          {enablement.status === "paused"
+            ? ` (paused: ${pausedText(enablement.pausedReason, enablement.pausedChange)})`
+            : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /**
  * One workflow: its working spec in the editor (a graph or JSON, validated live), then Publish
- * and its versions. The editor starts again from each save's revision.
+ * (to the org's `tags`) and its versions. The editor starts again from each save's revision.
  */
-export function WorkflowEditor({ workflow }: { workflow: WorkflowDetails }) {
+export function WorkflowEditor({
+  workflow,
+  tags,
+  preview,
+}: {
+  workflow: WorkflowDetails;
+  tags: Tag[];
+  /** What publishing the working spec would pause (`previewPublish`). */
+  preview: PublishPreview | null;
+}) {
   const latest = workflow.versions.at(0);
   return (
     <div className="flex flex-col gap-6">
@@ -139,7 +255,16 @@ export function WorkflowEditor({ workflow }: { workflow: WorkflowDetails }) {
             ? "Not published yet."
             : `Version ${String(latest.number)} is the latest. Publishing makes the saved spec version ${String(latest.number + 1)}.`}
         </p>
-        <PublishButton workflowId={workflow.id} />
+        <PublishDialog
+          // A publish or a save starts the dialog again from the working spec's tags.
+          key={workflow.revision}
+          workflowId={workflow.id}
+          nextNumber={(latest?.number ?? 0) + 1}
+          tags={tags}
+          chosen={workflow.workingSpec.visibility?.tags ?? []}
+          handoff={workflow.workingSpec.review?.handoff === true}
+          preview={preview}
+        />
         {workflow.versions.length === 0 ? null : (
           <ul className="flex flex-col gap-1 text-sm">
             {workflow.versions.map((version) => (

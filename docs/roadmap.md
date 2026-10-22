@@ -6,18 +6,18 @@ The builder chat is primary (ADR-0007), so it comes before mining. Milestones ke
 
 ## Status (2026-10-21)
 
-| Milestone | State       | Spec | Notes                                                                                                                                                                       |
-| --------- | ----------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M0        | Done        | #1   |                                                                                                                                                                             |
-| M1        | In progress | #11  | Merged: connect, org connections, disconnect cascade, Gmail backfill. Open: polling #15, reconciliation #16 (PR #31), Drive #17, dogfood #19.                               |
-| M3        | Ready       | #33  | Grilled; tickets ready for agents. Decisions in ADR-0010 (credits slice), ADR-0011 (write access up front), ADR-0012 (what runs keep) and ADR-0014 (one Google connection). |
-| M6        | Ready       | #43  | Grilled; tickets ready for agents. Capability requests moved to M10.                                                                                                        |
-| M12       | Grilling    |      | Branches and the workflow graph. Decisions in ADR-0015 (paths that never join); research in `docs/research/workflow-builders.md`.                                           |
-| M5        | Done        | #51  | Publish, tags, member toggles and the Reviews page (PR #89). Open: dogfood check #57.                                                                                       |
-| M11       | Ready       | #67  | Calendar, Docs and Tasks, each through its pending form (ADR-0013); tickets ready for agents.                                                                               |
-| M13       | Ready       | #91  | Custom actions made by the builder chat. Decisions in ADR-0018 to ADR-0021; research in `docs/research/integrations/`. Tickets to cut.                                      |
-| M14       | Ready       | #92  | Memory foundation. Decisions in ADR-0022 to ADR-0025; research in `docs/research/memory-layer.md`. Tickets to cut.                                                          |
-| M7 onward | Not started |      | Build order after M14: M7, M8, M9 (the agent), then M2 (discovery) and M4, then M10.                                                                                        |
+| Milestone | State       | Spec | Notes                                                                                                                                         |
+| --------- | ----------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| M0        | Done        | #1   |                                                                                                                                               |
+| M1        | In progress | #11  | Merged: connect, org connections, disconnect cascade, Gmail backfill. Open: polling #15, reconciliation #16 (PR #31), Drive #17, dogfood #19. |
+| M3        | Done        | #33  | Spec, policy and runtime (PR #74). Open: dogfood check #42. Decisions in ADR-0010 to ADR-0012 and ADR-0014.                                   |
+| M6        | Done        | #43  | Builder chat (PR #76). Open: dogfood check #50. Capability requests moved to M13 (#101).                                                      |
+| M12       | Done        | #77  | Branches and the workflow graph (PR #88). Open: dogfood check #87. Decisions in ADR-0015.                                                     |
+| M5        | Done        | #51  | Publish, tags, member toggles and the Reviews page (PR #89). Open: dogfood check #57.                                                         |
+| M11       | Ready       | #67  | Calendar, Docs and Tasks, each through its pending form (ADR-0013); tickets ready for agents.                                                 |
+| M13       | Ready       | #91  | Custom actions made by the builder chat. Decisions in ADR-0018 to ADR-0021; research in `docs/research/integrations/`. Tickets to cut.        |
+| M14       | Ready       | #92  | Memory foundation. Decisions in ADR-0022 to ADR-0025; research in `docs/research/memory-layer.md`. Tickets to cut.                            |
+| M7 onward | Not started |      | Build order after M14: M7, M8, M9 (the agent), then M2 (discovery) and M4, then M10.                                                          |
 
 ## M0: Scaffold and tenancy
 
@@ -77,7 +77,7 @@ Planned in this order, each its own milestone or part of one, after M12:
 
 - Admin publishes to tags; members enable/disable; member vs. org credentials.
 - Versioning with auto-upgrade and the re-enable exception.
-- The Reviews page: a member's main screen, holding every step that needs a person (ADR-0013). Accept, decline, edit, and hand-off where the workflow allows it; a review count and a daily digest email.
+- The Reviews page: a member's main screen, holding every step that needs a person (ADR-0013). Accept, decline, edit, and hand-off where the workflow allows it; a count of waiting reviews in the navigation. No email: Mycel sends none in v1.
 - Record how each review ends; this measures the builder ship bar.
 - **Done when:** a teammate enables a workflow on their own inbox without our help.
 
@@ -111,7 +111,7 @@ Planned in this order, each its own milestone or part of one, after M12:
 
 ## M8: Observability and failure handling
 
-- Admin runs/traces view, retries, auto-pause after 3 consecutive failures, admin email, member "paused" badge.
+- Admin runs/traces view, retries, auto-pause after 3 consecutive failures, admin alerts in the app (Mycel sends no email in v1 unless decided otherwise), member "paused" badge.
 
 ## M9: The agent
 

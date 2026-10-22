@@ -163,6 +163,18 @@ describe("validateSpec", () => {
       issues: [{ message: expect.stringContaining("pattern") as string }],
     });
   });
+
+  it("accepts a hand-off setting, which is off unless it says so", () => {
+    const allowed = validateSpec({ ...exampleSpec(), review: { handoff: true } });
+    const unsaid = validateSpec({ ...exampleSpec(), review: {} });
+
+    expect(allowed).toMatchObject({ ok: true, spec: { review: { handoff: true } } });
+    expect(unsaid).toMatchObject({ ok: true, spec: { review: { handoff: false } } });
+    expect(issuePaths({ ...exampleSpec(), review: { handoff: "yes" } })).toEqual([
+      ["review", "handoff"],
+    ]);
+    expect(issuePaths({ ...exampleSpec(), review: { handOff: true } })).toEqual([["review"]]);
+  });
 });
 
 describe("validateSpec on a v2 spec", () => {

@@ -21,3 +21,9 @@ export {
   staffReadObject,
   staffSearchMemory,
 } from "./lib/staff-consent";
+// Admins only.
+export {
+  listCompanyWideLists,
+  markCompanyWideList,
+  unmarkCompanyWideList,
+} from "./lib/company-wide-lists";

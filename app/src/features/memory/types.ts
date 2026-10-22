@@ -40,6 +40,9 @@ export type LearnOutcome =
   | { outcome: "skipped"; reason: SkipReason }
   | { outcome: "gone" };
 
+/** A group address an admin marked company-wide: email sent to it is visible to everyone. */
+export type CompanyWideList = { address: string; markedAt: Date };
+
 /** How a reader names an object: by its ID, or by one of its exact keys. */
 export type ObjectLookup = { id: string } | { key: { kind: ObjectKeyKind; value: string } };
 

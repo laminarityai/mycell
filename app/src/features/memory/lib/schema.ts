@@ -107,6 +107,21 @@ export const accessListEntries = pgTable(
   ],
 );
 
+/**
+ * A group address, such as all@, an admin marked company-wide (ADR-0023): email sent to it is
+ * visible to everyone in the org. A setting of the org's, not derived from a connection.
+ */
+export const companyWideLists = pgTable(
+  "company_wide_lists",
+  {
+    orgId: text("org_id").notNull(),
+    // Lowercased, at the org's Workspace domain.
+    address: text("address").notNull(),
+    markedAt: timestamp("marked_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.orgId, table.address] })],
+);
+
 /** A person, company, deal, project or document memory knows about. Never matched across orgs. */
 export const memoryObjects = pgTable(
   "memory_objects",
@@ -119,7 +134,7 @@ export const memoryObjects = pgTable(
   },
   (table) => [
     unique("memory_objects_org_id_id_unique").on(table.orgId, table.id),
-    // Matching's name candidates (`%`, trigram similarity; pg_trgm, migration 0028).
+    // Matching's name candidates (`%`, trigram similarity; pg_trgm, migration 0029).
     index("memory_objects_name_trgm_idx").using("gin", table.name.op("gin_trgm_ops")),
   ],
 );
@@ -193,7 +208,7 @@ export const facts = pgTable(
       foreignColumns: [memoryObjects.orgId, memoryObjects.id],
     }).onDelete("cascade"),
     // `superseded_by_id` has no foreign key: when the fact it points to is deleted, a trigger
-    // (migration 0030) points it at that fact's own replacement, or makes it current again.
+    // (migration 0031) points it at that fact's own replacement, or makes it current again.
     index("facts_superseded_by_id_idx").on(table.supersededById),
   ],
 );

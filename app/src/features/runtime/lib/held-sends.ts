@@ -9,7 +9,8 @@ import { forOrg } from "@/db/for-org";
 import type { CustomValue, RenderedRequest } from "@/features/custom-actions/description";
 import { decryptForOrg, encryptForOrg } from "@/features/key-store/server";
 import type { Ctx } from "@/lib/ctx";
-import { heldSends } from "./schema";
+import { NotFoundError } from "@/lib/errors";
+import { heldSends, runs } from "./schema";
 
 /** What a held send holds: the rendered request, and the checked inputs it was rendered from. */
 export type HeldRequest = {
@@ -49,11 +50,28 @@ export async function holdRequest(
   const ofStep = and(eq(heldSends.runId, send.runId), eq(heldSends.stepId, send.stepId));
   const earlier = (await db.select(heldSends, { where: ofStep })).at(0);
   if (earlier !== undefined) return earlier.id;
+  // The run's provenance (invariant 2).
+  const run = (await db.select(runs, { where: eq(runs.id, send.runId) })).at(0);
+  if (run === undefined) throw new NotFoundError("run");
   const request = await encryptForOrg(ctx, JSON.stringify(held));
-  await db.insert(heldSends, { id: randomUUID(), ...send, request }, { onConflictDoNothing: true });
+  const provenance = { sourceRef: run.sourceRef, ownerScope: run.ownerScope };
+  await db.insert(
+    heldSends,
+    { id: randomUUID(), ...send, ...provenance, request },
+    { onConflictDoNothing: true },
+  );
   const row = (await db.select(heldSends, { where: ofStep })).at(0);
   if (row === undefined) throw new Error("The held send wasn't stored.");
   return row.id;
+}
+
+/** Records the review that waits on the held send, which it then goes with. */
+export async function linkHeldSendReview(
+  ctx: Ctx,
+  heldSendId: string,
+  reviewId: string,
+): Promise<void> {
+  await forOrg(ctx).update(heldSends, { reviewId }, eq(heldSends.id, heldSendId));
 }
 
 /** The held send, decrypted; undefined once it's gone (sent, declined, expired). */

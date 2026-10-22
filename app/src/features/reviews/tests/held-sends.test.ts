@@ -272,6 +272,16 @@ describe("who sees a held send", () => {
   });
 });
 
+describe("what a held send records", () => {
+  it("names the message that started its run, and its review", async () => {
+    const orgs = await seedTwoOrgs();
+    const { reviewId, message } = await heldSend(orgs);
+
+    expect(await tablesHolding(message.id)).toContain("held_sends");
+    expect(await tablesHolding(reviewId)).toContain("held_sends");
+  });
+});
+
 describe("disconnecting", () => {
   it("the app's connection deletes its held sends and their reviews", async () => {
     const orgs = await seedTwoOrgs();
@@ -285,15 +295,17 @@ describe("disconnecting", () => {
     expect(await tablesHolding(heldSendId)).not.toContain("held_sends");
   });
 
-  it("the run's own connection deletes its held sends too", async () => {
+  it("the run's own connection deletes its held sends and their reviews too", async () => {
     const orgs = await seedTwoOrgs();
     const { owner, reviewId, google, runId } = await heldSend(orgs);
     const heldSendId = await heldSendIdOf(owner, runId);
 
     await disconnect(owner, google.id);
 
-    expect(await tablesHolding(heldSendId)).toEqual(["reviews"]);
-    expect((await openReview(owner, reviewId)).review.status).toBe("gone");
+    expect(await listReviews(owner)).toEqual([]);
+    await expect(openReview(owner, reviewId)).rejects.toThrow("That review doesn't exist.");
+    expect(await tablesHolding(heldSendId)).toEqual([]);
+    expect(await tablesHolding(runId)).toEqual([]);
   });
 });
 

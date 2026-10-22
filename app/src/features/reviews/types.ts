@@ -57,7 +57,13 @@ export const REVIEW_EXPIRY_DAYS: Partial<Record<ReviewKind, number>> = { held_se
 /** What a run hands `createReview`: where the item waits, and the run that prepared it. */
 export type NewReview = {
   runId: string;
+  /** The connection the item waits on, which acting on the review goes through. */
   connectionId: string;
+  /**
+   * The run's own connection, which `sourceRef` came from, when it isn't `connectionId`: a held
+   * send's review is on the connection to the custom action's app. The review goes with both.
+   */
+  runConnectionId?: string;
   workflowId: string;
   workflowVersionId: string;
   kind: ReviewKind;

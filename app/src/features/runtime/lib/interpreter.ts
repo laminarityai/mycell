@@ -18,6 +18,7 @@ import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import type { RetryPolicy, RunOutcome, RunStep } from "../types";
 import { actionExecutors } from "./actions";
 import { holdCustomWrite } from "./custom-action";
+import { linkHeldSendReview } from "./held-sends";
 import { attemptStep } from "./executors";
 import { isConnectionGone, type Failure } from "./failures";
 import { defaultRetryPolicy, runInline, withRetries } from "./run-step";
@@ -79,18 +80,22 @@ async function executeStep(ctx: Ctx, run: Run, step: Step, place: RunPlace): Pro
     actionSet: place.actionSet,
     actions: actionExecutors,
     holdSend: holdCustomWrite,
-    awaitReview: ({ kind, itemRef, threadRef, ...item }) =>
-      createReview(ctx, {
+    awaitReview: async ({ kind, itemRef, threadRef, ...item }) => {
+      const reviewId = await createReview(ctx, {
         kind,
         itemRef,
         threadRef,
         ...("reason" in item ? { reason: item.reason } : {}),
         runId: run.id,
         connectionId: "connectionId" in item ? item.connectionId : run.connectionId,
+        runConnectionId: run.connectionId,
         workflowId: run.workflowId,
         workflowVersionId: run.workflowVersionId,
         sourceRef: run.sourceRef,
-      }),
+      });
+      // A held send goes with its review.
+      if (kind === "held_send") await linkHeldSendReview(ctx, itemRef, reviewId);
+    },
   };
   const attempted = await withRetries(place.retry, () => attemptStep(step, context));
   try {

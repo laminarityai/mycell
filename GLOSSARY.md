@@ -58,6 +58,10 @@ _Avoid_: Activity, message, record
 Ingesting a connection's last 90 days when it's recorded, before polling picks up what's new.
 _Avoid_: Import, initial sync
 
+**Watch**:
+A standing request asking an app to tell Mycel whenever something changes in one connection's account, so Mycel checks for new items right away instead of waiting for its next scheduled check. A watch runs out after a few days unless Mycel renews it.
+_Avoid_: Subscription, webhook, channel
+
 **Object**:
 A business thing, such as a customer, order, or file, that several events refer to.
 _Avoid_: Entity, record

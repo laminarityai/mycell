@@ -56,10 +56,43 @@ const envSchema = z.object({
   CREDIT_ESTIMATE_SMART: positiveNumber("50"),
   CREDIT_ESTIMATE_JUDGE: positiveNumber("50"),
   CREDIT_ESTIMATE_EMBED: positiveNumber("1"),
+  // The injection screen (Google Cloud Model Armor): content fetched for a model is screened for
+  // prompt injection before any model reads it. Unset, nothing is screened and memory learns
+  // nothing, so CI and local dev start without Google Cloud. The template is its full resource
+  // name; its prompt-injection filter must be on and its logging off (docs/architecture.md).
+  MODEL_ARMOR_TEMPLATE: z
+    .string()
+    .regex(
+      /^projects\/[^/]+\/locations\/[a-z0-9-]+\/templates\/[^/]+$/,
+      "Expected projects/<project>/locations/<location>/templates/<template>",
+    )
+    .optional(),
+  // How Mycel reaches Model Armor from Vercel with no stored key (Workload Identity Federation):
+  // the pool provider that trusts the Vercel project's OIDC tokens, and the service account it
+  // acts as. Both are required with MODEL_ARMOR_TEMPLATE.
+  GCP_WORKLOAD_IDENTITY_PROVIDER: z
+    .string()
+    .regex(
+      /^projects\/\d+\/locations\/global\/workloadIdentityPools\/[^/]+\/providers\/[^/]+$/,
+      "Expected projects/<number>/locations/global/workloadIdentityPools/<pool>/providers/<id>",
+    )
+    .optional(),
+  GCP_SERVICE_ACCOUNT_EMAIL: z.email().optional(),
 });
 
 export const env = envSchema
   .superRefine((parsed, context) => {
+    if (parsed.MODEL_ARMOR_TEMPLATE !== undefined) {
+      for (const key of ["GCP_WORKLOAD_IDENTITY_PROVIDER", "GCP_SERVICE_ACCOUNT_EMAIL"] as const) {
+        if (parsed[key] === undefined) {
+          context.addIssue({
+            code: "custom",
+            path: [key],
+            message: "Required with MODEL_ARMOR_TEMPLATE",
+          });
+        }
+      }
+    }
     if (parsed.INNGEST_DEV) return;
     for (const key of ["INNGEST_EVENT_KEY", "INNGEST_SIGNING_KEY"] as const) {
       if (parsed[key] === undefined) {

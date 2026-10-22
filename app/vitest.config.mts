@@ -26,6 +26,20 @@ process.env.MODEL_FAST = "test/fast-default";
 process.env.MODEL_SMART = "test/smart-default";
 process.env.MODEL_JUDGE = "test/judge-default";
 process.env.MODEL_EMBED = "test/embed-default";
+// The injection screen reaches the fake Model Armor (src/testing/fake-model-armor.ts), which also
+// plays Google's token exchange: it accepts this Vercel OIDC token (an unsigned JWT that expires
+// in 2100) for this pool provider and service account.
+process.env.MODEL_ARMOR_TEMPLATE = "projects/mycel-test/locations/us/templates/mycel-memory";
+process.env.GCP_WORKLOAD_IDENTITY_PROVIDER =
+  "projects/123456789/locations/global/workloadIdentityPools/vercel/providers/vercel";
+process.env.GCP_SERVICE_ACCOUNT_EMAIL = "mycel-screen@mycel-test.iam.gserviceaccount.com";
+process.env.VERCEL_OIDC_TOKEN = [
+  { alg: "none", typ: "JWT" },
+  { sub: "owner:mycel:project:app:environment:test", exp: 4_102_444_800 },
+]
+  .map((part) => Buffer.from(JSON.stringify(part)).toString("base64url"))
+  .concat("signature")
+  .join(".");
 
 export default defineConfig({
   resolve: { tsconfigPaths: true },

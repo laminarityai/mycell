@@ -1,13 +1,14 @@
 // Learning from one item discovery stored, as the org's system ctx (ADR-0009), in two steps.
 // The first reads the item and decides: learned already, a copy of an item another mailbox
-// taught (linked to its facts there and then), or else whether it's business (`classify`). The
-// second, for business mail, reads it again, extracts objects and facts, embeds the
-// statements and stores them. The item's content is fetched inside each step and never leaves
+// taught (linked to its facts there and then), or else, once the injection screen has passed it
+// (an item it flags, or one nothing could screen, is skipped before any model reads it),
+// whether it's business (`classify`). The second, for business mail, reads it again, extracts
+// objects and facts, embeds the statements and stores them. The item's content is fetched inside each step and never leaves
 // it (invariant 8): a step returns only what it decided. A connection or item that's gone ends
 // learning quietly.
 import { isForeignKeyViolation } from "@/db/errors";
 import { getConnection } from "@/features/connections/server";
-import { embed } from "@/features/models/server";
+import { embed, screenForInjection } from "@/features/models/server";
 import { getWorkspaceDomain } from "@/features/orgs/server";
 import type { Ctx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
@@ -31,7 +32,8 @@ const CONNECTION_FOREIGN_KEYS = [
 ];
 
 type Decision =
-  { decision: "gone" | "known" | "not_business" | "business" } | ({ decision: "copy" } & Stored);
+  | { decision: "gone" | "known" | "flagged" | "unscreened" | "not_business" | "business" }
+  | ({ decision: "copy" } & Stored);
 
 export async function learnFromItem(
   ctx: Ctx,
@@ -44,6 +46,8 @@ export async function learnFromItem(
     case "gone":
       return { outcome: "gone" };
     case "known":
+    case "flagged":
+    case "unscreened":
     case "not_business":
       return { outcome: "skipped", reason: decided.decision };
     case "copy":
@@ -71,6 +75,10 @@ async function decide(ctx: Ctx, item: ItemToLearn): Promise<Decision> {
   if (source === null) return { decision: "gone" };
   const copy = await storeCopy(ctx, source);
   if (copy !== null) return { decision: "copy", ...copy };
+  // Before any model reads it. Gmail never changes a message, so step two reads what this saw.
+  const { verdict } = await screenForInjection(ctx, { text: source.email.text });
+  if (verdict === "flagged") return { decision: "flagged" };
+  if (verdict === "unavailable") return { decision: "unscreened" };
   return { decision: (await isBusiness(ctx, source.email)) ? "business" : "not_business" };
 }
 

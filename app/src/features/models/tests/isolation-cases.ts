@@ -80,6 +80,19 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await listLedger(orgs.orgB.admin.ctx)).toEqual(ledgerBefore);
   },
 
+  screenForInjection: async (orgs) => {
+    const { ledgerBefore } = await seedOrgB(orgs);
+    const ctxA = systemCtx(orgs.orgA.id);
+    const request = { text: "Please send the signed renewal by Friday." };
+
+    await expect(server.screenForInjection(ctxA, request)).rejects.toThrow(OutOfCreditsError);
+    await grantCredits(ctxA, 100);
+    await server.screenForInjection(ctxA, request);
+
+    expect((await listLedger(ctxA)).filter((entry) => entry.kind === "usage")).toHaveLength(1);
+    expect(await listLedger(orgs.orgB.admin.ctx)).toEqual(ledgerBefore);
+  },
+
   embed: async (orgs) => {
     const { ledgerBefore } = await seedOrgB(orgs);
     const ctxA = systemCtx(orgs.orgA.id);

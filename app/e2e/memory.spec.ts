@@ -23,7 +23,7 @@ test("an admin sees memory's settings before starting it; members have no memory
   const list = `all@${orgA.workspaceDomain}`;
   await page.getByRole("textbox", { name: "Group address" }).fill(list);
   await page.getByRole("button", { name: "Mark company-wide" }).click();
-  await expect(page.getByRole("cell", { name: list })).toBeVisible();
+  await expect(page.getByRole("cell", { name: list, exact: true })).toBeVisible();
   await page.getByRole("button", { name: `Stop treating ${list} as company-wide` }).click();
   await expect(page.getByText("No lists are marked company-wide.")).toBeVisible();
 

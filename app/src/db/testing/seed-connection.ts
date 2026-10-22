@@ -18,6 +18,8 @@ export async function seedGoogleConnection(input: {
   scopes: string[];
   /** The connection at the e2e fake Nango, for a test whose server reads its source. */
   nangoConnectionId?: string;
+  /** Where each ingested app stands on it; none by default. */
+  ingest?: Partial<Record<"gmail" | "drive", "backfilling" | "active" | "failed">>;
 }): Promise<{ id: string }> {
   const id = randomUUID();
   const nangoConnectionId = input.nangoConnectionId ?? `e2e-${id}`;
@@ -32,5 +34,11 @@ export async function seedGoogleConnection(input: {
          sql`, `,
        )}]::text[])
   `);
+  for (const [app, status] of Object.entries(input.ingest ?? {})) {
+    await getDb().execute(sql`
+      insert into ingest_states (id, org_id, connection_id, app, status)
+      values (${randomUUID()}, ${input.orgId}, ${id}, ${app}, ${status})
+    `);
+  }
   return { id };
 }

@@ -199,13 +199,14 @@ class FakeNango {
    * A user finishes OAuth in Connect UI opened with a reconnect session: Nango replaces the
    * connection's credentials and returns the `override` webhook it then sends. Choosing a
    * different account than before swaps in that account's (empty) mailbox, Drive, spreadsheets
-   * and Microsoft 365.
+   * and Microsoft 365. The new token refreshes again, so a revoked connection reaches its source.
    * `scopes`, when given, are what the new token was granted; otherwise they stay as they were.
    */
   completeReconnect(token: string, account?: FakeAccount, scopes?: readonly string[]): FakeWebhook {
     const session = this.sessions.reconnects.find((s) => s.token === token);
     if (session === undefined) throw new Error(`Unknown reconnect session token ${token}`);
     const connection = this.connection(session.connectionId);
+    connection.refreshFails = false;
     if (scopes !== undefined) connection.scopes = scopes;
     if (account !== undefined && account.emailAddress !== connection.account.emailAddress) {
       connection.account = account;

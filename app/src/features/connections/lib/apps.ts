@@ -68,15 +68,19 @@ const accountEmailReaders: Record<
   Exclude<RegisteredAppId, "google">,
   (connection: NangoConnection) => Promise<string>
 > = {
-  // The authorized user, with the `base` scope every Pipedrive app has.
-  pipedrive: async (connection) => {
-    const me = await nangoProxyGet(connection, { path: "/v1/users/me" }, pipedriveUser);
+  // The signed-in user, with `User.Read`: their mailbox address, or their sign-in name for a
+  // user without a mailbox.
+  microsoft: async (connection) => {
+    const me = await nangoProxyGet(connection, { path: "/v1.0/me" }, microsoftUser);
     if (me === null) throw new NangoConnectionGoneError();
-    return me.data.email;
+    return me.mail ?? me.userPrincipalName;
   },
 };
 
-const pipedriveUser = z.object({ data: z.object({ email: z.string().min(1) }) });
+const microsoftUser = z.object({
+  mail: z.string().min(1).nullish(),
+  userPrincipalName: z.string().min(1),
+});
 
 /**
  * The connected account's address, lowercased. A Google connection asks the first of its

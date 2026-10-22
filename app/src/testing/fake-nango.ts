@@ -9,7 +9,7 @@ import { connectionsApiHandlers, type ListingBehaviour } from "./fake-nango-conn
 import { FakeIntegrations } from "./fake-nango-integrations";
 import { authorised, NANGO_API, unauthorised } from "./fake-nango-http";
 import { proxyHandlers } from "./fake-nango-proxy";
-import { FakePipedrive } from "./fake-pipedrive";
+import { FakeMicrosoft } from "./fake-microsoft";
 import { type FakeReconnectSession, type FakeSession, FakeSessions } from "./fake-nango-sessions";
 import { DEFAULT_SCOPES } from "./fake-proxied-sources";
 import { FakeSheets } from "./fake-sheets";
@@ -27,12 +27,12 @@ export type FakeConnection = {
   account: FakeAccount;
   // The OAuth scopes the app granted, as Nango reports them in the token response.
   scopes: readonly string[];
-  // The account's Gmail mailbox, Drive and spreadsheets, and its Pipedrive. The proxy reaches
+  // The account's Gmail mailbox, Drive and spreadsheets, and its Microsoft 365. The proxy reaches
   // each through its API's host, if the connection's scopes allow that API.
   mailbox: FakeMailbox;
   drive: FakeDrive;
   sheets: FakeSheets;
-  pipedrive: FakePipedrive;
+  microsoft: FakeMicrosoft;
   // The app refused the refresh token (access revoked): the proxy can't call the source.
   refreshFails?: boolean;
 };
@@ -54,7 +54,7 @@ class FakeNango {
   private nextId = 1;
   private listing: ListingBehaviour = { pageCap: undefined, empty: false };
   /**
-   * The integrations: `google`, `google-mail`, `google-drive` and `pipedrive`, until a test
+   * The integrations: `google`, `google-mail`, `google-drive` and `microsoft`, until a test
    * changes them.
    */
   readonly integrations = new FakeIntegrations();
@@ -81,8 +81,8 @@ class FakeNango {
   /** The connected account's spreadsheets, for seeding sheets. */
   sheets = (connectionId: string): FakeSheets => this.connection(connectionId).sheets;
 
-  /** The connected account's Pipedrive, for reading what was sent to it. */
-  pipedrive = (connectionId: string): FakePipedrive => this.connection(connectionId).pipedrive;
+  /** The connected account's Microsoft 365, for reading what was sent to it. */
+  microsoft = (connectionId: string): FakeMicrosoft => this.connection(connectionId).microsoft;
 
   private connection(connectionId: string): FakeConnection {
     const connection = this.connections.get(connectionId);
@@ -185,7 +185,7 @@ class FakeNango {
       mailbox: new FakeMailbox(account.emailAddress),
       drive: new FakeDrive(account.emailAddress),
       sheets: new FakeSheets(),
-      pipedrive: new FakePipedrive(account.emailAddress),
+      microsoft: new FakeMicrosoft(account.emailAddress),
     });
     return connectionId;
   }
@@ -199,7 +199,7 @@ class FakeNango {
    * A user finishes OAuth in Connect UI opened with a reconnect session: Nango replaces the
    * connection's credentials and returns the `override` webhook it then sends. Choosing a
    * different account than before swaps in that account's (empty) mailbox, Drive, spreadsheets
-   * and Pipedrive.
+   * and Microsoft 365.
    * `scopes`, when given, are what the new token was granted; otherwise they stay as they were.
    */
   completeReconnect(token: string, account?: FakeAccount, scopes?: readonly string[]): FakeWebhook {
@@ -212,7 +212,7 @@ class FakeNango {
       connection.mailbox = new FakeMailbox(account.emailAddress);
       connection.drive = new FakeDrive(account.emailAddress);
       connection.sheets = new FakeSheets();
-      connection.pipedrive = new FakePipedrive(account.emailAddress);
+      connection.microsoft = new FakeMicrosoft(account.emailAddress);
     }
     return this.authWebhook(session.connectionId, "override", true);
   }

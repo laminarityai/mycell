@@ -141,8 +141,7 @@ export async function nangoConnectionExists(
 }
 
 // The parts of a connection Mycel reads: the app's token response, kept whole by Nango as
-// `credentials.raw`, whose `scope` lists the granted scopes: space-separated for Google, as
-// OAuth has it, and comma-separated for Pipedrive (unverified), so either is read.
+// `credentials.raw`, whose `scope` lists the granted scopes, space-separated as OAuth has it.
 const connectionCredentials = z.object({
   credentials: z.object({
     raw: z.object({ scope: z.string().optional() }).optional(),
@@ -166,14 +165,15 @@ export async function readGrantedScopes(
   if (response.status === 404) throw new NangoConnectionGoneError();
   if (!response.ok) throw new Error(`Nango connection read failed: ${String(response.status)}`);
   const { credentials } = connectionCredentials.parse(await response.json());
-  return (credentials.raw?.scope ?? "").split(/[\s,]+/).filter((scope) => scope !== "");
+  return (credentials.raw?.scope ?? "").split(/\s+/).filter((scope) => scope !== "");
 }
 
 // An error body from Nango itself rather than from the source: Nango's codes are strings, and
 // Google's are numbers. For a connection it doesn't have, the proxy answers 400
 // `{ error: { code: "server_error", message: "Failed to get connection" } }`, the same code it
 // uses when a token refresh fails (allProxy.ts, handleProxyServiceErrorResponse), so the code
-// alone can't say the connection is gone.
+// alone can't say the connection is gone. Microsoft Graph's codes are strings too, so its
+// refusals also ask Nango about the connection before being read as Graph's answer.
 const nangoError = z.object({ error: z.object({ code: z.string() }) });
 
 /**

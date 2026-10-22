@@ -5,7 +5,7 @@ import { googleScope } from "@/lib/google";
  * The apps our team has registered with their vendor and in Mycel (ADR-0018), each described
  * in `registered-apps.ts`. People connect them; the builder writes custom actions for them.
  */
-export const registeredAppIdSchema = z.enum(["google", "pipedrive"]);
+export const registeredAppIdSchema = z.enum(["google", "microsoft"]);
 export type RegisteredAppId = z.infer<typeof registeredAppIdSchema>;
 
 /**
@@ -30,8 +30,7 @@ export type RegisteredApp = {
   name: string;
   // Its Nango integration (provider config key).
   integration: string;
-  // The API origins its calls may reach. A host may start with `*.` for an app that serves
-  // each company on its own subdomain (Nango then picks it from the connection).
+  // The API origins its calls may reach.
   hosts: readonly string[];
   // The permissions (OAuth scopes) its connections ask for.
   scopes: readonly string[];

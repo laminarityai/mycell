@@ -4,8 +4,8 @@
 // because `connections` connects and proxies them, and `custom-actions` imports `connections`.
 //
 // Registering an app: add its ID to `registeredAppIdSchema` (types.ts), its entry below, its API
-// description under `app/api-descriptions/`, how to read which account it reached (lib/apps.ts), its
-// integration to `pnpm nango:preflight`, and a fake of it to the fake Nango.
+// description under `app/api-descriptions/`, how to read which account it reached
+// (lib/apps.ts), its integration to `pnpm nango:preflight`, and a fake of it to the fake Nango.
 import { GOOGLE_HOSTS } from "@/lib/google";
 import {
   GOOGLE_APP_SCOPES,
@@ -42,42 +42,48 @@ export const REGISTERED_APPS: Record<RegisteredAppId, RegisteredApp> = {
       ],
     },
   },
-  // The CRM built for small companies: OAuth and the API on every plan, authorized per user
-  // (so a member connects their own login, and an org connection is a shared one), and a
-  // private app needs no vendor review (docs/research/integrations/hubspot-pipedrive.md).
-  // Each company is served on its own subdomain, which Nango reads from the token response
-  // (`api_domain`) and proxies to as `<api_domain>/api`, so paths start `/v1/` or `/v2/`.
-  pipedrive: {
-    id: "pipedrive",
-    name: "Pipedrive",
-    integration: "pipedrive",
-    hosts: ["https://*.pipedrive.com"],
-    // Pipedrive's users accept every scope or none. Reading and writing deals, people,
-    // organizations, activities and leads, finding records, and naming users: no mail, admin,
-    // webhooks or fields (docs/intent.md non-goal 7).
+  // The suite most businesses use (docs/research/integrations/ranking.md: 450M+ paid Microsoft
+  // 365 commercial seats, Okta's #1 app), all through Microsoft Graph on one host with one token
+  // (docs/research/integrations/microsoft-365.md). Delegated permissions only, so every call acts
+  // as the signed-in person and sees only what they can (non-goal 7); asked for all at once, as
+  // ADR-0014 does for Google. Most need one tenant-wide admin consent per customer.
+  microsoft: {
+    id: "microsoft",
+    name: "Microsoft 365",
+    // Nango's `microsoft` provider: the `common` authority, proxying to graph.microsoft.com.
+    integration: "microsoft",
+    hosts: ["https://graph.microsoft.com"],
+    // Signing in and refreshing, then mail, calendar, contacts, files and Excel (OneDrive and
+    // SharePoint), To Do and Planner, and sending in Teams. No shared-mailbox, Teams-reading or
+    // admin-only scopes (microsoft-365.md, sections 5 and 8).
     scopes: [
-      "base",
-      "deals:full",
-      "contacts:full",
-      "activities:full",
-      "leads:full",
-      "search:read",
-      "users:read",
+      "openid",
+      "profile",
+      "offline_access",
+      "User.Read",
+      "Mail.ReadWrite",
+      "Mail.Send",
+      "Calendars.ReadWrite",
+      "Contacts.ReadWrite",
+      "Files.ReadWrite.All",
+      "Sites.ReadWrite.All",
+      "Tasks.ReadWrite",
+      "Chat.Create",
+      "ChatMessage.Send",
+      "ChannelMessage.Send",
     ],
     accountingOrPayments: false,
     bansStoredIndexes: false,
-    // v2 replaces v1 where it exists; notes, leads, files and more are still v1 only.
-    // Copied 2026-10-21.
+    // Microsoft's generated OpenAPI description of Graph v1.0 (44 MB, so kept gzipped). Its
+    // server is https://graph.microsoft.com/v1.0, so a call's path starts `/v1.0/`. Copied
+    // 2026-10-21.
     apiDescription: {
       format: "openapi",
       files: [
         {
-          path: "api-descriptions/pipedrive/openapi-v1.yaml",
-          source: "https://developers.pipedrive.com/docs/api/v1/openapi.yaml",
-        },
-        {
-          path: "api-descriptions/pipedrive/openapi-v2.yaml",
-          source: "https://developers.pipedrive.com/docs/api/v2/openapi.yaml",
+          path: "api-descriptions/microsoft/graph-v1.0-openapi.yaml.gz",
+          source:
+            "https://raw.githubusercontent.com/microsoftgraph/msgraph-metadata/master/openapi/v1.0/openapi.yaml",
         },
       ],
     },
@@ -89,22 +95,11 @@ export const registeredApps: readonly RegisteredApp[] = registeredAppIdSchema.op
   (id) => REGISTERED_APPS[id],
 );
 
-/**
- * Whether a URL is on one of the app's hosts: its origin is one of them, or, for a `*.` host,
- * is https on a subdomain of it.
- */
+/** Whether a URL is on one of the app's hosts: its origin is exactly one of them. */
 export function isAppHost(app: RegisteredApp, url: string): boolean {
-  let origin: URL;
   try {
-    origin = new URL(url);
+    return app.hosts.includes(new URL(url).origin);
   } catch {
     return false;
   }
-  return app.hosts.some((host) => {
-    const wildcard = /^https:\/\/\*\.(.+)$/.exec(host)?.[1];
-    if (wildcard === undefined) return origin.origin === host;
-    return (
-      origin.protocol === "https:" && origin.port === "" && origin.hostname.endsWith(`.${wildcard}`)
-    );
-  });
 }

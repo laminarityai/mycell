@@ -13,7 +13,7 @@ export async function seedGoogleConnection(input: {
   accountEmail: string;
   kind?: "member" | "org";
   /** The registered app it connects: Google unless a test says otherwise. */
-  source?: "google" | "pipedrive";
+  source?: "google" | "microsoft";
   /** Granted OAuth scopes: full URLs for Google. */
   scopes: string[];
   /** The connection at the e2e fake Nango, for a test whose server reads its source. */

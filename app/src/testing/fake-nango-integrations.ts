@@ -11,7 +11,7 @@ export type FakeIntegration = { uniqueKey: string; provider: string; missingFiel
 // each under its provider's name.
 const DEFAULT_INTEGRATIONS: FakeIntegration[] = [
   { uniqueKey: "google", provider: "google", missingFields: [] },
-  { uniqueKey: "pipedrive", provider: "pipedrive", missingFields: [] },
+  { uniqueKey: "microsoft", provider: "microsoft", missingFields: [] },
   { uniqueKey: "google-mail", provider: "google-mail", missingFields: [] },
   { uniqueKey: "google-drive", provider: "google-drive", missingFields: [] },
 ];

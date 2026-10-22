@@ -28,7 +28,7 @@ describe("nango preflight", () => {
     expect(results.map((r) => [r.name, r.ok])).toEqual([
       ["Nango API key", true],
       ["Integration google", true],
-      ["Integration pipedrive", true],
+      ["Integration microsoft", true],
       ["Webhook signing key", true],
       ["Inngest", true],
     ]);
@@ -40,9 +40,9 @@ describe("nango preflight", () => {
   });
 
   it("fails a registered app's missing integration", async () => {
-    fakeNango.integrations.remove("pipedrive");
+    fakeNango.integrations.remove("microsoft");
 
-    expect((await byName(READY))["Integration pipedrive"]).toMatchObject({ ok: false });
+    expect((await byName(READY))["Integration microsoft"]).toMatchObject({ ok: false });
   });
 
   it("fails the key and the integrations when Nango rejects the key", async () => {

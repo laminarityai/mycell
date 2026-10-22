@@ -14,8 +14,8 @@ import { member } from "@/db/auth-schema";
 
 /**
  * One Nango connection to one account in a registered app: a Google account (or, from before
- * ADR-0014, one of its apps), or an account in another registered app such as Pipedrive. One per
- * account and app.
+ * ADR-0014, one of its apps), or an account in another registered app such as Microsoft 365.
+ * One per account and app.
  * The owner has no foreign key to `member`: an org connection outlives the admin who made it,
  * so member connections are deleted explicitly when their owner is removed.
  */
@@ -26,7 +26,7 @@ export const connections = pgTable(
     orgId: text("org_id").notNull(),
     kind: text("kind", { enum: ["member", "org"] }).notNull(),
     ownerUserId: text("owner_user_id").notNull(),
-    source: text("source", { enum: ["google", "pipedrive", "gmail", "drive"] }).notNull(),
+    source: text("source", { enum: ["google", "microsoft", "gmail", "drive"] }).notNull(),
     // The connected account's address, lowercased.
     accountEmail: text("account_email").notNull(),
     nangoConnectionId: text("nango_connection_id").notNull().unique(),
@@ -93,7 +93,7 @@ export const connectAttempts = pgTable(
     orgId: text("org_id").notNull(),
     userId: text("user_id").notNull(),
     kind: text("kind", { enum: ["member", "org"] }).notNull(),
-    source: text("source", { enum: ["google", "pipedrive", "gmail", "drive"] }).notNull(),
+    source: text("source", { enum: ["google", "microsoft", "gmail", "drive"] }).notNull(),
     status: text("status", { enum: ["pending", "connected", "refused"] }).notNull(),
     refusal: text("refusal"),
     createdAt: timestamp("created_at").defaultNow().notNull(),

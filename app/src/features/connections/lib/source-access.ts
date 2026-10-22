@@ -96,7 +96,7 @@ function details(
  * A GET to the connection's app through the Nango proxy (never Nango syncs), parsed with
  * `schema`. A Google path is the API's own (`/gmail/v1/users/me/...`, `/drive/v3/...`,
  * `/v4/spreadsheets/...`) and decides which API host the call reaches; any other app's goes to
- * the host Nango keeps for the connection (Pipedrive's `/v1/...`, say). Nango retries the
+ * the host Nango keeps for the connection (Microsoft Graph's `/v1.0/...`, say). Nango retries the
  * source's 429s and 5xx. Null means the source has no such item; a connection gone here or at
  * Nango is NotFoundError.
  */

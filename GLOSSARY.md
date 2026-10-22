@@ -29,7 +29,7 @@ One authorised link between a user or the org and an external account, such as o
 _Avoid_: Integration, account, link
 
 **Registered app**:
-An app our team has registered with its vendor and set up in Mycel, so that people can connect it and the builder chat can make custom actions in it. Google and Pipedrive are the first.
+An app our team has registered with its vendor and set up in Mycel, so that people can connect it and the builder chat can make custom actions in it. Google and Microsoft 365 are the first.
 _Avoid_: Integration, provider, connector
 
 **Google app**:

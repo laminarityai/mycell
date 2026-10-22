@@ -14,7 +14,7 @@ export const APP_NAMES: Record<GoogleApp, string> = {
 /** How the UI names each source: its registered app, or a one-app connection's app. */
 export const SOURCE_NAMES: Record<Source, string> = {
   google: REGISTERED_APPS.google.name,
-  pipedrive: REGISTERED_APPS.pipedrive.name,
+  microsoft: REGISTERED_APPS.microsoft.name,
   gmail: "Gmail",
   drive: "Google Drive",
 };
@@ -30,7 +30,7 @@ export function appList(apps: readonly GoogleApp[]): string {
 export function attemptTarget(attempt: { source: Source; kind: ConnectionKind }): string {
   const orgTargets: Record<Source, string> = {
     google: "an org Google account",
-    pipedrive: "an org Pipedrive account",
+    microsoft: "an org Microsoft 365 account",
     gmail: "an org inbox",
     drive: "an org Drive",
   };

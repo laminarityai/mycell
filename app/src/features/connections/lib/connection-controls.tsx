@@ -34,8 +34,8 @@ export function ConnectionNotices({ connections }: { connections: ConnectionSumm
 function noticeFor(connection: ConnectionSummary): string | undefined {
   const account = connection.accountEmail;
   if (connection.status === "needs_reauth") {
-    if (connection.source === "pipedrive") {
-      return `Pipedrive stopped accepting Mycel's access to ${account}. Reconnect it so workflows can use it again.`;
+    if (connection.source === "microsoft") {
+      return `Microsoft stopped accepting Mycel's access to ${account}. Reconnect it so workflows can use it again.`;
     }
     return `Google stopped accepting Mycel's access to ${account}. Reconnect it to pick up new ${appList(connection.apps)} activity again.`;
   }

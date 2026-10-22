@@ -14,7 +14,7 @@ const NANGO_API_URL = "https://api.nango.dev";
  * with the one Google integration that every new Google connection uses (ADR-0014). The one-app
  * `google-mail` and `google-drive` serve only connections made before it.
  */
-export const EXPECTED_INTEGRATIONS = ["google", "pipedrive"] as const;
+export const EXPECTED_INTEGRATIONS = ["google", "microsoft"] as const;
 
 /** What the checks read: the env values that matter, as src/env.ts parsed them. */
 export type PreflightConfig = {

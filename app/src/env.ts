@@ -33,6 +33,11 @@ const envSchema = z.object({
     .transform((value) => value === "1"),
   INNGEST_EVENT_KEY: z.string().min(1).optional(),
   INNGEST_SIGNING_KEY: z.string().min(1).optional(),
+  // The app key Inngest's encryption middleware encrypts step state and function results with,
+  // so what Inngest stores of a run is ciphertext (ADR-0021). One key for the whole app, held in
+  // a KMS in production and set here from it. Required unless INNGEST_DEV=1; without it the dev
+  // server keeps step state in the clear.
+  INNGEST_ENCRYPTION_KEY: z.string().min(32).optional(),
   // The Vercel AI Gateway: every model call goes through it, and it reports each call's cost.
   AI_GATEWAY_API_KEY: z.string().min(1),
   // Where the gateway is, when not Vercel's own (https://ai-gateway.vercel.sh/v4/ai). Only the
@@ -45,6 +50,9 @@ const envSchema = z.object({
   MODEL_FAST: modelIdSchema,
   MODEL_SMART: modelIdSchema,
   MODEL_JUDGE: modelIdSchema,
+  // The embed role has a default, so existing .env files keep working. Its vectors have 1536
+  // dimensions, and stored vectors must keep one size: change it only together with them.
+  MODEL_EMBED: modelIdSchema.default("openai/text-embedding-3-small"),
   // Credits (ADR-0010): how many credits one US dollar of gateway cost uses up, and the per-role
   // estimate a call must find in the balance before it is made. Placeholders until M7's pricing.
   CREDITS_PER_USD: positiveNumber("1000"),
@@ -52,15 +60,90 @@ const envSchema = z.object({
   CREDIT_ESTIMATE_FAST: positiveNumber("5"),
   CREDIT_ESTIMATE_SMART: positiveNumber("50"),
   CREDIT_ESTIMATE_JUDGE: positiveNumber("50"),
+  CREDIT_ESTIMATE_EMBED: positiveNumber("1"),
+  // The injection screen (Google Cloud Model Armor): content fetched for a model is screened for
+  // prompt injection before any model reads it. Unset, nothing is screened and memory learns
+  // nothing, so CI and local dev start without Google Cloud. The template is its full resource
+  // name; its prompt-injection filter must be on and its logging off (docs/architecture.md).
+  MODEL_ARMOR_TEMPLATE: z
+    .string()
+    .regex(
+      /^projects\/[^/]+\/locations\/[a-z0-9-]+\/templates\/[^/]+$/,
+      "Expected projects/<project>/locations/<location>/templates/<template>",
+    )
+    .optional(),
+  // How Mycel reaches Model Armor from Vercel with no stored key (Workload Identity Federation):
+  // the pool provider that trusts the Vercel project's OIDC tokens, and the service account it
+  // acts as. Both are required with MODEL_ARMOR_TEMPLATE.
+  GCP_WORKLOAD_IDENTITY_PROVIDER: z
+    .string()
+    .regex(
+      /^projects\/\d+\/locations\/global\/workloadIdentityPools\/[^/]+\/providers\/[^/]+$/,
+      "Expected projects/<number>/locations/global/workloadIdentityPools/<pool>/providers/<id>",
+    )
+    .optional(),
+  GCP_SERVICE_ACCOUNT_EMAIL: z.email().optional(),
+  // The key store (ADR-0020, ADR-0024): AWS KMS holds two keys per org, made on first use under
+  // the aliases `alias/<KMS_ALIAS_PREFIX>/org/<org ID>` (encryption) and `…/<org ID>/hash` (keyed
+  // hashes). The key store needs KMS_REGION, which is required unless INNGEST_DEV=1, like the
+  // Inngest keys. The access key pair is an IAM user's; leave both unset to use the AWS SDK's own
+  // credential chain (a role) instead. Vercel reserves AWS_REGION and the AWS_* key names, hence
+  // the KMS_ prefix. KMS_ENDPOINT points at a KMS other than AWS's regional one, such as
+  // LocalStack.
+  KMS_REGION: z.string().min(1).optional(),
+  KMS_ACCESS_KEY_ID: z.string().min(1).optional(),
+  KMS_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+  KMS_ALIAS_PREFIX: z
+    .string()
+    .regex(/^[\w-]+$/, "Letters, digits, - and _ only")
+    .default("mycel"),
+  KMS_ENDPOINT: z.url().optional(),
 });
 
-export const env = envSchema
-  .superRefine((parsed, context) => {
-    if (parsed.INNGEST_DEV) return;
-    for (const key of ["INNGEST_EVENT_KEY", "INNGEST_SIGNING_KEY"] as const) {
+/**
+ * Away from the local Inngest dev server (production, and CI's build and the e2e tests, which
+ * run as production does), what production needs is required at boot rather than found missing
+ * when a job or a held send first uses it.
+ */
+const REQUIRED_UNLESS_DEV = [
+  "INNGEST_EVENT_KEY",
+  "INNGEST_SIGNING_KEY",
+  "INNGEST_ENCRYPTION_KEY",
+  "KMS_REGION",
+] as const;
+
+const checkedEnvSchema = envSchema.superRefine((parsed, context) => {
+  if (parsed.MODEL_ARMOR_TEMPLATE !== undefined) {
+    for (const key of ["GCP_WORKLOAD_IDENTITY_PROVIDER", "GCP_SERVICE_ACCOUNT_EMAIL"] as const) {
       if (parsed[key] === undefined) {
-        context.addIssue({ code: "custom", path: [key], message: "Required unless INNGEST_DEV=1" });
+        context.addIssue({
+          code: "custom",
+          path: [key],
+          message: "Required with MODEL_ARMOR_TEMPLATE",
+        });
       }
     }
-  })
-  .parse(process.env);
+  }
+  if ((parsed.KMS_ACCESS_KEY_ID === undefined) !== (parsed.KMS_SECRET_ACCESS_KEY === undefined)) {
+    context.addIssue({
+      code: "custom",
+      path: ["KMS_SECRET_ACCESS_KEY"],
+      message: "KMS_ACCESS_KEY_ID and KMS_SECRET_ACCESS_KEY are set together or not at all",
+    });
+  }
+  if (parsed.INNGEST_DEV) return;
+  for (const key of REQUIRED_UNLESS_DEV) {
+    if (parsed[key] === undefined) {
+      context.addIssue({ code: "custom", path: [key], message: "Required unless INNGEST_DEV=1" });
+    }
+  }
+});
+
+export type Env = z.output<typeof checkedEnvSchema>;
+
+/** The environment `source` describes, checked; throws with every issue. */
+export function parseEnv(source: Readonly<Record<string, string | undefined>>): Env {
+  return checkedEnvSchema.parse(source);
+}
+
+export const env = parseEnv(process.env);

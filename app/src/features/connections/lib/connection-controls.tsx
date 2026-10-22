@@ -1,11 +1,11 @@
-import { GOOGLE_APP_SCOPES, type ConnectionSummary } from "../types";
+import { GOOGLE_APP_SCOPES, type ConnectionSummary, type Source } from "../types";
 import { DisconnectButton } from "./disconnect-button";
 import { ReconnectButton } from "./reconnect-button";
 import { appList, SOURCE_NAMES } from "./source-names";
 
 /**
  * Tells whoever manages these connections (the owner, or admins for org connections) what
- * needs them: a connection Google stopped accepting Mycel's access to (polling skips it until
+ * needs them: a connection its app stopped accepting Mycel's access to (polling skips it until
  * it's reconnected), a backfill that failed (a reconnect starts it again), apps a Google
  * connection wasn't allowed, one-app connections from before one Google connection per
  * account, which connecting Google replaces, and Gmail read without the write access
@@ -35,12 +35,15 @@ export function ConnectionNotices({ connections }: { connections: ConnectionSumm
 function noticeFor(connection: ConnectionSummary): string | undefined {
   const account = connection.accountEmail;
   if (connection.status === "needs_reauth") {
+    if (connection.source === "microsoft") {
+      return `Microsoft stopped accepting Mycel's access to ${account}. Reconnect it so workflows can use it again.`;
+    }
     return `Google stopped accepting Mycel's access to ${account}. Reconnect it to pick up new ${appList(connection.apps)} activity again.`;
   }
   if (connection.status === "failed") {
     return `Mycel couldn't finish reading ${account}'s history. Reconnect it to try again.`;
   }
-  if (connection.source !== "google") {
+  if (isOneApp(connection.source)) {
     const write = needsWriteAccess(connection)
       ? " Until then, workflows can't label or draft in it: reconnect it to grant write access."
       : "";
@@ -63,7 +66,7 @@ function needsWriteAccess(connection: ConnectionSummary): boolean {
 }
 
 /**
- * A connection's controls: Reconnect when Google stopped accepting it, to retry a backfill that
+ * A connection's controls: Reconnect when its app stopped accepting it, to retry a backfill that
  * failed, to allow apps a Google connection wasn't granted, or to grant Gmail write access,
  * and Disconnect.
  */
@@ -93,14 +96,23 @@ export function ConnectionControls({ connection }: { connection: ConnectionSumma
   );
 }
 
-/** Which apps a connection reaches, as a table cell's text. */
+/**
+ * Which apps a connection reaches, as a table cell's text: the Google apps it allows, or
+ * another registered app by name.
+ */
 export function ConnectionApps({
   connection,
 }: {
   connection: Pick<ConnectionSummary, "source" | "apps">;
 }) {
-  if (connection.source !== "google") {
+  if (isOneApp(connection.source)) {
     return <>{SOURCE_NAMES[connection.source]} only (old connection)</>;
   }
+  if (connection.source !== "google") return <>{SOURCE_NAMES[connection.source]}</>;
   return <>{connection.apps.length === 0 ? "No apps" : appList(connection.apps)}</>;
+}
+
+/** A one-app connection from before one Google connection per account (ADR-0014). */
+function isOneApp(source: Source): boolean {
+  return source === "gmail" || source === "drive";
 }

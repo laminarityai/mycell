@@ -23,21 +23,27 @@ export type ReviewRow = typeof reviews.$inferSelect;
  * Records a `waiting` review of an item a run prepared, owned as the run's connection is: a
  * member connection's by its owner, an org connection's by the org. Called by a run's step, as
  * the org's system ctx, inside the step: one item of one run makes one review, however often
- * the step is retried.
+ * the step is retried. Returns the review's ID.
  */
-export async function createReview(ctx: Ctx, review: NewReview): Promise<void> {
+export async function createReview(ctx: Ctx, review: NewReview): Promise<string> {
   if (ctx.role !== "system") throw new ForbiddenError();
   const connection = await getConnection(ctx, review.connectionId);
-  await forOrg(ctx).insert(
+  const db = forOrg(ctx);
+  await db.insert(
     reviews,
     {
       ...review,
       id: randomUUID(),
+      runConnectionId: review.runConnectionId ?? review.connectionId,
       ownerScope: connection.kind,
       ownerUserId: connection.kind === "member" ? connection.ownerUserId : null,
     },
     { onConflictDoNothing: true },
   );
+  const ofItem = and(eq(reviews.runId, review.runId), eq(reviews.itemRef, review.itemRef));
+  const row = (await db.select(reviews, { where: ofItem })).at(0);
+  if (row === undefined) throw new Error("The review wasn't stored.");
+  return row.id;
 }
 
 /**

@@ -1,16 +1,16 @@
 // Nango's reports on a connection's credentials. A failed token refresh (`auth` / `refresh`,
-// success false) means Google no longer accepts Mycel's access: the connection needs its owner
+// success false) means the app no longer accepts Mycel's access: the connection needs its owner
 // to reconnect, and polling skips it. A later successful refresh clears that. A reconnect
-// (`override`) clears it too, and re-reads what Google granted: a reconnect can allow an app
-// the connection lacked, which then backfills, or leave one out, which it then stops using. An
-// app whose backfill failed (Google refused the token mid-backfill, say) backfills again.
+// (`override`) clears it too, and re-reads what the app granted: a reconnect can allow a Google
+// app the connection lacked, which then backfills, or leave one out, which it then stops using.
+// An app whose backfill failed (the app refused the token mid-backfill, say) backfills again.
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { forOrg } from "@/db/for-org";
 import { systemCtx, type Ctx } from "@/lib/ctx";
 import { ATTEMPT_TAGS } from "./connect";
 import { sendAppsGranted } from "./events";
-import { grantedApps, INTEGRATIONS, readAccountEmail } from "./google";
+import { grantedApps, integrationOf, readAccountEmail } from "./apps";
 import { failIngestStates, syncIngestStates } from "./ingest-states";
 import { NangoConnectionGoneError, readGrantedScopes } from "./nango";
 import { connections } from "./schema";
@@ -42,7 +42,7 @@ export async function recordCredentials(webhook: CredentialsWebhook): Promise<vo
     where: eq(connections.nangoConnectionId, webhook.connectionId),
   });
   const connection = rows.at(0);
-  if (connection === undefined || INTEGRATIONS[connection.source] !== webhook.providerConfigKey) {
+  if (connection === undefined || integrationOf(connection.source) !== webhook.providerConfigKey) {
     return;
   }
   if (webhook.operation === "refresh") {
@@ -54,7 +54,7 @@ export async function recordCredentials(webhook: CredentialsWebhook): Promise<vo
 
 async function recordReconnect(ctx: Ctx, connection: Connection): Promise<void> {
   const grant = await readGrant(connection);
-  // A reconnect can pick another Google account in the popup. The connection must keep
+  // A reconnect can pick another account in the popup. The connection must keep
   // reaching the account it was checked and recorded for, or it keeps waiting on a reconnect.
   if (grant === undefined || grant.accountEmail !== connection.accountEmail) {
     await setNeedsReauth(ctx, connection, true);
@@ -82,13 +82,13 @@ async function readGrant(connection: Connection) {
   try {
     const scopes = await readGrantedScopes(
       connection.nangoConnectionId,
-      INTEGRATIONS[connection.source],
+      integrationOf(connection.source),
     );
     const apps = grantedApps(connection.source, scopes);
     const accountEmail = await readAccountEmail(
       connection.source,
       connection.nangoConnectionId,
-      apps,
+      scopes,
     );
     return accountEmail === undefined ? undefined : { scopes, apps, accountEmail };
   } catch (error) {

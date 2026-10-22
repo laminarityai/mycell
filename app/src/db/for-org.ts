@@ -1,7 +1,7 @@
 // The org-scoped handle (ADR-0003): the only way feature code reaches tenant tables.
 // Every read, update, and delete is filtered to ctx.orgId, and every insert takes its
 // org_id from ctx. A caller can't name another org: org_id isn't accepted as input.
-import { and, eq, type InferInsertModel, type InferSelectModel, type SQL } from "drizzle-orm";
+import { and, eq, sql, type InferInsertModel, type InferSelectModel, type SQL } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { AnyPgColumn, PgColumn, PgTable } from "drizzle-orm/pg-core";
 import type { Ctx } from "@/lib/ctx";
@@ -26,6 +26,10 @@ export type InsertOptions = {
 
 export type OrgScopedDb = {
   select<T extends TenantTable>(table: T, options?: SelectOptions): Promise<InferSelectModel<T>[]>;
+  /** How many of the org's rows `where` picks. */
+  count(table: TenantTable, where?: SQL): Promise<number>;
+  /** The sum of a numeric `column` over the org's rows `where` picks; 0 when none. */
+  sum(table: TenantTable, column: PgColumn, where?: SQL): Promise<number>;
   insert<T extends TenantTable>(
     table: T,
     values: TenantValues<T> | TenantValues<T>[],
@@ -65,6 +69,24 @@ function scoped(ctx: Ctx, db: Executor): OrgScopedDb {
         .$dynamic();
       const rows = options.limit === undefined ? await query : await query.limit(options.limit);
       return rows as InferSelectModel<typeof table>[];
+    },
+
+    async count(table, where) {
+      const source: PgTable = table;
+      const rows = await db
+        .select({ value: sql<string>`count(*)` })
+        .from(source)
+        .where(inOrg(table, where));
+      return Number(rows.at(0)?.value ?? 0);
+    },
+
+    async sum(table, column, where) {
+      const source: PgTable = table;
+      const rows = await db
+        .select({ value: sql<string>`coalesce(sum(${column}), 0)` })
+        .from(source)
+        .where(inOrg(table, where));
+      return Number(rows.at(0)?.value ?? 0);
     },
 
     async insert(table, values, options = {}) {

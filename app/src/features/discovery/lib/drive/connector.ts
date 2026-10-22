@@ -1,6 +1,8 @@
 // The Drive connector: the changes feed's page token as the cursor, files.list for the backfill,
 // and changes.list for polling. Both read the same file fields (never the name) and normalize
-// each file the same way. My Drive and files shared with the user only: no shared drives.
+// each file the same way. My Drive and files shared with the user only: no shared drives. The
+// changes feed also reports files removed: deleted, no longer shared with the account (Drive's
+// `removed`), or put in the trash.
 import { SourceRequestError } from "@/features/connections/types";
 import type { Connector, NormalizedEvent, SourceClient } from "../connector";
 import {
@@ -42,15 +44,25 @@ export const driveConnector: Connector = {
 
   async poll(client, cursor) {
     const found = new Map<string, NormalizedEvent>();
+    const removed = new Set<string>();
     let pageToken = cursor;
     for (;;) {
       const page = await changesPage(client, pageToken);
       if (page === "expired") return { cursorExpired: true };
       for (const change of page.changes ?? []) {
-        const file = change.file;
-        // A removal, a change to a shared drive itself, or a file put in the trash.
-        if (change.removed === true || change.changeType !== "file" || file === undefined) continue;
-        if (file.trashed === true) continue;
+        // A change to a shared drive itself.
+        if (change.changeType !== "file") continue;
+        const fileId = change.fileId ?? change.file?.id;
+        const file = change.removed === true ? undefined : change.file;
+        if (file === undefined || file.trashed === true) {
+          if (fileId === undefined) continue;
+          removed.add(fileId);
+          // Gone after a change earlier in the feed: none of its versions is stored.
+          for (const ref of found.keys()) if (ref.startsWith(`${fileId}@`)) found.delete(ref);
+          continue;
+        }
+        // Back in the account's Drive after a removal earlier in the feed.
+        removed.delete(file.id);
         const event = normalizeFile(file);
         found.set(event.sourceRef, event);
       }
@@ -62,7 +74,11 @@ export const driveConnector: Connector = {
         throw new Error("Drive's last changes page had no newStartPageToken");
       }
       // The last page's token: the next poll starts where this one ended.
-      return { events: [...found.values()], nextCursor: page.newStartPageToken };
+      return {
+        events: [...found.values()],
+        removed: [...removed],
+        nextCursor: page.newStartPageToken,
+      };
     }
   },
 };

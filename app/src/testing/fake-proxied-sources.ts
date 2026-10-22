@@ -1,19 +1,21 @@
-// The Google APIs the fake Nango's proxy serves, each by its host and path prefix, answering
-// from the connection's own fake (its Gmail mailbox, its Drive or its spreadsheets). Like
-// Google, an API answers 403 to a connection whose token holds none of the scopes it accepts
-// (for a write, none of the scopes its writes accept), and a host answers 404 for a path it
-// doesn't serve.
+// The APIs the fake Nango's proxy serves, each by its host and path prefix, answering from the
+// connection's own fake: Google's (its Gmail mailbox, its Drive or its spreadsheets), and the
+// registered app Microsoft 365, through Microsoft Graph. Like Google, an API answers 403 to a
+// connection whose token holds none of the scopes it accepts (for a write, none of the scopes
+// its writes accept), and a host answers 404 for a path it doesn't serve.
 import { HttpResponse } from "msw";
+import { REGISTERED_APPS } from "@/features/connections/registered-apps";
 import { GOOGLE_APP_SCOPES } from "@/features/connections/types";
 import { driveError, driveResponse } from "./fake-drive";
 import { gmailError, gmailResponse, gmailWrite } from "./fake-gmail";
 import type { FakeConnection } from "./fake-nango";
+import { graphError } from "./fake-microsoft";
 import { sheetsError } from "./fake-sheets";
 
 type Respond = (connection: FakeConnection, path: string, params: URLSearchParams) => Response;
 
 /** The verbs the proxy forwards: a GET reads, and the rest write. */
-export type ProxyMethod = "GET" | "POST" | "PUT" | "DELETE";
+export type ProxyMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 export type WriteMethod = Exclude<ProxyMethod, "GET">;
 
 type RespondToWrite = (
@@ -30,7 +32,7 @@ export type ProxiedSource = {
   // Any one of these lets a token call the API.
   scopes: readonly string[];
   respond: Respond;
-  // How the API answers a write (POST, PUT or DELETE), and the scopes that let a token write;
+  // How the API answers a write (POST, PUT, PATCH or DELETE), and the scopes that let a token write;
   // none for a read-only API.
   write?: { scopes: readonly string[]; respond: RespondToWrite };
   rateLimited: () => Response;
@@ -42,6 +44,11 @@ const DRIVE_READONLY = GOOGLE_APP_SCOPES.drive;
 const DRIVE = "https://www.googleapis.com/auth/drive";
 const DRIVE_FILE = "https://www.googleapis.com/auth/drive.file";
 const SPREADSHEETS_READONLY = "https://www.googleapis.com/auth/spreadsheets.readonly";
+// Which Graph resources need which scope isn't modelled: any token that can sign in reads, and
+// any that can write something writes.
+const GRAPH_WRITE_SCOPES = REGISTERED_APPS.microsoft.scopes.filter((scope) =>
+  /\.(ReadWrite|Send|Create)(\.All)?$/.test(scope),
+);
 
 export const PROXIED_SOURCES: ProxiedSource[] = [
   {
@@ -52,8 +59,10 @@ export const PROXIED_SOURCES: ProxiedSource[] = [
     write: {
       // Labels, messages.modify and drafts all take gmail.modify; drafts take compose too.
       scopes: [GOOGLE_APP_SCOPES.gmail, GMAIL_COMPOSE, "https://mail.google.com/"],
-      respond: (connection, path, _params, body, method) =>
-        gmailWrite(connection.mailbox, path, body, method),
+      respond: (connection, path, _params, body, method) => {
+        if (method === "PATCH") throw new Error("The fake Gmail takes no PATCHes");
+        return gmailWrite(connection.mailbox, path, body, method);
+      },
     },
     rateLimited: () => gmailError(429, "RESOURCE_EXHAUSTED"),
   },
@@ -79,6 +88,19 @@ export const PROXIED_SOURCES: ProxiedSource[] = [
     },
     rateLimited: () => sheetsError(429, "RESOURCE_EXHAUSTED"),
   },
+  {
+    host: "https://graph.microsoft.com",
+    prefix: "/v1.0/",
+    scopes: ["User.Read"],
+    respond: (connection, path, params) =>
+      connection.microsoft.respond("GET", path, params, undefined),
+    write: {
+      scopes: GRAPH_WRITE_SCOPES,
+      respond: (connection, path, params, body, method) =>
+        connection.microsoft.respond(method, path, params, body),
+    },
+    rateLimited: () => graphError(429, "TooManyRequests", "Too many requests."),
+  },
 ];
 
 /** The host each Nango integration proxies to when a request names none (Nango's providers). */
@@ -86,16 +108,19 @@ export const INTEGRATION_HOSTS: Partial<Record<string, string>> = {
   google: "https://www.googleapis.com",
   "google-mail": "https://gmail.googleapis.com",
   "google-drive": "https://www.googleapis.com",
+  microsoft: "https://graph.microsoft.com",
 };
 
 /**
  * What a connection is granted unless a test says otherwise: every app Mycel asks for on the
- * `google` integration, and the one scope each one-app integration asked for before ADR-0014.
+ * `google` integration, the one scope each one-app integration asked for before ADR-0014, and
+ * everything another registered app asks for.
  */
 export const DEFAULT_SCOPES: Partial<Record<string, readonly string[]>> = {
   google: Object.values(GOOGLE_APP_SCOPES),
   "google-mail": [GMAIL_READONLY],
   "google-drive": [DRIVE_READONLY],
+  microsoft: REGISTERED_APPS.microsoft.scopes,
 };
 
 /**

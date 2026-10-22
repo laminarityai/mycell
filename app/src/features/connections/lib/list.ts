@@ -3,7 +3,7 @@ import { forOrg } from "@/db/for-org";
 import { listUsers } from "@/features/orgs/server";
 import type { Ctx } from "@/lib/ctx";
 import type { ConnectionOwner, ConnectionSummary, ConnectionsListing } from "../types";
-import { grantedApps, missingApps } from "./google";
+import { grantedApps, missingApps } from "./apps";
 import { backfilledItems, ingestStatesOf, lastPolledAt, overallStatus } from "./ingest-states";
 import { connectAttempts, connections, type ingestStates } from "./schema";
 

@@ -9,6 +9,13 @@ describe("validateSpec", () => {
     expect(result).toMatchObject({ ok: true, spec: { id: "pricing-inquiry-replies" } });
   });
 
+  it("refuses a step that names the embed role, whose model only turns text into vectors", () => {
+    const spec = exampleSpec();
+    spec.steps[0] = { ...spec.steps[0], role: "embed" };
+
+    expect(issuePaths(spec)).toEqual([["steps", 0, "role"]]);
+  });
+
   it("refuses a duplicate step ID at the second step that uses it", () => {
     const spec = exampleSpec();
     spec.steps[4] = { ...spec.steps[4], id: "classify" };

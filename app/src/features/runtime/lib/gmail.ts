@@ -1,5 +1,6 @@
 // Gmail through the Nango proxy, for runs. Content is fetched inside the step that uses it and
-// held in memory only (invariant 8); what leaves here for a step's output is IDs and counts.
+// held in memory, or handed to later steps in the step state, which Inngest stores encrypted
+// (ADR-0021); never in our database (invariant 8).
 import { z } from "zod";
 import { proxyGet } from "@/features/connections/server";
 import type { Ctx } from "@/lib/ctx";
@@ -48,6 +49,28 @@ export async function messageRef(ctx: Ctx, connectionId: string, messageId: stri
     `${GMAIL}/messages/${encodeURIComponent(messageId)}?format=minimal`,
     messageRefSchema,
   );
+}
+
+/**
+ * The message's IDs and labels, with its sender, subject and plain-text body: what the
+ * read-message action hands to later steps. Never into a run record or an error.
+ */
+export async function messageWithText(ctx: Ctx, connectionId: string, messageId: string) {
+  const message = await get(
+    ctx,
+    connectionId,
+    `${GMAIL}/messages/${encodeURIComponent(messageId)}?format=full`,
+    fullMessageSchema,
+  );
+  const { from, subject, body } = fieldsOf(message);
+  return {
+    id: message.id,
+    threadId: message.threadId,
+    labelIds: message.labelIds,
+    from,
+    subject,
+    body,
+  };
 }
 
 /** The thread's ID and its messages' IDs. */

@@ -9,7 +9,7 @@ import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import { mayManage } from "./disconnect";
 import { createReconnectSession } from "./nango";
 import { connections } from "./schema";
-import { INTEGRATIONS } from "./google";
+import { integrationOf } from "./apps";
 
 /**
  * Starts reconnecting one connection in the caller's org and returns the token Nango's Connect
@@ -23,7 +23,7 @@ export async function startReconnect(ctx: Ctx, connectionId: string): Promise<{ 
   if (!mayManage(ctx, connection)) throw new ForbiddenError();
   const token = await createReconnectSession(
     connection.nangoConnectionId,
-    INTEGRATIONS[connection.source],
+    integrationOf(connection.source),
   );
   return { token };
 }

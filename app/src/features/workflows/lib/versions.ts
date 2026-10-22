@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { isUniqueViolation } from "@/db/errors";
 import { forOrg } from "@/db/for-org";
+import { getActionSet } from "@/features/custom-actions/server";
 import { sameValue } from "@/features/spec/diff";
 import type { Spec } from "@/features/spec/types";
 import { findTagsByName } from "@/features/tags/server";
@@ -35,15 +36,17 @@ export async function publishWorkflow(
   requireAdmin(ctx);
   const workflow = await findWorkflow(ctx, workflowId);
   const working = withSettings(workflow.workingSpec, settings);
-  const validated = await validateWorkflowSpec(ctx, working);
+  const actions = await getActionSet(ctx);
+  const validated = await validateWorkflowSpec(ctx, working, actions);
   // Names no tag in the org has are refused here, before anything is written.
   const tags = await findTagsByName(ctx, validated.applied.visibility?.tags ?? []);
   const db = forOrg(ctx);
   const latest = (await latestVersions(ctx, [workflowId], db)).get(workflowId);
-  const gained = gainedForEnablements(latest, {
-    ...validated,
-    credentials: validated.applied.credentials,
-  });
+  const gained = gainedForEnablements(
+    latest,
+    { ...validated, credentials: validated.applied.credentials },
+    actions,
+  );
   try {
     // The version, its tags, the removals and the pauses together: a version is never seen
     // without who it's for, nor runs for anyone who can't see it or hasn't agreed to it.

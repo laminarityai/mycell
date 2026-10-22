@@ -7,9 +7,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { AdminConnections } from "./lib/admin-connections";
-import { ConnectButton } from "./lib/connect-button";
 import { ConnectionApps, ConnectionControls, ConnectionNotices } from "./lib/connection-controls";
 import { attemptTarget } from "./lib/source-names";
+import { RegisteredAppsList } from "./lib/registered-apps-list";
 import { LastPolled, StatusBadge } from "./lib/status-badge";
 import type { ConnectionsListing } from "./types";
 
@@ -19,9 +19,9 @@ export { ConnectButton } from "./lib/connect-button";
 export { ReconnectButton } from "./lib/reconnect-button";
 
 /**
- * The caller's connections, one row per Google account with the apps it allows, their
- * unfinished connect attempts, and the button to connect. Admins also get the org's
- * connections and the controls to make one.
+ * The registered apps, each with the button to connect it, and the caller's connections, one
+ * row per account (with the Google apps a Google connection allows), and their unfinished
+ * connect attempts. Admins also get the org's connections and the controls to make one.
  */
 export function ConnectionsPanel({
   listing,
@@ -32,9 +32,7 @@ export function ConnectionsPanel({
 }) {
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex gap-2">
-        <ConnectButton kind="member" label="Connect Google" />
-      </div>
+      <RegisteredAppsList kind="member" connections={listing.connections} />
       {listing.attempts.map((attempt) => (
         <p
           key={attempt.id}

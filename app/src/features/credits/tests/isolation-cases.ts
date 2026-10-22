@@ -52,6 +52,21 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await server.getBalance(orgs.orgA.admin.ctx)).toBe(10);
   },
 
+  getSpending: async (orgs) => {
+    await seedOrgBLedger(orgs);
+    await server.recordUsage(systemCtx(orgs.orgB.id), {
+      role: "classify",
+      modelId: "openai/x",
+      costUsd: 0.01,
+      outcome: "succeeded",
+      purpose: "memory",
+    });
+    const since = new Date(Date.now() - 3_600_000);
+
+    expect(await server.getSpending(orgs.orgB.admin.ctx, { purpose: "memory", since })).toBe(10);
+    expect(await server.getSpending(orgs.orgA.admin.ctx, { purpose: "memory", since })).toBe(0);
+  },
+
   listLedger: async (orgs) => {
     await seedOrgBLedger(orgs);
 

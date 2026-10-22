@@ -1,7 +1,7 @@
 import { expect } from "vitest";
 import { defineIsolationCases } from "@/db/testing/isolation";
 import type { TwoOrgs } from "@/db/testing/two-org-fixture";
-import { systemCtx } from "@/lib/ctx";
+import { systemCtx, type Ctx } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
 import { connectGmail, connectMailbox } from "@/testing/connect-helpers";
 import { listTags, renameTag, unassignTag } from "@/features/tags/server";
@@ -193,6 +193,16 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await server.currentVersionIds(orgs.orgB.member.ctx, [b.workflowId])).toEqual(
       new Map([[b.workflowId, b.version.id]]),
     );
+  },
+
+  workflowsUsingActions: async (orgs) => {
+    const b = await seedOrgBWorkflow(orgs);
+    const uses = (ctx: Ctx) => server.workflowsUsingActions(ctx, ["google-mail.create-draft"]);
+
+    expect([...(await uses(orgs.orgA.admin.ctx)).values()]).toEqual([[]]);
+    expect([...(await uses(orgs.orgB.admin.ctx)).values()]).toEqual([
+      [expect.objectContaining({ workflowId: b.id, publishedVersion: 1 })],
+    ]);
   },
 
   reviewSharing: async (orgs) => {

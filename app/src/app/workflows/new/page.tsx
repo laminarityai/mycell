@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
+import { listCustomActions } from "@/features/custom-actions/server";
 import { getCtx } from "@/features/orgs/server";
-import { NewWorkflowEditor } from "@/features/workflows/ui";
+import { ActionSetProvider, NewWorkflowEditor } from "@/features/workflows/ui";
 import { AppNav } from "@/app/app-nav";
 
 export default function NewWorkflowPage() {
@@ -21,5 +22,9 @@ export default function NewWorkflowPage() {
 async function NewWorkflow() {
   const ctx = await getCtx();
   if (ctx.role !== "admin") redirect("/");
-  return <NewWorkflowEditor />;
+  return (
+    <ActionSetProvider customActions={await listCustomActions(ctx)}>
+      <NewWorkflowEditor />
+    </ActionSetProvider>
+  );
 }

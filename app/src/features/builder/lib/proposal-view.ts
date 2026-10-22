@@ -1,9 +1,9 @@
 // A stored proposal as the conversation shows it: what it changes, grouped by path, in plain
-// words: each path's condition, each step with its catalog risk level and whether it waits for
+// words: each path's condition, each step with its fixed risk level and whether it waits for
 // a review.
-import { findAction } from "@/features/policy/catalog";
+import { customActionWords } from "@/features/custom-actions/description";
 import { applyPolicy } from "@/features/policy/engine";
-import type { InsertedApproval, RiskLevel } from "@/features/policy/types";
+import type { ActionSet, InsertedApproval, RiskLevel } from "@/features/policy/types";
 import type { SubjectWords } from "@/features/spec/conditions";
 import {
   describeCondition,
@@ -20,15 +20,20 @@ import type { builderProposals } from "./schema";
 
 type ProposalRow = typeof builderProposals.$inferSelect;
 
-export function toProposal(row: ProposalRow): Proposal {
+/**
+ * The proposal `row`, described from `actions`: the company's action set with the custom actions
+ * the proposal brings.
+ */
+export function toProposal(row: ProposalRow, actions: ActionSet): Proposal {
   // Both sides as a version would hold them: with the approvals the policy engine inserts.
   const baseSpec = row.baseSpec === null ? null : readStoredSpec(row.baseSpec);
   const spec = readStoredSpec(row.spec);
-  const before = baseSpec === null ? null : withPolicy(baseSpec);
-  const after = withPolicy(spec);
+  const before = baseSpec === null ? null : withPolicy(baseSpec, actions);
+  const after = withPolicy(spec, actions);
   const diff = diffSpecs(before?.spec ?? null, after.spec);
-  const beforeSteps = described(before);
-  const afterSteps = described(after);
+  const beforeSteps = described(before, actions);
+  const afterSteps = described(after, actions);
+  const info = (name: string) => actionInfo(name, actions);
   const step = (change: StepDiff): ProposalStep[] => {
     const now = afterSteps.get(change.id);
     const then = beforeSteps.get(change.id);
@@ -51,12 +56,14 @@ export function toProposal(row: ProposalRow): Proposal {
     status: row.status,
     maxRisk: row.maxRisk,
     groups: groupsOf(diff.steps, step, {
-      after: specWords(after.spec, actionInfo),
-      before: before === null ? undefined : specWords(before.spec, actionInfo),
+      after: specWords(after.spec, info),
+      before: before === null ? undefined : specWords(before.spec, info),
     }),
     settings: diff.settings,
     spec,
     baseSpec,
+    customActions: row.customActions.map((record) => customActionWords(record)),
+    customActionRecords: row.customActions,
     createdAt: row.createdAt,
     decidedAt: row.decidedAt,
   };
@@ -139,23 +146,26 @@ function runsWhen(path: Path, words: SubjectWords | undefined): string {
 
 type WithPolicy = { spec: Spec; inserted: InsertedApproval[] };
 
-// A spec the catalog no longer fully allows is shown as written.
-function withPolicy(spec: Spec): WithPolicy {
-  const policy = applyPolicy(spec);
+// A spec `actions` no longer fully allows is shown as written.
+function withPolicy(spec: Spec, actions: ActionSet): WithPolicy {
+  const policy = applyPolicy(spec, actions);
   return policy.ok ? { spec: policy.spec, inserted: policy.inserted } : { spec, inserted: [] };
 }
 
-function described(side: WithPolicy | null): Map<string, StepDescription<RiskLevel>> {
+function described(
+  side: WithPolicy | null,
+  actions: ActionSet,
+): Map<string, StepDescription<RiskLevel>> {
   if (side === null) return new Map();
   const steps = describeSpec(side.spec, {
-    action: actionInfo,
+    action: (name) => actionInfo(name, actions),
     insertedApprovals: side.inserted.map((approval) => approval.stepId),
   });
   return new Map(steps.map((step) => [step.id, step]));
 }
 
-function actionInfo(name: string): ActionInfo<RiskLevel> | undefined {
-  const action = findAction(name);
+function actionInfo(name: string, actions: ActionSet): ActionInfo<RiskLevel> | undefined {
+  const action = actions.find(name);
   if (action === undefined) return undefined;
   const { risk, description, conditionFields } = action;
   return { risk, description, conditionFields };

@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { env } from "@/env";
 import { fakeNango } from "@/testing/fake-nango";
-import { formatResults, type PreflightConfig, runPreflight } from "../nango-preflight-checks";
+import { registeredApps } from "@/features/connections/registered-apps";
+import {
+  EXPECTED_INTEGRATIONS,
+  formatResults,
+  type PreflightConfig,
+  runPreflight,
+} from "../nango-preflight-checks";
 
 // A setup that should pass: the fake Nango's own API key, and a real-looking signing key.
 const READY: PreflightConfig = {
@@ -22,10 +28,21 @@ describe("nango preflight", () => {
     expect(results.map((r) => [r.name, r.ok])).toEqual([
       ["Nango API key", true],
       ["Integration google", true],
+      ["Integration microsoft", true],
       ["Webhook signing key", true],
       ["Inngest", true],
     ]);
     expect(formatResults(results)).toMatch(/All checks passed\.$/);
+  });
+
+  it("checks every registered app's integration", () => {
+    expect([...EXPECTED_INTEGRATIONS]).toEqual(registeredApps.map((app) => app.integration));
+  });
+
+  it("fails a registered app's missing integration", async () => {
+    fakeNango.integrations.remove("microsoft");
+
+    expect((await byName(READY))["Integration microsoft"]).toMatchObject({ ok: false });
   });
 
   it("fails the key and the integrations when Nango rejects the key", async () => {

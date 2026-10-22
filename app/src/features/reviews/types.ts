@@ -1,7 +1,7 @@
 // The reviews feature's public types: what a review is, how it ends, and what the Reviews page
 // shows of it. A review holds pointers only (invariant 8); its item is fetched live.
 import { z } from "zod";
-import type { ItemView, PendingFormAdapter } from "@/features/runtime/adapters";
+import type { ItemView, PendingFormAdapter, ReviewEdits } from "@/features/runtime/adapters";
 
 /**
  * What a review waits on, which chooses its pending-form adapter: `approval` is a Gmail draft an
@@ -170,3 +170,36 @@ export const reviewPeriodSchema = z.enum(reviewPeriods).catch(DEFAULT_REVIEW_PER
 
 /** One row of review counts: a workflow's, or (`person`) one person's under it. */
 export type ReviewCountsRow = { key: string; label: string; person?: boolean; tally: ReviewTally };
+
+const FIELD = "field:";
+
+/**
+ * The approve form, as its Server Action parses it: the review, and the person's edits, if any.
+ * `text` is there only when they edited a draft, and `field:<name>` entries (text, by input
+ * name) only when they edited a held send. The edits are held in memory and handed to the
+ * adapter, never stored (invariant 8).
+ */
+export const approveFormSchema = z
+  .looseObject({ reviewId: z.string().min(1), text: z.string().optional() })
+  .transform(({ reviewId, text, ...entries }) => ({
+    reviewId,
+    ...(text === undefined ? {} : { text }),
+    fields: Object.fromEntries(
+      Object.entries(entries).flatMap(([name, value]) =>
+        name.startsWith(FIELD) ? [[name.slice(FIELD.length), value]] : [],
+      ),
+    ),
+  }))
+  .pipe(
+    z
+      .object({
+        reviewId: z.string(),
+        text: z.string().optional(),
+        fields: z.record(z.string().min(1), z.string()),
+      })
+      .transform(({ reviewId, text, fields }): { reviewId: string; edits?: ReviewEdits } => {
+        if (text !== undefined) return { reviewId, edits: { text } };
+        if (Object.keys(fields).length > 0) return { reviewId, edits: { fields } };
+        return { reviewId };
+      }),
+  );

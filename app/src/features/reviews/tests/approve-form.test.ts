@@ -1,7 +1,10 @@
 // The approve form as its Server Action reads it: the review, and the person's edits, if any.
 import { describe, expect, it } from "vitest";
 import { ValidationError } from "@/lib/errors";
-import { parseApproveForm } from "../lib/approve-form";
+import { parseForm } from "@/lib/forms";
+import { approveFormSchema } from "../types";
+
+const parseApproveForm = (data: FormData) => parseForm(approveFormSchema, data);
 
 function form(entries: [string, string | Blob][]): FormData {
   const data = new FormData();

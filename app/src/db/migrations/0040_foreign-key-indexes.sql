@@ -1,0 +1,22 @@
+CREATE INDEX "invitation_inviter_id_idx" ON "invitation" USING btree ("inviter_id");--> statement-breakpoint
+CREATE INDEX "builder_conversations_org_id_workflow_id_idx" ON "builder_conversations" USING btree ("org_id","workflow_id");--> statement-breakpoint
+CREATE INDEX "builder_messages_org_id_conversation_id_idx" ON "builder_messages" USING btree ("org_id","conversation_id");--> statement-breakpoint
+CREATE INDEX "builder_proposals_org_id_conversation_id_idx" ON "builder_proposals" USING btree ("org_id","conversation_id");--> statement-breakpoint
+CREATE INDEX "builder_proposals_org_id_workflow_id_idx" ON "builder_proposals" USING btree ("org_id","workflow_id");--> statement-breakpoint
+CREATE INDEX "capability_request_asks_org_id_request_id_idx" ON "capability_request_asks" USING btree ("org_id","request_id");--> statement-breakpoint
+CREATE INDEX "capability_request_asks_org_id_conversation_id_idx" ON "capability_request_asks" USING btree ("org_id","conversation_id");--> statement-breakpoint
+CREATE INDEX "reviews_org_id_connection_id_idx" ON "reviews" USING btree ("org_id","connection_id");--> statement-breakpoint
+CREATE INDEX "reviews_org_id_run_connection_id_idx" ON "reviews" USING btree ("org_id","run_connection_id");--> statement-breakpoint
+CREATE INDEX "reviews_org_id_owner_user_id_idx" ON "reviews" USING btree ("org_id","owner_user_id");--> statement-breakpoint
+CREATE INDEX "held_sends_org_id_connection_id_idx" ON "held_sends" USING btree ("org_id","connection_id");--> statement-breakpoint
+CREATE INDEX "held_sends_org_id_review_id_idx" ON "held_sends" USING btree ("org_id","review_id");--> statement-breakpoint
+CREATE INDEX "held_sends_org_id_custom_action_idx" ON "held_sends" USING btree ("org_id","custom_action");--> statement-breakpoint
+CREATE INDEX "run_steps_org_id_connection_id_idx" ON "run_steps" USING btree ("org_id","connection_id");--> statement-breakpoint
+CREATE INDEX "runs_enablement_id_idx" ON "runs" USING btree ("enablement_id");--> statement-breakpoint
+CREATE INDEX "runs_org_id_connection_id_idx" ON "runs" USING btree ("org_id","connection_id");--> statement-breakpoint
+CREATE INDEX "runs_org_id_workflow_version_id_idx" ON "runs" USING btree ("org_id","workflow_version_id");--> statement-breakpoint
+CREATE INDEX "tag_assignments_org_id_user_id_idx" ON "tag_assignments" USING btree ("org_id","user_id");--> statement-breakpoint
+CREATE INDEX "enablements_org_id_connection_id_idx" ON "enablements" USING btree ("org_id","connection_id");--> statement-breakpoint
+CREATE INDEX "enablements_org_id_user_id_idx" ON "enablements" USING btree ("org_id","user_id");--> statement-breakpoint
+CREATE INDEX "workflow_version_tags_org_id_tag_id_idx" ON "workflow_version_tags" USING btree ("org_id","tag_id");--> statement-breakpoint
+CREATE INDEX "workflows_org_connection_id_idx" ON "workflows" USING btree ("org_connection_id");

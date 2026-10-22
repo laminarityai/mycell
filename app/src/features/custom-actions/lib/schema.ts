@@ -2,7 +2,7 @@
 // asked for one. All are tenant-owned and hold no connection_id: a custom action describes a
 // call and outlives the connections it runs through, and a request holds the agent's words and
 // code draft; none holds source content (invariant 8), so disconnecting leaves them alone.
-import { foreignKey, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { foreignKey, index, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { zodJsonb } from "@/db/columns";
 // An ask names the builder conversation it was filed from, which never leaves its org.
@@ -90,11 +90,16 @@ export const capabilityRequestAsks = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
+    index("capability_request_asks_org_id_request_id_idx").on(table.orgId, table.requestId),
     foreignKey({
       name: "capability_request_asks_request_fk",
       columns: [table.orgId, table.requestId],
       foreignColumns: [capabilityRequests.orgId, capabilityRequests.id],
     }).onDelete("cascade"),
+    index("capability_request_asks_org_id_conversation_id_idx").on(
+      table.orgId,
+      table.conversationId,
+    ),
     foreignKey({
       name: "capability_request_asks_conversation_fk",
       columns: [table.orgId, table.conversationId],

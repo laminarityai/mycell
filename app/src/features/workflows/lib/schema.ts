@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 import {
   check,
   foreignKey,
+  index,
   integer,
   pgTable,
   primaryKey,
@@ -49,6 +50,7 @@ export const workflows = pgTable(
   (table) => [
     unique("workflows_org_id_spec_id_unique").on(table.orgId, table.specId),
     unique("workflows_org_id_id_unique").on(table.orgId, table.id),
+    index("workflows_org_connection_id_idx").on(table.orgConnectionId),
     // On the connection's ID alone, so deleting it can null this column and keep org_id. The
     // switch-on checks the connection is in the workflow's org.
     foreignKey({
@@ -97,11 +99,13 @@ export const enablements = pgTable(
       columns: [table.orgId, table.workflowId],
       foreignColumns: [workflows.orgId, workflows.id],
     }).onDelete("cascade"),
+    index("enablements_org_id_connection_id_idx").on(table.orgId, table.connectionId),
     foreignKey({
       name: "enablements_connection_fk",
       columns: [table.orgId, table.connectionId],
       foreignColumns: [connections.orgId, connections.id],
     }).onDelete("cascade"),
+    index("enablements_org_id_user_id_idx").on(table.orgId, table.userId),
     foreignKey({
       name: "enablements_member_fk",
       columns: [table.orgId, table.userId],
@@ -159,6 +163,7 @@ export const workflowVersionTags = pgTable(
       columns: [table.orgId, table.workflowVersionId],
       foreignColumns: [workflowVersions.orgId, workflowVersions.id],
     }).onDelete("cascade"),
+    index("workflow_version_tags_org_id_tag_id_idx").on(table.orgId, table.tagId),
     foreignKey({
       name: "workflow_version_tags_tag_fk",
       columns: [table.orgId, table.tagId],

@@ -132,6 +132,8 @@ export const invitation = pgTable(
   (table) => [
     index("invitation_organizationId_idx").on(table.organizationId),
     index("invitation_email_idx").on(table.email),
+    // Ours, not Better Auth's: every foreign key has an index (src/db/tests/foreign-key-indexes).
+    index("invitation_inviter_id_idx").on(table.inviterId),
   ],
 );
 

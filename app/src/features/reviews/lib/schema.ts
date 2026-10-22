@@ -52,16 +52,19 @@ export const reviews = pgTable(
     unique("reviews_org_id_run_id_item_ref_unique").on(table.orgId, table.runId, table.itemRef),
     unique("reviews_org_id_id_unique").on(table.orgId, table.id),
     index("reviews_org_id_status_idx").on(table.orgId, table.status),
+    index("reviews_org_id_connection_id_idx").on(table.orgId, table.connectionId),
     foreignKey({
       name: "reviews_connection_fk",
       columns: [table.orgId, table.connectionId],
       foreignColumns: [connections.orgId, connections.id],
     }).onDelete("cascade"),
+    index("reviews_org_id_run_connection_id_idx").on(table.orgId, table.runConnectionId),
     foreignKey({
       name: "reviews_run_connection_fk",
       columns: [table.orgId, table.runConnectionId],
       foreignColumns: [connections.orgId, connections.id],
     }).onDelete("cascade"),
+    index("reviews_org_id_owner_user_id_idx").on(table.orgId, table.ownerUserId),
     foreignKey({
       name: "reviews_owner_fk",
       columns: [table.orgId, table.ownerUserId],

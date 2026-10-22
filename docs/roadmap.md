@@ -15,8 +15,8 @@ The builder chat is primary (ADR-0007), so it comes before mining. Milestones ke
 | M12       | Grilling    |      | Branches and the workflow graph. Decisions in ADR-0015 (paths that never join); research in `docs/research/workflow-builders.md`.                                           |
 | M5        | Done        | #51  | Publish, tags, member toggles and the Reviews page (PR #89). Open: dogfood check #57.                                                                                       |
 | M11       | Ready       | #67  | Calendar, Docs and Tasks, each through its pending form (ADR-0013); tickets ready for agents.                                                                               |
-| M13       | Grilled     |      | Custom actions made by the builder chat. Decisions in ADR-0017 to ADR-0020; research in `docs/research/integrations/`.                                                      |
-| M14       | Grilled     |      | Memory foundation. Decisions in ADR-0021 to ADR-0024; research in `docs/research/memory-layer.md`.                                                                          |
+| M13       | Ready       | #91  | Custom actions made by the builder chat. Decisions in ADR-0017 to ADR-0020; research in `docs/research/integrations/`. Tickets to cut.                                      |
+| M14       | Ready       | #92  | Memory foundation. Decisions in ADR-0021 to ADR-0024; research in `docs/research/memory-layer.md`. Tickets to cut.                                                          |
 | M7 onward | Not started |      | Build order after M14: M7, M8, M9 (the agent), then M2 (discovery) and M4, then M10.                                                                                        |
 
 ## M0: Scaffold and tenancy

@@ -6,7 +6,7 @@ import { tablesHolding } from "@/db/testing/content-scan";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs, seedUser, type FixtureOrg } from "@/db/testing/two-org-fixture";
 import { backfillConnection } from "@/features/discovery/server";
-import { listAccessLog } from "@/features/memory/server";
+import { listAccessLog, markCompanyWideList } from "@/features/memory/server";
 import { enable } from "@/features/workflows/server";
 import { systemCtx, type Ctx } from "@/lib/ctx";
 import { connectGoogle, connectMailbox, daysAgo } from "@/testing/connect-helpers";
@@ -191,6 +191,69 @@ describe("memory.lookup in an org-credential run", () => {
       reader: { kind: "workflow_run", userId: null, runId, workflowId },
       factCount: 1,
     });
+  });
+});
+
+describe("memory.lookup with a fact from outside that contradicts the company's", () => {
+  it("hands the draft both, the outside one marked disputed", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const { admin } = orgA;
+    await withCredits(orgA.id);
+    const billing = "Acme's billing contact is billing@acme.example.";
+    const changed = "Acme's billing contact is now pay@other.example.";
+    const all = `all@${orgA.workspaceDomain}`;
+    await markCompanyWideList(admin.ctx, all);
+    // The admin tells all@ who Acme's billing contact is.
+    const adminBox = await connectMailbox(admin.ctx, admin.email, [
+      {
+        from: admin.email,
+        to: [all],
+        text: "FYI: Acme's billing contact is billing@acme.example.",
+        at: daysAgo(5),
+        sent: true,
+      },
+    ]);
+    await backfillConnection(admin.ctx, adminBox.id);
+    const billingFact = (statement: string, evidence: string, value: string) => ({
+      objects: [acme],
+      facts: [{ about: "acme", statement, evidence, predicate: "billing_contact", value }],
+    });
+    scriptLearning(
+      billingFact(
+        billing,
+        "Acme's billing contact is billing@acme.example",
+        "billing@acme.example",
+      ),
+    );
+    await learnStoredItems(orgA.id);
+    // Then someone writes to support@ from acme.example that it has changed.
+    const support = `support@${orgA.workspaceDomain}`;
+    const inbox = await mailboxLearning(
+      orgA,
+      admin.ctx,
+      support,
+      "Acme's billing contact is now pay@other.example (acme.example).",
+      billingFact(
+        changed,
+        "Acme's billing contact is now pay@other.example (acme.example)",
+        "pay@other.example",
+      ),
+      "org",
+    );
+    const { workflowId } = await publishTo(
+      admin.ctx,
+      "Support replies",
+      lookupSpec("org", { about: "sender_company" }),
+      [],
+    );
+
+    const { runId } = await startRun(admin.ctx, workflowId, inbox.id, inbox.sourceRef);
+    fakeAiGateway.text(REPLY);
+    expect(await executeRun(systemCtx(orgA.id), runId)).toEqual({ status: "succeeded" });
+
+    expect(draftPrompt()).toContain(`About Acme: ${billing}`);
+    expect(draftPrompt()).toContain(`About Acme (disputed`);
+    expect(draftPrompt()).toContain(changed);
   });
 });
 

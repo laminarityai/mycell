@@ -139,11 +139,19 @@ const actions = [
         message: 'Give a topic exactly when about is "topic".',
         path: ["topic"],
       }),
-    // The facts found, best match first, each with what it's about. A draft step that names
-    // this step in its context reads them.
+    // The facts found, best match first, each with what it's about, and `disputed` when only
+    // someone outside the company states it, against a fact from inside. A draft step that
+    // names this step in its context reads them.
     output: z.object({
       factCount: z.number().int().nonnegative(),
-      facts: z.array(z.object({ id, about: z.string(), statement: z.string() })),
+      facts: z.array(
+        z.object({
+          id,
+          about: z.string(),
+          statement: z.string(),
+          disputed: z.boolean().optional(),
+        }),
+      ),
     }),
     conditionFields: [{ name: "factCount", type: "number", label: "The number of facts found" }],
   },

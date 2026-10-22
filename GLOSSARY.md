@@ -254,6 +254,10 @@ _Avoid_: Guardrail, filter, firewall
 **Do-not-learn list**:
 The addresses of people an admin asked Mycel to forget, which memory never learns about again.
 
+**Retention window**:
+How long memory keeps what it learned from an email or doc after it was sent or saved: 24 months, or less if an admin shortens it. Past it, the item and every fact only it supported are deleted.
+_Avoid_: TTL, expiry
+
 **Access log**:
 The record of every read of memory: who or what read it (a person, the builder chat, a workflow run, our staff), when, and which objects and facts, never what they say. Admins see their company's; members see the reads of facts from their own sources.
 _Avoid_: Audit trail, history

@@ -11,7 +11,7 @@ import {
 } from "../actions";
 import { EXCLUSION_KIND_NAMES, EXCLUSION_KINDS } from "../types";
 
-const fieldClass =
+export const fieldClass =
   "h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
 /** The monthly budget, and the button that starts memory, or saves a new budget once started. */
@@ -93,7 +93,7 @@ export function RemoveExclusionButton({ id, name }: { id: string; name: string }
   );
 }
 
-function ErrorMessage({ result }: { result: ActionResult }) {
+export function ErrorMessage({ result }: { result: ActionResult }) {
   return result.error === undefined ? null : (
     <p role="alert" className="text-sm text-destructive">
       {result.error}

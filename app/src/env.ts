@@ -83,9 +83,9 @@ const envSchema = z.object({
     )
     .optional(),
   GCP_SERVICE_ACCOUNT_EMAIL: z.email().optional(),
-  // The key store (ADR-0020, ADR-0024): AWS KMS holds one key per org, made on first use under
-  // the alias `alias/<KMS_ALIAS_PREFIX>/org/<org ID>`. The key store needs KMS_REGION; without
-  // it, encrypting or decrypting fails. The access key pair is an IAM user's; leave both unset to
+  // The key store (ADR-0020, ADR-0024): AWS KMS holds two keys per org, made on first use under
+  // the aliases `alias/<KMS_ALIAS_PREFIX>/org/<org ID>` (encryption) and `…/<org ID>/hash` (keyed
+  // hashes). The key store needs KMS_REGION; without it, encrypting, decrypting or hashing fails. The access key pair is an IAM user's; leave both unset to
   // use the AWS SDK's own credential chain (a role) instead. Vercel reserves AWS_REGION and the
   // AWS_* key names, hence the KMS_ prefix. KMS_ENDPOINT points at a KMS other than AWS's
   // regional one, such as LocalStack.

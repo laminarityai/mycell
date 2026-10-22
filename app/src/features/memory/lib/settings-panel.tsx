@@ -6,6 +6,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { AccessLogLink, CompanyWideLists, ForgetPerson, Retention } from "./retention-panel";
 import { AddExclusionForm, BudgetForm, RemoveExclusionButton } from "./settings-controls";
 import { EXCLUSION_KIND_NAMES, type MemorySettings } from "../types";
 
@@ -14,13 +15,18 @@ const day = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeZone: "UTC"
 
 /**
  * The admin's memory screen: the estimate and the start, the monthly budget and this month's
- * spending, and the company-wide exclusions.
+ * spending, the company-wide exclusions and lists, the retention window, forgetting a person,
+ * and the way to the access log.
  */
 export function MemorySettingsPanel({ settings }: { settings: MemorySettings }) {
   return (
     <div className="flex flex-col gap-8">
       <Learning settings={settings} />
       <Exclusions settings={settings} />
+      <CompanyWideLists settings={settings} />
+      <Retention settings={settings} />
+      <ForgetPerson settings={settings} />
+      <AccessLogLink />
     </div>
   );
 }

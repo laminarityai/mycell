@@ -264,6 +264,8 @@ export type MemorySettings = {
   estimate: MemoryEstimate;
   exclusions: Exclusion[];
   companyWideLists: CompanyWideList[];
+  // The company's Workspace domain: only a list there can be marked company-wide.
+  workspaceDomain: string;
   // How many people are on the do-not-learn list: never who.
   forgottenPeople: number;
 };

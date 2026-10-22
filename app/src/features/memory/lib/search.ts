@@ -15,6 +15,7 @@
 import { and, cosineDistance, desc, eq, inArray, lte, ne, or, sql } from "drizzle-orm";
 import { forOrg, type OrgScopedDb } from "@/db/for-org";
 import type { Ctx } from "@/lib/ctx";
+import { emailAddressesIn } from "@/lib/email-addresses";
 import {
   memorySearchSchema,
   type FoundObject,
@@ -91,11 +92,11 @@ function wordsOf(text: string): string[] {
 /** The email addresses and domains in a text, as object keys. */
 function keysIn(text: string): Key[] {
   const lower = text.toLowerCase();
-  const emails = lower.match(/[a-z0-9._%+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}/g) ?? [];
+  const emails = emailAddressesIn(lower);
   const withoutEmails = emails.reduce((rest, email) => rest.replace(email, " "), lower);
   const domains = withoutEmails.match(/\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b/g) ?? [];
   return [
-    ...[...new Set(emails)].map((value) => ({ kind: "email" as const, value })),
+    ...emails.map((value) => ({ kind: "email" as const, value })),
     ...[...new Set(domains)].map((value) => ({ kind: "domain" as const, value })),
   ];
 }

@@ -1,25 +1,19 @@
 // Whether a person sent mail in a Gmail thread themselves: how the pending-form adapters see a
 // review finished in Gmail (a draft sent from there, or an escalated message replied to). Reads
 // labels and times only, never content.
-import { z } from "zod";
+import type { z } from "zod";
+import { GMAIL, messageSchema, threadSchema } from "@/features/connections/gmail";
 import { proxyGet } from "@/features/connections/server";
 import type { Ctx } from "@/lib/ctx";
-import { GMAIL } from "./gmail";
 
-const threadSchema = z.object({
-  messages: z
-    .array(
-      z.object({
-        id: z.string(),
-        labelIds: z.array(z.string()).default([]),
-        internalDate: z.string().optional(),
-      }),
-    )
-    .default([]),
-});
+// A message in a thread, without its headers or body. Its date may be missing: sentAt falls back.
+const threadMessageSchema = messageSchema
+  .pick({ id: true, labelIds: true, internalDate: true })
+  .partial({ internalDate: true });
+const minimalThreadSchema = threadSchema(threadMessageSchema);
 
 /** A message in a thread, by its ID, labels and when Gmail received or sent it. */
-export type ThreadMessage = z.infer<typeof threadSchema>["messages"][number];
+export type ThreadMessage = z.infer<typeof threadMessageSchema>;
 
 /** The thread's messages, without their headers or bodies; null when the thread is gone. */
 export async function threadMessages(
@@ -31,7 +25,7 @@ export async function threadMessages(
     ctx,
     connectionId,
     `${GMAIL}/threads/${encodeURIComponent(threadId)}?format=minimal`,
-    threadSchema,
+    minimalThreadSchema,
   );
   return thread?.messages ?? null;
 }

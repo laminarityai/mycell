@@ -4,9 +4,10 @@
 // Every call goes through the Nango proxy with the caller's ctx; the draft's and the message's
 // text are held in memory only (invariant 8).
 import { z } from "zod";
+import { GMAIL } from "@/features/connections/gmail";
 import { proxyDelete, proxyGet, proxyPost, proxyPut } from "@/features/connections/server";
 import type { Ctx } from "@/lib/ctx";
-import { fullMessageSchema, GMAIL, mailOf } from "./gmail";
+import { fullMessageSchema, mailOf } from "./gmail";
 import { createReplyDraft, editedMessage } from "./gmail-drafts";
 import { sentSince, threadMessages } from "./gmail-sent";
 import { ItemGoneError, ValidationError } from "@/lib/errors";

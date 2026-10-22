@@ -2,14 +2,12 @@
 // write checks first for what an earlier try already did, so a retry whose first answer was
 // lost labels the message once and makes one label.
 import { z } from "zod";
+import { GMAIL, labelNamed, labelSchema, labelsSchema } from "@/features/connections/gmail";
 import { sourceClient } from "@/features/connections/server";
 import { SourceRequestError, type SourceClient } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
 import { RunStepError } from "./failures";
-import { GMAIL, messageRefSchema } from "./gmail";
-
-const labelSchema = z.object({ id: z.string(), name: z.string() });
-const labelsSchema = z.object({ labels: z.array(labelSchema).default([]) });
+import { messageRefSchema } from "./gmail";
 
 /** Puts the label named `label` on the message, making the label if the mailbox lacks it. */
 export async function addLabel(
@@ -38,7 +36,6 @@ function found<T>(answer: T | null): T {
   return answer;
 }
 
-// Gmail's label names are unique regardless of case.
 async function labelIdFor(source: SourceClient, name: string): Promise<string> {
   const existing = await findLabel(source, name);
   if (existing !== undefined) return existing.id;
@@ -54,5 +51,5 @@ async function labelIdFor(source: SourceClient, name: string): Promise<string> {
 
 async function findLabel(source: SourceClient, name: string) {
   const listing = await source.get(`${GMAIL}/labels`, labelsSchema);
-  return listing?.labels.find((label) => label.name.toLowerCase() === name.toLowerCase());
+  return labelNamed(listing?.labels ?? [], name);
 }

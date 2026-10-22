@@ -6,7 +6,7 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
-import { listUsers, userNames } from "@/features/orgs/server";
+import { findUser, userNames } from "@/features/orgs/server";
 import { type Ctx, requireAdmin } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import {
@@ -110,7 +110,7 @@ async function consented(ctx: Ctx, access: StaffAccess) {
   ) {
     throw new ForbiddenError();
   }
-  const admin = (await listUsers(ctx)).find((user) => user.id === consent.grantedByUserId);
+  const admin = await findUser(ctx, consent.grantedByUserId);
   if (admin?.role !== "admin") throw new ForbiddenError();
   const granter: Ctx = { orgId: ctx.orgId, userId: admin.id, role: admin.role };
   return { granter, consentId: consent.id };

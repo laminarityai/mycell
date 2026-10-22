@@ -75,14 +75,18 @@ export async function switchWorkflowOff(ctx: Ctx, workflowId: string): Promise<v
 export async function listSwitchedOn(ctx: Ctx, connectionId: string): Promise<SwitchedOn[]> {
   if (ctx.role !== "system") throw new ForbiddenError();
   const db = forOrg(ctx);
-  const enabled = await db.select(enablements, {
-    where: eq(enablements.connectionId, connectionId),
-    orderBy: [enablements.enabledAt],
-  });
-  const orgSwitched = await db.select(workflows, {
-    where: eq(workflows.orgConnectionId, connectionId),
-    orderBy: [workflows.orgSwitchedOnAt],
-  });
+  const [enabled, orgSwitched] = await Promise.all([
+    db.select(enablements, {
+      columns: ["id", "workflowId", "enabledAt"],
+      where: eq(enablements.connectionId, connectionId),
+      orderBy: [enablements.enabledAt],
+    }),
+    db.select(workflows, {
+      columns: ["id", "orgSwitchedOnAt"],
+      where: eq(workflows.orgConnectionId, connectionId),
+      orderBy: [workflows.orgSwitchedOnAt],
+    }),
+  ]);
   const latest = await latestVersions(ctx, [
     ...enabled.map((row) => row.workflowId),
     ...orgSwitched.map((row) => row.id),

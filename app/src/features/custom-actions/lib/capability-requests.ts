@@ -23,7 +23,6 @@ import { capabilityRequestPrompts } from "./prompts";
 import { capabilityRequestAsks, capabilityRequests } from "./schema";
 
 type RequestRow = typeof capabilityRequests.$inferSelect;
-type AskRow = typeof capabilityRequestAsks.$inferSelect;
 
 /**
  * Files a capability request from a builder conversation, or adds an ask to the org's request
@@ -77,11 +76,10 @@ export async function fileCapabilityRequest(
         conversationId: from.conversationId,
         askedBy: ctx.userId,
       });
-      const count = (
-        await tx.select(capabilityRequestAsks, {
-          where: eq(capabilityRequestAsks.requestId, row.id),
-        })
-      ).length;
+      const count = await tx.count(
+        capabilityRequestAsks,
+        eq(capabilityRequestAsks.requestId, row.id),
+      );
       return { requestId: row.id, count, status: row.status, message: filedMessage(count, row) };
     });
   } catch (error) {
@@ -100,14 +98,34 @@ export async function listCapabilityRequests(ctx: Ctx): Promise<CapabilityReques
     orderBy: [desc(capabilityRequests.updatedAt), desc(capabilityRequests.id)],
   });
   if (rows.length === 0) return [];
-  const asks = await forOrg(ctx).select(capabilityRequestAsks, {
-    where: inArray(
-      capabilityRequestAsks.requestId,
-      rows.map((row) => row.id),
-    ),
-    orderBy: [asc(capabilityRequestAsks.createdAt), asc(capabilityRequestAsks.id)],
-  });
-  return rows.map((row) => toRequest(row, asks));
+  const asks = capabilityRequestAsks;
+  const ofRequests = inArray(
+    asks.requestId,
+    rows.map((row) => row.id),
+  );
+  const [counts, firstAsks] = await Promise.all([
+    forOrg(ctx).countBy(asks, { requestId: asks.requestId }, ofRequests),
+    // Each conversation a request was asked in, once: its first ask there.
+    forOrg(ctx).select(asks, {
+      columns: ["requestId", "conversationId", "createdAt", "id"],
+      where: ofRequests,
+      distinctOn: [asks.requestId, asks.conversationId],
+      orderBy: [asc(asks.requestId), asc(asks.conversationId), asc(asks.createdAt), asc(asks.id)],
+    }),
+  ]);
+  const countOf = new Map(counts.map((group) => [group.requestId, group.count]));
+  // Oldest first, as the conversations were first asked in.
+  const asked = firstAsks.toSorted(
+    (a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id),
+  );
+  return rows.map((row) =>
+    toRequest(row, {
+      count: countOf.get(row.id) ?? 0,
+      conversationIds: asked
+        .filter((ask) => ask.requestId === row.id)
+        .map((ask) => ask.conversationId),
+    }),
+  );
 }
 
 /**
@@ -153,8 +171,10 @@ function filedMessage(count: number, row: RequestRow): PromptText {
     : capabilityRequestPrompts.askedAgain({ count: String(count), status: row.status });
 }
 
-function toRequest(row: RequestRow, asks: AskRow[]): CapabilityRequest {
-  const own = asks.filter((ask) => ask.requestId === row.id);
+function toRequest(
+  row: RequestRow,
+  { count, conversationIds }: { count: number; conversationIds: string[] },
+): CapabilityRequest {
   const registered = registeredAppIdSchema.safeParse(row.app);
   return {
     id: row.id,
@@ -166,8 +186,8 @@ function toRequest(row: RequestRow, asks: AskRow[]): CapabilityRequest {
     outputs: row.outputs,
     reason: row.reason,
     codeDraft: row.codeDraft,
-    count: own.length,
-    conversationIds: [...new Set(own.map((ask) => ask.conversationId))],
+    count,
+    conversationIds,
     status: row.status,
     note: row.note,
     createdAt: row.createdAt,

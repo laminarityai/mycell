@@ -5,7 +5,7 @@
 import { z } from "zod";
 import { registeredApps } from "@/features/connections/registered-apps";
 import { checkCustomAction } from "@/features/custom-actions/description";
-import { listCustomActions } from "@/features/custom-actions/server";
+import { findCustomAction } from "@/features/custom-actions/server";
 import { sameValue } from "@/features/spec/diff";
 import { requireAdmin } from "@/lib/ctx";
 import { joinPrompts } from "@/lib/prompts";
@@ -34,8 +34,8 @@ export const describeCustomActionTool: ToolDefinition<
     const check = checkCustomAction(action);
     if (!check.ok) return { ok: false, issues: check.issues, message: NOT_ADDED };
     const { name, risk } = check.action;
-    const stored = (await listCustomActions(ctx)).find((each) => each.name === name);
-    if (stored !== undefined) {
+    const stored = await findCustomAction(ctx, name);
+    if (stored !== null) {
       const { app, description, call, inputs, outputs, editable } = stored;
       const record = { name, app, description, call, inputs, outputs, editable, risk: stored.risk };
       if (!sameValue(record, check.action)) {

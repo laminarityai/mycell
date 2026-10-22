@@ -227,5 +227,9 @@ An exact identifier of an object, such as a person's email address or a company'
 **Exclusion**:
 A Gmail label, Drive folder or similar that an admin keeps out of memory for the whole company.
 
+**Company-wide list**:
+A group address, such as all@, that an admin marked company-wide, so what memory learns from email sent to it is visible to everyone in the org.
+_Avoid_: Public list, shared list
+
 **Do-not-learn list**:
 The addresses of people an admin asked Mycel to forget, which memory never learns about again.

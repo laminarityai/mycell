@@ -116,7 +116,19 @@ export async function saveWorkflowIn(
 /** The org's workflows by name, each with its latest version and its switch. */
 export async function listWorkflows(ctx: Ctx): Promise<WorkflowSummary[]> {
   requireAdmin(ctx);
-  const rows = await forOrg(ctx).select(workflows, { orderBy: [workflows.name] });
+  // Not the working specs: the list shows the latest versions'.
+  const rows = await forOrg(ctx).select(workflows, {
+    columns: [
+      "id",
+      "name",
+      "specId",
+      "orgConnectionId",
+      "orgSwitchedOnAt",
+      "archivedAt",
+      "updatedAt",
+    ],
+    orderBy: [workflows.name],
+  });
   const [latest, switches] = await Promise.all([
     latestVersions(
       ctx,

@@ -12,3 +12,5 @@ export {
   listLedger,
   recordUsage,
 } from "./lib/ledger";
+// A failed call's real cost, which `models` looks up in the gateway and records as a correction.
+export { findUncostedFailedCall, recordFailedCallCost } from "./lib/corrections";

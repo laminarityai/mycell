@@ -2,9 +2,11 @@
 // the real AI SDK without network or keys. Each test scripts the answers it expects, in order:
 // a Jev decision, a structured output, a text, a streamed reply (text and tool calls, for the
 // builder chat), embeddings, or a failure, each with the cost the gateway reports. A request with no script
-// left (or the wrong key) fails the test after it ends.
+// left (or the wrong key) fails the test after it ends. Its Generation Lookup answers what a
+// failed generation was billed, once a test says.
 import { http, HttpResponse } from "msw";
 import { env } from "@/env";
+import { FakeGenerations } from "./fake-ai-gateway-generations";
 import {
   costMetadata,
   streamedReplyEvents,
@@ -37,6 +39,12 @@ type FailureOptions = {
   status?: number;
   /** The generation ID a billed failure carries. */
   generationId?: string;
+  /**
+   * What the gateway billed the failed generation, in US dollars: its Generation Lookup knows
+   * it from when the failure is answered. Unset, the lookup doesn't know the generation (404)
+   * until `bill` says so.
+   */
+  billedUsd?: number;
   model?: string;
 };
 
@@ -52,11 +60,13 @@ class FakeAiGateway {
   private scripts: Script[] = [];
   private received: FakeGatewayRequest[] = [];
   private unexpected: string[] = [];
+  private readonly generations = new FakeGenerations();
 
   reset(): void {
     this.scripts = [];
     this.received = [];
     this.unexpected = [];
+    this.generations.reset();
   }
 
   /** Jev's answer to the next decision: a choice and its probabilities, or a refusal. */
@@ -122,20 +132,39 @@ class FakeAiGateway {
     endpoint: FakeGatewayEndpoint,
     options: FailureOptions & { streaming?: boolean } = {},
   ): void {
-    const status = options.status ?? 500;
+    const { status = 500, generationId, billedUsd } = options;
     this.script(
       endpoint,
       options.model,
-      () =>
-        HttpResponse.json(
+      () => {
+        if (generationId !== undefined && billedUsd !== undefined) {
+          this.generations.bill(generationId, billedUsd);
+        }
+        return HttpResponse.json(
           {
             error: { message: "Upstream provider failed", type: "internal_server_error" },
-            ...(options.generationId === undefined ? {} : { generationId: options.generationId }),
+            ...(generationId === undefined ? {} : { generationId }),
           },
           { status },
-        ),
+        );
+      },
       options.streaming ?? false,
     );
+  }
+
+  /** From now on, the Generation Lookup knows the generation and what it was billed. */
+  bill(generationId: string, costUsd: number): void {
+    this.generations.bill(generationId, costUsd);
+  }
+
+  /** Makes every generation lookup answer with this error status, until the next reset. */
+  failLookups(status: number): void {
+    this.generations.failLookups(status);
+  }
+
+  /** The generation IDs looked up so far, oldest first. */
+  lookups(): string[] {
+    return this.generations.lookups();
   }
 
   /** The requests received so far, oldest first, optionally for one endpoint. */
@@ -154,6 +183,13 @@ class FakeAiGateway {
     http.post(`${BASE_URL}/decision-model`, ({ request }) => this.handle("decision", request)),
     http.post(`${BASE_URL}/language-model`, ({ request }) => this.handle("language", request)),
     http.post(`${BASE_URL}/embedding-model`, ({ request }) => this.handle("embedding", request)),
+    http.get(`${new URL(BASE_URL).origin}/v1/generation`, ({ request }) => {
+      if (request.headers.get("authorization") !== `Bearer ${env.AI_GATEWAY_API_KEY}`) {
+        return unauthorized();
+      }
+      const { status, body } = this.generations.answer(new URL(request.url).searchParams.get("id"));
+      return HttpResponse.json(body, { status });
+    }),
   ];
 
   private script(
@@ -172,10 +208,7 @@ class FakeAiGateway {
 
   private async handle(endpoint: FakeGatewayEndpoint, request: Request): Promise<Response> {
     if (request.headers.get("authorization") !== `Bearer ${env.AI_GATEWAY_API_KEY}`) {
-      return HttpResponse.json(
-        { error: { message: "Invalid API key", type: "authentication_error" } },
-        { status: 401 },
-      );
+      return unauthorized();
     }
     const modelId =
       request.headers.get(endpoint === "language" ? "ai-language-model-id" : "ai-model-id") ?? "";
@@ -202,6 +235,13 @@ class FakeAiGateway {
     }
     return script.respond();
   }
+}
+
+function unauthorized(): Response {
+  return HttpResponse.json(
+    { error: { message: "Invalid API key", type: "authentication_error" } },
+    { status: 401 },
+  );
 }
 
 function streamedResponse(reply: FakeStreamedReply, costUsd: number | undefined): Response {

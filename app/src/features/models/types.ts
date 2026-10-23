@@ -110,6 +110,29 @@ export class ModelCallError extends Error {
   }
 }
 
+/**
+ * How looking up a failed call's billed cost ended (`correctFailedCallCost`): `corrected` when
+ * the gateway knew it and the ledger now records it; `not_billed_yet` when the gateway can't say
+ * yet, so the job looks again later; `given_up` a day after the call; `nothing_to_correct` when
+ * the entry is already corrected, or is no failed call recorded at 0 under a generation ID.
+ */
+export type FailedCallCostOutcome =
+  "corrected" | "not_billed_yet" | "given_up" | "nothing_to_correct";
+
+/**
+ * The AI Gateway refused a generation lookup for a reason looking again won't fix (a bad key, a
+ * malformed request). Built from the status only.
+ */
+export class GenerationLookupError extends Error {
+  readonly status: number;
+
+  constructor(status: number) {
+    super(`The AI Gateway refused the generation lookup (${String(status)}).`);
+    this.name = "GenerationLookupError";
+    this.status = status;
+  }
+}
+
 /** An injection screen request: text fetched for a model, held in memory only. */
 export type ScreenRequest = CallAttribution & { text: string };
 

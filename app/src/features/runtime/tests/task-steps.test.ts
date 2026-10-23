@@ -155,7 +155,7 @@ describe("a workflow that labels an email and adds a follow-up task", () => {
 
     await executeRun(system, runId, runner.runStep);
 
-    const runs = [await getRun(admin, runId), await listRuns(admin, workflowId)];
+    const runs = [await getRun(admin, runId), await listRuns(admin, { workflowId })];
     const records = JSON.stringify(runs);
     for (const text of [TITLE, NOTES, "Leeds", "oak chairs", "Added by"]) {
       expect(records).not.toContain(text);

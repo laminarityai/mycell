@@ -4,6 +4,7 @@ import { createHmac, randomUUID } from "node:crypto";
 import { http, HttpResponse } from "msw";
 import { env } from "@/env";
 import { FakeCalendar } from "./fake-calendar";
+import { FakeDocs } from "./fake-docs";
 import { FakeDrive } from "./fake-drive";
 import { FakeMailbox } from "./fake-gmail";
 import { connectionsApiHandlers, type ListingBehaviour } from "./fake-nango-connections";
@@ -28,12 +29,14 @@ export type FakeConnection = {
   account: FakeAccount;
   // The OAuth scopes the app granted, as Nango reports them in the token response.
   scopes: readonly string[];
-  // The account's Gmail mailbox, Drive, spreadsheets and primary calendar, and its Microsoft 365.
-  // The proxy reaches each through its API's host, if the connection's scopes allow that API.
+  // The account's Gmail mailbox, Drive, spreadsheets, primary calendar and documents, and its
+  // Microsoft 365. The proxy reaches each through its API's host, if the connection's scopes
+  // allow that API.
   mailbox: FakeMailbox;
   drive: FakeDrive;
   sheets: FakeSheets;
   calendar: FakeCalendar;
+  docs: FakeDocs;
   microsoft: FakeMicrosoft;
   // The app refused the refresh token (access revoked): the proxy can't call the source.
   refreshFails?: boolean;
@@ -87,6 +90,9 @@ class FakeNango {
 
   /** The connected account's primary calendar, for seeding invites. */
   calendar = (connectionId: string): FakeCalendar => this.connection(connectionId).calendar;
+
+  /** The connected account's documents, for seeding docs and reading what was suggested. */
+  docs = (connectionId: string): FakeDocs => this.connection(connectionId).docs;
 
   /** The connected account's Microsoft 365, for reading what was sent to it. */
   microsoft = (connectionId: string): FakeMicrosoft => this.connection(connectionId).microsoft;
@@ -189,6 +195,7 @@ class FakeNango {
     scopes: readonly string[] | undefined,
   ): string {
     const connectionId = randomUUID();
+    const drive = new FakeDrive(account.emailAddress);
     this.connections.set(connectionId, {
       id: this.nextId++,
       created: new Date().toISOString(),
@@ -198,9 +205,10 @@ class FakeNango {
       account,
       scopes: scopes ?? DEFAULT_SCOPES[integration] ?? [],
       mailbox: new FakeMailbox(account.emailAddress),
-      drive: new FakeDrive(account.emailAddress),
+      drive,
       sheets: new FakeSheets(),
       calendar: new FakeCalendar(account.emailAddress),
+      docs: new FakeDocs(drive),
       microsoft: new FakeMicrosoft(account.emailAddress),
     });
     return connectionId;
@@ -215,7 +223,7 @@ class FakeNango {
    * A user finishes OAuth in Connect UI opened with a reconnect session: Nango replaces the
    * connection's credentials and returns the `override` webhook it then sends. Choosing a
    * different account than before swaps in that account's (empty) mailbox, Drive, spreadsheets,
-   * calendar and Microsoft 365. The new token refreshes again, so a revoked connection reaches
+   * calendar, documents and Microsoft 365. The new token refreshes again, so a revoked connection reaches
    * its source.
    * `scopes`, when given, are what the new token was granted; otherwise they stay as they were.
    */
@@ -231,6 +239,7 @@ class FakeNango {
       connection.drive = new FakeDrive(account.emailAddress);
       connection.sheets = new FakeSheets();
       connection.calendar = new FakeCalendar(account.emailAddress);
+      connection.docs = new FakeDocs(connection.drive);
       connection.microsoft = new FakeMicrosoft(account.emailAddress);
     }
     return this.authWebhook(session.connectionId, "override", true);

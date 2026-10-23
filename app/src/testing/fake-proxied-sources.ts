@@ -1,12 +1,13 @@
 // The APIs the fake Nango's proxy serves, each by its host and path prefix, answering from the
-// connection's own fake: Google's (its Gmail mailbox, its Drive, its spreadsheets or its
-// calendar), and the registered app Microsoft 365, through Microsoft Graph. Like Google, an API
+// connection's own fake: Google's (its Gmail mailbox, its Drive, its spreadsheets, its calendar
+// or its documents), and the registered app Microsoft 365, through Microsoft Graph. Like Google, an API
 // answers 403 to a connection whose token holds none of the scopes it accepts (for a write, none
 // of the scopes its writes accept), and a host answers 404 for a path it doesn't serve.
 import { HttpResponse } from "msw";
 import { REGISTERED_APPS } from "@/features/connections/registered-apps";
 import { GOOGLE_APP_SCOPES } from "@/features/connections/types";
 import { calendarError, calendarResponse } from "./fake-calendar";
+import { docsError } from "./fake-docs";
 import { driveError, driveResponse } from "./fake-drive";
 import { gmailError, gmailResponse, gmailWrite } from "./fake-gmail";
 import type { FakeConnection } from "./fake-nango";
@@ -44,6 +45,7 @@ const GMAIL_COMPOSE = "https://www.googleapis.com/auth/gmail.compose";
 const DRIVE_READONLY = GOOGLE_APP_SCOPES.drive;
 const DRIVE = "https://www.googleapis.com/auth/drive";
 const DRIVE_FILE = "https://www.googleapis.com/auth/drive.file";
+const DOCUMENTS_READONLY = "https://www.googleapis.com/auth/documents.readonly";
 const SPREADSHEETS_READONLY = "https://www.googleapis.com/auth/spreadsheets.readonly";
 const CALENDAR_READS = ["calendar", "calendar.readonly", "calendar.events.readonly"].map(
   (name) => `https://www.googleapis.com/auth/${name}`,
@@ -99,6 +101,21 @@ export const PROXIED_SOURCES: ProxiedSource[] = [
       },
     },
     rateLimited: () => sheetsError(429, "RESOURCE_EXHAUSTED"),
+  },
+  {
+    host: "https://docs.googleapis.com",
+    prefix: "/v1/documents",
+    // documents.get takes any Docs or Drive scope; batchUpdate a read-write one.
+    scopes: [GOOGLE_APP_SCOPES.docs, DOCUMENTS_READONLY, DRIVE, DRIVE_READONLY, DRIVE_FILE],
+    respond: (connection, path, params) => connection.docs.respond(path, params),
+    write: {
+      scopes: [GOOGLE_APP_SCOPES.docs, DRIVE, DRIVE_FILE],
+      respond: (connection, path, _params, body, method) => {
+        if (method !== "POST") throw new Error(`The fake Docs takes no ${method}s`);
+        return connection.docs.write(path, body);
+      },
+    },
+    rateLimited: () => docsError(429, "RESOURCE_EXHAUSTED"),
   },
   {
     host: "https://graph.microsoft.com",

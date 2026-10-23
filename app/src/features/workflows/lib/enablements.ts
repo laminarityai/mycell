@@ -12,6 +12,7 @@ import { NotFoundError, ValidationError } from "@/lib/errors";
 import type { EnablementSummary, EnableResult } from "../types";
 import { findWorkflow } from "./access";
 import { deleteEnablement, switchOnEnablement } from "./enablement-rows";
+import { pausesOf, readHolds } from "./pauses";
 import { enablements } from "./schema";
 import { missingAccess, unconnectedApps } from "./requirements";
 import { latestVersions } from "./latest-versions";
@@ -84,12 +85,13 @@ export async function listEnablementsFor(
 ): Promise<Map<string, EnablementSummary[]>> {
   requireAdmin(ctx);
   if (workflowIds.length === 0) return new Map();
-  const [rows, nameOf] = await Promise.all([
+  const [rows, nameOf, holds] = await Promise.all([
     forOrg(ctx).select(enablements, {
       where: inArray(enablements.workflowId, workflowIds),
       orderBy: [enablements.enabledAt],
     }),
     userNames(ctx),
+    readHolds(ctx, workflowIds),
   ]);
   const byWorkflow = new Map(workflowIds.map((id): [string, EnablementSummary[]] => [id, []]));
   for (const row of rows) {
@@ -99,6 +101,7 @@ export async function listEnablementsFor(
       status: row.status,
       pausedReason: row.pausedReason,
       pausedChange: row.pausedChange,
+      pauses: pausesOf(row, holds(row.workflowId)),
       since: row.enabledAt,
     });
   }

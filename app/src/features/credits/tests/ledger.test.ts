@@ -8,6 +8,7 @@ import {
   getBalance,
   getSpending,
   grantCredits,
+  isOutOfCredits,
   listLedger,
   recordUsage,
 } from "../server";
@@ -33,6 +34,24 @@ describe("the credit balance", () => {
     });
 
     expect(await getBalance(orgA.admin.ctx)).toBeCloseTo(87.5);
+  });
+
+  it("is out of credits at or below zero, and not once a grant brings it above", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const system = systemCtx(orgA.id);
+    const spend = (costUsd: number) =>
+      recordUsage(system, { role: "fast", modelId: "openai/x", costUsd, outcome: "succeeded" });
+
+    expect(await isOutOfCredits(orgA.admin.ctx)).toBe(true);
+    await grantCredits(system, 10);
+    expect(await isOutOfCredits(orgA.admin.ctx)).toBe(false);
+    // 10 credits: exactly the balance.
+    await spend(0.01);
+    expect(await isOutOfCredits(orgA.admin.ctx)).toBe(true);
+    await spend(0.01);
+    expect(await isOutOfCredits(orgA.admin.ctx)).toBe(true);
+    await grantCredits(system, 25);
+    expect(await isOutOfCredits(orgA.admin.ctx)).toBe(false);
   });
 
   it("only lets our team grant credits, through the system ctx", async () => {

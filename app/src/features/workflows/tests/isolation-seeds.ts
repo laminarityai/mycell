@@ -1,7 +1,9 @@
 // What the isolation cases (isolation-cases.ts) seed in org B, for each case to check org A
 // can't reach it.
-import type { TwoOrgs } from "@/db/testing/two-org-fixture";
+import { FUNDED_CREDITS, type TwoOrgs } from "@/db/testing/two-org-fixture";
+import { grantCredits } from "@/features/credits/server";
 import { listTags } from "@/features/tags/server";
+import { systemCtx } from "@/lib/ctx";
 import { connectGmail, connectMailbox } from "@/testing/connect-helpers";
 import { publishTo, tagUsers } from "@/testing/visibility-helpers";
 import * as server from "../server";
@@ -16,9 +18,10 @@ export async function seedOrgBWorkflow({ orgA, orgB }: TwoOrgs) {
   return { id, version, before: await server.getWorkflow(orgB.admin.ctx, id) };
 }
 
-// Org B's admin has a member workflow switched on for their own connection.
+// Org B's admin has a member workflow switched on for their own connection, and credits to run it.
 export async function switchedOnInOrgB({ orgB }: TwoOrgs) {
   const admin = orgB.admin.ctx;
+  await grantCredits(systemCtx(orgB.id), FUNDED_CREDITS);
   const own = await connectMailbox(admin, orgB.admin.email);
   const { id } = await server.saveWorkflow(admin, { name: "B", spec: labelSpec() });
   await server.publishWorkflow(admin, id);

@@ -20,6 +20,7 @@ import type { Tag } from "@/features/tags/types";
 import { PublishDialog } from "./lib/workflow-editor";
 import { WorkflowGraph, type WorkflowGraphProps } from "./lib/workflow-graph";
 import { WorkingSpecEditor, type EditableWorkflow } from "./lib/working-spec-editor";
+import { PauseBadge, PausedNotice, StateBadge } from "./lib/pause-display";
 import { pausedText } from "./lib/paused-text";
 import type {
   Audience,
@@ -31,6 +32,8 @@ import type {
 } from "./types";
 
 export { VisibleWorkflowsList } from "./lib/visible-workflows";
+// How a switch's state shows: its badge and the notice explaining its pauses.
+export { PausedNotice, StateBadge };
 export type { SwitchConnectionOption };
 
 export {
@@ -199,9 +202,11 @@ function reach(audience: Audience | null): string {
   return audience.reach === 1 ? "1 user" : `${String(audience.reach)} users`;
 }
 
-/** Whether the workflow is on: for the admin's own connection, for the org's, or off. */
+/** Whether the workflow is on: for the admin's own connection, for the org's, paused, or off. */
 function SwitchBadge({ current }: { current: WorkflowSwitch | null }) {
   if (current === null) return <Badge variant="secondary">Off</Badge>;
+  const shown = current.pauses.at(0);
+  if (shown !== undefined) return <PauseBadge reason={shown} change={current.pausedChange} />;
   return (
     <Badge variant="outline">
       {current.kind === "member" ? "On for your connection" : "On for the org"}
@@ -214,14 +219,17 @@ function EnabledBy({ enablements }: { enablements: EnablementSummary[] }) {
   if (enablements.length === 0) return <span className="text-muted-foreground">Nobody</span>;
   return (
     <ul className="flex flex-col gap-1">
-      {enablements.map((enablement) => (
-        <li key={enablement.userId}>
-          {enablement.name}
-          {enablement.status === "paused"
-            ? ` (paused: ${pausedText(enablement.pausedReason, enablement.pausedChange)})`
-            : null}
-        </li>
-      ))}
+      {enablements.map((enablement) => {
+        const shown = enablement.pauses.at(0);
+        return (
+          <li key={enablement.userId}>
+            {enablement.name}
+            {shown === undefined
+              ? null
+              : ` (paused: ${pausedText(shown, enablement.pausedChange)})`}
+          </li>
+        );
+      })}
     </ul>
   );
 }

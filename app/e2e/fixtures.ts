@@ -1,14 +1,23 @@
 // The e2e `test`: each test that asks for `orgs` starts from an empty database seeded with the
-// shared two-org fixture, and `signInAs` signs the test's browser in as one of its users.
+// shared two-org fixture, each org granted `credits` (funded by default, since a zero balance
+// pauses every workflow; a test that wants none says `test.use({ credits: 0 })`), and
+// `signInAs` signs the test's browser in as one of its users.
 import { test as base, expect, type Page } from "@playwright/test";
 import { closeDb } from "@/db/client";
 import { resetDatabase } from "@/db/testing/reset";
-import { seedTwoOrgs, type FixtureUser, type TwoOrgs } from "@/db/testing/two-org-fixture";
+import {
+  FUNDED_CREDITS,
+  seedTwoOrgs,
+  type FixtureUser,
+  type TwoOrgs,
+} from "@/db/testing/two-org-fixture";
 import { fakeAiGateway, type E2eAiGateway } from "./fake-ai-gateway";
 import { fakeNango, type E2eNango } from "./fake-nango";
 import { signInAs } from "./sign-in-as";
 
 type TestFixtures = {
+  /** The credits each org is granted before the test. */
+  credits: number;
   orgs: TwoOrgs;
   signInAs: (user: FixtureUser) => Promise<void>;
   /** The fake AI Gateway, emptied for the test; a test that leaves a request unscripted fails. */
@@ -27,9 +36,10 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
     },
     { scope: "worker", auto: true },
   ],
-  orgs: async ({}, provide) => {
+  credits: [FUNDED_CREDITS, { option: true }],
+  orgs: async ({ credits }, provide) => {
     await resetDatabase();
-    await provide(await seedTwoOrgs());
+    await provide(await seedTwoOrgs({ credits }));
   },
   signInAs: async ({ context }, provide) => {
     await provide((user) => signInAs(context, user.id));

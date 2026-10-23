@@ -245,7 +245,7 @@ describe("dryRun", () => {
     });
 
     expect(result.costUsd).toBeCloseTo(0.021);
-    expect(await listRuns(admin, workflowId)).toEqual([]);
+    expect((await listRuns(admin, { workflowId })).runs).toEqual([]);
     const usage = (await listLedger(admin)).filter((entry) => entry.kind === "usage");
     expect(usage).toHaveLength(2);
     for (const entry of usage)

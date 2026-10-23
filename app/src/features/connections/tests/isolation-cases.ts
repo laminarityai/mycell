@@ -161,6 +161,26 @@ export const isolationCases = defineIsolationCases(server, {
     }
   },
 
+  connectionOwners: async (orgs) => {
+    const { before } = await seedOrgBConnection(orgs);
+    const { orgA } = orgs;
+
+    for (const ctx of [orgA.admin.ctx, orgA.member.ctx, systemCtx(orgA.id)]) {
+      expect(await server.connectionOwners(ctx)).toEqual([]);
+    }
+    expect(await server.listConnections(orgs.orgB.admin.ctx)).toEqual(before);
+  },
+
+  sourceClients: async (orgs) => {
+    const { before, memberBefore } = await seedOrgBConnection(orgs);
+    const ids = orgBIds(before, memberBefore);
+
+    for (const ctx of [orgs.orgA.admin.ctx, systemCtx(orgs.orgA.id)]) {
+      expect(await server.sourceClients(ctx, ids)).toEqual(new Map());
+    }
+    expect(await server.listConnections(orgs.orgB.admin.ctx)).toEqual(before);
+  },
+
   listConnectionsForJobs: async (orgs) => {
     await seedOrgBConnection(orgs);
     await connectGmail(orgs.orgA.member.ctx, orgs.orgA.member.email);

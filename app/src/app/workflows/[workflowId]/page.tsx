@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { listConversations } from "@/features/builder/server";
@@ -6,7 +7,7 @@ import { listCustomActions } from "@/features/custom-actions/server";
 import { getCtx } from "@/features/orgs/server";
 import { listRuns } from "@/features/runtime/server";
 import { listTags } from "@/features/tags/server";
-import { RecentRuns, RunOnMessageForm } from "@/features/runtime/ui";
+import { RunOnMessageForm, RunsTable, runsHref } from "@/features/runtime/ui";
 import { getWorkflow, previewPublish, runnableConnections } from "@/features/workflows/server";
 import {
   ActionSetProvider,
@@ -19,6 +20,9 @@ import { isAdmin } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
 import { TryIt } from "./try-it";
 import { AppShell } from "@/app/_shell/app-shell";
+
+/** How many of its latest runs the workflow's page shows; the Runs page has the rest. */
+const RECENT_RUNS = 10;
 
 // A Server Action here may try the working spec on a message, model steps and all.
 export const maxDuration = 300;
@@ -51,7 +55,7 @@ async function Workflow({ params }: Pick<PageProps<"/workflows/[workflowId]">, "
     throw error;
   });
   const [runs, runnable, conversations, tags, customActions, preview] = await Promise.all([
-    listRuns(ctx, workflowId),
+    listRuns(ctx, { workflowId }, { size: RECENT_RUNS }),
     runnableConnections(ctx, workflowId),
     listConversations(ctx, { workflowId }),
     listTags(ctx),
@@ -89,7 +93,19 @@ async function Workflow({ params }: Pick<PageProps<"/workflows/[workflowId]">, "
         <section className="flex flex-col gap-3" aria-label="Runs">
           <h2 className="text-lg font-semibold">Runs</h2>
           <RunOnMessageForm workflowId={workflow.id} connections={connections} />
-          <RecentRuns runs={runs} />
+          {runs.runs.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No runs yet.</p>
+          ) : (
+            <>
+              <RunsTable runs={runs.runs} showInbox />
+              <Link
+                href={runsHref({ workflowId: workflow.id })}
+                className="text-sm font-medium underline-offset-4 hover:underline"
+              >
+                See every run of this workflow
+              </Link>
+            </>
+          )}
         </section>
       </div>
     </ActionSetProvider>

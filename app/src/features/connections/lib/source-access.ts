@@ -106,7 +106,11 @@ function described(connection: Connection): Omit<ConnectionDetails, "ingest"> {
  * (a connection the caller may read, or was delegated), for a job step that makes several calls.
  */
 export async function sourceClient(ctx: Ctx, connectionId: string): Promise<SourceClient> {
-  const connection = await readable(ctx, connectionId, { delegated: true });
+  return clientOf(await readable(ctx, connectionId, { delegated: true }));
+}
+
+/** The source client of a connection whose access the caller has checked. */
+export function clientOf(connection: Connection): SourceClient {
   return {
     connection: described(connection),
     get: (path, schema, call) =>

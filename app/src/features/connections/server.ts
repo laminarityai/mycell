@@ -37,5 +37,8 @@ export {
   recordIngestState,
   sourceClient,
 } from "./lib/source-access";
+// For a list of what ran on many connections (the Runs page): whose each one is, and clients
+// to read the ones the caller may, in the same queries however many there are.
+export { connectionOwners, sourceClients } from "./lib/owners";
 // Called only by the Nango webhook route and tests: it checks Nango's signature itself.
 export { handleNangoWebhook } from "./lib/webhook";

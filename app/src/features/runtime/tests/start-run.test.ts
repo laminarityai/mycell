@@ -110,25 +110,32 @@ describe("reading runs", () => {
     return { orgA, admin, promoted, memberWorkflow, orgWorkflow, ownRun, otherRun, orgRun };
   }
 
-  it("gives an admin their own member runs and the org's runs, not another user's", async () => {
+  it("gives an admin their own member runs and the org's in full, another user's redacted", async () => {
     const { admin, ownRun, otherRun, orgRun } = await threeRuns();
 
-    expect(await getRun(admin, ownRun.runId)).toMatchObject({ id: ownRun.runId });
-    expect(await getRun(admin, orgRun.runId)).toMatchObject({ id: orgRun.runId });
-    await expect(getRun(admin, otherRun.runId)).rejects.toThrow(ForbiddenError);
+    expect(await getRun(admin, ownRun.runId)).toMatchObject({ id: ownRun.runId, full: true });
+    expect(await getRun(admin, orgRun.runId)).toMatchObject({ id: orgRun.runId, full: true });
+    expect(await getRun(admin, otherRun.runId)).toMatchObject({
+      id: otherRun.runId,
+      full: false,
+      sourceRef: null,
+    });
   });
 
-  it("gives another admin only their own member runs, and the org's", async () => {
+  it("gives another admin their own member runs and the org's in full, the first's redacted", async () => {
     const { promoted, ownRun, otherRun, orgRun } = await threeRuns();
 
-    expect(await getRun(promoted, otherRun.runId)).toMatchObject({ id: otherRun.runId });
-    expect(await getRun(promoted, orgRun.runId)).toMatchObject({ id: orgRun.runId });
-    await expect(getRun(promoted, ownRun.runId)).rejects.toThrow(ForbiddenError);
+    expect(await getRun(promoted, otherRun.runId)).toMatchObject({ full: true, sourceRef: "m-2" });
+    expect(await getRun(promoted, orgRun.runId)).toMatchObject({ full: true, sourceRef: "m-3" });
+    expect(await getRun(promoted, ownRun.runId)).toMatchObject({ full: false, sourceRef: null });
   });
 
-  it("gives a member no run by its ID yet, not even on their own connection", async () => {
-    const { orgA, otherRun } = await threeRuns();
+  it("gives a member their own runs, and no one else's", async () => {
+    const { orgA, ownRun, otherRun, orgRun } = await threeRuns();
+    const member = orgA.member.ctx;
 
-    await expect(getRun(orgA.member.ctx, otherRun.runId)).rejects.toThrow(ForbiddenError);
+    expect(await getRun(member, otherRun.runId)).toMatchObject({ full: true, sourceRef: "m-2" });
+    await expect(getRun(member, ownRun.runId)).rejects.toThrow(ForbiddenError);
+    await expect(getRun(member, orgRun.runId)).rejects.toThrow(ForbiddenError);
   });
 });

@@ -49,7 +49,7 @@ async function publishTo(page: Page, name: string, spec: object, tag: string) {
   await page.getByRole("textbox", { name: "Name" }).fill(name);
   await page.getByRole("tab", { name: "JSON" }).click();
   await page.getByRole("textbox", { name: "Spec (JSON)" }).fill(JSON.stringify(spec));
-  await expect(page.getByText("Ready to save.")).toBeVisible();
+  await expect(page.getByText("Ready to save.").filter({ visible: true })).toBeVisible();
   await page.getByRole("button", { name: "Save" }).click();
   await page.getByRole("button", { name: "Publish" }).click();
   const dialog = page.getByRole("dialog", { name: "Publish version 1" });
@@ -133,9 +133,9 @@ test("a riskier version pauses a member's switch until they re-enable it", async
   await page.goto(workflowPage);
   await page.getByRole("tab", { name: "JSON" }).click();
   await page.getByRole("textbox", { name: "Spec (JSON)" }).fill(JSON.stringify(LABELS_AND_REPLIES));
-  await expect(page.getByText("Ready to save.")).toBeVisible();
+  await expect(page.getByText("Ready to save.").filter({ visible: true })).toBeVisible();
   await page.getByRole("button", { name: "Save" }).click();
-  await expect(page.getByText("All changes saved.")).toBeVisible();
+  await expect(page.getByText("All changes saved.").filter({ visible: true })).toBeVisible();
   await page.getByRole("button", { name: "Publish" }).click();
   const dialog = page.getByRole("dialog", { name: "Publish version 2" });
   const warning = dialog.getByRole("note", { name: "What publishing pauses" });

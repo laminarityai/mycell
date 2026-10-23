@@ -40,7 +40,21 @@ export const isolationCases = defineIsolationCases(server, {
   getRun: async (orgs) => {
     const { runId } = await seedOrgBRun(orgs);
 
-    await expect(server.getRun(orgs.orgA.admin.ctx, runId)).rejects.toThrow(NotFoundError);
+    for (const ctx of [orgs.orgA.admin.ctx, orgs.orgA.member.ctx]) {
+      await expect(server.getRun(ctx, runId)).rejects.toThrow(NotFoundError);
+    }
+    expect(await server.getRun(orgs.orgB.admin.ctx, runId)).toMatchObject({ id: runId });
+  },
+
+  getRunMessage: async (orgs) => {
+    const { runId } = await seedOrgBRun(orgs);
+
+    for (const ctx of [orgs.orgA.admin.ctx, orgs.orgA.member.ctx]) {
+      await expect(server.getRunMessage(ctx, runId)).rejects.toThrow(NotFoundError);
+    }
+    expect(await server.getRunMessage(orgs.orgB.admin.ctx, runId)).toMatchObject({
+      subject: pricingQuestion().subject,
+    });
   },
 
   listRuns: async (orgs) => {

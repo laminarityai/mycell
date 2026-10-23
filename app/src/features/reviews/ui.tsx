@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DateTime } from "@/components/date-time";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -23,6 +24,7 @@ import type {
   ReviewKind,
   ReviewStatus,
   ReviewSummary,
+  RunReview,
 } from "./types";
 
 export { ReviewCountsSection } from "./lib/review-counts";
@@ -77,6 +79,54 @@ function handOffText(handOff: HandOff, viewerId: string): string {
 /** Who an org review is shared with, as the viewer knows them: "Shared with sales, support". */
 function sharedText(tags: string[]): string {
   return tags.length === 0 ? "Shared inbox" : `Shared with ${tags.join(", ")}`;
+}
+
+const RUN_REVIEW_STATUSES: Record<ReviewStatus, string> = {
+  waiting: "waiting",
+  approved: "approved",
+  edited_approved: "edited and approved",
+  declined: "declined",
+  done_in_app: "done in its app",
+  gone: "gone",
+  expired: "expired",
+  unconfirmed: "approved, not confirmed sent",
+};
+
+/**
+ * The reviews a run created, each with how it stands and since when, linked when the viewer may
+ * open it; one in a colleague's inbox is named but not linked.
+ */
+export function RunReviews({ reviews }: { reviews: RunReview[] }) {
+  if (reviews.length === 0) {
+    return <p className="text-sm text-muted-foreground">This run created no reviews.</p>;
+  }
+  return (
+    <ul className="flex flex-col gap-1 text-sm">
+      {reviews.map((review) => (
+        <li key={review.id} className="flex flex-wrap items-center gap-2">
+          {review.openable ? (
+            <Link
+              href={`/reviews/${review.id}`}
+              className="font-medium underline-offset-4 hover:underline"
+            >
+              {KIND_LABELS[review.kind]}
+            </Link>
+          ) : (
+            <span className="font-medium">{KIND_LABELS[review.kind]}</span>
+          )}
+          <Badge variant={review.status === "waiting" ? "secondary" : "outline"}>
+            {RUN_REVIEW_STATUSES[review.status]}
+          </Badge>
+          <span className="text-muted-foreground">
+            created <DateTime value={review.createdAt} />
+          </span>
+          {review.openable ? null : (
+            <span className="text-xs text-muted-foreground">In its owner&apos;s inbox</span>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 /**

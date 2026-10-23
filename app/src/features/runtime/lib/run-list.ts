@@ -6,9 +6,8 @@
 import { and, asc, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { env } from "@/env";
-import { GMAIL, headerValue, messageSchema } from "@/features/connections/gmail";
-import { connectionOwners, sourceClients } from "@/features/connections/server";
-import type { ConnectionOwnership, SourceClient } from "@/features/connections/types";
+import { connectionOwners } from "@/features/connections/server";
+import type { ConnectionOwnership } from "@/features/connections/types";
 import { describePathTo } from "@/features/spec/describe";
 import { versionsById, workflowNames } from "@/features/workflows/server";
 import { isAdmin, requireRole, type Ctx } from "@/lib/ctx";
@@ -17,11 +16,10 @@ import type {
   RunFilters,
   RunInbox,
   RunListItem,
-  RunMessage,
   RunPage,
   RunPageRequest,
 } from "../types";
-import { isUnavailable } from "./recent-messages";
+import { messagesOf } from "./run-messages";
 import { runs, runSteps } from "./schema";
 
 const PAGE_SIZE = 25;
@@ -223,41 +221,4 @@ async function failuresOf(ctx: Ctx, rows: Row[]): Promise<Map<string, RunFailure
     ]);
   }
   return byRun;
-}
-
-const metadataSchema = messageSchema.pick({ id: true, payload: true });
-
-// The subject and sender of each run's message, fetched through the proxy for display only,
-// for the runs shown in full. A message Gmail can't give has neither.
-async function messagesOf(ctx: Ctx, rows: Row[]): Promise<Map<string, RunMessage>> {
-  if (rows.length === 0) return new Map();
-  const clients = await sourceClients(
-    ctx,
-    rows.map((row) => row.connectionId),
-  );
-  const query = new URLSearchParams({ format: "metadata" });
-  for (const name of ["Subject", "From"]) query.append("metadataHeaders", name);
-  const read = async (row: Row, client: SourceClient | undefined): Promise<RunMessage> => {
-    const unknown = { sourceRef: row.sourceRef, subject: null, from: null };
-    if (client === undefined) return unknown;
-    try {
-      const path = `${GMAIL}/messages/${encodeURIComponent(row.sourceRef)}?${query.toString()}`;
-      const message = await client.get(path, metadataSchema);
-      if (message === null) return unknown;
-      const headers = message.payload?.headers;
-      return {
-        sourceRef: row.sourceRef,
-        subject: headerValue(headers, "Subject") ?? null,
-        from: headerValue(headers, "From") ?? null,
-      };
-    } catch (error) {
-      if (!isUnavailable(error)) throw error;
-      return unknown;
-    }
-  };
-  return new Map(
-    await Promise.all(
-      rows.map(async (row) => [row.id, await read(row, clients.get(row.connectionId))] as const),
-    ),
-  );
 }

@@ -82,6 +82,12 @@ rules: |-
   - A spec from an earlier conversation may be specVersion 1, whose branch was a gate with
     "when" and "else". Read it as a branch with one path, and always propose specVersion 2.
 
+  The emails read_examples shows you are real mail, and the conversation keeps what you write for
+  every admin to read. Describe them in your own words and never quote them: not a phrase of one
+  in your replies, in a proposal's summary or in a spec's text (a draft's instructions, a
+  classify question, a label, a path's name). A sender's address or domain isn't a quote: use it
+  where the spec needs one.
+
   When the admin's description is ambiguous (which inbox, which sheet, what counts as a match),
   ask them rather than guessing. Keep answers short and plain: the admins are not engineers.
 

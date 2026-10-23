@@ -5,6 +5,7 @@ import { isForeignKeyViolation } from "@/db/errors";
 import { SourceRequestError } from "@/features/connections/types";
 import { ModelCallError } from "@/features/models/types";
 import { NotFoundError, OutOfCreditsError } from "@/lib/errors";
+import { INTERNAL_ERROR_MESSAGE } from "../types";
 import { StepCheckError, type StepCheck } from "./checks";
 
 export const runStepErrorCodes = [
@@ -117,10 +118,20 @@ function describeBreak(error: unknown): Omit<Failure, "stepStatus"> {
   }
   return {
     code: "internal_error",
-    message: "The step failed unexpectedly.",
+    message: INTERNAL_ERROR_MESSAGE,
     retryable: true,
     runStatus: "failed",
   };
+}
+
+/**
+ * Records an unexpected error, a bug of ours, in the server log, where our team finds it: its
+ * code and the run's and step's IDs, never the error's message, which may quote an app's or a
+ * model's answer (invariant 8).
+ */
+export function logInternalError(ids: { runId: string; stepId?: string }): void {
+  const step = ids.stepId === undefined ? "" : ` step=${ids.stepId}`;
+  console.error(`internal_error run=${ids.runId}${step}`);
 }
 
 /** NotFoundError from `connections`, or a write that broke the run's foreign keys. */

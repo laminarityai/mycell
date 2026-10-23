@@ -288,6 +288,13 @@
       "when": 1792708478642,
       "tag": "0040_foreign-key-indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1792729495603,
+      "tag": "0041_run-error-code",
+      "breakpoints": true
     }
   ]
 }

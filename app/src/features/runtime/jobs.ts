@@ -5,7 +5,7 @@ import { systemCtx } from "@/lib/ctx";
 import { gmailMessageReceived } from "@/lib/events";
 import { inngest, stepRunner } from "@/lib/inngest";
 import { runRequested } from "./lib/events";
-import { executeRun, startTriggeredRuns } from "./server";
+import { executeRun, failCrashedRun, startTriggeredRuns } from "./server";
 
 // At most this many runs execute at once for one org, as for ingest.
 const PER_ORG_LIMIT = 3;
@@ -31,7 +31,8 @@ export const fanOutMessageJob = inngest.createFunction(
 /**
  * Executes one run, one spec step per Inngest step. A step's attempts and backoff run inside
  * the step, which records its failure rather than throwing it, so Inngest's own retries are
- * left for infrastructure errors (the database unreachable, say).
+ * left for infrastructure errors (the database unreachable, say). Once those run out, the run
+ * ends `failed` rather than staying running.
  */
 export const runWorkflowJob = inngest.createFunction(
   {
@@ -42,6 +43,10 @@ export const runWorkflowJob = inngest.createFunction(
       { scope: "env", key: '"run-connection-" + event.data.connectionId', limit: 1 },
       { scope: "env", key: '"run-org-" + event.data.orgId', limit: PER_ORG_LIMIT },
     ],
+    onFailure: async ({ event }) => {
+      const data = runRequested.schema.parse(event.data.event.data);
+      await failCrashedRun(systemCtx(data.orgId), data.runId);
+    },
   },
   async ({ event, step }) =>
     executeRun(systemCtx(event.data.orgId), event.data.runId, stepRunner(step)),

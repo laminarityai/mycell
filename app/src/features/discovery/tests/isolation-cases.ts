@@ -3,7 +3,7 @@ import { defineIsolationCases } from "@/db/testing/isolation";
 import type { TwoOrgs } from "@/db/testing/two-org-fixture";
 import { getConnection, listConnections } from "@/features/connections/server";
 import { systemCtx } from "@/lib/ctx";
-import { NotFoundError } from "@/lib/errors";
+import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import * as server from "../server";
 import { connectMailbox, daysAgo } from "@/testing/connect-helpers";
 import { fakeGooglePush } from "@/testing/fake-google-push";
@@ -31,7 +31,11 @@ async function seedOrgB({ orgB }: TwoOrgs) {
   await server.backfillConnection(orgB.admin.ctx, org.id);
   member.mailbox.add({ from: CUSTOMER, to: [orgB.member.email], text: "Again", at: new Date() });
   org.mailbox.add({ from: CUSTOMER, to: [inbox], text: "Again", at: new Date() });
-  return { ids: [member.id, org.id], snapshot: () => orgBState(orgB) };
+  return {
+    ids: [member.id, org.id],
+    mailboxes: [member.mailbox, org.mailbox],
+    snapshot: () => orgBState(orgB),
+  };
 }
 
 async function orgBState(orgB: TwoOrgs["orgB"]) {
@@ -104,6 +108,24 @@ export const isolationCases = defineIsolationCases(server, {
       });
       await expect(getConnection(systemCtx(other), connectionId)).rejects.toThrow(NotFoundError);
     }
+  },
+
+  // Org A's system ctx renews only org A's watches; no one else's ctx renews any.
+  renewWatches: async (orgs) => {
+    const { mailboxes } = await seedOrgB(orgs);
+    const { orgA } = orgs;
+    const own = await connectMailbox(orgA.member.ctx, orgA.member.email);
+    await server.backfillConnection(orgA.member.ctx, own.id);
+    const watchesMade = () => mailboxes.map((mailbox) => mailbox.watches.made.length);
+    const before = watchesMade();
+
+    for (const ctx of [orgA.admin.ctx, orgA.member.ctx]) {
+      await expect(server.renewWatches(ctx)).rejects.toThrow(ForbiddenError);
+    }
+    expect(await server.renewWatches(systemCtx(orgA.id))).toEqual({ renewed: 1, failed: 0 });
+
+    expect(own.mailbox.watches.made).toHaveLength(2);
+    expect(watchesMade()).toEqual(before);
   },
 
   // Takes no ctx: a notification names only an address. Org A's notifications must start only

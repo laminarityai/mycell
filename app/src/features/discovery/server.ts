@@ -8,6 +8,8 @@ export { pollConnection } from "./lib/poll";
 export { countStoredItems, listStoredItems } from "./lib/stored-items";
 // Called only by the polling cron, which has no ctx until it picks an org (ADR-0009).
 export { pollAllConnections } from "./lib/poll-all";
+// Called only by the renew-watches cron, as each org's system ctx (ADR-0026).
+export { renewWatches } from "./lib/watch";
 // Called only by the Gmail push route and tests: it checks Google's token itself, and has no
 // ctx until it finds the mailbox's org (ADR-0026).
 export { handleGmailPush } from "./lib/gmail-push";

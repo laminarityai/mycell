@@ -4,13 +4,15 @@
 // Each page is one step, so Inngest retries a failed page without redoing the others. A
 // connection deleted while this runs ends it quietly: a missing connection is NotFoundError,
 // and a write for it breaks its foreign key. Finishing sets only the app's ingest status, so a
-// `needs_reauth` Nango reported meanwhile (kept on the connection itself) stays.
+// `needs_reauth` Nango reported meanwhile (kept on the connection itself) stays. An app that can
+// watch then starts its watch, in a step of its own (ADR-0026); a failure leaves it to polling.
 import { getConnection, recordIngestState, sourceClient } from "@/features/connections/server";
 import { ingestedAppSchema, type IngestedApp } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
 import { runInline, type RunStep } from "@/lib/inngest";
 import type { BackfillOutcome } from "../types";
 import { CONNECTORS, storeWindow, whileConnected } from "./ingest-steps";
+import { startWatch, watches } from "./watch";
 
 /** How far back a backfill reaches. */
 export const BACKFILL_DAYS = 90;
@@ -44,6 +46,15 @@ export async function backfillConnection(
       }),
     );
     if (end.gone) return { outcome: "gone" };
+    if (watches(app)) {
+      const watched = await runStep(`${app}-watch`, () =>
+        whileConnected(async () => {
+          const expiresAt = await startWatch(ctx, connectionId, app);
+          return { expiresAt: expiresAt?.toISOString() ?? null };
+        }),
+      );
+      if (watched.gone) return { outcome: "gone" };
+    }
     items += stored.items;
   }
   return { outcome: "done", items };

@@ -2,11 +2,17 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { getBalance, listLedger } from "@/features/credits/server";
+import { spendingKindOf } from "@/features/credits/types";
+import { correctFailedCallCost } from "@/features/models/server";
+import { systemCtx } from "@/lib/ctx";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
+import { fakeInngest } from "@/testing/fake-inngest";
+import { fundOrg, readTurn } from "@/testing/streamed-turn";
 import { getConversation, startConversation, streamTurn } from "../server";
-import { fundOrg, readTurn } from "./turn-helpers";
 
 beforeEach(resetDatabase);
+
+const FAILED_CALL = "models/failed-call.recorded";
 
 describe("streamTurn", () => {
   it("streams the scripted reply and stores both messages on the conversation", async () => {
@@ -101,13 +107,16 @@ describe("a turn's credits", () => {
     await readTurn(await streamTurn(admin, id, "What does my workflow do?"));
 
     expect(await getBalance(admin)).toBe(970);
-    expect((await listLedger(admin)).at(0)).toMatchObject({
+    const [entry] = await listLedger(admin);
+    expect(entry).toMatchObject({
       kind: "usage",
       role: "smart",
       modelId: "test/smart-default",
       outcome: "succeeded",
       costUsd: 0.03,
+      purpose: "builder",
     });
+    expect(spendingKindOf(entry)).toBe("builder");
   });
 
   it("records the cost of the steps that ran when a turn ends early", async () => {
@@ -125,9 +134,58 @@ describe("a turn's credits", () => {
 
     expect(turn.errors).not.toEqual([]);
     expect(await getBalance(admin)).toBe(990);
-    expect((await listLedger(admin)).at(0)).toMatchObject({ outcome: "failed", costUsd: 0.01 });
+    expect((await listLedger(admin)).at(0)).toMatchObject({
+      outcome: "failed",
+      costUsd: 0.01,
+      purpose: "builder",
+    });
     const reply = (await getConversation(admin, id)).messages.at(-1);
     expect(reply?.parts.at(-1)).toMatchObject({ type: "notice", kind: "failed" });
+  });
+
+  it("adds what a failed turn was billed once the job looks it up", async () => {
+    const { orgA } = await seedTwoOrgs();
+    await fundOrg(orgA.id, 1000);
+    const admin = orgA.admin.ctx;
+    const { id } = await startConversation(admin, {});
+    fakeAiGateway.fail("language", { streaming: true, status: 500, generationId: "gen_turn" });
+
+    const turn = await readTurn(await streamTurn(admin, id, "What does my workflow do?"));
+    fakeAiGateway.bill("gen_turn", 0.02);
+    for (const event of fakeInngest.sent(FAILED_CALL)) {
+      await correctFailedCallCost(systemCtx(orgA.id), String(event.data.entryId));
+    }
+
+    expect(turn.errors).not.toEqual([]);
+    // 0.02 USD is 20 credits at 1000/USD.
+    expect(await getBalance(admin)).toBe(980);
+    expect(fakeAiGateway.lookups()).toEqual(["gen_turn"]);
+    const corrected = (await listLedger(admin)).find((entry) => entry.correctsId !== null);
+    expect(corrected).toMatchObject({
+      costUsd: 0.02,
+      generationId: "gen_turn",
+      purpose: "builder",
+    });
+  });
+
+  it("keeps a failed turn at 0, looked up by no one, when its error names no generation", async () => {
+    const { orgA } = await seedTwoOrgs();
+    await fundOrg(orgA.id, 1000);
+    const admin = orgA.admin.ctx;
+    const { id } = await startConversation(admin, {});
+    fakeAiGateway.fail("language", { streaming: true, status: 500 });
+
+    await readTurn(await streamTurn(admin, id, "What does my workflow do?"));
+
+    expect(fakeInngest.sent(FAILED_CALL)).toEqual([]);
+    expect(fakeAiGateway.lookups()).toEqual([]);
+    expect(await getBalance(admin)).toBe(1000);
+    expect((await listLedger(admin)).at(0)).toMatchObject({
+      outcome: "failed",
+      costUsd: 0,
+      generationId: null,
+      purpose: "builder",
+    });
   });
 
   it("calls no model out of credits, and the conversation says why", async () => {

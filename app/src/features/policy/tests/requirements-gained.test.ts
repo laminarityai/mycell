@@ -1,8 +1,11 @@
 // What a new workflow version needs that the previous one didn't (M5): decided from the
 // catalog's fixed risk levels, apps and scopes, never from anything a spec or model says.
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
+import { actionSetOf, appsUsed } from "../action-set";
 import { catalogActionSet } from "../catalog";
 import { requirementsGained } from "../engine";
+import type { CustomAction } from "../types";
 
 const LABEL = "google-mail.add-label";
 const DRAFT = "google-mail.create-draft";
@@ -67,5 +70,63 @@ describe("comparing a new version's requirements with the previous one's", () =>
         catalogActionSet,
       ),
     ).toBeNull();
+  });
+});
+
+describe("the apps a workflow uses", () => {
+  // Custom reads on Google, one in Gmail and one in Calendar, and one in Microsoft 365.
+  const customRead = (name: string, registeredApp: string, app: string, path: string) =>
+    ({
+      kind: "custom",
+      name,
+      app,
+      description: "Read one thing.",
+      risk: "read",
+      registeredApp,
+      scopes: [],
+      input: z.object({}),
+      output: z.object({}),
+      request: { method: "GET", path, query: {}, body: {}, outputs: {} },
+    }) satisfies CustomAction;
+  const actions = actionSetOf([
+    ...catalogActionSet.actions,
+    customRead("google.read-label", "google", "Google", "/gmail/v1/users/me/labels/{id}"),
+    customRead(
+      "google.read-event",
+      "google",
+      "Google",
+      "/calendar/v3/calendars/primary/events/{id}",
+    ),
+    customRead("google.read-other", "google", "Google", "/youtube/v3/videos"),
+    customRead("microsoft.read-message", "microsoft", "Microsoft 365", "/v1.0/me/messages/{id}"),
+  ]);
+
+  it("are Gmail, then each catalog action's app, each once", () => {
+    expect(appsUsed([LABEL, READ_RANGE, DRAFT], actions)).toEqual(["Gmail", "Sheets"]);
+  });
+
+  it("name a custom Google action's own Google app, from its path", () => {
+    expect(appsUsed(["google.read-event", "google.read-label"], actions)).toEqual([
+      "Gmail",
+      "Calendar",
+    ]);
+  });
+
+  it("name Google for a custom Google action no Google app serves, and another app by its name", () => {
+    expect(appsUsed(["google.read-other", "microsoft.read-message"], actions)).toEqual([
+      "Gmail",
+      "Google",
+      "Microsoft 365",
+    ]);
+  });
+
+  it("make a version that starts calling a new Google app gain it", () => {
+    expect(
+      requirementsGained(
+        { maxRisk: "read", requiredActions: ["google.read-label"] },
+        { maxRisk: "read", requiredActions: ["google.read-label", "google.read-event"] },
+        actions,
+      ),
+    ).toEqual({ newApps: ["Calendar"] });
   });
 });

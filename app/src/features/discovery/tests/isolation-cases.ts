@@ -6,8 +6,12 @@ import { systemCtx } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
 import * as server from "../server";
 import { connectMailbox, daysAgo } from "@/testing/connect-helpers";
+import { fakeGooglePush } from "@/testing/fake-google-push";
+import { fakeInngest } from "@/testing/fake-inngest";
 
 const CUSTOMER = "alice@customer.example";
+
+const polled = () => fakeInngest.sent("discovery/connection.poll-due").map((event) => event.data);
 
 // Org B's member and org B's shared inbox both hear from the same customer as org A, and are
 // backfilled, then hear from them again, so every case can check org B is left as it was (a
@@ -100,6 +104,27 @@ export const isolationCases = defineIsolationCases(server, {
       });
       await expect(getConnection(systemCtx(other), connectionId)).rejects.toThrow(NotFoundError);
     }
+  },
+
+  // Takes no ctx: a notification names only an address. Org A's notifications must start only
+  // org A's polls, and an address in org B only org B's.
+  handleGmailPush: async (orgs) => {
+    const { ids } = await seedOrgB(orgs);
+    const { orgA, orgB } = orgs;
+    const own = await connectMailbox(orgA.member.ctx, orgA.member.email);
+    await server.backfillConnection(orgA.member.ctx, own.id);
+
+    for (const address of [orgA.member.email, `support@${orgA.workspaceDomain}`]) {
+      expect((await fakeGooglePush.notify(address)).status).toBe(204);
+    }
+    expect(polled()).toEqual([{ orgId: orgA.id, connectionId: own.id }]);
+
+    for (const address of [orgB.member.email, `support@${orgB.workspaceDomain}`]) {
+      await fakeGooglePush.notify(address);
+    }
+    expect(polled().slice(1)).toEqual(
+      ids.map((connectionId) => ({ orgId: orgB.id, connectionId })),
+    );
   },
 
   findEventsByObject: async (orgs) => {

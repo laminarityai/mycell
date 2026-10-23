@@ -16,6 +16,7 @@ import { and, cosineDistance, desc, eq, inArray, lte, ne, or, sql } from "drizzl
 import { forOrg, type OrgScopedDb } from "@/db/for-org";
 import type { Ctx } from "@/lib/ctx";
 import { emailAddressesIn } from "@/lib/email-addresses";
+import { unique } from "@/lib/utils";
 import {
   memorySearchSchema,
   type FoundObject,
@@ -253,14 +254,4 @@ async function found(
         : [{ ...fact, subject: { id: subject.id, kind: subject.kind, name: subject.name } }];
     }),
   };
-}
-
-function unique<T extends string | { id: string }>(items: T[]): T[] {
-  const ids = new Set<string>();
-  return items.filter((item) => {
-    const id = typeof item === "string" ? item : item.id;
-    if (ids.has(id)) return false;
-    ids.add(id);
-    return true;
-  });
 }

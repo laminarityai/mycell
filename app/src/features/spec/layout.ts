@@ -29,6 +29,20 @@ export type LayoutNode<Risk extends string = string> = Box &
     | { kind: "end"; label: "End" | "Stops here"; run: LayoutRun; removed: boolean }
   );
 
+/** A box's name for a screen reader: the trigger, a step by its ID, a path by its name. */
+export function boxLabel(node: LayoutNode): string | undefined {
+  switch (node.kind) {
+    case "trigger":
+      return "Trigger";
+    case "step":
+      return `Step ${node.step.id}`;
+    case "path":
+      return `Path ${node.path.name ?? "Otherwise"}`;
+    case "end":
+      return undefined;
+  }
+}
+
 export type LayoutEdge = {
   id: string;
   source: string;
@@ -44,6 +58,11 @@ export type LayoutEdge = {
 };
 
 export type GraphLayout<Risk extends string = string> = {
+  /**
+   * In reading order: the trigger, then each list's steps top to bottom, a branch's paths left
+   * to right, each followed by everything under it, and each list's end. A keyboard reaches
+   * them in this order.
+   */
   nodes: LayoutNode<Risk>[];
   edges: LayoutEdge[];
   width: number;

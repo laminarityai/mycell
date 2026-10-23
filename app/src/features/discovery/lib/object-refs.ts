@@ -1,5 +1,6 @@
 // Deterministic object refs (ADR-0008): exact email addresses and Drive file IDs, found by
 // pattern in header values and in decoded text. No fuzzy matching and no model.
+import { unique } from "@/lib/utils";
 import type { ObjectRefKind } from "../types";
 
 const DRIVE_ID = "([a-zA-Z0-9_-]{10,})";
@@ -25,8 +26,4 @@ export function normalizeKey(kind: ObjectRefKind, key: string): string {
 // Each Drive link pattern captures the file ID as its first group.
 function idOf(match: RegExpExecArray): string {
   return match[1];
-}
-
-function unique(values: string[]): string[] {
-  return [...new Set(values)];
 }

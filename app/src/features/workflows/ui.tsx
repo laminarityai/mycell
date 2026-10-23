@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AppMarks } from "@/components/app-mark";
 import { DateTime } from "@/components/date-time";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -88,7 +89,7 @@ export function WorkflowArchiveSection({ workflow }: { workflow: WorkflowDetails
 }
 
 /**
- * The admin's workflows: name, latest version, its max risk level, the tags it's published to
+ * The admin's workflows: name, latest version, the apps it uses and its max risk level, the tags it's published to
  * and how many users they reach, whether it's on for them or the org, who has it on or paused
  * (`enablements`, by workflow ID), and Archive or Restore. A published org workflow has its org
  * switch right in the row, over the connections it may run on (`orgConnections`, by workflow
@@ -112,6 +113,7 @@ export function WorkflowsList({
         <TableRow>
           <TableHead>Workflow</TableHead>
           <TableHead>Latest version</TableHead>
+          <TableHead>Apps</TableHead>
           <TableHead>Max risk</TableHead>
           <TableHead>Published to</TableHead>
           <TableHead>Reach</TableHead>
@@ -140,6 +142,9 @@ export function WorkflowsList({
               {workflow.latestVersion === null
                 ? "Not published"
                 : `Version ${String(workflow.latestVersion.number)}`}
+            </TableCell>
+            <TableCell>
+              {workflow.latestVersion === null ? "—" : <AppMarks apps={workflow.requiredApps} />}
             </TableCell>
             <TableCell>
               {workflow.latestVersion === null ? (

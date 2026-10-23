@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
-import { grantCredits } from "@/features/credits/server";
+import { grantCredits, listLedger } from "@/features/credits/server";
+import { spendingKindOf } from "@/features/credits/types";
 import { systemCtx } from "@/lib/ctx";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import { executeRun, getRun, startRun } from "../server";
@@ -113,6 +114,20 @@ describe("the draft step", () => {
         output: { awaiting: "human", channel: "gmail_drafts", draftIds: [draft.id] },
       },
     ]);
+  });
+
+  it("charges its model calls to its workflow's run", async () => {
+    const { admin, system, workflowId, runId } = await replyRun();
+    fakeAiGateway.text(REPLY, { costUsd: 0.003 });
+
+    await executeRun(system, runId);
+
+    const usage = (await listLedger(admin)).filter((entry) => entry.kind === "usage");
+    expect(usage.map((entry) => entry.role).sort()).toEqual(["classify", "smart"]);
+    for (const entry of usage) {
+      expect(entry).toMatchObject({ workflowId, runId, dryRun: false, purpose: null });
+      expect(spendingKindOf(entry)).toBe("workflow");
+    }
   });
 
   it("writes from the step's instructions, the message and the earlier steps it names", async () => {

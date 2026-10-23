@@ -3,9 +3,10 @@
 // does, and messages deleted for good or moved to the trash, which it reports removed. Deleting
 // in Gmail's own app moves a message to the trash, where it stays 30 days before it's deleted
 // for good, so a trashed message counts as removed: what Mycel learned from it goes at once.
+import { GMAIL, messageListSchema, messageSchema } from "@/features/connections/gmail";
 import { InvariantError } from "@/lib/errors";
 import type { Connector, NormalizedEvent, SourceClient } from "../connector";
-import { historyListSchema, messageListSchema, messageSchema, profileSchema } from "./api";
+import { historyListSchema, profileSchema } from "./api";
 import { normalizeMessage } from "./normalize";
 
 // Messages per backfill page, so one page (one Inngest step) stays well inside a serverless
@@ -25,7 +26,7 @@ const EXCLUDED_LABELS = ["SPAM", "TRASH", "DRAFT"];
 
 export const gmailConnector: Connector = {
   async readStartCursor(client) {
-    const profile = await client.get("/gmail/v1/users/me/profile", profileSchema);
+    const profile = await client.get(`${GMAIL}/profile`, profileSchema);
     if (profile === null) throw new InvariantError("Gmail has no profile for this mailbox");
     return profile.historyId;
   },
@@ -36,10 +37,7 @@ export const gmailConnector: Connector = {
       maxResults: String(PAGE_SIZE),
     });
     if (pageToken !== null) query.set("pageToken", pageToken);
-    const list = await client.get(
-      `/gmail/v1/users/me/messages?${query.toString()}`,
-      messageListSchema,
-    );
+    const list = await client.get(`${GMAIL}/messages?${query.toString()}`, messageListSchema);
     const ids = (list?.messages ?? []).map((message) => message.id);
     const events = await mapConcurrently(ids, FETCH_CONCURRENCY, (id) => fetchEvent(client, id));
     return {
@@ -63,10 +61,7 @@ export const gmailConnector: Connector = {
       });
       for (const type of HISTORY_TYPES) query.append("historyTypes", type);
       if (pageToken !== null) query.set("pageToken", pageToken);
-      const page = await client.get(
-        `/gmail/v1/users/me/history?${query.toString()}`,
-        historyListSchema,
-      );
+      const page = await client.get(`${GMAIL}/history?${query.toString()}`, historyListSchema);
       // Gmail answers 404 for a history ID it no longer keeps (roughly a week).
       if (page === null) return { cursorExpired: true };
       // The first page's history ID: whatever arrives while later pages are read is after it,
@@ -96,7 +91,7 @@ function isIngested(event: NormalizedEvent | null): event is NormalizedEvent {
 // One message, fetched in full and normalized in memory. Null if it was deleted since listing.
 async function fetchEvent(client: SourceClient, id: string): Promise<NormalizedEvent | null> {
   const message = await client.get(
-    `/gmail/v1/users/me/messages/${encodeURIComponent(id)}?format=full`,
+    `${GMAIL}/messages/${encodeURIComponent(id)}?format=full`,
     messageSchema,
   );
   return message === null ? null : normalizeMessage(message);

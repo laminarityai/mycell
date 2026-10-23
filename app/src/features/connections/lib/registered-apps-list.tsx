@@ -29,7 +29,9 @@ export function RegisteredAppsList({
         <TableRow>
           <TableHead>App</TableHead>
           <TableHead>Connected</TableHead>
-          <TableHead />
+          <TableHead>
+            <span className="sr-only">Actions</span>
+          </TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>

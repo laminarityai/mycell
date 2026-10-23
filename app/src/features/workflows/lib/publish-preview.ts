@@ -7,7 +7,7 @@ import { requireAdmin, type Ctx } from "@/lib/ctx";
 import type { PublishPreview } from "../types";
 import { findWorkflow } from "./access";
 import { enablements } from "./schema";
-import { checkedByPolicy } from "./validation";
+import { checkedByPolicy } from "./policy-check";
 import { gainedForEnablements, onEnablements } from "./version-pauses";
 import { latestVersions } from "./latest-versions";
 

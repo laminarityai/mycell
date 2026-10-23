@@ -2,17 +2,15 @@
 // person's own Gmail. Nothing is prepared or removed there: approving means the person is done
 // with it, and replying to it in Gmail finishes it on its own. Every call goes through the Nango
 // proxy with the caller's ctx; the message's text is held in memory only (invariant 8).
-import { z } from "zod";
+import { GMAIL } from "@/features/connections/gmail";
 import { getConnection, proxyGet } from "@/features/connections/server";
-import { fullMessageSchema, GMAIL, mailOf } from "./gmail";
+import { fullMessageSchema, mailOf, messageRefSchema } from "./gmail";
 import { ItemGoneError } from "@/lib/errors";
 import { sentAt, sentSince, threadMessages } from "./gmail-sent";
 import type { PendingFormAdapter } from "./pending-forms";
 
 /** What the escalate step hands `prepare`: the message the run started from. */
 export type EscalatedMessage = { connectionId: string; messageId: string };
-
-const messageRefSchema = z.object({ id: z.string(), threadId: z.string() });
 
 export const escalationAdapter: PendingFormAdapter<EscalatedMessage> = {
   // Points at the message itself (its source_ref) and its thread. ItemGoneError if it's gone.

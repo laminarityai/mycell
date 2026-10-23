@@ -13,15 +13,16 @@ import type { ActionSet } from "@/features/policy/types";
 import { createReview } from "@/features/reviews/server";
 import type { Spec, Step } from "@/features/spec/types";
 import { getWorkflowVersion, listSwitchedOn } from "@/features/workflows/server";
-import type { Ctx } from "@/lib/ctx";
-import { ForbiddenError, NotFoundError } from "@/lib/errors";
-import type { RetryPolicy, RunOutcome, RunStep } from "../types";
+import { type Ctx, requireSystem } from "@/lib/ctx";
+import { NotFoundError } from "@/lib/errors";
+import type { RetryPolicy, RunErrorCode, RunOutcome } from "../types";
+import { runInline, type RunStep } from "@/lib/inngest";
 import { actionExecutors } from "./actions";
 import { holdCustomWrite } from "./custom-action";
 import { linkHeldSendReview } from "./held-sends";
 import { attemptStep } from "./executors";
-import { isConnectionGone, type Failure } from "./failures";
-import { defaultRetryPolicy, runInline, withRetries } from "./run-step";
+import { isConnectionGone, logInternalError, type Failure } from "./failures";
+import { defaultRetryPolicy, withRetries } from "./run-step";
 import { findRun, stepsOf } from "./runs";
 import { runs, runSteps } from "./schema";
 import type { StepContext, StepExecution } from "./step-context";
@@ -50,7 +51,7 @@ export async function executeRun(
   runStep: RunStep = runInline,
   retry: RetryPolicy = defaultRetryPolicy,
 ): Promise<RunOutcome> {
-  if (ctx.role !== "system") throw new ForbiddenError();
+  requireSystem(ctx);
   const run = await findRun(ctx, runId);
   if (run === undefined) return { status: "cancelled" };
   if (run.status !== "running") return { status: run.status };
@@ -101,6 +102,9 @@ async function executeStep(ctx: Ctx, run: Run, step: Step, place: RunPlace): Pro
   try {
     if (!attempted.ok) {
       if (attempted.failure.runStatus === "cancelled") return CANCELLED;
+      if (attempted.failure.code === "internal_error") {
+        logInternalError({ runId: run.id, stepId: step.id });
+      }
       await recordStep(ctx, run, step, place.position, startedAt, attempted, {
         failure: attempted.failure,
       });
@@ -187,13 +191,32 @@ async function recordStep(
   await forOrg(ctx).insert(runSteps, values, { onConflictDoNothing: true });
 }
 
-/** Ends a run still running; one an earlier invocation already ended is left as it was. */
-async function finishRun(ctx: Ctx, runId: string, status: Ended): Promise<void> {
+/**
+ * The run job crashed past Inngest's retries (its onFailure handler): a run it left running
+ * ends `failed` with `internal_error`, and the log records it. A run that finished, or that a
+ * call before this one ended, is left as it was, and logged once.
+ */
+export async function failCrashedRun(ctx: Ctx, runId: string): Promise<void> {
+  requireSystem(ctx);
+  if (await finishRun(ctx, runId, "failed", "internal_error")) logInternalError({ runId });
+}
+
+/**
+ * Ends a run still running, with what its recorded steps cost; one an earlier invocation
+ * already ended is left as it was. Whether this call ended it.
+ */
+async function finishRun(
+  ctx: Ctx,
+  runId: string,
+  status: Ended,
+  errorCode: RunErrorCode | null = null,
+): Promise<boolean> {
   const steps = await stepsOf(ctx, [runId]);
   const costUsd = steps.reduce((sum, step) => sum + step.costUsd, 0);
-  await forOrg(ctx).update(
+  const ended = await forOrg(ctx).update(
     runs,
-    { status, costUsd, finishedAt: new Date() },
+    { status, errorCode, costUsd, finishedAt: new Date() },
     and(eq(runs.id, runId), eq(runs.status, "running")),
   );
+  return ended.length > 0;
 }

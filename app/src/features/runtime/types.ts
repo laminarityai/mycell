@@ -1,15 +1,7 @@
 // Runtime's public types: runs, their steps and records, and what a dry run returns.
 import type { ActionName } from "@/features/policy/catalog";
 import type { ModelRole, StepType } from "@/features/spec/types";
-
-/** JSON: what a step hands on, since Inngest stores it and replays it instead of re-running. */
-export type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
-
-/**
- * Runs one named step: Inngest's `step.run` in the job, called straight through elsewhere. A
- * finished step's result is replayed, never re-run, so a retry repeats no earlier step.
- */
-export type RunStep = <T extends Json>(id: string, run: () => Promise<T>) => Promise<T>;
+import type { Json } from "@/lib/inngest";
 
 /**
  * How often a failing step is tried, and how long it waits before attempt `attempt + 1`. The
@@ -36,6 +28,20 @@ export const runStatuses = [
   "partly_failed",
 ] as const;
 export type RunStatus = (typeof runStatuses)[number];
+
+/**
+ * Why a run failed as a whole, rather than at one of its steps: `internal_error`, its job
+ * crashed past Inngest's retries.
+ */
+export const runErrorCodes = ["internal_error"] as const;
+export type RunErrorCode = (typeof runErrorCodes)[number];
+
+/**
+ * What an `internal_error`, a run's or a step's, reads as wherever it's shown: a bug of ours,
+ * which the server log records by code and IDs.
+ */
+export const INTERNAL_ERROR_MESSAGE =
+  "Something went wrong on our side. Nothing in the workflow needs changing.";
 
 export const runStepStatuses = ["succeeded", "failed", "check_failed", "skipped"] as const;
 export type RunStepStatus = (typeof runStepStatuses)[number];
@@ -88,6 +94,8 @@ export type RunRecord = {
   /** The triggering Gmail message's ID. */
   sourceRef: string;
   status: RunStatus;
+  /** Why the run failed as a whole; null when it didn't, or failed at its steps. */
+  errorCode: RunErrorCode | null;
   costUsd: number;
   startedAt: Date;
   finishedAt: Date | null;

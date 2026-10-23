@@ -1,5 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 import { checkoutIsolation } from "./checkout-isolation";
+// The features the tests seed through load prompt files, which Node can't on its own. The config
+// loads in every worker, so each gets the hooks.
+import "./prompt-hooks.cjs";
 
 // End-to-end tests drive the production build (`pnpm build` first; `pnpm verify` builds before
 // it runs them) against their own database, never the one in .env or Vitest's: mycel_e2e_<suffix>,
@@ -63,14 +66,14 @@ export default defineConfig({
       stderr: "pipe",
     },
     {
-      command: `node --disable-warning=DEP0205 --import tsx e2e/fake-ai-gateway-server.ts ${String(fakeAiGatewayPort)}`,
+      command: `node --disable-warning=DEP0205 --import tsx --import ./prompt-hooks.cjs e2e/fake-ai-gateway-server.ts ${String(fakeAiGatewayPort)}`,
       url: `http://localhost:${String(fakeAiGatewayPort)}/health`,
       reuseExistingServer: false,
       stdout: "ignore",
       stderr: "pipe",
     },
     {
-      command: `node --disable-warning=DEP0205 --import tsx e2e/fake-nango-server.ts ${String(fakeNangoPort)}`,
+      command: `node --disable-warning=DEP0205 --import tsx --import ./prompt-hooks.cjs e2e/fake-nango-server.ts ${String(fakeNangoPort)}`,
       url: `http://localhost:${String(fakeNangoPort)}/health`,
       // It runs the Vitest fake, which reads the API key and signing key from src/env.
       env: e2eEnv,

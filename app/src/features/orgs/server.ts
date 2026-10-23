@@ -1,6 +1,7 @@
 // The orgs feature: signing in to a Workspace domain's org, the ctx every request runs as, and
 // the org's users with their roles (ADR-0002). It is the only feature that touches Better
 // Auth's tables.
+import "server-only";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
@@ -9,7 +10,7 @@ import { getAuth } from "./lib/auth";
 import { findCtx } from "./lib/find-ctx";
 
 // The org's users, and what to call each one wherever Mycel names them.
-export { listUsers, userNames } from "./lib/list-users";
+export { findUser, findUsersByEmail, listUsers, userCtx, userNames } from "./lib/list-users";
 // Called only by scheduled jobs, which take no ctx until they pick an org.
 export { listOrgIds } from "./lib/list-org-ids";
 export { getOrgSettings, getWorkspaceDomain } from "./lib/workspace-domain";

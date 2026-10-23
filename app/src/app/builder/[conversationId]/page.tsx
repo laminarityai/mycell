@@ -12,44 +12,46 @@ import { listCustomActions } from "@/features/custom-actions/server";
 import { getCtx } from "@/features/orgs/server";
 import { recentMessages } from "@/features/runtime/server";
 import { getWorkflow } from "@/features/workflows/server";
+import { isAdmin } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
-import { AppNav } from "@/app/app-nav";
+import { AppShell } from "@/app/_shell/app-shell";
 
 // A Server Action here may try the working spec on a message, model steps and all.
 export const maxDuration = 300;
 
-// The whole window: the conversations, then the chat beside the workflow's graph.
+// The whole window beside the sidebar: the conversations, then the chat beside the workflow's
+// graph.
 export default function ConversationPage({
   params,
   searchParams,
 }: PageProps<"/builder/[conversationId]">) {
   return (
-    <main className="flex h-dvh flex-col">
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b px-4 py-3">
-        <div className="flex items-center gap-4">
-          <h1 className="text-lg font-semibold tracking-tight">Builder chat</h1>
-          {/* Narrower than the conversation list's column, the list is a page of its own. */}
-          <Link
-            href="/builder"
-            className="text-sm text-muted-foreground hover:text-foreground lg:hidden"
-          >
-            All conversations
-          </Link>
-        </div>
-        <AppNav />
-      </header>
+    <AppShell
+      current="builder"
+      title="Builder chat"
+      width="full"
+      actions={
+        // Narrower than the conversation list's column, the list is a page of its own.
+        <Link
+          href="/builder"
+          className="text-sm text-muted-foreground hover:text-foreground lg:hidden"
+        >
+          All conversations
+        </Link>
+      }
+    >
       <Suspense
         fallback={<p className="p-4 text-sm text-muted-foreground">Loading conversation…</p>}
       >
         <ConversationView params={params} searchParams={searchParams} />
       </Suspense>
-    </main>
+    </AppShell>
   );
 }
 
 async function ConversationView({ params, searchParams }: PageProps<"/builder/[conversationId]">) {
   const ctx = await getCtx();
-  if (ctx.role !== "admin") redirect("/");
+  if (!isAdmin(ctx)) redirect("/");
   const { conversationId } = await params;
   const [conversation, conversations] = await Promise.all([
     getConversation(ctx, conversationId).catch((error: unknown) => {

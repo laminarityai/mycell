@@ -1,13 +1,11 @@
 "use client";
 
 import { useActionState } from "react";
+import { FormError } from "@/components/form-error";
 import { Button } from "@/components/ui/button";
-import type { ActionResult } from "@/lib/errors";
+import { Input } from "@/components/ui/input";
 import { grantStaffConsentAction, revokeStaffConsentAction } from "../actions";
 import { MAX_STAFF_CONSENT_DAYS } from "../types";
-
-const fieldClass =
-  "h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
 /** An admin names a person at Mycel, the case, and how many days they may read memory for. */
 export function GrantStaffConsentForm() {
@@ -17,42 +15,41 @@ export function GrantStaffConsentForm() {
       <div className="flex flex-wrap items-end gap-2">
         <label className="flex flex-col gap-1 text-sm">
           Mycel staff email
-          <input
+          <Input
             name="staffEmail"
             type="email"
             required
             maxLength={320}
             placeholder="name@mycel.ai"
-            className={fieldClass}
+            className="w-56"
           />
         </label>
         <label className="flex min-w-64 flex-1 flex-col gap-1 text-sm">
           The case
-          <input
+          <Input
             name="reason"
             required
             maxLength={500}
             placeholder="Support ticket 4411: a wrong fact about a customer"
-            className={fieldClass}
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
           Days
-          <input
+          <Input
             name="days"
             type="number"
             required
             min={1}
             max={MAX_STAFF_CONSENT_DAYS}
             defaultValue={7}
-            className={`${fieldClass} w-20`}
+            className="w-20"
           />
         </label>
         <Button type="submit" size="sm" disabled={granting}>
           Give consent
         </Button>
       </div>
-      <ErrorMessage result={result} />
+      <FormError message={result.error} />
     </form>
   );
 }
@@ -66,15 +63,7 @@ export function RevokeStaffConsentButton({ consentId }: { consentId: string }) {
       <Button type="submit" variant="outline" size="sm" disabled={revoking}>
         Revoke
       </Button>
-      <ErrorMessage result={result} />
+      <FormError message={result.error} />
     </form>
-  );
-}
-
-function ErrorMessage({ result }: { result: ActionResult }) {
-  return result.error === undefined ? null : (
-    <p role="alert" className="text-sm text-destructive">
-      {result.error}
-    </p>
   );
 }

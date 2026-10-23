@@ -7,11 +7,12 @@ import { OutOfCreditsError } from "@/lib/errors";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import { classify, setModelRole } from "../server";
 import { ModelCallError } from "../types";
+import { testPrompts } from "./requests";
 
 beforeEach(resetDatabase);
 
 const request = {
-  question: "Is this message asking for a quote?",
+  question: testPrompts.isItAQuote(),
   labels: ["quote", "other"],
   state: "From: ada@example.com\nSubject: Prices\n\nHow much for 30 chairs?",
   runId: "run_1",

@@ -8,8 +8,8 @@ import { getActionSet } from "@/features/custom-actions/server";
 import { sameValue } from "@/features/spec/diff";
 import type { Spec } from "@/features/spec/types";
 import { findTagsByName } from "@/features/tags/server";
-import { requireAdmin, type Ctx } from "@/lib/ctx";
-import { ConflictError, ForbiddenError, InvariantError, NotFoundError } from "@/lib/errors";
+import { type Ctx, requireAdmin, requireRole } from "@/lib/ctx";
+import { ConflictError, InvariantError, NotFoundError } from "@/lib/errors";
 import type { PublishSettings, WorkflowVersion } from "../types";
 import { workflows, workflowVersions, workflowVersionTags } from "./schema";
 import { validateWorkflowSpec } from "./validation";
@@ -17,6 +17,7 @@ import { findWorkflow } from "./access";
 import { gainedForEnablements, pauseEnablements } from "./version-pauses";
 import { latestVersions, version } from "./latest-versions";
 import { removeInvisibleIn } from "./lost-visibility";
+import { readViewers } from "./visibility";
 
 /**
  * Re-validates the working spec (connections may have changed since it was saved) and records
@@ -47,6 +48,8 @@ export async function publishWorkflow(
     { ...validated, credentials: validated.applied.credentials },
     actions,
   );
+  // Who is in the org and each one's tags, read now: the transaction queries only through `tx`.
+  const viewers = await readViewers(ctx);
   try {
     // The version, its tags, the removals and the pauses together: a version is never seen
     // without who it's for, nor runs for anyone who can't see it or hasn't agreed to it.
@@ -86,7 +89,7 @@ export async function publishWorkflow(
         tags.map((tag) => ({ workflowVersionId: inserted.id, tagId: tag.id })),
       );
       // Members the new tags leave out lose their enablements, before anything is paused.
-      await removeInvisibleIn(ctx, tx, { workflowId });
+      await removeInvisibleIn(ctx, { tx, viewers }, { workflowId });
       if (gained !== null) await pauseEnablements(tx, workflowId, gained);
       return inserted;
     });
@@ -111,7 +114,7 @@ function withSettings(spec: Spec, settings: PublishSettings): Spec {
 
 /** One published version, for an admin or for a run acting as the system ctx (ADR-0009). */
 export async function getWorkflowVersion(ctx: Ctx, versionId: string): Promise<WorkflowVersion> {
-  if (ctx.role !== "admin" && ctx.role !== "system") throw new ForbiddenError();
+  requireRole(ctx, "admin", "system");
   const rows = await forOrg(ctx).select(workflowVersions, {
     where: eq(workflowVersions.id, versionId),
     limit: 1,

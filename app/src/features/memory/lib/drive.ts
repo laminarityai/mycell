@@ -8,13 +8,11 @@
 // it's shared with as a writer). Read by anyone else, a doc has an empty access list, so only
 // the people whose own Drive holds it see what it taught.
 import { z } from "zod";
-import { proxyGet, proxyGetText } from "@/features/connections/server";
-import { SourceRequestError } from "@/features/connections/types";
+import { FILES } from "@/features/connections/drive";
+import { type SourceClient, SourceRequestError } from "@/features/connections/types";
 import { getWorkspaceDomain } from "@/features/orgs/server";
 import type { Ctx } from "@/lib/ctx";
 import type { AccessEntry, SourceItem } from "./source-item";
-
-const FILES = "/drive/v3/files";
 
 /** The one kind of Drive file memory learns from. */
 export const GOOGLE_DOC = "application/vnd.google-apps.document";
@@ -59,18 +57,18 @@ export function driveVersion(sourceRef: string): { fileId: string; modifiedAt: D
  */
 export async function readDoc(
   ctx: Ctx,
-  connectionId: string,
+  source: SourceClient,
   sourceRef: string,
 ): Promise<SourceItem | "gone" | "unsupported" | "outdated"> {
   const { fileId, modifiedAt } = driveVersion(sourceRef);
   const path = filePath(fileId);
-  const file = await readFile(ctx, connectionId, fileId);
+  const file = await readFile(source, fileId);
   if (file === "gone") return "gone";
   if (file.mimeType !== GOOGLE_DOC) return "unsupported";
   if (Date.parse(file.modifiedTime) !== modifiedAt.getTime()) return "outdated";
   let text: string | null;
   try {
-    text = await proxyGetText(ctx, connectionId, `${path}/export?mimeType=text%2Fplain`);
+    text = await source.getText(`${path}/export?mimeType=text%2Fplain`);
   } catch (error) {
     // The owner can stop viewers downloading, which stops exports too.
     if (error instanceof SourceRequestError && error.status === 403) return "unsupported";
@@ -101,11 +99,10 @@ export async function readDoc(
  * account's.
  */
 export async function readAccess(
-  ctx: Ctx,
-  connectionId: string,
+  source: SourceClient,
   fileId: string,
 ): Promise<AccessEntry[] | "gone"> {
-  const file = await readFile(ctx, connectionId, fileId);
+  const file = await readFile(source, fileId);
   return file === "gone" ? "gone" : accessList(file.permissions ?? []);
 }
 
@@ -114,10 +111,8 @@ function filePath(fileId: string): string {
 }
 
 // The file's metadata and sharing list, never its name.
-async function readFile(ctx: Ctx, connectionId: string, fileId: string) {
-  const file = await proxyGet(
-    ctx,
-    connectionId,
+async function readFile(source: SourceClient, fileId: string) {
+  const file = await source.get(
     `${filePath(fileId)}?${new URLSearchParams({ fields: FIELDS }).toString()}`,
     fileSchema,
   );

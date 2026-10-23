@@ -1,44 +1,19 @@
 import { expect } from "vitest";
+import { forOrg } from "@/db/for-org";
 import { defineIsolationCases } from "@/db/testing/isolation";
-import type { TwoOrgs } from "@/db/testing/two-org-fixture";
 import { systemCtx, type Ctx } from "@/lib/ctx";
-import { NotFoundError } from "@/lib/errors";
+import { ConflictError, NotFoundError } from "@/lib/errors";
 import { connectGmail, connectMailbox } from "@/testing/connect-helpers";
-import { listTags, renameTag, unassignTag } from "@/features/tags/server";
+import { renameTag, unassignTag } from "@/features/tags/server";
 import { publishTo, tagUsers } from "@/testing/visibility-helpers";
 import * as server from "../server";
+import {
+  orgBTags,
+  publishedToSalesInOrgB,
+  seedOrgBWorkflow,
+  switchedOnInOrgB,
+} from "./isolation-seeds";
 import { draftSpec, labelSpec } from "./specs";
-
-// Org B gets a published workflow, so every case can check org B is left exactly as it was.
-async function seedOrgBWorkflow({ orgA, orgB }: TwoOrgs) {
-  await connectGmail(orgA.admin.ctx, orgA.admin.email);
-  await connectGmail(orgB.admin.ctx, orgB.admin.email);
-  const { id } = await server.saveWorkflow(orgB.admin.ctx, { name: "B", spec: draftSpec() });
-  const version = await server.publishWorkflow(orgB.admin.ctx, id);
-  return { id, version, before: await server.getWorkflow(orgB.admin.ctx, id) };
-}
-
-// Org B's admin has a member workflow switched on for their own connection.
-async function switchedOnInOrgB({ orgB }: TwoOrgs) {
-  const admin = orgB.admin.ctx;
-  const own = await connectMailbox(admin, orgB.admin.email);
-  const { id } = await server.saveWorkflow(admin, { name: "B", spec: labelSpec() });
-  await server.publishWorkflow(admin, id);
-  await server.switchWorkflowOn(admin, id, own.id);
-  return { workflowId: id, connectionId: own.id, before: await server.getWorkflow(admin, id) };
-}
-
-// Org B publishes a workflow to its own `sales` tag, which its member has.
-async function publishedToSalesInOrgB({ orgB }: TwoOrgs) {
-  await connectGmail(orgB.admin.ctx, orgB.admin.email);
-  await tagUsers(orgB.admin.ctx, "sales", [orgB.member]);
-  return publishTo(orgB.admin.ctx, "B", labelSpec(), ["sales"]);
-}
-
-// Org B's tag IDs.
-async function orgBTags({ orgB }: TwoOrgs): Promise<string[]> {
-  return (await listTags(orgB.admin.ctx)).map((tag) => tag.id);
-}
 
 export const isolationCases = defineIsolationCases(server, {
   saveWorkflow: async (orgs) => {
@@ -51,6 +26,34 @@ export const isolationCases = defineIsolationCases(server, {
     // The same spec ID is free in org A.
     await server.saveWorkflow(ctx, { name: "A", spec: draftSpec() });
 
+    expect(await server.getWorkflow(orgs.orgB.admin.ctx, id)).toEqual(before);
+  },
+
+  checkWorkflowSave: async (orgs) => {
+    const { id } = await seedOrgBWorkflow(orgs);
+
+    await expect(
+      server.checkWorkflowSave(orgs.orgA.admin.ctx, {
+        workflowId: id,
+        name: "A",
+        spec: draftSpec(),
+      }),
+    ).rejects.toThrow(NotFoundError);
+  },
+
+  saveWorkflowIn: async (orgs) => {
+    const { id, before } = await seedOrgBWorkflow(orgs);
+    // A save of org B's workflow, checked in org B, finds nothing to write through org A.
+    const checked = await server.checkWorkflowSave(orgs.orgB.admin.ctx, {
+      workflowId: id,
+      name: "Taken",
+      spec: draftSpec(),
+    });
+    const ctx = orgs.orgA.admin.ctx;
+
+    await expect(
+      forOrg(ctx).transaction((tx) => server.saveWorkflowIn(ctx, tx, checked)),
+    ).rejects.toThrow(ConflictError);
     expect(await server.getWorkflow(orgs.orgB.admin.ctx, id)).toEqual(before);
   },
 
@@ -319,5 +322,49 @@ export const isolationCases = defineIsolationCases(server, {
     await expect(server.getWorkflowVersion(orgs.orgA.admin.ctx, version.id)).rejects.toThrow(
       NotFoundError,
     );
+  },
+
+  listEnablementsFor: async (orgs) => {
+    const { orgA, orgB } = orgs;
+    const b = await publishedToSalesInOrgB(orgs);
+    await connectMailbox(orgB.member.ctx, orgB.member.email);
+    await server.enable(orgB.member.ctx, b.workflowId);
+
+    expect(await server.listEnablementsFor(orgA.admin.ctx, [b.workflowId])).toEqual(
+      new Map([[b.workflowId, []]]),
+    );
+    expect(
+      (await server.listEnablementsFor(orgB.admin.ctx, [b.workflowId])).get(b.workflowId),
+    ).toHaveLength(1);
+  },
+
+  runnableConnectionsFor: async (orgs) => {
+    const b = await switchedOnInOrgB(orgs);
+    const ownA = await connectMailbox(orgs.orgA.admin.ctx, orgs.orgA.admin.email);
+    const { id: workflowA } = await server.saveWorkflow(orgs.orgA.admin.ctx, {
+      name: "A",
+      spec: labelSpec(),
+    });
+
+    const runnable = await server.runnableConnectionsFor(orgs.orgA.admin.ctx, [
+      b.workflowId,
+      workflowA,
+    ]);
+    expect([...runnable.keys()]).toEqual([workflowA]);
+    expect(runnable.get(workflowA)?.map((c) => c.id)).toEqual([ownA.id]);
+  },
+
+  listWorkingSpecs: async (orgs) => {
+    await seedOrgBWorkflow(orgs);
+    const own = await server.saveWorkflow(orgs.orgA.admin.ctx, { name: "A", spec: draftSpec() });
+
+    expect((await server.listWorkingSpecs(orgs.orgA.admin.ctx)).map((w) => w.id)).toEqual([own.id]);
+  },
+
+  findWorkflowBySpecId: async (orgs) => {
+    // Org B's workflow has the spec ID "pricing-replies"; org A has none.
+    await seedOrgBWorkflow(orgs);
+
+    expect(await server.findWorkflowBySpecId(orgs.orgA.admin.ctx, "pricing-replies")).toBeNull();
   },
 });

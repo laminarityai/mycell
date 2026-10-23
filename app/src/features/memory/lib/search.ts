@@ -15,6 +15,8 @@
 import { and, cosineDistance, desc, eq, inArray, lte, ne, or, sql } from "drizzle-orm";
 import { forOrg, type OrgScopedDb } from "@/db/for-org";
 import type { Ctx } from "@/lib/ctx";
+import { emailAddressesIn } from "@/lib/email-addresses";
+import { unique } from "@/lib/utils";
 import {
   memorySearchSchema,
   type FoundObject,
@@ -24,7 +26,7 @@ import {
 } from "../types";
 import { facts, memoryObjects, objectKeys } from "./schema";
 import { describeFacts, type FactRow, overTime, type SeenFact, seenFacts } from "./visible-facts";
-import { type Reading, readingOf, viewerOf, visibleFact, visibleObject } from "./visibility";
+import { type Reading, readingOf, visibleFact, visibleObject } from "./visibility";
 
 const DEFAULT_LIMIT = 20;
 // How many facts the keyword and link lists rank at most.
@@ -48,8 +50,8 @@ type Ranked = { facts: FactRow[]; weight: number };
 export async function searchMemory(ctx: Ctx, input: MemorySearch): Promise<MemorySearchResult> {
   const search = memorySearchSchema.parse(input);
   const db = forOrg(ctx);
-  const viewer = await viewerOf(ctx);
-  const reading = await readingOf(ctx, viewer);
+  // Who reads, resolved once and passed to every check below.
+  const reading = await readingOf(ctx);
   const words = "text" in search ? wordsOf(search.text) : [];
   const keys = "key" in search ? [search.key] : keysIn(search.text);
 
@@ -60,7 +62,7 @@ export async function searchMemory(ctx: Ctx, input: MemorySearch): Promise<Memor
   const seen = new Map<string, SeenFact>();
   // Only the facts current for the viewer: the newest of each timeline they can see.
   const see = async (rows: FactRow[]) => {
-    const { current } = await overTime(ctx, viewer, await seenFacts(ctx, viewer, rows));
+    const { current } = await overTime(ctx, reading, await seenFacts(ctx, reading, rows));
     for (const found of current) seen.set(found.fact.id, found);
     return rows.filter((fact) => seen.has(fact.id));
   };
@@ -80,7 +82,7 @@ export async function searchMemory(ctx: Ctx, input: MemorySearch): Promise<Memor
   const fused = fuse(lists).flatMap((id) => seen.get(id) ?? []);
   const isKeyed = ({ fact }: SeenFact) => byKey.includes(fact.subjectId);
   const ranked = [...fused.filter(isKeyed), ...fused.filter((found) => !isKeyed(found))];
-  return found(ctx, ranked.slice(0, search.limit ?? DEFAULT_LIMIT), named);
+  return found(ctx, reading, ranked.slice(0, search.limit ?? DEFAULT_LIMIT), named);
 }
 
 /** The text's distinct words, lowercased: letters and digits only, so never query syntax. */
@@ -91,11 +93,11 @@ function wordsOf(text: string): string[] {
 /** The email addresses and domains in a text, as object keys. */
 function keysIn(text: string): Key[] {
   const lower = text.toLowerCase();
-  const emails = lower.match(/[a-z0-9._%+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}/g) ?? [];
+  const emails = emailAddressesIn(lower);
   const withoutEmails = emails.reduce((rest, email) => rest.replace(email, " "), lower);
   const domains = withoutEmails.match(/\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b/g) ?? [];
   return [
-    ...[...new Set(emails)].map((value) => ({ kind: "email" as const, value })),
+    ...emails.map((value) => ({ kind: "email" as const, value })),
     ...[...new Set(domains)].map((value) => ({ kind: "domain" as const, value })),
   ];
 }
@@ -211,7 +213,12 @@ function fuse(lists: Ranked[]): string[] {
 }
 
 /** The result: the facts, and the objects they're about, the ones the search named first. */
-async function found(ctx: Ctx, ranked: SeenFact[], named: string[]): Promise<MemorySearchResult> {
+async function found(
+  ctx: Ctx,
+  reading: Reading,
+  ranked: SeenFact[],
+  named: string[],
+): Promise<MemorySearchResult> {
   const db = forOrg(ctx);
   const subjectIds = unique(ranked.map(({ fact }) => fact.subjectId));
   const objectIds = [
@@ -237,7 +244,7 @@ async function found(ctx: Ctx, ranked: SeenFact[], named: string[]): Promise<Mem
       },
     ];
   });
-  const described = await describeFacts(ctx, ranked);
+  const described = await describeFacts(ctx, reading, ranked);
   return {
     objects,
     facts: described.flatMap((fact, i) => {
@@ -247,14 +254,4 @@ async function found(ctx: Ctx, ranked: SeenFact[], named: string[]): Promise<Mem
         : [{ ...fact, subject: { id: subject.id, kind: subject.kind, name: subject.name } }];
     }),
   };
-}
-
-function unique<T extends string | { id: string }>(items: T[]): T[] {
-  const ids = new Set<string>();
-  return items.filter((item) => {
-    const id = typeof item === "string" ? item : item.id;
-    if (ids.has(id)) return false;
-    ids.add(id);
-    return true;
-  });
 }

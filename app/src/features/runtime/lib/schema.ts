@@ -1,17 +1,19 @@
 // Runtime's tables. runs and run_steps record what each run did: derived data only, never
 // message content or generated text (invariant 8). Both cascade from their connection
 // (invariant 3).
+import "server-only";
 import {
   doublePrecision,
   foreignKey,
   index,
   integer,
-  jsonb,
   pgTable,
   text,
   timestamp,
   unique,
 } from "drizzle-orm/pg-core";
+import { z } from "zod";
+import { zodJsonb } from "@/db/columns";
 // Runs reference the connection they act on and the version they run: derived data cascades
 // from its connection (docs/conventions.md).
 import { connections } from "@/features/connections/lib/schema";
@@ -21,7 +23,7 @@ import { reviews } from "@/features/reviews/lib/schema";
 import { customActions } from "@/features/custom-actions/lib/schema";
 import { modelRoleSchema, stepTypes, type ModelRole, type StepType } from "@/features/spec/types";
 import { enablements, workflowVersions } from "@/features/workflows/lib/schema";
-import { runStatuses, runStepStatuses, type Json } from "../types";
+import { runErrorCodes, runStatuses, runStepStatuses } from "../types";
 
 const modelRoleEnum = modelRoleSchema.options as [ModelRole, ...ModelRole[]];
 
@@ -50,6 +52,9 @@ export const runs = pgTable(
     // one run of each. Null for a manual run, which may be repeated.
     triggerKey: text("trigger_key"),
     status: text("status", { enum: runStatuses }).notNull(),
+    // Why the run failed as a whole: its job crashed (`internal_error`). Null otherwise; a
+    // step's failure is on its step.
+    errorCode: text("error_code", { enum: runErrorCodes }),
     costUsd: doublePrecision("cost_usd").notNull().default(0),
     startedAt: timestamp("started_at", { withTimezone: true }).defaultNow().notNull(),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
@@ -58,6 +63,7 @@ export const runs = pgTable(
     unique("runs_org_id_id_unique").on(table.orgId, table.id),
     unique("runs_org_id_trigger_key_unique").on(table.orgId, table.triggerKey),
     index("runs_org_id_workflow_id_idx").on(table.orgId, table.workflowId),
+    index("runs_enablement_id_idx").on(table.enablementId),
     // On the enablement's ID alone, so switching off nulls it and the run's row stays: the run
     // then ends `cancelled` before its next step.
     foreignKey({
@@ -65,11 +71,13 @@ export const runs = pgTable(
       columns: [table.enablementId],
       foreignColumns: [enablements.id],
     }).onDelete("set null"),
+    index("runs_org_id_connection_id_idx").on(table.orgId, table.connectionId),
     foreignKey({
       name: "runs_connection_fk",
       columns: [table.orgId, table.connectionId],
       foreignColumns: [connections.orgId, connections.id],
     }).onDelete("cascade"),
+    index("runs_org_id_workflow_version_id_idx").on(table.orgId, table.workflowVersionId),
     foreignKey({
       name: "runs_workflow_version_fk",
       columns: [table.orgId, table.workflowVersionId],
@@ -97,7 +105,7 @@ export const runSteps = pgTable(
     // Labels, probabilities, IDs, field names, and a tool result's field kinds and sizes; never
     // content, which only the step state carries (ADR-0021). Null when the step failed or has
     // nothing to show.
-    output: jsonb("output").$type<Json>(),
+    output: zodJsonb("output", z.json()),
     // Built from codes and field names only.
     errorCode: text("error_code"),
     errorMessage: text("error_message"),
@@ -115,6 +123,7 @@ export const runSteps = pgTable(
       columns: [table.orgId, table.runId],
       foreignColumns: [runs.orgId, runs.id],
     }).onDelete("cascade"),
+    index("run_steps_org_id_connection_id_idx").on(table.orgId, table.connectionId),
     foreignKey({
       name: "run_steps_connection_fk",
       columns: [table.orgId, table.connectionId],
@@ -158,6 +167,7 @@ export const heldSends = pgTable(
   (table) => [
     unique("held_sends_org_id_run_id_step_id_unique").on(table.orgId, table.runId, table.stepId),
     index("held_sends_org_id_created_at_idx").on(table.orgId, table.createdAt),
+    index("held_sends_org_id_connection_id_idx").on(table.orgId, table.connectionId),
     foreignKey({
       name: "held_sends_connection_fk",
       columns: [table.orgId, table.connectionId],
@@ -168,11 +178,13 @@ export const heldSends = pgTable(
       columns: [table.orgId, table.runId],
       foreignColumns: [runs.orgId, runs.id],
     }).onDelete("cascade"),
+    index("held_sends_org_id_review_id_idx").on(table.orgId, table.reviewId),
     foreignKey({
       name: "held_sends_review_fk",
       columns: [table.orgId, table.reviewId],
       foreignColumns: [reviews.orgId, reviews.id],
     }).onDelete("cascade"),
+    index("held_sends_org_id_custom_action_idx").on(table.orgId, table.customAction),
     foreignKey({
       name: "held_sends_custom_action_fk",
       columns: [table.orgId, table.customAction],

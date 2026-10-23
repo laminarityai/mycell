@@ -1,5 +1,3 @@
-import { grantCredits } from "@/features/credits/server";
-import { systemCtx } from "@/lib/ctx";
 import { expect, test } from "./fixtures";
 
 const CODE_DRAFT = "const keep = await getContact(keepId);\nawait mergeInto(keep, mergeId);";
@@ -10,7 +8,6 @@ test("the builder files a capability request that only the company's admins see"
   signInAs,
   aiGateway,
 }) => {
-  await grantCredits(systemCtx(orgA.id), 1000);
   await aiGateway.reply({
     toolCalls: [
       {

@@ -9,8 +9,9 @@ import { isForeignKeyViolation } from "@/db/errors";
 import { forOrg } from "@/db/for-org";
 import { REGISTERED_APPS, registeredApps } from "@/features/connections/registered-apps";
 import { registeredAppIdSchema } from "@/features/connections/types";
-import { requireAdmin, type Ctx } from "@/lib/ctx";
-import { ForbiddenError, InvariantError, NotFoundError, ValidationError } from "@/lib/errors";
+import { type Ctx, requireAdmin, requireRole, requireSystem } from "@/lib/ctx";
+import { InvariantError, NotFoundError, ValidationError } from "@/lib/errors";
+import type { PromptText } from "@/lib/prompts";
 import {
   capabilityRequestInputSchema,
   type CapabilityRequest,
@@ -18,10 +19,10 @@ import {
   type CapabilityRequestStatus,
   type FiledCapabilityRequest,
 } from "../types";
+import { capabilityRequestPrompts } from "./prompts";
 import { capabilityRequestAsks, capabilityRequests } from "./schema";
 
 type RequestRow = typeof capabilityRequests.$inferSelect;
-type AskRow = typeof capabilityRequestAsks.$inferSelect;
 
 /**
  * Files a capability request from a builder conversation, or adds an ask to the org's request
@@ -75,11 +76,10 @@ export async function fileCapabilityRequest(
         conversationId: from.conversationId,
         askedBy: ctx.userId,
       });
-      const count = (
-        await tx.select(capabilityRequestAsks, {
-          where: eq(capabilityRequestAsks.requestId, row.id),
-        })
-      ).length;
+      const count = await tx.count(
+        capabilityRequestAsks,
+        eq(capabilityRequestAsks.requestId, row.id),
+      );
       return { requestId: row.id, count, status: row.status, message: filedMessage(count, row) };
     });
   } catch (error) {
@@ -93,19 +93,39 @@ export async function fileCapabilityRequest(
 
 /** The org's capability requests, most recently changed first. Admins, and our team's script. */
 export async function listCapabilityRequests(ctx: Ctx): Promise<CapabilityRequest[]> {
-  if (ctx.role !== "system") requireAdmin(ctx);
+  requireRole(ctx, "admin", "system");
   const rows = await forOrg(ctx).select(capabilityRequests, {
     orderBy: [desc(capabilityRequests.updatedAt), desc(capabilityRequests.id)],
   });
   if (rows.length === 0) return [];
-  const asks = await forOrg(ctx).select(capabilityRequestAsks, {
-    where: inArray(
-      capabilityRequestAsks.requestId,
-      rows.map((row) => row.id),
-    ),
-    orderBy: [asc(capabilityRequestAsks.createdAt), asc(capabilityRequestAsks.id)],
-  });
-  return rows.map((row) => toRequest(row, asks));
+  const asks = capabilityRequestAsks;
+  const ofRequests = inArray(
+    asks.requestId,
+    rows.map((row) => row.id),
+  );
+  const [counts, firstAsks] = await Promise.all([
+    forOrg(ctx).countBy(asks, { requestId: asks.requestId }, ofRequests),
+    // Each conversation a request was asked in, once: its first ask there.
+    forOrg(ctx).select(asks, {
+      columns: ["requestId", "conversationId", "createdAt", "id"],
+      where: ofRequests,
+      distinctOn: [asks.requestId, asks.conversationId],
+      orderBy: [asc(asks.requestId), asc(asks.conversationId), asc(asks.createdAt), asc(asks.id)],
+    }),
+  ]);
+  const countOf = new Map(counts.map((group) => [group.requestId, group.count]));
+  // Oldest first, as the conversations were first asked in.
+  const asked = firstAsks.toSorted(
+    (a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id),
+  );
+  return rows.map((row) =>
+    toRequest(row, {
+      count: countOf.get(row.id) ?? 0,
+      conversationIds: asked
+        .filter((ask) => ask.requestId === row.id)
+        .map((ask) => ask.conversationId),
+    }),
+  );
 }
 
 /**
@@ -117,7 +137,7 @@ export async function setCapabilityRequestStatus(
   requestId: string,
   change: { status: CapabilityRequestStatus; note?: string },
 ): Promise<void> {
-  if (ctx.role !== "system") throw new ForbiddenError();
+  requireSystem(ctx);
   const note = change.note?.trim();
   const updated = await forOrg(ctx).update(
     capabilityRequests,
@@ -145,15 +165,16 @@ function collapse(text: string): string {
   return text.trim().replace(/\s+/g, " ");
 }
 
-function filedMessage(count: number, row: RequestRow): string {
+function filedMessage(count: number, row: RequestRow): PromptText {
   return count === 1
-    ? "Filed: our team will see it. Tell the admin plainly what you can't do yet."
-    : `This was asked for ${String(count)} times now, and its status is ${row.status}. ` +
-        "Tell the admin plainly what you can't do yet.";
+    ? capabilityRequestPrompts.filed()
+    : capabilityRequestPrompts.askedAgain({ count: String(count), status: row.status });
 }
 
-function toRequest(row: RequestRow, asks: AskRow[]): CapabilityRequest {
-  const own = asks.filter((ask) => ask.requestId === row.id);
+function toRequest(
+  row: RequestRow,
+  { count, conversationIds }: { count: number; conversationIds: string[] },
+): CapabilityRequest {
   const registered = registeredAppIdSchema.safeParse(row.app);
   return {
     id: row.id,
@@ -165,8 +186,8 @@ function toRequest(row: RequestRow, asks: AskRow[]): CapabilityRequest {
     outputs: row.outputs,
     reason: row.reason,
     codeDraft: row.codeDraft,
-    count: own.length,
-    conversationIds: [...new Set(own.map((ask) => ask.conversationId))],
+    count,
+    conversationIds,
     status: row.status,
     note: row.note,
     createdAt: row.createdAt,

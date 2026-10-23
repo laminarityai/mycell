@@ -2,14 +2,16 @@
 // has seen the estimate, made from the items discovery stored, and started memory with a
 // monthly budget. Every model call learning makes is tagged `memory` in the ledger, and once a
 // calendar month's (UTC) tagged spending reaches the budget, each item is postponed until the
-// next month starts, or the budget changes.
+// next month starts, or the budget changes. The budget caps learning only: a person's summaries
+// are tagged `memory_summary`, so they neither count toward it nor wait on it.
 import { and, inArray, lte, sql } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { getSpending } from "@/features/credits/server";
 import { countStoredItems, listStoredItems } from "@/features/discovery/server";
 import { CREDIT_ESTIMATES, estimateScreenCredits } from "@/features/models/server";
-import type { Ctx } from "@/lib/ctx";
-import { ConflictError, ForbiddenError, ValidationError } from "@/lib/errors";
+import { type Ctx, requireRole, requireSystem } from "@/lib/ctx";
+import { ConflictError, ValidationError } from "@/lib/errors";
+import type { RunStep } from "@/lib/inngest";
 import {
   memoryBudgetSchema,
   POSTPONE_REASONS,
@@ -68,7 +70,7 @@ export async function spentThisMonth(ctx: Ctx): Promise<number> {
  * stored so far is queued for learning, and new items are learned as they're stored.
  */
 export async function startMemory(ctx: Ctx, input: MemoryBudget): Promise<void> {
-  if (ctx.role === "member") throw new ForbiddenError();
+  requireRole(ctx, "admin", "system");
   const monthlyBudget = budgetOf(input);
   const inserted = await forOrg(ctx).insert(
     memorySettings,
@@ -81,7 +83,7 @@ export async function startMemory(ctx: Ctx, input: MemoryBudget): Promise<void> 
 
 /** Changes the monthly budget. Items postponed under the old one are tried again. */
 export async function setMemoryBudget(ctx: Ctx, input: MemoryBudget): Promise<void> {
-  if (ctx.role === "member") throw new ForbiddenError();
+  requireRole(ctx, "admin", "system");
   const monthlyBudget = budgetOf(input);
   const updated = await forOrg(ctx).update(memorySettings, {
     monthlyBudget,
@@ -128,14 +130,8 @@ const PAGE = 1000;
  * Queues every item discovery stored for learning, a page a step: what memory's start job
  * runs. Items learned already are skipped when they're learned.
  */
-export async function queueStoredItems(
-  ctx: Ctx,
-  runStep: <T extends Record<string, string | number | boolean | null>>(
-    id: string,
-    run: () => Promise<T>,
-  ) => Promise<T>,
-): Promise<{ queued: number }> {
-  if (ctx.role !== "system") throw new ForbiddenError();
+export async function queueStoredItems(ctx: Ctx, runStep: RunStep): Promise<{ queued: number }> {
+  requireSystem(ctx);
   let after: string | null = null;
   let queued = 0;
   for (let page = 0; ; page += 1) {
@@ -164,7 +160,7 @@ export async function resumePostponed(
   ctx: Ctx,
   reasons: readonly PostponeReason[] = POSTPONE_REASONS,
 ): Promise<{ queued: number }> {
-  if (ctx.role !== "system") throw new ForbiddenError();
+  requireSystem(ctx);
   const db = forOrg(ctx);
   const began = new Date();
   let queued = 0;

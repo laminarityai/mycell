@@ -7,7 +7,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { Ctx, Role } from "@/lib/ctx";
+import { isAdmin, type Ctx, type Role } from "@/lib/ctx";
 import { WorkspaceAccountRequiredError } from "@/lib/errors";
 import { UserControls } from "./lib/user-controls";
 import type { OrgUser } from "./types";
@@ -34,7 +34,7 @@ const roleBadges = {
 
 /** The org's users. An admin viewer also gets each user's role and removal controls. */
 export function OrgUsersTable({ users, viewer }: { users: OrgUser[]; viewer: Ctx }) {
-  const canManage = viewer.role === "admin";
+  const canManage = isAdmin(viewer);
   return (
     <Table>
       <TableHeader>

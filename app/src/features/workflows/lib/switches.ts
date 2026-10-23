@@ -10,8 +10,8 @@ import { getActionSet } from "@/features/custom-actions/server";
 import type { ConnectionSummary } from "@/features/connections/types";
 import type { ActionSet } from "@/features/policy/types";
 import type { Spec, SpecIssue } from "@/features/spec/types";
-import { requireAdmin, type Ctx } from "@/lib/ctx";
-import { ForbiddenError, NotFoundError, SpecInvalidError, ValidationError } from "@/lib/errors";
+import { type Ctx, requireAdmin, requireSystem } from "@/lib/ctx";
+import { NotFoundError, SpecInvalidError, ValidationError } from "@/lib/errors";
 import type { Switch, SwitchedOn, WorkflowSwitch } from "../types";
 import { enablements, workflows } from "./schema";
 import { scopeIssues } from "./scope-check";
@@ -19,8 +19,11 @@ import { reachesGmail } from "./validation";
 import { latestVersions } from "./latest-versions";
 import { findWorkflow } from "./access";
 import { deleteEnablement, switchOnEnablement } from "./enablement-rows";
+import { pausesOf, readHolds } from "./pauses";
 
 type Workflow = typeof workflows.$inferSelect;
+/** What a workflow's switch is read from: its ID and its org switch. */
+type SwitchedWorkflow = Pick<Workflow, "id" | "orgConnectionId" | "orgSwitchedOnAt">;
 
 /**
  * Switches the workflow on for `connectionId`, from now on: messages that arrived earlier start
@@ -73,16 +76,20 @@ export async function switchWorkflowOff(ctx: Ctx, workflowId: string): Promise<v
  * credentials (republished from member to org, say) is left out until switched on again.
  */
 export async function listSwitchedOn(ctx: Ctx, connectionId: string): Promise<SwitchedOn[]> {
-  if (ctx.role !== "system") throw new ForbiddenError();
+  requireSystem(ctx);
   const db = forOrg(ctx);
-  const enabled = await db.select(enablements, {
-    where: eq(enablements.connectionId, connectionId),
-    orderBy: [enablements.enabledAt],
-  });
-  const orgSwitched = await db.select(workflows, {
-    where: eq(workflows.orgConnectionId, connectionId),
-    orderBy: [workflows.orgSwitchedOnAt],
-  });
+  const [enabled, orgSwitched] = await Promise.all([
+    db.select(enablements, {
+      columns: ["id", "workflowId", "enabledAt"],
+      where: eq(enablements.connectionId, connectionId),
+      orderBy: [enablements.enabledAt],
+    }),
+    db.select(workflows, {
+      columns: ["id", "orgSwitchedOnAt"],
+      where: eq(workflows.orgConnectionId, connectionId),
+      orderBy: [workflows.orgSwitchedOnAt],
+    }),
+  ]);
   const latest = await latestVersions(ctx, [
     ...enabled.map((row) => row.workflowId),
     ...orgSwitched.map((row) => row.id),
@@ -113,14 +120,17 @@ export async function listSwitchedOn(ctx: Ctx, connectionId: string): Promise<Sw
 }
 
 /** The workflow's switch as the caller sees it: their own enablement, or the org switch. */
-export async function switchOf(ctx: Ctx, workflow: Workflow): Promise<WorkflowSwitch | null> {
+export async function switchOf(
+  ctx: Ctx,
+  workflow: SwitchedWorkflow,
+): Promise<WorkflowSwitch | null> {
   return (await switchesOf(ctx, [workflow])).get(workflow.id) ?? null;
 }
 
 /** Each workflow's switch as the caller sees it, by workflow ID, in one read. */
 export async function switchesOf(
   ctx: Ctx,
-  rows: Workflow[],
+  rows: SwitchedWorkflow[],
 ): Promise<Map<string, WorkflowSwitch | null>> {
   const own =
     rows.length === 0
@@ -136,22 +146,32 @@ export async function switchesOf(
         });
   const ownOf = new Map(own.map((enablement) => [enablement.workflowId, enablement]));
   const found = rows.map((row) => [row.id, switchFrom(row, ownOf.get(row.id))] as const);
-  const refused = await refusedConnections(
-    ctx,
-    found.map(([, one]) => one),
-  );
+  const switchedOn = found.flatMap(([id, one]) => (one === null ? [] : [id]));
+  const [refused, holds] = await Promise.all([
+    refusedConnections(
+      ctx,
+      found.map(([, one]) => one),
+    ),
+    readHolds(ctx, switchedOn),
+  ]);
   return new Map(
     found.map(([id, one]) => [
       id,
-      one === null ? null : { ...one, needsReconnect: refused.has(one.connectionId) },
+      one === null
+        ? null
+        : {
+            ...one,
+            pauses: pausesOf(one.kind === "member" ? one : null, holds(id)),
+            needsReconnect: refused.has(one.connectionId),
+          },
     ]),
   );
 }
 
-type Found = Omit<WorkflowSwitch, "needsReconnect">;
+type Found = Omit<WorkflowSwitch, "pauses" | "needsReconnect">;
 
 function switchFrom(
-  workflow: Workflow,
+  workflow: SwitchedWorkflow,
   own: typeof enablements.$inferSelect | undefined,
 ): Found | null {
   if (own !== undefined) {

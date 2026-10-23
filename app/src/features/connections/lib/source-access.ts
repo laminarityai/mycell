@@ -6,9 +6,15 @@
 import { and, eq } from "drizzle-orm";
 import type { z } from "zod";
 import { forOrg } from "@/db/for-org";
-import type { Ctx } from "@/lib/ctx";
+import { type Ctx, isAdmin, isSystem, requireSystem } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
-import type { ConnectionDetails, IngestedApp, IngestStateUpdate } from "../types";
+import type {
+  ConnectionDetails,
+  IngestedApp,
+  IngestStateUpdate,
+  ProxyCall,
+  SourceClient,
+} from "../types";
 import { isDelegated } from "./delegation";
 import { grantedApps, integrationOf, proxyTargetFor } from "./apps";
 import { ingestByApp, ingestStatesOf } from "./ingest-states";
@@ -27,21 +33,13 @@ import { connections, ingestStates } from "./schema";
 type Connection = typeof connections.$inferSelect;
 
 /**
- * What a proxied call says about itself: a custom call's path `template`, which its errors name
- * it by, since the rendered path and query hold input values (content, an address, a search).
- */
-export type ProxyCall = { template?: string };
-
-/**
  * Whether the caller may read what a connection reaches: a member connection is its owner's
  * alone (ADR-0001), and an org connection is any admin's. The system ctx, which scheduled jobs
  * act as, may read every connection in its org (ADR-0009): it ingests for their owners.
  */
 export function isReadableBy(ctx: Ctx, connection: Pick<Connection, "kind" | "ownerUserId">) {
-  if (ctx.role === "system") return true;
-  return connection.kind === "member"
-    ? connection.ownerUserId === ctx.userId
-    : ctx.role === "admin";
+  if (isSystem(ctx)) return true;
+  return connection.kind === "member" ? connection.ownerUserId === ctx.userId : isAdmin(ctx);
 }
 
 /** One connection the caller may read, or was delegated. */
@@ -74,7 +72,7 @@ export async function readableConnectionIds(ctx: Ctx): Promise<string[]> {
  * system ctx. Anyone else is ForbiddenError: users list connections with listConnections.
  */
 export async function listConnectionsForJobs(ctx: Ctx): Promise<ConnectionDetails[]> {
-  if (ctx.role !== "system") throw new ForbiddenError();
+  requireSystem(ctx);
   const rows = await forOrg(ctx).select(connections, { orderBy: [connections.createdAt] });
   const states = await ingestStatesOf(
     ctx,
@@ -87,6 +85,10 @@ function details(
   connection: Connection,
   states: Parameters<typeof ingestByApp>[0] = [],
 ): ConnectionDetails {
+  return { ...described(connection), ingest: ingestByApp(states) };
+}
+
+function described(connection: Connection): Omit<ConnectionDetails, "ingest"> {
   return {
     id: connection.id,
     source: connection.source,
@@ -96,7 +98,27 @@ function details(
     needsReauth: connection.needsReauth,
     grantedScopes: connection.grantedScopes,
     apps: grantedApps(connection.source, connection.grantedScopes),
-    ingest: ingestByApp(states),
+  };
+}
+
+/**
+ * The connection's source, its access checked once here as each proxy call below checks its own
+ * (a connection the caller may read, or was delegated), for a job step that makes several calls.
+ */
+export async function sourceClient(ctx: Ctx, connectionId: string): Promise<SourceClient> {
+  const connection = await readable(ctx, connectionId, { delegated: true });
+  return {
+    connection: described(connection),
+    get: (path, schema, call) =>
+      through(connection, path, (to, target) => nangoProxyGet(to, target, schema), call),
+    getText: (path) => through(connection, path, (to, target) => nangoProxyGetText(to, target)),
+    post: (path, body, schema, call) =>
+      through(connection, path, (to, target) => nangoProxyPost(to, target, body, schema), call),
+    put: (path, body, schema, call) =>
+      through(connection, path, (to, target) => nangoProxyPut(to, target, body, schema), call),
+    patch: (path, body, schema, call) =>
+      through(connection, path, (to, target) => nangoProxyPatch(to, target, body, schema), call),
+    delete: (path) => through(connection, path, (to, target) => nangoProxyDelete(to, target)),
   };
 }
 
@@ -209,17 +231,28 @@ export async function proxyDelete(ctx: Ctx, connectionId: string, path: string):
   );
 }
 
+type Send<T> = (
+  connection: { connectionId: string; integration: string },
+  target: ProxyTarget,
+) => Promise<T>;
+
 async function proxied<T>(
   ctx: Ctx,
   connectionId: string,
   path: string,
-  send: (
-    connection: { connectionId: string; integration: string },
-    target: ProxyTarget,
-  ) => Promise<T>,
+  send: Send<T>,
+  call: ProxyCall = {},
+): Promise<T> {
+  return through(await readable(ctx, connectionId, { delegated: true }), path, send, call);
+}
+
+// One call through the Nango proxy, to a connection whose access was checked.
+async function through<T>(
+  connection: Connection,
+  path: string,
+  send: Send<T>,
   { template }: ProxyCall = {},
 ): Promise<T> {
-  const connection = await readable(ctx, connectionId, { delegated: true });
   try {
     return await send(
       { connectionId: connection.nangoConnectionId, integration: integrationOf(connection.source) },

@@ -10,7 +10,7 @@ import {
   renderRequest,
   type RenderedRequest,
 } from "@/features/custom-actions/description";
-import { listCustomActions } from "@/features/custom-actions/server";
+import { findCustomAction } from "@/features/custom-actions/server";
 import type { StoredCustomAction } from "@/features/custom-actions/types";
 import type { Ctx } from "@/lib/ctx";
 import { SourceRequestError } from "@/features/connections/types";
@@ -117,8 +117,8 @@ async function heldSendOf(ctx: Ctx, item: PendingItem): Promise<HeldSend> {
 
 // The custom action it calls, which never changes once accepted.
 async function actionOf(ctx: Ctx, send: HeldSend): Promise<StoredCustomAction> {
-  const record = (await listCustomActions(ctx)).find((stored) => stored.name === send.customAction);
-  if (record === undefined) throw new ItemGoneError();
+  const record = await findCustomAction(ctx, send.customAction);
+  if (record === null) throw new ItemGoneError();
   return record;
 }
 

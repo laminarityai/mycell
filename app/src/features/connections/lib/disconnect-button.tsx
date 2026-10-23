@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { FormError } from "@/components/form-error";
 import { Button } from "@/components/ui/button";
 import { disconnectAction } from "../actions";
 
@@ -47,11 +48,7 @@ export function DisconnectButton({
           Disconnect
         </Button>
       )}
-      {result.error === undefined ? null : (
-        <p role="alert" className="text-sm text-destructive">
-          {result.error}
-        </p>
-      )}
+      <FormError message={result.error} />
     </div>
   );
 }

@@ -2,7 +2,7 @@
 // use to follow an object across messages and files.
 import { and, asc, eq, inArray, or, type SQL } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
-import type { Ctx } from "@/lib/ctx";
+import { type Ctx, isAdmin } from "@/lib/ctx";
 import type { IngestedEvent, ObjectRefKind } from "../types";
 import { normalizeKey } from "./object-refs";
 import { events, objectRefs } from "./schema";
@@ -48,5 +48,5 @@ export async function findEventsByObject(
 // The caller's own member-scoped events, plus org-scoped ones for admins.
 function visibleTo(ctx: Ctx): SQL | undefined {
   const own = and(eq(events.ownerScope, "member"), eq(events.ownerUserId, ctx.userId));
-  return ctx.role === "admin" ? or(own, eq(events.ownerScope, "org")) : own;
+  return isAdmin(ctx) ? or(own, eq(events.ownerScope, "org")) : own;
 }

@@ -8,7 +8,7 @@ import { forOrg, type GroupCount } from "@/db/for-org";
 import { userNames } from "@/features/orgs/server";
 import type { UserNames } from "@/features/orgs/types";
 import { currentVersionIds } from "@/features/workflows/server";
-import type { Ctx } from "@/lib/ctx";
+import { type Ctx, isAdmin, isSystem } from "@/lib/ctx";
 import { ForbiddenError } from "@/lib/errors";
 import {
   reviewStatuses,
@@ -58,7 +58,7 @@ export async function reviewStatsByWorkflow(
 // Whose reviews the caller may count: a member only their own, and never by person; an admin
 // anyone's (undefined for everyone's).
 function whose(ctx: Ctx, query: Omit<ReviewStatsQuery, "workflowId">): string | undefined {
-  if (ctx.role === "admin" || ctx.role === "system") return query.userId;
+  if (isAdmin(ctx) || isSystem(ctx)) return query.userId;
   if (query.groupBy !== undefined) throw new ForbiddenError();
   if (query.userId !== undefined && query.userId !== ctx.userId) throw new ForbiddenError();
   return ctx.userId;

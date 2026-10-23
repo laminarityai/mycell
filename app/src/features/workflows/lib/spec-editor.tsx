@@ -140,7 +140,7 @@ export function SpecEditor(props: SpecEditorProps) {
           Save
         </Button>
         <p className="text-sm text-muted-foreground" aria-live="polite">
-          {saved ? "All changes saved." : saveHint(parsed.ok, current, issues.length)}
+          {saved ? "All changes saved." : saveHint(current, issues.length)}
         </p>
       </div>
       <Problems result={result} />

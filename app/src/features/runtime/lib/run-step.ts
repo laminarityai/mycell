@@ -1,10 +1,8 @@
 // Steps and their attempts. A run's step runs once through RunStep (Inngest's step.run in the
 // job), and inside it the step's work is tried up to `attempts` times with backoff, so the
 // attempts are counted on the step's record and a failure is recorded rather than thrown.
-import type { RetryPolicy, RunStep } from "../types";
+import type { RetryPolicy } from "../types";
 import { describeFailure, type Failure } from "./failures";
-
-export const runInline: RunStep = (_id, run) => run();
 
 /** 3 attempts, waiting 2 s then 8 s between them. */
 export const defaultRetryPolicy: RetryPolicy = {

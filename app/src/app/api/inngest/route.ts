@@ -17,6 +17,7 @@ import {
   retryScreenCron,
   startJob,
 } from "@/features/memory/jobs";
+import { failedCallCostJob } from "@/features/models/jobs";
 import { checkWaitingReviewsJob, endedInGmailJob } from "@/features/reviews/jobs";
 import { fanOutMessageJob, runWorkflowJob } from "@/features/runtime/jobs";
 import { assignmentRemovedJob, tagDeletedJob, tagRenamedJob } from "@/features/workflows/jobs";
@@ -50,5 +51,6 @@ export const { GET, POST, PUT } = serve({
     forgetPersonAgainJob,
     retentionCron,
     applyRetentionJob,
+    failedCallCostJob,
   ],
 });

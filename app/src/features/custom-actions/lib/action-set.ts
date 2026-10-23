@@ -2,7 +2,8 @@
 // Saving, checking and publishing a workflow, running it, Try it and the builder chat each
 // resolve the set once and hand it to the policy engine and everything else that looks an action
 // up. Custom actions are only ever inserted: a changed one is a new one, with a new name.
-import { asc, inArray } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
+import { cache } from "react";
 import { isUniqueViolation } from "@/db/errors";
 import { forOrg, type OrgScopedDb } from "@/db/for-org";
 import type { ActionSet } from "@/features/policy/types";
@@ -13,27 +14,46 @@ import { actionSetWith, checkedCustomActions } from "../description";
 import type { CustomActionRecord, StoredCustomAction } from "../types";
 import { customActions } from "./schema";
 
-/** The actions the caller's org may use: the catalog, then its custom actions. */
-export async function getActionSet(ctx: Ctx): Promise<ActionSet> {
-  return actionSetWith(await listCustomActions(ctx));
-}
+/**
+ * The actions the caller's org may use: the catalog, then its custom actions. React's cache
+ * makes it one read per page render for the same ctx (getCtx's), however many of the page's
+ * reads ask; outside a render (a Server Action, a job) each call reads afresh.
+ */
+export const getActionSet = cache(async (ctx: Ctx): Promise<ActionSet> =>
+  actionSetWith(await listCustomActions(ctx)),
+);
 
 /**
  * The org's custom actions, oldest first, for any of its users: they're as much a part of
- * its workflows as the catalog is, and hold nothing from anyone's account.
+ * its workflows as the catalog is, and hold nothing from anyone's account. Cached per page
+ * render, like getActionSet.
  */
-export async function listCustomActions(ctx: Ctx): Promise<StoredCustomAction[]> {
+export const listCustomActions = cache(async (ctx: Ctx): Promise<StoredCustomAction[]> => {
   const rows = await forOrg(ctx).select(customActions, {
     orderBy: [asc(customActions.acceptedAt), asc(customActions.name)],
   });
-  return rows.map((row) => ({
+  return rows.map(storedAction);
+});
+
+/** The org's custom action named `name`; null when it has none. */
+export async function findCustomAction(ctx: Ctx, name: string): Promise<StoredCustomAction | null> {
+  const rows = await forOrg(ctx).select(customActions, {
+    where: eq(customActions.name, name),
+    limit: 1,
+  });
+  const row = rows.at(0);
+  return row === undefined ? null : storedAction(row);
+}
+
+function storedAction(row: typeof customActions.$inferSelect): StoredCustomAction {
+  return {
     ...row.description,
     risk: row.risk,
     id: row.id,
     acceptedBy: row.acceptedBy,
     acceptedAt: row.acceptedAt,
     proposalId: row.proposalId,
-  }));
+  };
 }
 
 /**

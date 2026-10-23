@@ -9,7 +9,7 @@ import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import { fakeInngest } from "@/testing/fake-inngest";
 import { fakeNango } from "@/testing/fake-nango";
 import { executeRun, getRun, listRuns, startRun } from "../server";
-import type { RunStep } from "../types";
+import type { RunStep } from "@/lib/inngest";
 import {
   connectInbox,
   pricingQuestion,

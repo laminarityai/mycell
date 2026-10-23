@@ -1,38 +1,25 @@
 // Where an app files an item, for exclusions: a Gmail message's labels (each mailbox has its own
 // label IDs, so they're matched by name) and a Drive doc's folders (its parents, and theirs, up
-// to the root). Read through the Nango proxy; nothing here is stored.
+// to the root). Read through the Nango proxy, a source client a step; nothing here is stored.
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { forOrg } from "@/db/for-org";
-import { proxyGet } from "@/features/connections/server";
+import { FILES } from "@/features/connections/drive";
+import { GMAIL, labelNamed, labelsSchema, messageListSchema } from "@/features/connections/gmail";
+import { sourceClient } from "@/features/connections/server";
+import type { SourceClient } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
 import { driveVersion } from "./drive";
 import { sourceRecords } from "./schema";
 
-const GMAIL = "/gmail/v1/users/me";
-const FILES = "/drive/v3/files";
-
 // How far up a doc's folders are followed: well past any real nesting.
 const MAX_FOLDER_DEPTH = 25;
-
-const labelsSchema = z.object({
-  labels: z.array(z.object({ id: z.string(), name: z.string() })).default([]),
-});
-
-const messageListSchema = z.object({
-  messages: z.array(z.object({ id: z.string() })).default([]),
-  nextPageToken: z.string().optional(),
-});
 
 const parentsSchema = z.object({ parents: z.array(z.string()).default([]) });
 
 /** The names, lowercased, of the mailbox's labels among `labelIds`. */
-export async function labelNames(
-  ctx: Ctx,
-  connectionId: string,
-  labelIds: string[],
-): Promise<Set<string>> {
-  const labels = (await proxyGet(ctx, connectionId, `${GMAIL}/labels`, labelsSchema))?.labels;
+export async function labelNames(source: SourceClient, labelIds: string[]): Promise<Set<string>> {
+  const labels = (await source.get(`${GMAIL}/labels`, labelsSchema))?.labels;
   return new Set(
     (labels ?? [])
       .filter((label) => labelIds.includes(label.id))
@@ -52,8 +39,9 @@ export async function labelledRecords(
     and(eq(sourceRecords.connectionId, connectionId), eq(sourceRecords.app, "gmail")),
   );
   if (learned === 0) return [];
-  const labels = await proxyGet(ctx, connectionId, `${GMAIL}/labels`, labelsSchema);
-  const label = labels?.labels.find((l) => l.name.toLowerCase() === name.toLowerCase());
+  const source = await sourceClient(ctx, connectionId);
+  const labels = await source.get(`${GMAIL}/labels`, labelsSchema);
+  const label = labelNamed(labels?.labels ?? [], name);
   if (label === undefined) return [];
   const ids: string[] = [];
   let pageToken: string | undefined;
@@ -64,9 +52,10 @@ export async function labelledRecords(
       includeSpamTrash: "true",
       ...(pageToken === undefined ? {} : { pageToken }),
     });
-    const page = await proxyGet(ctx, connectionId, `${GMAIL}/messages?${query}`, messageListSchema);
+    const page = await source.get(`${GMAIL}/messages?${query}`, messageListSchema);
     if (page === null || page.messages.length === 0) break;
     const records = await db.select(sourceRecords, {
+      columns: ["id"],
       where: and(
         eq(sourceRecords.connectionId, connectionId),
         eq(sourceRecords.app, "gmail"),
@@ -84,8 +73,7 @@ export async function labelledRecords(
 
 /** Whether a file with `parentIds` is in one of `folderIds`, or a folder under one. */
 export async function inFolders(
-  ctx: Ctx,
-  connectionId: string,
+  source: SourceClient,
   parentIds: string[],
   folderIds: string[],
 ): Promise<boolean> {
@@ -98,7 +86,7 @@ export async function inFolders(
     for (const id of level) {
       if (seen.has(id)) continue;
       seen.add(id);
-      next.push(...(await parentsOf(ctx, connectionId, id)));
+      next.push(...(await parentsOf(source, id)));
     }
     level = next;
   }
@@ -112,13 +100,16 @@ export async function folderedRecords(
   folderId: string,
 ): Promise<string[]> {
   const records = await forOrg(ctx).select(sourceRecords, {
+    columns: ["id", "sourceRef"],
     where: and(eq(sourceRecords.connectionId, connectionId), eq(sourceRecords.app, "drive")),
   });
+  if (records.length === 0) return [];
+  const source = await sourceClient(ctx, connectionId);
   const ids: string[] = [];
   const byFile = Map.groupBy(records, (record) => driveVersion(record.sourceRef).fileId);
   for (const [fileId, versions] of byFile) {
-    const parents = await parentsOf(ctx, connectionId, fileId);
-    if (await inFolders(ctx, connectionId, parents, [folderId])) {
+    const parents = await parentsOf(source, fileId);
+    if (await inFolders(source, parents, [folderId])) {
       ids.push(...versions.map((record) => record.id));
     }
   }
@@ -126,7 +117,7 @@ export async function folderedRecords(
 }
 
 // A Drive file's (or folder's) parents; none for one the account can't see.
-async function parentsOf(ctx: Ctx, connectionId: string, fileId: string): Promise<string[]> {
+async function parentsOf(source: SourceClient, fileId: string): Promise<string[]> {
   const path = `${FILES}/${encodeURIComponent(fileId)}?fields=parents`;
-  return (await proxyGet(ctx, connectionId, path, parentsSchema))?.parents ?? [];
+  return (await source.get(path, parentsSchema))?.parents ?? [];
 }

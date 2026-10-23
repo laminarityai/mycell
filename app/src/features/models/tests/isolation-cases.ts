@@ -5,7 +5,10 @@ import { grantCredits, listLedger } from "@/features/credits/server";
 import { systemCtx } from "@/lib/ctx";
 import { OutOfCreditsError } from "@/lib/errors";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
+import { readTurn } from "@/testing/streamed-turn";
 import * as server from "../server";
+import { testPrompts } from "./requests";
+import { askTurn, type StoredAskMessage } from "./second-chat";
 
 // Org B points every role at its own models and has credits; org A has neither, so a call as
 // org A that read org B's rows would use org B's model or pass on org B's balance.
@@ -17,7 +20,7 @@ async function seedOrgB({ orgB }: TwoOrgs) {
   return { ledgerBefore: await listLedger(orgB.admin.ctx) };
 }
 
-const question = { question: "Which?", labels: ["a", "b"], state: "text" };
+const question = { question: testPrompts.which(), labels: ["a", "b"], state: "text" };
 
 export const isolationCases = defineIsolationCases(server, {
   estimateScreenCredits: notTenantScoped(
@@ -44,6 +47,28 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await listLedger(orgs.orgB.admin.ctx)).toEqual(ledgerBefore);
   },
 
+  streamChatTurn: async (orgs) => {
+    const { ledgerBefore } = await seedOrgB(orgs);
+    const member = orgs.orgA.member.ctx;
+    const stored: StoredAskMessage[] = [];
+
+    // Org B's balance doesn't cover org A.
+    const refused = await readTurn(await askTurn(member, "Hi", stored));
+    expect(refused.notices.map((notice) => notice.kind)).toEqual(["out_of_credits"]);
+    await grantCredits(systemCtx(orgs.orgA.id), 100);
+    fakeAiGateway.reply({ text: "Hello." }, { costUsd: 0.001 });
+    await readTurn(await askTurn(member, "Hi", stored));
+
+    expect(fakeAiGateway.requests().map((request) => request.modelId)).toEqual([
+      "test/smart-default",
+    ]);
+    expect(await listLedger(orgs.orgB.admin.ctx)).toEqual(ledgerBefore);
+  },
+
+  chatTool: notTenantScoped("wraps a tool definition: it takes no ctx and reads no org's data"),
+  chatModelMessages: notTenantScoped("maps the stored messages it's given: pure, no IO"),
+  chatUIPart: notTenantScoped("maps the stored part it's given: pure, no IO"),
+
   setModelRole: async (orgs) => {
     await seedOrgB(orgs);
 
@@ -56,12 +81,12 @@ export const isolationCases = defineIsolationCases(server, {
     const { ledgerBefore } = await seedOrgB(orgs);
     const ctxA = systemCtx(orgs.orgA.id);
 
-    await expect(server.callModel(ctxA, "fast", { prompt: "Hi" })).rejects.toThrow(
+    await expect(server.callModel(ctxA, "fast", { prompt: testPrompts.hi() })).rejects.toThrow(
       OutOfCreditsError,
     );
     await grantCredits(ctxA, 100);
     fakeAiGateway.text("ok", { costUsd: 0.001 });
-    await server.callModel(ctxA, "fast", { prompt: "Hi" });
+    await server.callModel(ctxA, "fast", { prompt: testPrompts.hi() });
 
     expect(fakeAiGateway.requests().map((request) => request.modelId)).toEqual([
       "test/fast-default",
@@ -95,6 +120,23 @@ export const isolationCases = defineIsolationCases(server, {
 
     expect((await listLedger(ctxA)).filter((entry) => entry.kind === "usage")).toHaveLength(1);
     expect(await listLedger(orgs.orgB.admin.ctx)).toEqual(ledgerBefore);
+  },
+
+  correctFailedCallCost: async (orgs) => {
+    await seedOrgB(orgs);
+    const ctxB = systemCtx(orgs.orgB.id);
+    fakeAiGateway.fail("language", { generationId: "gen_b", billedUsd: 0.01 });
+    await expect(server.callModel(ctxB, "fast", { prompt: testPrompts.hi() })).rejects.toThrow();
+    const failed = (await listLedger(ctxB, 1)).at(0);
+    const ledgerBefore = await listLedger(ctxB);
+
+    // Org B's failed call, from org A: no lookup, and nothing recorded in either org.
+    expect(await server.correctFailedCallCost(systemCtx(orgs.orgA.id), failed?.id ?? "")).toBe(
+      "nothing_to_correct",
+    );
+    expect(fakeAiGateway.lookups()).toEqual([]);
+    expect(await listLedger(orgs.orgA.admin.ctx)).toEqual([]);
+    expect(await listLedger(ctxB)).toEqual(ledgerBefore);
   },
 
   embed: async (orgs) => {

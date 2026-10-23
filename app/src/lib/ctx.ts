@@ -27,7 +27,29 @@ export function systemCtx(orgId: string): Ctx {
   return { orgId, userId: SYSTEM_USER_ID, role: "system" };
 }
 
+// Every role check goes through these: a lint rule bans comparing `ctx.role` anywhere else.
+
 /** The admin check every admin-only server function starts with: anyone else is ForbiddenError. */
 export function requireAdmin(ctx: Ctx): void {
-  if (ctx.role !== "admin") throw new ForbiddenError();
+  requireRole(ctx, "admin");
+}
+
+/** The check a function only jobs call starts with: anyone but `system` is ForbiddenError. */
+export function requireSystem(ctx: Ctx): void {
+  requireRole(ctx, "system");
+}
+
+/** ForbiddenError unless the ctx acts as one of `actors`. */
+export function requireRole(ctx: Ctx, ...actors: Actor[]): void {
+  if (!actors.includes(ctx.role)) throw new ForbiddenError();
+}
+
+/** Whether the ctx is an admin's. */
+export function isAdmin(ctx: Ctx): boolean {
+  return ctx.role === "admin";
+}
+
+/** Whether the ctx is a scheduled job's (`system`), not a person's. */
+export function isSystem(ctx: Ctx): boolean {
+  return ctx.role === "system";
 }

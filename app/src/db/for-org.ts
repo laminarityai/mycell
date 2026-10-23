@@ -1,10 +1,12 @@
 // The org-scoped handle (ADR-0003): the only way feature code reaches tenant tables.
 // Every read, count, update, and delete is filtered to ctx.orgId, and every insert takes its
 // org_id from ctx. A caller can't name another org: org_id isn't accepted as input.
+import "server-only";
 import {
   and,
   count,
   eq,
+  getTableColumns,
   sql,
   type Column,
   type GetColumnData,
@@ -23,6 +25,17 @@ export type TenantTable = PgTable & { orgId: AnyPgColumn<{ notNull: true }> };
 /** A row to insert or a change to apply, without `orgId`: that always comes from ctx. */
 export type TenantValues<T extends TenantTable> = Omit<InferInsertModel<T>, "orgId">;
 
+/**
+ * A change to apply to rows: each column's new value, or SQL computing it from the row (one
+ * update setting each row its own value, by a `case` on its ID).
+ */
+export type TenantChanges<T extends TenantTable> = {
+  [K in keyof TenantValues<T>]?: TenantValues<T>[K] | SQL;
+};
+
+/** A column's name on `table`, as its rows hold it. */
+export type ColumnName<T extends TenantTable> = keyof InferSelectModel<T> & string;
+
 /** One of `table`'s columns. */
 type ColumnOf<T extends TenantTable> = T["_"]["columns"][keyof T["_"]["columns"]];
 
@@ -30,17 +43,29 @@ type ColumnOf<T extends TenantTable> = T["_"]["columns"][keyof T["_"]["columns"]
 export type NumberColumn<T extends TenantTable> = Extract<ColumnOf<T>, { _: { data: number } }>;
 
 /**
- * The columns `countBy` groups by, each under the name its value comes back as. `count` is
- * taken: it's the group's count.
+ * The columns `countBy` and `sumBy` group by, each under the name its value comes back as.
+ * `count` and `total` are taken: they're the group's count and sum.
  */
-export type GroupColumns<T extends TenantTable> = Record<string, ColumnOf<T>> & { count?: never };
+export type GroupColumns<T extends TenantTable> = Record<string, ColumnOf<T>> & {
+  count?: never;
+  total?: never;
+};
+
+/** One group's value of each group column. */
+type GroupValues<G> = { [K in keyof G]: G[K] extends Column ? GetColumnData<G[K]> : never };
 
 /** One group `countBy` found: its value of each group column, and how many rows it has. */
-export type GroupCount<G> = {
-  [K in keyof G]: G[K] extends Column ? GetColumnData<G[K]> : never;
-} & { count: number };
+export type GroupCount<G> = GroupValues<G> & { count: number };
 
-export type SelectOptions = {
+/** One group `sumBy` found: its value of each group column, and the total of its rows. */
+export type GroupSum<G> = GroupValues<G> & { total: number };
+
+export type SelectOptions<K extends string = string> = {
+  /**
+   * Only these columns, by their names on the table: the rows hold just them. Read what a
+   * caller uses, not a whole row it only counts or maps (a fact's embedding, a spec).
+   */
+  columns?: readonly K[];
   where?: SQL;
   orderBy?: (PgColumn | SQL)[];
   limit?: number;
@@ -58,11 +83,26 @@ export type InsertOptions = {
 };
 
 export type OrgScopedDb = {
-  select<T extends TenantTable>(table: T, options?: SelectOptions): Promise<InferSelectModel<T>[]>;
+  select<T extends TenantTable, K extends ColumnName<T> = ColumnName<T>>(
+    table: T,
+    options?: SelectOptions<K>,
+  ): Promise<Pick<InferSelectModel<T>, K>[]>;
   /** How many of the org's rows match `where`, counted in the database. */
   count(table: TenantTable, where?: SQL): Promise<number>;
   /** The total of `column` over the org's rows matching `where`; 0 when none do. */
   sum<T extends TenantTable>(table: T, column: NumberColumn<T>, where?: SQL): Promise<number>;
+  /**
+   * The total of `column` over the org's rows matching `where`, per distinct value of
+   * `groupBy`'s columns: one row per group, with its values under `groupBy`'s names and its
+   * `total` (spending by purpose, or by workflow, in one query). Groups no row has aren't
+   * returned. Name at least one column; `sum` adds up with none.
+   */
+  sumBy<T extends TenantTable, G extends GroupColumns<T>>(
+    table: T,
+    column: NumberColumn<T>,
+    groupBy: G,
+    where?: SQL,
+  ): Promise<GroupSum<G>[]>;
   /**
    * The org's rows matching `where`, counted per distinct value of `groupBy`'s columns: one
    * row per group, with its values under `groupBy`'s names and its `count`. Groups no row has
@@ -80,10 +120,12 @@ export type OrgScopedDb = {
   ): Promise<InferSelectModel<T>[]>;
   update<T extends TenantTable>(
     table: T,
-    set: Partial<TenantValues<T>>,
+    set: TenantChanges<T>,
     where?: SQL,
   ): Promise<InferSelectModel<T>[]>;
   delete<T extends TenantTable>(table: T, where?: SQL): Promise<InferSelectModel<T>[]>;
+  /** Deletes like `delete`, returning only how many rows went, never the rows themselves. */
+  deleteCount(table: TenantTable, where?: SQL): Promise<number>;
   /**
    * Runs `fn` in one database transaction, with a handle scoped to the same org: its writes
    * commit together, or none do when `fn` throws (the error is rethrown).
@@ -107,15 +149,23 @@ function scoped(ctx: Ctx, db: Executor): OrgScopedDb {
   return {
     async select(table, options = {}) {
       const source: PgTable = table;
+      const fields = options.columns === undefined ? undefined : named(table, options.columns);
       const query = (
-        options.distinctOn === undefined ? db.select() : db.selectDistinctOn(options.distinctOn)
+        options.distinctOn === undefined
+          ? fields === undefined
+            ? db.select()
+            : db.select(fields)
+          : fields === undefined
+            ? db.selectDistinctOn(options.distinctOn)
+            : db.selectDistinctOn(options.distinctOn, fields)
       )
         .from(source)
         .where(inOrg(table, options.where))
         .orderBy(...(options.orderBy ?? []))
         .$dynamic();
       const rows = options.limit === undefined ? await query : await query.limit(options.limit);
-      return rows as InferSelectModel<typeof table>[];
+      // The rows hold the named columns, or every column when none are named.
+      return rows as never;
     },
 
     async count(table, where) {
@@ -126,10 +176,22 @@ function scoped(ctx: Ctx, db: Executor): OrgScopedDb {
 
     async sum(table, column, where) {
       const source: PgTable = table;
-      // A sum over no rows is null, and Postgres returns numeric and bigint sums as strings.
-      const total = sql<number>`coalesce(sum(${column}), 0)`.mapWith(Number);
-      const rows = await db.select({ total }).from(source).where(inOrg(table, where));
+      const rows = await db
+        .select({ total: total(column) })
+        .from(source)
+        .where(inOrg(table, where));
       return rows.at(0)?.total ?? 0;
+    },
+
+    async sumBy(table, column, groupBy, where) {
+      const source: PgTable = table;
+      const columns: Record<string, PgColumn> = groupBy;
+      const rows = await db
+        .select({ ...columns, total: total(column) })
+        .from(source)
+        .where(inOrg(table, where))
+        .groupBy(...Object.values(columns));
+      return rows as GroupSum<typeof groupBy>[];
     },
 
     async countBy(table, groupBy, where) {
@@ -173,10 +235,28 @@ function scoped(ctx: Ctx, db: Executor): OrgScopedDb {
       return deleted as InferSelectModel<typeof table>[];
     },
 
+    async deleteCount(table, where) {
+      const source: PgTable = table;
+      const result = await db.delete(source).where(inOrg(table, where));
+      return result.rowCount ?? 0;
+    },
+
     transaction(fn) {
       return db.transaction((tx) => fn(scoped(ctx, tx)));
     },
   };
+}
+
+// A column's sum, as a number. A sum over no rows (or only nulls) is null, and Postgres returns
+// numeric and bigint sums as strings.
+function total(column: Column): SQL<number> {
+  return sql<number>`coalesce(sum(${column}), 0)`.mapWith(Number);
+}
+
+// The table's columns with these names, as a select's fields.
+function named(table: TenantTable, names: readonly string[]): Record<string, PgColumn> {
+  const columns: Record<string, PgColumn> = getTableColumns(table);
+  return Object.fromEntries(names.map((name) => [name, columns[name]]));
 }
 
 // Types already forbid orgId; this also drops one smuggled in at runtime (e.g. a parsed form).

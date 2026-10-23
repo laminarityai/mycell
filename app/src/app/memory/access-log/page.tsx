@@ -1,27 +1,24 @@
 import { Suspense } from "react";
-import { AppNav } from "@/app/app-nav";
+import { AppShell } from "@/app/_shell/app-shell";
 import { listAccessLog, listStaffConsents } from "@/features/memory/server";
 import { AccessLog, StaffConsents } from "@/features/memory/ui";
 import { getCtx } from "@/features/orgs/server";
 import { workflowNames } from "@/features/workflows/server";
+import { isAdmin } from "@/lib/ctx";
 
 export default function AccessLogPage() {
   return (
-    <main className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-6">
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold tracking-tight">Memory access log</h1>
-        <AppNav />
-      </header>
+    <AppShell current="memory-log" title="Memory access log" width="wide">
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading the log…</p>}>
         <Log />
       </Suspense>
-    </main>
+    </AppShell>
   );
 }
 
 async function Log() {
   const ctx = await getCtx();
-  const admin = ctx.role === "admin";
+  const admin = isAdmin(ctx);
   const entries = await listAccessLog(ctx);
   const [names, consents] = await Promise.all([
     workflowNames(

@@ -1,10 +1,10 @@
 // Review counts as the Workflows page lists them: a row per workflow, and for admins each
 // person's under it. The periods the page offers are counted back from now here.
-import type { Ctx } from "@/lib/ctx";
+import { type Ctx, isAdmin, isSystem } from "@/lib/ctx";
+import { DAY_MS } from "@/lib/time";
 import type { ReviewCountsRow, ReviewPeriod, ReviewStatsQuery } from "../types";
 import { reviewStatsByWorkflow } from "./stats";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
 const PERIOD_DAYS = { "2d": 2, "7d": 7, "30d": 30 } as const;
 
 /**
@@ -18,7 +18,7 @@ export async function reviewCountsByWorkflow(
   now: Date = new Date(),
 ): Promise<ReviewCountsRow[]> {
   const since = sinceOf(period, now);
-  const perPerson = ctx.role === "admin" || ctx.role === "system";
+  const perPerson = isAdmin(ctx) || isSystem(ctx);
   // Every workflow counted together: the page makes the same queries for 1 workflow or 100.
   const byWorkflow = await reviewStatsByWorkflow(
     ctx,

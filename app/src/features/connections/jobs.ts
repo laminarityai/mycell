@@ -1,4 +1,5 @@
 // The connections feature's Inngest functions. Thin: each calls server.ts.
+import "server-only";
 import { cron } from "inngest";
 import { inngest } from "@/lib/inngest";
 import { reconcileConnections } from "./server";

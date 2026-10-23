@@ -6,7 +6,7 @@ import { and, eq } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { listUsers } from "@/features/orgs/server";
 import { reviewSharing } from "@/features/workflows/server";
-import type { Ctx } from "@/lib/ctx";
+import { type Ctx, isSystem } from "@/lib/ctx";
 import { AlreadyHandledError, ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import type { ReviewPerson } from "../types";
 import { handledBy, visibleReview, type ReviewRow } from "./reviews";
@@ -48,7 +48,7 @@ export async function handOffTo(ctx: Ctx, row: ReviewRow): Promise<ReviewPerson[
 // Whether the caller, who sees the review, may hand it on: a user (not a job), its owner for a
 // member's review, and only while the workflow's latest version allows hand-off.
 async function mayHandOn(ctx: Ctx, row: ReviewRow): Promise<boolean> {
-  if (ctx.role === "system") return false;
+  if (isSystem(ctx)) return false;
   if (row.ownerScope === "member" && row.ownerUserId !== ctx.userId) return false;
   return (await reviewSharing(ctx, [row.workflowId])).get(row.workflowId)?.handOff === true;
 }

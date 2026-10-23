@@ -10,8 +10,8 @@ import { getConnection } from "@/features/connections/server";
 import type { ConnectionDetails } from "@/features/connections/types";
 import { listStartable } from "@/features/workflows/server";
 import type { SwitchedOn } from "@/features/workflows/types";
-import type { Ctx } from "@/lib/ctx";
-import { ForbiddenError, NotFoundError } from "@/lib/errors";
+import { type Ctx, requireSystem } from "@/lib/ctx";
+import { NotFoundError } from "@/lib/errors";
 import type { GmailMessageReceived } from "@/lib/events";
 import { sendRunRequested } from "./events";
 import { runs } from "./schema";
@@ -28,7 +28,7 @@ export async function startTriggeredRuns(
   ctx: Ctx,
   message: GmailMessageReceived,
 ): Promise<{ runIds: string[] }> {
-  if (ctx.role !== "system") throw new ForbiddenError();
+  requireSystem(ctx);
   const occurredAt = new Date(message.occurredAt);
   const due = (await listStartable(ctx, message.connectionId)).filter(
     (on) =>

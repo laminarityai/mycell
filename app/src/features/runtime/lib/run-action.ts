@@ -3,7 +3,7 @@
 // a custom action), check the input against the action's schema, run it, and check what it
 // returned. Messages name the action and the fields, never their values.
 import type { ActionName } from "@/features/policy/catalog";
-import type { Json } from "../types";
+import type { Json } from "@/lib/inngest";
 import { runCustomAction, type CustomInput } from "./custom-action";
 import { RunStepError } from "./failures";
 import type { Compose, StepContext } from "./step-context";

@@ -1,6 +1,15 @@
 // Tags and who has them. Both tables are tenant-owned; composite foreign keys keep a tag and
 // the member it's assigned to in the same org as the assignment.
-import { foreignKey, pgTable, primaryKey, text, timestamp, unique } from "drizzle-orm/pg-core";
+import "server-only";
+import {
+  foreignKey,
+  index,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  unique,
+} from "drizzle-orm/pg-core";
 import { member } from "@/db/auth-schema";
 
 export const tags = pgTable(
@@ -33,6 +42,7 @@ export const tagAssignments = pgTable(
       columns: [table.orgId, table.tagId],
       foreignColumns: [tags.orgId, tags.id],
     }).onDelete("cascade"),
+    index("tag_assignments_org_id_user_id_idx").on(table.orgId, table.userId),
     // Removing a user deletes their member row, and with it their assignments.
     foreignKey({
       name: "tag_assignments_member_fk",

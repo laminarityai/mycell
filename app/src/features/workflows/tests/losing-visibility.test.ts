@@ -3,6 +3,7 @@
 // cleans up as the system ctx; publishing to fewer tags cleans up in the publish itself.
 import { beforeEach, describe, expect, it } from "vitest";
 import { resetDatabase } from "@/db/testing/reset";
+import { queriesOnOtherConnections } from "@/db/testing/transaction-queries";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { deleteTag, unassignTag } from "@/features/tags/server";
 import { systemCtx } from "@/lib/ctx";
@@ -95,6 +96,20 @@ describe("publishing a version to fewer tags", () => {
 
     await publishWorkflow(admin.ctx, both, { tags: ["support"] });
 
+    expect(await enabledBy(admin.ctx, both)).toEqual([member.id]);
+  });
+
+  it("reads who sees it before the transaction, which then queries only its own connection", async () => {
+    const { admin, member, salesOnly, both } = await enabledThroughSales();
+    await tagUsers(admin.ctx, "finance", []);
+
+    const stray = await queriesOnOtherConnections(async () => {
+      await publishWorkflow(admin.ctx, salesOnly, { tags: ["finance"] });
+      await publishWorkflow(admin.ctx, both, { tags: ["support"] });
+    });
+
+    expect(stray).toEqual([]);
+    expect(await enabledBy(admin.ctx, salesOnly)).toEqual([]);
     expect(await enabledBy(admin.ctx, both)).toEqual([member.id]);
   });
 });

@@ -1,0 +1,20 @@
+# What the builder chat's tools tell its agent, beside their results.
+
+# propose_spec (builder/lib/proposals.ts).
+proposalStored: |-
+  Stored as a proposal. The admin sees it as a before/after and accepts or rejects it; nothing is saved until they accept.
+proposalNotStored: |-
+  The spec wasn't stored. Fix every issue and call propose_spec again.
+# After the third failed proposal in a turn.
+proposalsGaveUp: |-
+  Stop proposing in this turn: the admin now sees these issues. Tell them in plain words what you couldn't resolve.
+
+# describe_custom_action (builder/lib/custom-action-tool.ts). `risk` is the level Mycel's rule set.
+customActionAdded: |-
+  Added to this turn's proposal as "{{name}}", at risk level {{risk}}, set by Mycel's rule. Use it by name in a tool step of the spec you send to propose_spec.
+customActionStored: |-
+  This org already has this custom action: use it by name in propose_spec.
+customActionNotAdded: |-
+  Not added to the proposal. Fix every issue and describe it again.
+customActionNameTaken: |-
+  This org already has a custom action named "{{name}}" that does something else, and a stored custom action never changes. Give the changed one a new name, such as "{{name}}-v2".

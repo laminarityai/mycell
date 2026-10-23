@@ -1,8 +1,9 @@
 // Discovery's Inngest functions. Thin: each calls server.ts. The backfill runs as the user who
 // connected the source; polling, started by a cron, as the org's system ctx (ADR-0009).
+import "server-only";
 import { connectionAppsGranted, connectionRecorded } from "@/features/connections/server";
 import { systemCtx, type Ctx } from "@/lib/ctx";
-import { inngest } from "@/lib/inngest";
+import { inngest, PER_ORG_LIMIT, stepRunner } from "@/lib/inngest";
 import { connectionPollDue } from "./lib/events";
 import {
   backfillConnection,
@@ -10,10 +11,6 @@ import {
   pollAllConnections,
   pollConnection,
 } from "./server";
-
-// At most this many backfills and polls run at once for one org, so one org's large
-// mailboxes leave other orgs' ingest unblocked.
-const PER_ORG_LIMIT = 3;
 
 // Shared by the backfill and the poll (scope "env" keys them across functions): one ingest run
 // per connection at a time, so cursors don't race, and a few per org. Both events carry
@@ -30,12 +27,6 @@ const ctxOf = (data: EventData): Ctx => ({
   userId: data.userId,
   role: data.role,
 });
-
-// Step results are plain JSON already, so Inngest's serialized type is the same type.
-const stepRunner =
-  (step: { run: (id: string, run: () => Promise<unknown>) => Promise<unknown> }) =>
-  <T>(id: string, run: () => Promise<T>) =>
-    step.run(id, run) as Promise<T>;
 
 /**
  * Backfills a connection's apps once it's recorded, and the apps a reconnect grants it or

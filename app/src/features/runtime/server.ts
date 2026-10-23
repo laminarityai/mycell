@@ -1,6 +1,7 @@
 // The runtime feature: the interpreter and its run records.
 // Called by the run-workflow job and tests, as the org's system ctx.
-export { executeRun } from "./lib/interpreter";
+import "server-only";
+export { executeRun, failCrashedRun } from "./lib/interpreter";
 export { getRun, listRuns, startRun } from "./lib/runs";
 // "Try it": a spec on one message, in memory, with every write stubbed. Nothing is stored.
 export { dryRun } from "./lib/dry-run";

@@ -7,7 +7,7 @@ import type { ActionSet, RiskLevel } from "@/features/policy/types";
 import { describeSpec, type ActionInfo } from "@/features/spec/describe";
 import { listUsers } from "@/features/orgs/server";
 import { listMyTags, listTagIdsByUser, listTags } from "@/features/tags/server";
-import type { Ctx } from "@/lib/ctx";
+import { type Ctx, isAdmin, type Role } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
 import type { Audience, VisibleWorkflow, WorkflowVersion } from "../types";
 import { requiredApps } from "./requirements";
@@ -56,25 +56,46 @@ export async function audiencesOf(ctx: Ctx, versionIds: string[]): Promise<Map<s
 }
 
 /**
+ * Who may see what, read before a transaction that asks: the org's users' roles, and the tag IDs
+ * of the users they were read for, each by user ID.
+ */
+export type Viewers = { roles: Map<string, Role>; tags: Map<string, string[]> };
+
+/** A transaction, and the viewers read before it began: inside it, only `tx` is queried. */
+export type InTransaction = { tx: OrgScopedDb; viewers: Viewers };
+
+/**
+ * The org's users' roles, and the tags of `userIds`, or of every user in the org when left out.
+ * A publish reads them before its transaction, which then holds one connection and no other.
+ */
+export async function readViewers(ctx: Ctx, userIds?: readonly string[]): Promise<Viewers> {
+  const roles = new Map((await listUsers(ctx)).map((user) => [user.id, user.role]));
+  const tags = await listTagIdsByUser(ctx, userIds ?? [...roles.keys()]);
+  return { roles, tags };
+}
+
+/**
  * Whether a user can see a workflow version, for each of `pairs` asked: an admin sees every
  * one; anyone else one published to a tag they have; someone no longer in the org, none. It's
  * how the system ctx checks what someone else may see (the trigger's fan-out, say), so it
  * reads their tags rather than the caller's. Asking about a pair not given answers false.
- * Versions' tags are read through `db`, which a publish passes to see the version it's writing.
+ * A publish passes its transaction, to see the version it's writing, with the viewers it read
+ * before it began.
  */
 export async function seenByUsers(
   ctx: Ctx,
   pairs: readonly { userId: string; versionId: string }[],
-  db: OrgScopedDb = forOrg(ctx),
+  inTransaction?: InTransaction,
 ): Promise<(userId: string, versionId: string) => boolean> {
   if (pairs.length === 0) return () => false;
   const asked = new Set(pairs.map(({ userId, versionId }) => `${userId}\n${versionId}`));
-  const roles = new Map((await listUsers(ctx)).map((user) => [user.id, user.role]));
-  const userTags = await listTagIdsByUser(ctx, [...new Set(pairs.map(({ userId }) => userId))]);
+  const { roles, tags: userTags } =
+    inTransaction?.viewers ??
+    (await readViewers(ctx, [...new Set(pairs.map(({ userId }) => userId))]));
   const versionTags = await tagIdsOf(
     ctx,
     [...new Set(pairs.map(({ versionId }) => versionId))],
-    db,
+    inTransaction?.tx,
   );
   return (userId, versionId) => {
     if (!asked.has(`${userId}\n${versionId}`)) return false;
@@ -91,7 +112,7 @@ async function visible(ctx: Ctx, rows: Workflow[]): Promise<VisibleWorkflow[]> {
     ctx,
     rows.map((row) => row.id),
   );
-  const admin = ctx.role === "admin";
+  const admin = isAdmin(ctx);
   const published = rows.flatMap((row) => {
     const version = latest.get(row.id);
     // An archived workflow is hidden from everyone but admins.

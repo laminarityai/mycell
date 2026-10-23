@@ -16,15 +16,15 @@ import {
   type PendingItem,
   type ReviewEdits,
 } from "@/features/runtime/adapters";
-import type { Ctx } from "@/lib/ctx";
+import { type Ctx, requireSystem } from "@/lib/ctx";
 import {
   AlreadyHandledError,
   ConflictError,
-  ForbiddenError,
   ItemGoneError,
   SendUnconfirmedError,
   ValidationError,
 } from "@/lib/errors";
+import { DAY_MS } from "@/lib/time";
 import {
   REVIEW_EXPIRY_DAYS,
   reviewActions,
@@ -97,7 +97,7 @@ export async function checkWaitingReviews(
   ctx: Ctx,
   adapters: PendingForms = pendingForms,
 ): Promise<void> {
-  if (ctx.role !== "system") throw new ForbiddenError();
+  requireSystem(ctx);
   const now = Date.now();
   const waiting = await forOrg(ctx).select(reviews, { where: eq(reviews.status, "waiting") });
   for (const row of waiting) {
@@ -114,8 +114,6 @@ export async function checkWaitingReviews(
     if (cutoff !== undefined) await adapters[kind].purge?.(ctx, cutoff);
   }
 }
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 // When a review of `kind` made before now expires, or undefined when the kind never does.
 function expiryCutoff(kind: ReviewKind, now: number): Date | undefined {

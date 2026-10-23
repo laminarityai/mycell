@@ -1,13 +1,14 @@
-// The models feature's public types: what a model call takes and returns, and the error it
-// throws.
-import type { LanguageModel } from "ai";
-import type { z } from "zod";
+// The models feature's public types: what a model call takes and returns, the error it throws,
+// and the parts a metered chat turn stores.
+import type { LanguageModel, UIMessage } from "ai";
+import { z } from "zod";
 import type { CreditPurpose } from "@/features/credits/types";
 import type { ModelRole } from "@/features/spec/types";
+import type { PromptText } from "@/lib/prompts";
 
 /**
- * What a model call is for; recorded on its ledger entry. `purpose` tags usage a budget of its
- * own caps (memory's learning).
+ * What a model call is for; recorded on its ledger entry. Every call names one: a run's
+ * workflow and run, Try it's `dryRun`, or a `purpose` (memory's learning, a person's summary, or the builder chat).
  */
 export type CallAttribution = {
   workflowId?: string;
@@ -29,10 +30,13 @@ export type MeteredStream = {
   finish(outcome: "succeeded" | "failed"): Promise<void>;
 };
 
-/** A text call. */
+/**
+ * A text call. Its `system` and `prompt` are rendered from a prompt file (`@/lib/prompts`), with
+ * anything not written for the model, such as a message, filled in as a variable.
+ */
 export type TextRequest = CallAttribution & {
-  system?: string;
-  prompt: string;
+  system?: PromptText;
+  prompt: PromptText;
   maxOutputTokens?: number;
 };
 
@@ -60,7 +64,8 @@ export type Classification = {
 
 /** A classify request: which label, of 2 to 10, fits `state` best. */
 export type ClassifyRequest = CallAttribution & {
-  question: string;
+  /** Rendered from a prompt file, like a text call's prompt; a spec's question as a variable. */
+  question: PromptText;
   labels: string[];
   /** What to classify, such as the message's sender, subject and text, held in memory only. */
   state: string;
@@ -101,6 +106,29 @@ export class ModelCallError extends Error {
     this.code = code;
     this.role = role;
     this.modelId = modelId;
+    this.status = status;
+  }
+}
+
+/**
+ * How looking up a failed call's billed cost ended (`correctFailedCallCost`): `corrected` when
+ * the gateway knew it and the ledger now records it; `not_billed_yet` when the gateway can't say
+ * yet, so the job looks again later; `given_up` a day after the call; `nothing_to_correct` when
+ * the entry is already corrected, or is no failed call recorded at 0 under a generation ID.
+ */
+export type FailedCallCostOutcome =
+  "corrected" | "not_billed_yet" | "given_up" | "nothing_to_correct";
+
+/**
+ * The AI Gateway refused a generation lookup for a reason looking again won't fix (a bad key, a
+ * malformed request). Built from the status only.
+ */
+export class GenerationLookupError extends Error {
+  readonly status: number;
+
+  constructor(status: number) {
+    super(`The AI Gateway refused the generation lookup (${String(status)}).`);
+    this.name = "GenerationLookupError";
     this.status = status;
   }
 }
@@ -157,3 +185,37 @@ export class InjectionScreenError extends Error {
     this.status = status;
   }
 }
+
+/** Why a chat turn shows a notice instead of (or after) a reply. */
+export const noticeKindSchema = z.enum(["out_of_credits", "failed"]);
+export type NoticeKind = z.infer<typeof noticeKindSchema>;
+
+export type Notice = { kind: NoticeKind; text: string };
+
+/**
+ * The parts every chat's stored messages share (`streamChatTurn`): text, one tool call with its
+ * result, or a notice. A tool's result is stored as the tool chooses (its `stored`), never as
+ * source content (invariant 8). A chat adds part kinds of its own, each with its own `type`, in
+ * a discriminated union over these and them.
+ */
+export const chatPartSchemas = [
+  z.object({ type: z.literal("text"), text: z.string() }),
+  z.object({
+    type: z.literal("tool"),
+    toolCallId: z.string(),
+    toolName: z.string(),
+    input: z.unknown(),
+    /** What the tool returned, or the error the model was told about. */
+    output: z.unknown(),
+    isError: z.boolean(),
+  }),
+  z.object({ type: z.literal("notice"), kind: noticeKindSchema, text: z.string() }),
+] as const;
+export type ChatPart = z.infer<(typeof chatPartSchemas)[number]>;
+
+/** A stored chat message as its history is read back: the shared parts and the chat's own. */
+export type ChatMessage<P> = { id: string; role: "user" | "assistant"; parts: P[] };
+
+/** A chat page's messages as the shared turn streams them: the AI SDK's, with notices. */
+export type ChatUIMessage = UIMessage<never, { notice: Notice }>;
+export type ChatUIPart = ChatUIMessage["parts"][number];

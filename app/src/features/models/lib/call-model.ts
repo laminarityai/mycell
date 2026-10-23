@@ -9,7 +9,7 @@ import {
   Output,
 } from "ai";
 import { env } from "@/env";
-import { checkCredits, recordUsage } from "@/features/credits/server";
+import { checkCredits } from "@/features/credits/server";
 import type { ModelRole } from "@/features/spec/types";
 import type { Ctx } from "@/lib/ctx";
 import {
@@ -19,6 +19,7 @@ import {
   type ObjectRequest,
   type TextRequest,
 } from "../types";
+import { recordCallUsage } from "./failed-call-costs";
 import { meteredGateway, type MeteredGateway } from "./gateway";
 import { resolveModel } from "./model-roles";
 
@@ -67,16 +68,21 @@ export async function callModel<T>(
 
 /**
  * Runs one gateway call for the role, between the credit check and the usage entry. `call` may
- * throw a ModelCallError of its own when an answer arrived but can't be used.
+ * throw a ModelCallError of its own when an answer arrived but can't be used. A caller that
+ * already resolved the role's model passes it as `resolved`.
  */
 export async function meteredCall<R>(
   ctx: Ctx,
   role: ModelRole,
   attribution: CallAttribution,
   call: (gateway: MeteredGateway, modelId: string) => Promise<R>,
+  resolved?: string,
 ): Promise<ModelResult<R>> {
-  const modelId = await resolveModel(ctx, role);
-  await checkCredits(ctx, CREDIT_ESTIMATES[role]);
+  // Both come before anything is sent, and neither waits on the other.
+  const [modelId] = await Promise.all([
+    resolved ?? resolveModel(ctx, role),
+    checkCredits(ctx, CREDIT_ESTIMATES[role]),
+  ]);
 
   const gateway = meteredGateway();
   const usage = {
@@ -92,11 +98,12 @@ export async function meteredCall<R>(
     output = await call(gateway, modelId);
   } catch (error) {
     const { costUsd, generationId } = gateway.metering();
-    await recordUsage(ctx, { ...usage, costUsd, generationId, outcome: "failed" });
+    // Queues the lookup of what the gateway billed, when it reported no cost.
+    await recordCallUsage(ctx, { ...usage, costUsd, generationId, outcome: "failed" });
     throw toModelCallError(error, role, modelId);
   }
   const { costUsd, generationId } = gateway.metering();
-  await recordUsage(ctx, { ...usage, costUsd, generationId, outcome: "succeeded" });
+  await recordCallUsage(ctx, { ...usage, costUsd, generationId, outcome: "succeeded" });
   return { output, modelId, costUsd };
 }
 

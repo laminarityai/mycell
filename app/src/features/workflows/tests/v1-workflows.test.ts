@@ -7,6 +7,7 @@ import type { Spec } from "@/features/spec/types";
 import { upgradeSpec } from "@/features/spec/upgrade";
 import { specV1Schema, type SpecV1 } from "@/features/spec/v1";
 import { validateSpec } from "@/features/spec/validate";
+import { InvariantError } from "@/lib/errors";
 import { connectGmail } from "@/testing/connect-helpers";
 import { getWorkflow, getWorkflowVersion, publishWorkflow, saveWorkflow } from "../server";
 import { draftSpec, labelSpec, sheetSpec } from "./specs";
@@ -113,5 +114,19 @@ describe("a workflow saved before branches had paths", () => {
     const latest = (await getWorkflow(admin, workflowId)).versions.at(0);
     const { spec } = await getWorkflowVersion(admin, latest?.id ?? "");
     expect(stepIds(spec)).toEqual(["classify", "gate", "reply", "reply-approval"]);
+  });
+});
+
+describe("a stored spec in neither version's shape", () => {
+  it("fails as it's read, with InvariantError", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const { workflowId } = await seedV1Workflow({
+      orgId: orgA.id,
+      createdBy: orgA.admin.id,
+      // Saving never let a spec with no steps through.
+      workingSpec: { ...v1(draftSpec()), steps: [] },
+    });
+
+    await expect(getWorkflow(orgA.admin.ctx, workflowId)).rejects.toBeInstanceOf(InvariantError);
   });
 });

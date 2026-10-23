@@ -8,6 +8,7 @@ import type { Ctx } from "@/lib/ctx";
 import { ModelCallError, type Classification, type ClassifyRequest } from "../types";
 import { callModel, meteredCall } from "./call-model";
 import { resolveModel } from "./model-roles";
+import { classifyPrompts } from "./prompts";
 
 // Gateway decision models: Jev, and Laya, which an org may try through its role table.
 const DECISION_MODEL_PREFIXES = ["typesafe-ai/jev", "convaiinnovations/laya"];
@@ -18,7 +19,7 @@ export async function classify(ctx: Ctx, request: ClassifyRequest): Promise<Clas
   const modelId = await resolveModel(ctx, "classify");
   if (DECISION_MODEL_PREFIXES.some((prefix) => modelId.startsWith(prefix))) {
     try {
-      return await decide(ctx, request);
+      return await decide(ctx, request, modelId);
     } catch (error) {
       if (!(error instanceof ModelCallError)) throw error;
     }
@@ -26,7 +27,11 @@ export async function classify(ctx: Ctx, request: ClassifyRequest): Promise<Clas
   return fallback(ctx, request);
 }
 
-async function decide(ctx: Ctx, request: ClassifyRequest): Promise<Classification> {
+async function decide(
+  ctx: Ctx,
+  request: ClassifyRequest,
+  resolved: string,
+): Promise<Classification> {
   const { output, modelId, costUsd } = await meteredCall(
     ctx,
     "classify",
@@ -52,6 +57,8 @@ async function decide(ctx: Ctx, request: ClassifyRequest): Promise<Classificatio
       if (p === undefined) throw new ModelCallError("no_probabilities", "classify", modelId);
       return { label: answer.choice, p };
     },
+    // Already resolved to choose Jev: resolved again, it could name another model.
+    resolved,
   );
   return { ...output, modelId, costUsd, fallback: false };
 }
@@ -59,12 +66,15 @@ async function decide(ctx: Ctx, request: ClassifyRequest): Promise<Classificatio
 async function fallback(ctx: Ctx, request: ClassifyRequest): Promise<Classification> {
   const schema = z.object({
     label: z.enum(request.labels as [string, ...string[]]),
-    p: z.number().min(0).max(1).describe("Your confidence that the label is right, 0 to 1."),
+    p: z.number().min(0).max(1).describe(classifyPrompts.confidence()),
   });
   const { output, modelId, costUsd } = await callModel(ctx, "fast", {
-    system:
-      "Classify the input. Answer with the one label that fits best, and your confidence in it.",
-    prompt: `${request.question}\n\nLabels: ${request.labels.join(", ")}\n\nInput:\n${request.state}`,
+    system: classifyPrompts.system(),
+    prompt: classifyPrompts.prompt({
+      question: request.question,
+      labels: request.labels.join(", "),
+      input: request.state,
+    }),
     schema,
     workflowId: request.workflowId,
     runId: request.runId,

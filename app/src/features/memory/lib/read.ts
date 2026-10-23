@@ -8,7 +8,7 @@ import { NotFoundError } from "@/lib/errors";
 import type { MemoryObject, ObjectLookup } from "../types";
 import { facts, memoryObjects, objectKeys } from "./schema";
 import { describeFacts, describeHistory, overTime, seenFacts } from "./visible-facts";
-import { viewerOf } from "./visibility";
+import { readingOf } from "./visibility";
 
 export async function readObject(ctx: Ctx, lookup: ObjectLookup): Promise<MemoryObject> {
   const db = forOrg(ctx);
@@ -19,8 +19,8 @@ export async function readObject(ctx: Ctx, lookup: ObjectLookup): Promise<Memory
     where: eq(facts.subjectId, object.id),
     orderBy: [asc(facts.recordedAt), asc(facts.id)],
   });
-  const viewer = await viewerOf(ctx);
-  const { current, history } = await overTime(ctx, viewer, await seenFacts(ctx, viewer, about));
+  const reading = await readingOf(ctx);
+  const { current, history } = await overTime(ctx, reading, await seenFacts(ctx, reading, about));
   if (current.length === 0) throw new NotFoundError("object");
 
   const keys = await db.select(objectKeys, {
@@ -32,8 +32,8 @@ export async function readObject(ctx: Ctx, lookup: ObjectLookup): Promise<Memory
     kind: object.kind,
     name: object.name,
     keys: keys.map(({ kind, value }) => ({ kind, value })),
-    facts: await describeFacts(ctx, current),
-    history: await describeHistory(ctx, history),
+    facts: await describeFacts(ctx, reading, current),
+    history: await describeHistory(ctx, reading, history),
   };
 }
 

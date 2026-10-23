@@ -3,8 +3,9 @@
 // risk level the fixed rule set, and capability requests.
 import { z } from "zod";
 import { registeredAppIdSchema, type RegisteredAppId } from "@/features/connections/types";
-import { httpMethodSchema, type RiskLevel } from "@/features/policy/types";
+import { httpMethodSchema, riskLevelSchema, type RiskLevel } from "@/features/policy/types";
 import type { ApiField, ApiOperation } from "./lib/api-index-types";
+import { capabilityRequestPrompts } from "./lib/prompts";
 
 /** `microsoft.read-message`: the app's word, a dot, then what it does. Unique in the org. */
 export const customActionNameSchema = z
@@ -63,25 +64,27 @@ const graphqlCall = z.strictObject({
   variables: mapping,
 });
 
+/** A custom action's description without a level. */
+const describedAction = z.strictObject({
+  name: customActionNameSchema,
+  app: registeredAppIdSchema,
+  /** What it does, in a sentence an admin and the builder chat read. */
+  description: z.string().min(1),
+  call: z.union([restCall, graphqlCall]),
+  inputs: z.record(inputName, inputSchema).default({}),
+  /** A read's result fields; a write's never reach the run, since it sends only once approved. */
+  outputs: z.record(inputName, outputSchema).default({}),
+  /** For a write: the text inputs a reviewer may edit before it's sent. */
+  editable: z.array(inputName).default([]),
+});
+
 /**
  * A custom action as the builder chat describes it: one call to a registered app, its inputs and
  * its typed result fields. A `risk` it proposes is accepted and dropped: only the fixed rule
  * sets a level (invariant 4).
  */
-export const customActionDescriptionSchema = z
-  .strictObject({
-    name: customActionNameSchema,
-    app: registeredAppIdSchema,
-    /** What it does, in a sentence an admin and the builder chat read. */
-    description: z.string().min(1),
-    call: z.union([restCall, graphqlCall]),
-    inputs: z.record(inputName, inputSchema).default({}),
-    /** A read's result fields; a write's never reach the run, since it sends only once approved. */
-    outputs: z.record(inputName, outputSchema).default({}),
-    /** For a write: the text inputs a reviewer may edit before it's sent. */
-    editable: z.array(inputName).default([]),
-    risk: z.unknown().optional(),
-  })
+export const customActionDescriptionSchema = describedAction
+  .extend({ risk: z.unknown().optional() })
   .transform(
     (description) =>
       Object.fromEntries(Object.entries(description).filter(([key]) => key !== "risk")) as Omit<
@@ -96,7 +99,8 @@ export type CustomActionDescription = z.output<typeof customActionDescriptionSch
  * A custom action whose description passed every check, with the level the fixed rule set: what
  * a proposal carries, what's stored once accepted, and what the browser gets, as plain data.
  */
-export type CustomActionRecord = CustomActionDescription & { risk: RiskLevel };
+export const customActionRecordSchema = describedAction.extend({ risk: riskLevelSchema });
+export type CustomActionRecord = z.output<typeof customActionRecordSchema>;
 
 /**
  * A custom action in plain words, as a proposal card and the custom actions page show it: its
@@ -124,45 +128,33 @@ export type StoredCustomAction = CustomActionRecord & {
 export const capabilityRequestStatusSchema = z.enum(["open", "building", "shipped", "declined"]);
 export type CapabilityRequestStatus = z.infer<typeof capabilityRequestStatusSchema>;
 
-const fieldSchema = z.object({
+/** One input or output of what a capability request asks for. */
+export const capabilityRequestFieldSchema = z.object({
   name: z.string().trim().min(1).max(100),
   description: z.string().trim().min(1).max(500),
 });
-/** One input or output of what a capability request asks for. */
-export type CapabilityRequestField = z.infer<typeof fieldSchema>;
+export type CapabilityRequestField = z.infer<typeof capabilityRequestFieldSchema>;
 
 /**
  * What the builder chat files when one call can't do what the admin described (ADR-0018): the
  * builder tool's input, validated at that boundary.
  */
 export const capabilityRequestInputSchema = z.object({
-  app: z
-    .string()
-    .trim()
-    .min(1)
-    .max(100)
-    .describe("A registered app's ID, or the name of an app that isn't registered."),
-  operation: z
-    .string()
-    .trim()
-    .min(1)
-    .max(200)
-    .describe("What Mycel would need to do there, in a few plain words: 'Merge two contacts'."),
-  inputs: z.array(fieldSchema).max(20).describe("What it would take, each with a description."),
-  outputs: z.array(fieldSchema).max(20).describe("What it would give back to later steps."),
-  reason: z
-    .string()
-    .trim()
-    .min(1)
-    .max(2000)
-    .describe("Why a catalog action or one call can't do it, in plain words."),
+  app: z.string().trim().min(1).max(100).describe(capabilityRequestPrompts.app()),
+  operation: z.string().trim().min(1).max(200).describe(capabilityRequestPrompts.operation()),
+  inputs: z.array(capabilityRequestFieldSchema).max(20).describe(capabilityRequestPrompts.inputs()),
+  outputs: z
+    .array(capabilityRequestFieldSchema)
+    .max(20)
+    .describe(capabilityRequestPrompts.outputs()),
+  reason: z.string().trim().min(1).max(2000).describe(capabilityRequestPrompts.reason()),
   codeDraft: z
     .string()
     .trim()
     .min(1)
     .max(20_000)
     .optional()
-    .describe("The call sequence or code it would need, as a starting point for our team."),
+    .describe(capabilityRequestPrompts.codeDraft()),
 });
 export type CapabilityRequestInput = z.infer<typeof capabilityRequestInputSchema>;
 

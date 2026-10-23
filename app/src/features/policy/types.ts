@@ -129,13 +129,14 @@ export type ActionSet = {
 };
 
 /** An approval step the policy engine added because the spec was missing it. */
-export type InsertedApproval = {
+export const insertedApprovalSchema = z.object({
   /** The new approval step's ID. */
-  stepId: string;
+  stepId: z.string(),
   /** The step whose external-send action needed it; the approval comes right after it. */
-  after: string;
-  action: string;
-};
+  after: z.string(),
+  action: z.string(),
+});
+export type InsertedApproval = z.infer<typeof insertedApprovalSchema>;
 
 export type PolicyResult =
   | { ok: true; spec: Spec; maxRisk: RiskLevel; inserted: InsertedApproval[] }
@@ -150,11 +151,12 @@ export type Requirements = {
 
 /**
  * What a new version needs that the previous one didn't: a higher max risk level, apps it
- * didn't use (as admins name them), scopes by short name (`gmail.modify`). Each is left out
- * when nothing was gained there.
+ * didn't use (as admins name them, an action's `app`), scopes by short name (`gmail.modify`).
+ * Each is left out when nothing was gained there.
  */
-export type RequirementsGained = {
-  maxRiskRaised?: { from: RiskLevel; to: RiskLevel };
-  newApps?: Action["app"][];
-  newScopes?: string[];
-};
+export const requirementsGainedSchema = z.object({
+  maxRiskRaised: z.object({ from: riskLevelSchema, to: riskLevelSchema }).optional(),
+  newApps: z.array(z.string()).optional(),
+  newScopes: z.array(z.string()).optional(),
+});
+export type RequirementsGained = z.infer<typeof requirementsGainedSchema>;

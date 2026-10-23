@@ -101,8 +101,8 @@ function Fields({ title, fields }: { title: string; fields: CapabilityRequestFie
     <div>
       <p className="font-medium">{title}</p>
       <ul className="list-inside list-disc">
-        {fields.map((field, index) => (
-          <li key={index}>
+        {fields.map((field) => (
+          <li key={`${field.name}: ${field.description}`}>
             <span className="font-mono text-xs">{field.name}</span>: {field.description}
           </li>
         ))}

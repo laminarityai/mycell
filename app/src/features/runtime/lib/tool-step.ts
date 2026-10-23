@@ -4,7 +4,8 @@
 // lookup's record keeps how many facts it found, never the facts, which are its member's
 // (ADR-0001).
 import type { Step } from "@/features/spec/types";
-import type { Json, ResultField } from "../types";
+import type { ResultField } from "../types";
+import type { Json } from "@/lib/inngest";
 import { resolveInput } from "./references";
 import { runAction } from "./run-action";
 import type { StepContext, StepExecution } from "./step-context";

@@ -5,15 +5,13 @@ import type { ConnectionSummary } from "@/features/connections/types";
 import { actionSetWith } from "@/features/custom-actions/description";
 import { listCustomActions } from "@/features/custom-actions/server";
 import type { CustomActionRecord } from "@/features/custom-actions/types";
-import { applyPolicy } from "@/features/policy/engine";
 import type { ActionSet } from "@/features/policy/types";
-import { eachStep } from "@/features/spec/tree";
 import type { Spec, SpecIssue } from "@/features/spec/types";
 import { issuesAsWritten } from "@/features/spec/upgrade";
-import { validateSpec } from "@/features/spec/validate";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { SpecInvalidError } from "@/lib/errors";
 import type { SpecCheck, ValidatedSpec } from "../types";
+import { checkedByPolicy, requiredActions } from "./policy-check";
 import { unconnectedApps } from "./requirements";
 import { scopeIssues } from "./scope-check";
 
@@ -52,37 +50,22 @@ export async function validateWorkflowSpec(
 }
 
 /**
- * The spec schema and the policy engine on `input`, without the org-setup checks: what a version
- * of it would hold and need, against the company's action set. Throws SpecInvalidError with
- * every issue.
- */
-export function checkedByPolicy(input: unknown, actions: ActionSet): ValidatedSpec {
-  const parsed = validateSpec(input);
-  if (!parsed.ok) throw new SpecInvalidError(parsed.issues);
-  // The spec past here is v2; issues about it point where the input wrote the field.
-  const policy = applyPolicy(parsed.spec, actions);
-  if (!policy.ok) throw new SpecInvalidError(issuesAsWritten(input, policy.issues));
-  return {
-    working: parsed.spec,
-    applied: policy.spec,
-    maxRisk: policy.maxRisk,
-    inserted: policy.inserted,
-    requiredActions: requiredActions(policy.spec),
-  };
-}
-
-/**
  * Validates `input` for the caller as saving would, returning every issue instead of throwing
  * them: for the builder's proposals and the editor's live validation. A proposal checks its spec
- * with the custom actions it brings, `newCustomActions`, as if they were stored.
+ * with the custom actions it brings, `newCustomActions`, as if they were stored. A caller that
+ * already read the org's custom actions (a builder turn) passes them as `stored`.
  */
 export async function checkWorkflowSpec(
   ctx: Ctx,
   input: unknown,
   newCustomActions: readonly CustomActionRecord[] = [],
+  stored?: readonly CustomActionRecord[],
 ): Promise<SpecCheck> {
   requireAdmin(ctx);
-  const actions = actionSetWith([...(await listCustomActions(ctx)), ...newCustomActions]);
+  const actions = actionSetWith([
+    ...(stored ?? (await listCustomActions(ctx))),
+    ...newCustomActions,
+  ]);
   try {
     return { ok: true, ...(await validateWorkflowSpec(ctx, input, actions)) };
   } catch (error) {
@@ -146,12 +129,4 @@ export function reachesGmail(connection: ConnectionSummary): boolean {
 export async function readSetup(ctx: Ctx): Promise<OrgSetup> {
   const listing = await listConnections(ctx);
   return { ownConnections: listing.connections, orgConnections: listing.orgConnections };
-}
-
-/** The actions the spec names, at any depth, each once, in the order a run reaches them. */
-export function requiredActions(spec: Spec): string[] {
-  const names = eachStep(spec).flatMap(({ step }) =>
-    step.type === "tool" ? [step.action] : step.type === "draft" ? [step.output] : [],
-  );
-  return [...new Set(names)];
 }

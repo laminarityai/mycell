@@ -13,7 +13,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, gte, inArray, isNull, lt, ne } from "drizzle-orm";
 import { forOrg, type OrgScopedDb } from "@/db/for-org";
-import type { ConnectionDetails } from "@/features/connections/types";
+import type { SourceClient } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
 import type { MemoryApp } from "../types";
 import { driveVersion } from "./drive";
@@ -34,7 +34,7 @@ import {
 /** How many objects and facts a stored item is linked to. */
 export type Stored = { objects: number; facts: number };
 
-type Source = { connection: ConnectionDetails; app: MemoryApp; item: SourceItem };
+type Source = { connection: SourceClient["connection"]; app: MemoryApp; item: SourceItem };
 
 /**
  * Whether the connection's copy of the item is learned already: for a Drive file, this version
@@ -101,7 +101,11 @@ export async function storeCopy(ctx: Ctx, source: Source): Promise<Stored | null
   });
   const factIds = [...new Set(links.map((link) => link.factId))];
   if (factIds.length === 0) return null;
-  const taught = await db.select(facts, { where: inArray(facts.id, factIds) });
+  // Only what's counted: a fact's embedding alone is 1536 numbers.
+  const taught = await db.select(facts, {
+    columns: ["subjectId", "objectId"],
+    where: inArray(facts.id, factIds),
+  });
   const companyWide = await companyWideOf(ctx);
   return db.transaction(async (tx) => {
     const recordId = await insertRecord(tx, source);

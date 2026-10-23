@@ -31,7 +31,9 @@ export function AdminConnections({ listing }: { listing: ConnectionsListing }) {
                 <TableHead>Connected by</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Last polled</TableHead>
-                <TableHead />
+                <TableHead>
+                  <span className="sr-only">Actions</span>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

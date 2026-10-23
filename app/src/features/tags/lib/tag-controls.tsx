@@ -3,8 +3,11 @@
 // React resets a form after its action, even a refused one, so each field starts from what a
 // refused form sent (`values`).
 import { useActionState, useState } from "react";
+import { FormError } from "@/components/form-error";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import type { ActionResult } from "@/lib/errors";
 import {
   assignTagAction,
@@ -14,9 +17,6 @@ import {
   unassignTagAction,
 } from "../actions";
 
-const fieldClass =
-  "h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
-
 type UserOption = { id: string; name: string };
 
 export function CreateTagForm() {
@@ -24,20 +24,20 @@ export function CreateTagForm() {
   return (
     <form action={create} className="flex flex-col gap-1">
       <div className="flex gap-2">
-        <input
+        <Input
           name="name"
           defaultValue={result.values?.name ?? ""}
           required
           maxLength={40}
           placeholder="support-team"
           aria-label="New tag name"
-          className={fieldClass}
+          className="w-48"
         />
         <Button type="submit" size="sm" disabled={creating}>
           Add tag
         </Button>
       </div>
-      <ErrorMessage result={result} />
+      <FormError message={result.error} />
     </form>
   );
 }
@@ -62,13 +62,13 @@ export function TagNameControls({ tagId, name }: { tagId: string; name: string }
         {editing ? (
           <form action={rename} className="flex gap-2">
             <input type="hidden" name="tagId" value={tagId} />
-            <input
+            <Input
               name="name"
               defaultValue={renameResult.values?.name ?? name}
               required
               maxLength={40}
               aria-label={`New name for ${name}`}
-              className={fieldClass}
+              className="w-48"
             />
             <Button type="submit" size="sm" disabled={renaming}>
               Save
@@ -129,8 +129,8 @@ export function TagNameControls({ tagId, name }: { tagId: string; name: string }
           </Button>
         )}
       </div>
-      <ErrorMessage result={renameResult} />
-      <ErrorMessage result={deleteResult} />
+      <FormError message={renameResult.error} />
+      <FormError message={deleteResult.error} />
     </div>
   );
 }
@@ -157,14 +157,16 @@ export function TagUsersControls({
             <input type="hidden" name="userId" value={user.id} />
             <Badge variant="secondary" className="gap-1 pr-1">
               {user.name}
-              <button
+              <Button
                 type="submit"
+                variant="ghost"
+                size="icon-xs"
                 disabled={unassigning}
                 aria-label={`Remove tag from ${user.name}`}
-                className="rounded px-1 text-muted-foreground hover:text-foreground"
+                className="text-muted-foreground"
               >
                 ×
-              </button>
+              </Button>
             </Badge>
           </form>
         ))}
@@ -172,33 +174,24 @@ export function TagUsersControls({
       {others.length === 0 ? null : (
         <form action={assign} className="flex gap-2">
           <input type="hidden" name="tagId" value={tagId} />
-          <select
+          <NativeSelect
             name="userId"
             defaultValue={assignResult.values?.userId}
             aria-label="User to tag"
-            className={fieldClass}
           >
             {others.map((user) => (
-              <option key={user.id} value={user.id}>
+              <NativeSelectOption key={user.id} value={user.id}>
                 {user.name}
-              </option>
+              </NativeSelectOption>
             ))}
-          </select>
+          </NativeSelect>
           <Button type="submit" variant="outline" size="sm" disabled={assigning}>
             Add
           </Button>
         </form>
       )}
-      <ErrorMessage result={assignResult} />
-      <ErrorMessage result={unassignResult} />
+      <FormError message={assignResult.error} />
+      <FormError message={unassignResult.error} />
     </div>
-  );
-}
-
-function ErrorMessage({ result }: { result: ActionResult }) {
-  return result.error === undefined ? null : (
-    <p role="alert" className="text-sm text-destructive">
-      {result.error}
-    </p>
   );
 }

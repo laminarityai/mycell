@@ -40,7 +40,7 @@ const roleBadges = {
 export function OrgUsersTable({ users, viewer }: { users: OrgUser[]; viewer: Ctx }) {
   const canManage = isAdmin(viewer);
   return (
-    <Table>
+    <Table aria-label="People">
       <TableHeader>
         <TableRow>
           <TableHead>Name</TableHead>

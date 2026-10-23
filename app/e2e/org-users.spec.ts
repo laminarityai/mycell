@@ -34,7 +34,13 @@ test("an admin sees the org's users and can promote, remove and re-add them", as
   await page.reload();
   await expect(member).toHaveCount(1);
   await expect(member.getByRole("button", { name: "Make admin" })).toBeHidden();
-  await expect(userRow(page, orgA.admin)).toBeVisible();
+  // The admin is now also named under Removed people, as who removed the member.
+  await expect(
+    page
+      .getByRole("table", { name: "People", exact: true })
+      .getByRole("row")
+      .filter({ hasText: orgA.admin.email }),
+  ).toBeVisible();
 
   await member.getByRole("button", { name: "Re-add" }).click();
   await expect(page.getByText(orgA.member.email)).toBeHidden();

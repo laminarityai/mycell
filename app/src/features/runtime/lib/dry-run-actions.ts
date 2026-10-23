@@ -51,6 +51,8 @@ export function dryRunActions(report: (effect: DryRunEffect) => void): ActionExe
         return { draftId: DRY_RUN_ID, threadId: target.threadId };
       },
     },
+    "google-docs.read-document": { status: "pending", ticket: "#71" },
+    "google-docs.suggest-edits": { status: "pending", ticket: "#71" },
     // A read, so it runs for real, in the view a run on the connection would have. Try it is
     // part of building, so its read is logged as the builder's.
     "memory.lookup": {

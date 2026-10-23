@@ -43,6 +43,8 @@ export const actionExecutors: ActionExecutors = {
   // Hands on the range's counts; a draft step that names it re-reads the values.
   "google-sheet.read-range": { status: "ready", run: readRange },
   "google-sheet.append-row": { status: "ready", run: appendRow },
+  "google-docs.read-document": { status: "pending", ticket: "#71" },
+  "google-docs.suggest-edits": { status: "pending", ticket: "#71" },
   // Reads as the run: in its member's view, or company-wide only (memory-lookup.ts).
   "memory.lookup": {
     status: "ready",

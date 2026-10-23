@@ -8,6 +8,7 @@ import { checkWords } from "@/features/policy/condition-fields";
 import type { ActionSet } from "@/features/policy/types";
 import type { BranchPath, DryRunResult, DryRunStep } from "@/features/runtime/types";
 import { describeCheck } from "@/features/spec/conditions";
+import { isReference } from "@/features/spec/input-values";
 import { findStep } from "@/features/spec/tree";
 import type { Spec } from "@/features/spec/types";
 import { joinPrompts, type PromptText } from "@/lib/prompts";
@@ -138,7 +139,7 @@ function specInput(spec: Spec, stepId: string, field: string): PromptText {
   if (typeof value === "string") {
     return tryItPrompts.literalInput({ field, value: JSON.stringify(value) });
   }
-  if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+  if (isReference(value)) {
     return tryItPrompts.referenceInput({ field, reference: value.from });
   }
   return tryItPrompts.unknownInput({ field });

@@ -72,6 +72,8 @@ describe("the catalog", () => {
       "google-mail.create-draft": "external_send",
       "google-sheet.read-range": "read",
       "google-sheet.append-row": "internal_reversible",
+      "google-docs.read-document": "read",
+      "google-docs.suggest-edits": "external_send",
       "memory.lookup": "read",
     });
   });

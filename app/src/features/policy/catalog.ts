@@ -1,11 +1,12 @@
 // The action catalog, as code (invariant 4): every catalog action's risk level is fixed here
-// by our team, and nothing a spec or a model says changes it. v1 has six Gmail and Sheets
+// by our team, and nothing a spec or a model says changes it. v1 has Gmail, Sheets and Docs
 // actions and one that reads memory; no action is `financial` or `destructive`. Code that looks
 // up the action a workflow names takes the company's action set (`action-set.ts`), which starts
 // from this catalog.
 import { z } from "zod";
 import { GOOGLE_HOSTS, googleScope as scope } from "@/lib/google";
 import { actionSetOf, scopesOf } from "./action-set";
+import { docsRequestSchema } from "./docs-requests";
 import type { ActionSet, CatalogAction } from "./types";
 
 const GMAIL_HOST = GOOGLE_HOSTS.gmail;
@@ -20,6 +21,14 @@ const SHEETS_READ = [
   scope("spreadsheets"),
 ];
 const SHEETS_WRITE = [scope("spreadsheets")];
+const DOCS_HOST = GOOGLE_HOSTS.docs;
+const DOCS_READ = [
+  scope("documents"),
+  scope("documents.readonly"),
+  scope("drive"),
+  scope("drive.readonly"),
+];
+const DOCS_WRITE = [scope("documents"), scope("drive")];
 
 const id = z.string().min(1);
 const cell = z.union([z.string(), z.number(), z.boolean(), z.null()]);
@@ -80,6 +89,7 @@ const actions = [
     app: "Gmail",
     description: "Write a reply to the triggering message as a draft in its thread.",
     pendingForm: "a Gmail draft",
+    channel: "gmail_drafts",
     risk: "external_send",
     integration: "google",
     host: GMAIL_HOST,
@@ -118,6 +128,38 @@ const actions = [
     scopes: SHEETS_WRITE,
     input: z.object({ spreadsheetId: id, range: sheetRange, values: z.array(cell).min(1) }),
     output: z.object({ updatedRange: z.string() }),
+  },
+  {
+    kind: "catalog",
+    name: "google-docs.read-document",
+    app: "Docs",
+    description: "Read one Google Doc: its title and its text, without any suggested edits.",
+    risk: "read",
+    integration: "google",
+    host: DOCS_HOST,
+    scopes: DOCS_READ,
+    input: z.object({ documentId: id }),
+    // Its title and text pass to later steps, never into run records (ADR-0021).
+    output: z.object({ documentId: id, title: z.string(), text: z.string() }),
+  },
+  {
+    kind: "catalog",
+    name: "google-docs.suggest-edits",
+    app: "Docs",
+    description:
+      "Suggest edits to a Google Doc, as a person in suggesting mode would: `requests` are " +
+      "Docs batchUpdate requests (such as insertText at endOfSegmentLocation, or " +
+      "replaceAllText), and nothing in the doc changes until a person approves them (accepting " +
+      "the suggestions) or declines them (rejecting them).",
+    pendingForm: "suggested edits in the doc, accepted or rejected from the review",
+    channel: "suggested_edits",
+    risk: "external_send",
+    integration: "google",
+    host: DOCS_HOST,
+    scopes: DOCS_WRITE,
+    input: z.object({ documentId: id, requests: z.array(docsRequestSchema).min(1).max(100) }),
+    // Pointers only: the suggested text stays in the doc.
+    output: z.object({ documentId: id, suggestionIds: z.array(id) }),
   },
   {
     kind: "catalog",

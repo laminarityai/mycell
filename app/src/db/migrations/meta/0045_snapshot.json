@@ -1,5 +1,5 @@
 {
-  "id": "72b2c97a-25a3-4dcb-b490-cd918332f5c4",
+  "id": "e18c5b2c-92ab-4079-84dd-2585031811dd",
   "prevId": "24822607-8f9a-455e-8b32-d9fe6e727d88",
   "version": "7",
   "dialect": "postgresql",
@@ -4475,12 +4475,6 @@
         },
         "document_id": {
           "name": "document_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "revision_id": {
-          "name": "revision_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true

@@ -2,9 +2,11 @@
 // edits wait in the Doc as suggestions and nothing in it changes until a person accepts them.
 // Mycel writes as the person, so the IDs Docs returns are all that tells its suggestions from
 // theirs. A batchUpdate isn't idempotent and leaves no marker, so before writing the step notes
-// the document's revision and the suggestions already in it (suggested_edit_writes); a retry
-// whose earlier answer was lost finds the suggestions that write created, the ones new since,
-// and doesn't suggest the edits again. IDs only: the text stays in the Doc (invariant 8).
+// the suggestions already in the document (suggested_edit_writes); a retry whose earlier answer
+// was lost finds the suggestions that write created, the ones new since, and doesn't suggest the
+// edits again; one whose earlier write never landed finds none, and writes. A suggestion the
+// person makes in the document in between would be taken for the step's: a known limit. IDs
+// only: the text stays in the Doc (invariant 8).
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
@@ -41,26 +43,17 @@ export async function suggestEdits(
     return { documentId, suggestionIds: earlier.createdSuggestionIds };
   }
   const document = await docs(liveDocument(ctx, connectionId, documentId));
-  const revisionId = document.revisionId ?? "";
   const now = [...suggestionIdsIn(document)];
   if (earlier !== undefined && earlier.documentId === documentId) {
-    // The document changed since the earlier try noted it: its write may have landed, and the
-    // suggestions new since then are what it made.
+    // Suggestions new since the earlier try noted the document are what its write made.
     const created = now.filter((id) => !earlier.suggestionIdsBefore.includes(id));
-    if (earlier.revisionId !== revisionId && created.length > 0) {
+    if (created.length > 0) {
       await recordCreated(ctx, earlier.id, created);
       return { documentId, suggestionIds: created };
     }
   }
-  const write = await noteWrite(
-    ctx,
-    earlier,
-    { connectionId, runId, stepId, documentId },
-    {
-      revisionId,
-      suggestionIdsBefore: now,
-    },
-  );
+  const step = { connectionId, runId, stepId, documentId };
+  const write = await noteWrite(ctx, earlier, step, now);
   const answer = await docs(
     batchUpdate(ctx, connectionId, documentId, {
       requests: input.requests,
@@ -85,16 +78,16 @@ async function writeOf(ctx: Ctx, runId: string, stepId: string): Promise<Write |
   return (await forOrg(ctx).select(suggestedEditWrites, { where: ofStep })).at(0);
 }
 
-// Notes where the document stood before the write: a new row, or the earlier try's, updated.
+// Notes the suggestions in the document before the write: a new row, or the earlier try's.
 async function noteWrite(
   ctx: Ctx,
   earlier: Write | undefined,
   step: { connectionId: string; runId: string; stepId: string; documentId: string },
-  before: { revisionId: string; suggestionIdsBefore: string[] },
+  suggestionIdsBefore: string[],
 ): Promise<string> {
   const db = forOrg(ctx);
   if (earlier !== undefined) {
-    const update = { documentId: step.documentId, ...before, createdSuggestionIds: null };
+    const update = { documentId: step.documentId, suggestionIdsBefore, createdSuggestionIds: null };
     await db.update(suggestedEditWrites, update, eq(suggestedEditWrites.id, earlier.id));
     return earlier.id;
   }
@@ -103,7 +96,7 @@ async function noteWrite(
   if (run === undefined) throw new NotFoundError("run");
   const id = randomUUID();
   const provenance = { sourceRef: run.sourceRef, ownerScope: run.ownerScope };
-  await db.insert(suggestedEditWrites, { id, ...step, ...provenance, ...before });
+  await db.insert(suggestedEditWrites, { id, ...step, ...provenance, suggestionIdsBefore });
   return id;
 }
 

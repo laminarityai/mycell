@@ -7,7 +7,6 @@ CREATE TABLE "suggested_edit_writes" (
 	"source_ref" text NOT NULL,
 	"owner_scope" text NOT NULL,
 	"document_id" text NOT NULL,
-	"revision_id" text NOT NULL,
 	"suggestion_ids_before" text[] NOT NULL,
 	"created_suggestion_ids" text[],
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,

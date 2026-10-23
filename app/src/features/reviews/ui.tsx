@@ -60,7 +60,7 @@ const SUGGESTED_EDITS_ENDINGS: Partial<Record<ReviewStatus, string>> = {
   approved: "Its suggestions were accepted",
   declined: "Its suggestions were rejected",
   done_in_app: "Its suggestions were accepted or rejected in Docs",
-  gone: "Its doc is no longer there",
+  gone: "Its suggestions are no longer in the doc",
 };
 
 /**

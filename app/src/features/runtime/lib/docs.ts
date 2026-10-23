@@ -20,7 +20,6 @@ type ViewMode = "SUGGESTIONS_INLINE" | "PREVIEW_WITHOUT_SUGGESTIONS";
 const documentSchema = z.object({
   documentId: z.string(),
   title: z.string().default(""),
-  revisionId: z.string().optional(),
   tabs: z.array(z.unknown()).default([]),
 });
 export type DocsDocument = z.infer<typeof documentSchema>;

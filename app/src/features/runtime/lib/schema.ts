@@ -222,8 +222,8 @@ export const heldSends = pgTable(
 );
 
 /**
- * Where a suggest-edits step stood before it wrote (ADR-0017): the document's revision and the
- * suggestion IDs in it then, and the IDs its write created, once known. Docs can't tell Mycel's
+ * What a suggest-edits step found before it wrote (ADR-0017): the suggestion IDs in the document
+ * then, and the IDs its write created, once known. Docs can't tell Mycel's
  * suggestions from the person's, and a batchUpdate isn't idempotent, so a step retried after its
  * answer was lost finds what it created here, rather than suggesting the edits twice. IDs only,
  * never the document's text or the suggested text (invariant 8).
@@ -241,7 +241,6 @@ export const suggestedEditWrites = pgTable(
     sourceRef: text("source_ref").notNull(),
     ownerScope: text("owner_scope", { enum: ["member", "org"] }).notNull(),
     documentId: text("document_id").notNull(),
-    revisionId: text("revision_id").notNull(),
     suggestionIdsBefore: text("suggestion_ids_before").array().notNull(),
     // Null until the write's answer arrived, or a retry found what it created.
     createdSuggestionIds: text("created_suggestion_ids").array(),

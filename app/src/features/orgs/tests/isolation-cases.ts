@@ -47,6 +47,15 @@ export const isolationCases = defineIsolationCases(server, {
     );
   },
 
+  findUsersByEmail: async ({ orgA, orgB }) => {
+    const found = await server.findUsersByEmail(orgA.member.ctx, [
+      orgB.admin.email,
+      orgA.admin.email.toUpperCase(),
+    ]);
+
+    expect(found.map((user) => user.id)).toEqual([orgA.admin.id]);
+  },
+
   userCtx: async ({ orgA, orgB }) => {
     expect(await server.userCtx(orgA.member.ctx, orgB.admin.id)).toBeNull();
     expect(await server.userCtx(orgA.member.ctx, orgA.admin.id)).toEqual(orgA.admin.ctx);

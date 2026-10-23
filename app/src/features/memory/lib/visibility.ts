@@ -14,10 +14,11 @@
 // system ctx (an org-credential run) is no one, so it sees only what's company-wide.
 //
 // The rule is SQL, so a search filters by it before it ranks or limits anything: facts the
-// viewer can't see never crowd out the ones they can.
+// viewer can't see never crowd out the ones they can. A read resolves its Reading (who reads, and
+// what's company-wide) once, with reads that don't grow with the org, and passes it down.
 import { and, inArray, sql, type SQL } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
-import { getWorkspaceDomain, listUsers } from "@/features/orgs/server";
+import { findUser, findUsersByEmail, getWorkspaceDomain } from "@/features/orgs/server";
 import { type Ctx, isSystem } from "@/lib/ctx";
 import { markedAddresses } from "./company-wide-lists";
 import { facts, memoryObjects, sourceRecords } from "./schema";
@@ -27,8 +28,8 @@ export type Viewer = { userId: string | null; addresses: string[] };
 
 export async function viewerOf(ctx: Ctx): Promise<Viewer> {
   if (isSystem(ctx)) return { userId: null, addresses: [] };
-  const me = (await listUsers(ctx)).find((user) => user.id === ctx.userId);
-  return { userId: ctx.userId, addresses: me === undefined ? [] : [me.email.toLowerCase()] };
+  const me = await findUser(ctx, ctx.userId);
+  return { userId: ctx.userId, addresses: me === null ? [] : [me.email.toLowerCase()] };
 }
 
 /** What makes a source record company-wide in an org: its marked lists and Workspace domain. */
@@ -39,34 +40,33 @@ export type CompanyWide = { lists: string[]; domain: string };
  * person's own counts as theirs, not as a list's.
  */
 export async function companyWideOf(ctx: Ctx): Promise<CompanyWide> {
-  const marked = await markedAddresses(ctx);
-  const people = new Set((await listUsers(ctx)).map((user) => user.email.toLowerCase()));
+  const [marked, domain] = await Promise.all([markedAddresses(ctx), getWorkspaceDomain(ctx)]);
+  const people = new Set(
+    (await findUsersByEmail(ctx, marked)).map((user) => user.email.toLowerCase()),
+  );
   return {
     lists: marked.filter((address) => !people.has(address)),
-    domain: (await getWorkspaceDomain(ctx)).toLowerCase(),
+    domain: domain.toLowerCase(),
   };
 }
 
 /** The viewer and the org's company-wide terms: everything the rule needs. */
 export type Reading = { orgId: string; viewer: Viewer; companyWide: CompanyWide };
 
-export async function readingOf(ctx: Ctx, viewer?: Viewer): Promise<Reading> {
-  return {
-    orgId: ctx.orgId,
-    viewer: viewer ?? (await viewerOf(ctx)),
-    companyWide: await companyWideOf(ctx),
-  };
+export async function readingOf(ctx: Ctx): Promise<Reading> {
+  const [viewer, companyWide] = await Promise.all([viewerOf(ctx), companyWideOf(ctx)]);
+  return { orgId: ctx.orgId, viewer, companyWide };
 }
 
-/** Which of the source records `ids` the viewer may see. */
+/** Which of the source records `ids` the reader may see. */
 export async function visibleSourceRecords(
   ctx: Ctx,
-  viewer: Viewer,
+  reading: Reading,
   ids: string[],
 ): Promise<Set<string>> {
   if (ids.length === 0) return new Set();
-  const reading = await readingOf(ctx, viewer);
   const records = await forOrg(ctx).select(sourceRecords, {
+    columns: ["id"],
     where: and(inArray(sourceRecords.id, ids), recordVisible(reading, sql`${sourceRecords.id}`)),
   });
   return new Set(records.map((record) => record.id));

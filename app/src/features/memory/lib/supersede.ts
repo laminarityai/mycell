@@ -21,7 +21,18 @@ import type { OrgScopedDb } from "@/db/for-org";
 import { factSources, facts, sourceRecords } from "./schema";
 import { type CompanyWide, recordCompanyWide } from "./visibility";
 
-type FactRow = typeof facts.$inferSelect;
+// What placing a fact in its timeline reads of it: never its embedding.
+const TIMELINE_COLUMNS = [
+  "id",
+  "origin",
+  "validFrom",
+  "validUntil",
+  "recordedAt",
+  "supersededAt",
+  "supersededById",
+  "conflictsWithId",
+] as const;
+type FactRow = Pick<typeof facts.$inferSelect, (typeof TIMELINE_COLUMNS)[number]>;
 
 /**
  * Places the facts in their subjects' timelines for their predicates, relinking each timeline
@@ -49,7 +60,7 @@ export async function placeInTimelines(
     );
   }
   for (const where of timelines.values()) {
-    const timeline = await tx.select(facts, { where });
+    const timeline = await tx.select(facts, { columns: TIMELINE_COLUMNS, where });
     await relink(tx, await standingOf(tx, orgId, companyWide, timeline), added);
   }
 }
@@ -91,25 +102,44 @@ async function relink(tx: OrgScopedDb, timeline: Standing[], added: Set<string>)
   });
 
   const now = new Date();
-  for (const [i, { row }] of ordered.entries()) {
+  const changed = ordered.flatMap(({ row }, i) => {
     const next = replacements[i];
-    const linked = {
+    const linked: Linked = {
       supersededById: next?.id ?? null,
       supersededAt: next === undefined ? null : (row.supersededAt ?? now),
       validUntil: next?.validFrom ?? null,
       conflictsWithId: conflicts.get(row.id) ?? null,
     };
-    if (
+    const same =
       row.supersededById === linked.supersededById &&
       row.supersededAt?.getTime() === linked.supersededAt?.getTime() &&
       row.validUntil?.getTime() === linked.validUntil?.getTime() &&
-      row.conflictsWithId === linked.conflictsWithId
-    ) {
-      continue;
-    }
-    await tx.update(facts, linked, eq(facts.id, row.id));
-  }
+      row.conflictsWithId === linked.conflictsWithId;
+    return same ? [] : [{ id: row.id, linked }];
+  });
+  if (changed.length === 0) return;
+  // One update for every fact whose links changed, each set to its own values.
+  const each = (column: keyof Linked, type: "text" | "timestamptz") =>
+    sql`(case ${facts.id} ${sql.join(
+      changed.map(({ id, linked }) => sql`when ${id} then ${linked[column]}`),
+      sql` `,
+    )} end)::${sql.raw(type)}`;
+  await tx.update(
+    facts,
+    {
+      supersededById: each("supersededById", "text"),
+      supersededAt: each("supersededAt", "timestamptz"),
+      validUntil: each("validUntil", "timestamptz"),
+      conflictsWithId: each("conflictsWithId", "text"),
+    },
+    inArray(
+      facts.id,
+      changed.map(({ id }) => id),
+    ),
+  );
 }
+
+type Linked = Pick<FactRow, "supersededById" | "supersededAt" | "validUntil" | "conflictsWithId">;
 
 // Who stated each fact, and when the first item stating it happened.
 async function standingOf(
@@ -119,6 +149,7 @@ async function standingOf(
   rows: FactRow[],
 ): Promise<Standing[]> {
   const links = await tx.select(factSources, {
+    columns: ["factId", "sourceRecordId"],
     where: inArray(
       factSources.factId,
       rows.map((row) => row.id),
@@ -128,11 +159,15 @@ async function standingOf(
   const records =
     recordIds.length === 0
       ? []
-      : await tx.select(sourceRecords, { where: inArray(sourceRecords.id, recordIds) });
+      : await tx.select(sourceRecords, {
+          columns: ["id", "occurredAt", "fromInside"],
+          where: inArray(sourceRecords.id, recordIds),
+        });
   const wide =
     recordIds.length === 0
       ? []
       : await tx.select(sourceRecords, {
+          columns: ["id"],
           where: and(
             inArray(sourceRecords.id, recordIds),
             recordCompanyWide(orgId, companyWide, sql`${sourceRecords.id}`),

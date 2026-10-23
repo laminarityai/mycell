@@ -182,8 +182,12 @@ An unsent Gmail message a workflow prepared, waiting for a person to send it; Gm
 An app's own way of holding an action until a person approves it, such as a Gmail draft, a Calendar event with no guests yet, or suggested edits in a Doc.
 _Avoid_: Staged action, preview
 
+**Meeting**:
+An event a workflow booked on a person's calendar, waiting there with no guests, private and not blocking time, until a person approves it; Calendar's pending form. Approving invites its guests, and declining deletes it.
+_Avoid_: Appointment, booking (for the waiting event; booking is what the step does), invite (that's an event someone else sent)
+
 **Review**:
-One action waiting for a person's decision, shown on their Reviews page, which points at the waiting item in its app, or holds it when the app can't (ADR-0020). Its kind names what it waits on: `approval` (a draft an approval step left waiting), `escalation` (a message an escalate step handed over) or `held_send` (a held send).
+One action waiting for a person's decision, shown on their Reviews page, which points at the waiting item in its app, or holds it when the app can't (ADR-0020). Its kind names what it waits on: `approval` (a draft an approval step left waiting), `escalation` (a message an escalate step handed over), `held_send` (a held send) or `calendar_event` (a meeting).
 _Avoid_: Approval for the review itself (it's the step, and the kind of review that step makes), task (a Google Tasks item), notification
 
 **Held send**:

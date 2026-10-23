@@ -18,7 +18,7 @@ import {
 import { isAdmin } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
 import { TryIt } from "./try-it";
-import { AppNav } from "@/app/app-nav";
+import { AppShell } from "@/app/_shell/app-shell";
 
 // A Server Action here may try the working spec on a message, model steps and all.
 export const maxDuration = 300;
@@ -28,11 +28,7 @@ export default function WorkflowPage({
   searchParams,
 }: PageProps<"/workflows/[workflowId]">) {
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold tracking-tight">Workflow</h1>
-        <AppNav />
-      </header>
+    <AppShell current="workflows" title="Workflow" width="wide">
       {/* Try it lights up the steps it ran and the paths it took on the workflow's graph. */}
       <GraphTraceProvider>
         <Suspense fallback={<p className="text-sm text-muted-foreground">Loading workflow…</p>}>
@@ -42,7 +38,7 @@ export default function WorkflowPage({
           <TryIt params={params} searchParams={searchParams} />
         </Suspense>
       </GraphTraceProvider>
-    </main>
+    </AppShell>
   );
 }
 

@@ -8,9 +8,9 @@ import { seedTwoOrgs, type FixtureOrg } from "@/db/testing/two-org-fixture";
 import { publishWorkflow, saveWorkflow } from "@/features/workflows/server";
 import { connectGmail } from "@/testing/connect-helpers";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
+import { fundOrg, readTurn } from "@/testing/streamed-turn";
 import { startConversation, streamTurn } from "../server";
 import { labelSpec } from "./specs";
-import { fundOrg, readTurn } from "./turn-helpers";
 
 beforeEach(resetDatabase);
 

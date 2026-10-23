@@ -9,6 +9,11 @@ export { embed } from "./lib/embed";
 // Screens fetched text for prompt injection before a model reads it, metered the same way.
 export { estimateScreenCredits, screenForInjection } from "./lib/injection-screen";
 export { resolveModel, setModelRole } from "./lib/model-roles";
-// For callers that stream a model themselves (the builder chat): the role's model, behind the
-// credit check, and its one usage entry when the stream ends.
+// For callers that stream a model themselves: the role's model, behind the credit check, and
+// its one usage entry when the stream ends.
 export { openMeteredStream } from "./lib/metered-stream";
+// A chat's metered turn (the builder chat's, and any other chat's): the streamed reply, its
+// tools, and its stored messages read back for the model and the chat page.
+export { streamChatTurn, type ChatTurnRequest } from "./lib/chat-turn";
+export { chatTool, type ChatTool, type ChatToolDefinition, type ChatTools } from "./lib/chat-tools";
+export { chatModelMessages, chatUIPart } from "./lib/chat-history";

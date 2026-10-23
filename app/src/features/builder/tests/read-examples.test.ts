@@ -5,8 +5,8 @@ import { setRole } from "@/features/orgs/server";
 import { connectGoogle, daysAgo } from "@/testing/connect-helpers";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import type { FakeMessageInput } from "@/testing/fake-gmail";
+import { fundOrg, readTurn } from "@/testing/streamed-turn";
 import { getConversation, startConversation, streamTurn } from "../server";
-import { fundOrg, readTurn } from "./turn-helpers";
 
 beforeEach(resetDatabase);
 

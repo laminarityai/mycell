@@ -4,8 +4,8 @@ import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { getBalance, listLedger } from "@/features/credits/server";
 import { spendingKindOf } from "@/features/credits/types";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
+import { fundOrg, readTurn } from "@/testing/streamed-turn";
 import { getConversation, startConversation, streamTurn } from "../server";
-import { fundOrg, readTurn } from "./turn-helpers";
 
 beforeEach(resetDatabase);
 

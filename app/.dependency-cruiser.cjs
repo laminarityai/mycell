@@ -87,6 +87,14 @@ module.exports = {
       to: { path: `^${R}/memory/` },
     },
     {
+      name: "nothing-imports-agent",
+      comment:
+        "The agent (Ask Mycel, M9) sits on top: it imports memory, models, connections and the rest, and no feature imports it, so a person's private conversations never become another feature's data. Only its own routes and pages reach it.",
+      severity: "error",
+      from: { path: `^${R}/`, pathNot: `^${R}/agent/` },
+      to: { path: `^${R}/agent/` },
+    },
+    {
       name: "no-circular",
       comment:
         "No dependency cycles. Scope to `^${R}/` if you want to allow cycles outside features.",

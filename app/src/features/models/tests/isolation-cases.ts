@@ -26,6 +26,9 @@ export const isolationCases = defineIsolationCases(server, {
   estimateScreenCredits: notTenantScoped(
     "a price worked out from config: it takes no ctx and reads no org's data",
   ),
+  injectionScreenConfigured: notTenantScoped(
+    "whether config names a screen: it takes no ctx and reads no org's data",
+  ),
 
   resolveModel: async (orgs) => {
     await seedOrgB(orgs);

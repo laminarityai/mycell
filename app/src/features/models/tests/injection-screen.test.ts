@@ -6,7 +6,7 @@ import { grantCredits, listLedger } from "@/features/credits/server";
 import { systemCtx, type Ctx } from "@/lib/ctx";
 import { OutOfCreditsError } from "@/lib/errors";
 import { fakeModelArmor } from "@/testing/fake-model-armor";
-import { screenForInjection } from "../server";
+import { injectionScreenConfigured, screenForInjection } from "../server";
 import { InjectionScreenError } from "../types";
 
 beforeEach(resetDatabase);
@@ -99,5 +99,17 @@ describe("screenForInjection", () => {
     }
     expect(fakeModelArmor.screened()).toEqual([]);
     expect(await usages(ctx)).toEqual([]);
+  });
+
+  it("says ahead whether a screen is configured, so a caller can skip reading what it can't screen", () => {
+    expect(injectionScreenConfigured()).toBe(true);
+    const template = env.MODEL_ARMOR_TEMPLATE;
+    env.MODEL_ARMOR_TEMPLATE = undefined;
+    try {
+      expect(injectionScreenConfigured()).toBe(false);
+    } finally {
+      env.MODEL_ARMOR_TEMPLATE = template;
+    }
+    expect(fakeModelArmor.screened()).toEqual([]);
   });
 });

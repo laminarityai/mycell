@@ -172,6 +172,10 @@ _Avoid_: Deleted, retired
 One operation on an external source that a workflow is allowed to call, with a fixed risk level.
 _Avoid_: Tool, integration, capability
 
+**Default list**:
+The Google Tasks list a person's own tasks go to, the first of their lists. Mycel's Tasks actions act only on it, and leave alone any task on it that someone assigned from Docs or Chat.
+_Avoid_: My Tasks, task list (any list)
+
 **Risk level**:
 The fixed danger class of a catalog action: read, internal-reversible, external-send, financial, or destructive.
 

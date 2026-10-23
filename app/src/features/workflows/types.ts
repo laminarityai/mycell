@@ -94,6 +94,14 @@ export type WorkflowVersionSummary = Pick<
 >;
 
 /** A row of the workflows list. */
+/** A workflow's monthly credit budget, from its latest published version; null for none. */
+export type WorkflowBudget = {
+  id: string;
+  name: string;
+  archived: boolean;
+  monthlyCredits: number | null;
+};
+
 export type WorkflowSummary = {
   id: string;
   name: string;

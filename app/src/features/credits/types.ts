@@ -132,6 +132,25 @@ export type Runway = {
   zeroAt: Date | null;
 };
 
+/**
+ * A workflow's line on the Credits page: its spending, with its name and published budget,
+ * which the page joins in from workflows (credits can't import workflows: workflows reads
+ * credits for its pauses).
+ */
+export type WorkflowSpendingLine = WorkflowSpending & {
+  name: string;
+  /** Its monthly budget; null for none. */
+  monthlyBudget: number | null;
+  /** This month's live runs have spent its budget: it's paused, budget reached. */
+  budgetReached: boolean;
+};
+
+/** What the Credits page's chart plots: the balance, spending by kind, or by workflow. */
+export type ChartLens = "balance" | "kinds" | "workflows";
+
+/** A ledger entry on the Credits page, with its workflow's name joined in. */
+export type LedgerLine = LedgerEntry & { workflowName: string | null };
+
 /** Which ledger entries `listLedger` returns, newest first. */
 export type LedgerFilter = {
   /** At most this many (100 by default). */

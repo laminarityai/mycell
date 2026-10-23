@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedGoogleConnection } from "@/db/testing/seed-connection";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
+import { grantCredits, recordUsage } from "@/features/credits/server";
 import { createReview } from "@/features/reviews/server";
 import { systemCtx } from "@/lib/ctx";
 import { googleScope } from "@/lib/google";
@@ -20,7 +21,10 @@ describe("the sidebar's items", () => {
   it("groups an admin's items under Your work, Company, and Accounts and memory", () => {
     expect(labelsOf(true)).toEqual([
       ["Your work", ["Reviews", "Workflows"]],
-      ["Company", ["Builder chat", "Custom actions", "Capability requests", "Manage tags"]],
+      [
+        "Company",
+        ["Builder chat", "Credits", "Custom actions", "Capability requests", "Manage tags"],
+      ],
       ["Accounts and memory", ["Connections", "Your org", "Memory log", "Memory settings"]],
     ]);
   });
@@ -61,12 +65,31 @@ describe("what the shell reads for the signed-in person", () => {
       orgName: "Org A",
       counts: { reviews: 2 },
     });
-    // The member's reviews aren't the admin's.
+    // The member's reviews aren't the admin's, and only the admin sees the company's credits.
     expect(await loadShell(orgA.admin.ctx)).toEqual({
       admin: true,
       viewer: { name: orgA.admin.email, role: "admin" },
       orgName: "Org A",
       counts: { reviews: 0 },
+      credits: { balance: 0, runwayDays: null },
     });
+  });
+
+  it("gives an admin the balance and how many days it lasts at this week's rate", async () => {
+    const { orgA } = await seedTwoOrgs();
+    await grantCredits(systemCtx(orgA.id), 1000, "October allowance");
+    await recordUsage(systemCtx(orgA.id), {
+      role: "fast",
+      modelId: "openai/x",
+      costUsd: 0.07,
+      outcome: "succeeded",
+      purpose: "builder",
+    });
+
+    const { credits } = await loadShell(orgA.admin.ctx);
+
+    expect(credits?.balance).toBeCloseTo(930);
+    expect(credits?.runwayDays).toBeCloseTo(93);
+    expect((await loadShell(orgA.member.ctx)).credits).toBeUndefined();
   });
 });

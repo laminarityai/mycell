@@ -53,7 +53,11 @@ export const backfillJob = inngest.createFunction(
     backfillConnection(ctxOf(event.data), event.data.connectionId, stepRunner(step)),
 );
 
-/** Every minute, sends one poll event per `active` connection in every org. */
+/**
+ * The sweep (ADR-0026): every minute, sends one poll event per connection that's due in every
+ * org. An app with a live watch is due every 15 minutes, one without every minute. Once Drive
+ * has push (#147), every ingested app has a watch and this cron can run every 5 minutes.
+ */
 export const pollCron = inngest.createFunction(
   { id: "poll-connections", triggers: [{ cron: "* * * * *" }] },
   async ({ step }) => {

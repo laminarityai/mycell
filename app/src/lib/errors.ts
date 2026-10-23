@@ -13,6 +13,22 @@ export class WorkspaceAccountRequiredError extends Error {
   }
 }
 
+/**
+ * An admin removed this person from the org their Workspace domain would join, and no admin has
+ * re-added them: they're turned away at sign-in instead of joining again.
+ */
+export class RemovedFromOrgError extends Error {
+  /** Carried in the sign-in page's `?error=` parameter. */
+  static readonly code = "removed_from_org";
+
+  constructor() {
+    super(
+      "An admin removed you from your company's Mycel. Ask an admin to re-add you, then sign in again.",
+    );
+    this.name = "RemovedFromOrgError";
+  }
+}
+
 /** The caller's role doesn't allow this operation. */
 export class ForbiddenError extends Error {
   constructor() {

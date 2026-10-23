@@ -6,10 +6,11 @@ import { deleteMemberConnectionsOf } from "@/features/connections/server";
 import { roleSchema } from "@/lib/ctx";
 import { NotFoundError, type ActionResult } from "@/lib/errors";
 import { runFormAction } from "./form-action";
-import { removeUser, setRole } from "./server";
+import { reAddUser, removeUser, setRole } from "./server";
 
 const setRoleInput = z.object({ userId: z.string().min(1), role: roleSchema });
 const removeUserInput = z.object({ userId: z.string().min(1) });
+const reAddUserInput = z.object({ removalId: z.string().min(1) });
 
 export async function setRoleAction(
   _previous: ActionResult,
@@ -41,4 +42,14 @@ export async function removeUserAction(
     },
     { after: refresh },
   );
+}
+
+/** Lifts a removal: the person joins again as a member the next time they sign in. */
+export async function reAddUserAction(
+  _previous: ActionResult,
+  form: FormData,
+): Promise<ActionResult> {
+  return runFormAction(form, reAddUserInput, (ctx, { removalId }) => reAddUser(ctx, removalId), {
+    after: refresh,
+  });
 }

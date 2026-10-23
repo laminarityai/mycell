@@ -3,6 +3,7 @@
 // (a keyed hash: the same text gives the same hash, which only that key can make). What it
 // returns is safe to store; the key material it uses is never stored or logged. Held sends use
 // the encryption, and memory's do-not-learn list the hash.
+import "server-only";
 import { type Ctx, requireSystem } from "@/lib/ctx";
 import { open, parseEnvelope, seal } from "./lib/envelope";
 import { decryptDataKey, destroyKeys, generateDataKey, generateMac } from "./lib/kms";

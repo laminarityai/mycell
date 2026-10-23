@@ -58,7 +58,9 @@ export function ConnectionsPanel({
               <TableHead>Apps</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Last polled</TableHead>
-              <TableHead />
+              <TableHead>
+                <span className="sr-only">Actions</span>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

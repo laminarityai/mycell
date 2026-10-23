@@ -7,7 +7,7 @@ import { requireAdmin, type Ctx } from "@/lib/ctx";
 import type { ActionUse } from "../types";
 import { latestVersions } from "./latest-versions";
 import { workflows } from "./schema";
-import { requiredActions } from "./validation";
+import { requiredActions } from "./policy-check";
 
 /**
  * For each of `actionNames`, the caller's company's workflows whose working spec or latest

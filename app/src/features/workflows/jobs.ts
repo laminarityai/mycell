@@ -1,6 +1,7 @@
 // The workflows feature's Inngest functions. Thin: each calls server.ts as the org's system ctx
 // (ADR-0009). Until a cleanup runs, the trigger's fan-out already starts nothing for someone who
 // can't see a workflow, so those only tidy up what admins and members are shown.
+import "server-only";
 import { tagAssignmentRemoved, tagDeleted, tagRenamed } from "@/features/tags/server";
 import { systemCtx } from "@/lib/ctx";
 import { inngest } from "@/lib/inngest";

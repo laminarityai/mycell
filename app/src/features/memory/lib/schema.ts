@@ -6,6 +6,7 @@
 // link goes, and an object when no fact is about it or links to it (triggers in migration
 // 0026). So whatever deletes a connection removes the facts only it supported, in the same
 // transaction. No table holds source text (invariant 8): statements are short derived facts.
+import "server-only";
 import { sql } from "drizzle-orm";
 import {
   boolean,

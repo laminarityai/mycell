@@ -7,7 +7,6 @@ import { runFormAction, runValueAction } from "@/features/orgs/form-action";
 import { SpecInvalidError, type ActionResult } from "@/lib/errors";
 import {
   archiveWorkflow,
-  checkWorkflowSpec,
   disable,
   enable,
   publishWorkflow,
@@ -16,7 +15,7 @@ import {
   switchWorkflowOff,
   switchWorkflowOn,
 } from "./server";
-import type { EnableResult, SpecCheckResult } from "./types";
+import type { EnableResult } from "./types";
 
 const saveInput = z.object({
   workflowId: z.string().min(1).optional(),
@@ -80,23 +79,6 @@ function readSpecText(text: string): unknown {
       "The spec isn't valid JSON.",
     );
   }
-}
-
-/**
- * The editor's live validation: every issue with the spec as it stands, as saving would find
- * them, or what the policy engine makes of it. Saves nothing.
- */
-export async function checkWorkflowSpecAction(spec: unknown): Promise<SpecCheckResult> {
-  const result = await runValueAction(spec, z.unknown(), async (ctx, value) => {
-    const checked = await checkWorkflowSpec(ctx, value);
-    return checked.ok
-      ? { issues: [], maxRisk: checked.maxRisk, inserted: checked.inserted }
-      : { issues: checked.issues, maxRisk: null, inserted: [] };
-  });
-  // A refused check (a member, say) says only why.
-  return "maxRisk" in result
-    ? result
-    : { error: result.error, issues: [], maxRisk: null, inserted: [] };
 }
 
 export async function switchWorkflowOnAction(

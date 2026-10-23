@@ -1,5 +1,6 @@
 // Runtime's Inngest functions. Thin: each calls server.ts. Runs act as their org's system ctx
 // (ADR-0009).
+import "server-only";
 import { systemCtx } from "@/lib/ctx";
 import { gmailMessageReceived } from "@/lib/events";
 import { inngest, stepRunner } from "@/lib/inngest";

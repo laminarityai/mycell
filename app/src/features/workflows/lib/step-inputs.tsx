@@ -4,14 +4,13 @@
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import type { Step } from "@/features/spec/types";
 import type { StepEdit } from "./panel-shell";
 
 type ExtractStep = Extract<Step, { type: "extract" }>;
 type Tool = Extract<Step, { type: "tool" }>;
 type ExtractedField = ExtractStep["fields"][string];
-
-const SELECT = "h-8 rounded-lg border border-input bg-transparent px-2 text-sm font-normal";
 
 /** Each field an extract step reads: its name, type and description, in order. */
 export function ExtractFields({
@@ -45,19 +44,19 @@ export function ExtractFields({
                 change(index, event.target.value, field);
               }}
             />
-            <select
+            <NativeSelect
               aria-label="Field type"
-              className={`${SELECT} w-28`}
+              className="w-28"
               value={field.type}
               onChange={(event) => {
                 const type = event.target.value as ExtractedField["type"];
                 change(index, name, { ...field, type });
               }}
             >
-              <option value="string">text</option>
-              <option value="number">number</option>
-              <option value="boolean">yes/no</option>
-            </select>
+              <NativeSelectOption value="string">text</NativeSelectOption>
+              <NativeSelectOption value="number">number</NativeSelectOption>
+              <NativeSelectOption value="boolean">yes/no</NativeSelectOption>
+            </NativeSelect>
             <Button
               type="button"
               size="icon-sm"

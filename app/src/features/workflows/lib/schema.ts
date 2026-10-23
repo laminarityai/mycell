@@ -1,5 +1,6 @@
 // Workflows, their published versions, and what switches them on. All are tenant-owned. A
 // version is immutable: the feature has no update path for it, only inserts.
+import "server-only";
 import { sql } from "drizzle-orm";
 import {
   check,

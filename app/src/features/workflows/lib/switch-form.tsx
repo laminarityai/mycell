@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { DateTime } from "@/components/date-time";
 import { Button } from "@/components/ui/button";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { switchWorkflowOffAction, switchWorkflowOnAction } from "../actions";
 import type { WorkflowSwitch } from "../types";
 import { Problems } from "./workflow-editor";
@@ -73,17 +74,17 @@ export function SwitchForm({
       <input type="hidden" name="workflowId" value={workflowId} />
       <label className="flex flex-col gap-1 text-sm font-medium">
         Connection
-        <select
+        <NativeSelect
           name="connectionId"
-          className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+          className="w-full"
           defaultValue={onResult.values?.connectionId ?? connections[0]?.id}
         >
           {connections.map((connection) => (
-            <option key={connection.id} value={connection.id}>
+            <NativeSelectOption key={connection.id} value={connection.id}>
               {connection.label}
-            </option>
+            </NativeSelectOption>
           ))}
-        </select>
+        </NativeSelect>
       </label>
       {compact ? null : (
         <p className="text-sm text-muted-foreground">

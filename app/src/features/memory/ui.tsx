@@ -158,7 +158,9 @@ export function StaffConsents({ consents, now }: { consents: StaffConsent[]; now
               <TableHead>Case</TableHead>
               <TableHead>Given by</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead />
+              <TableHead>
+                <span className="sr-only">Actions</span>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

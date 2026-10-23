@@ -2,6 +2,7 @@
 // pending form, on the person's Reviews page. It reaches the app only through runtime's
 // pending-form adapters.
 // Called by a run's approval step, as the org's system ctx.
+import "server-only";
 export { createReview } from "./lib/reviews";
 export { listReviews } from "./lib/reviews";
 // Ending the reviews in a thread their people finished in Gmail: a job calls it, as the system

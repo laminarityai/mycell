@@ -4,8 +4,13 @@
 // run the working spec on it with every write stubbed, and see each step's result. The page
 // that holds it gives the Server Action (the workflow page's, or the builder chat's) and the
 // hidden fields it needs. On a page with a workflow graph, the result lights it up too.
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  NativeSelect,
+  NativeSelectOptGroup,
+  NativeSelectOption,
+} from "@/components/ui/native-select";
 import { useShowOnGraph } from "@/features/workflows/ui";
 import type { RecentMessages, TryItState } from "../types";
 import { TryItResult } from "./try-it-result";
@@ -20,11 +25,13 @@ export function TryItPanel({
   /** Hidden form fields the action reads, such as the workflow's ID. */
   fields: Record<string, string>;
 }) {
-  const [state, tryIt, trying] = useActionState(action, {});
   const showOnGraph = useShowOnGraph();
-  useEffect(() => {
-    showOnGraph?.(state.result ?? null);
-  }, [showOnGraph, state.result]);
+  // Each try's answer lights up the graph as it arrives; one that failed puts the last away.
+  const [state, tryIt, trying] = useActionState(async (previous: TryItState, form: FormData) => {
+    const next = await action(previous, form);
+    showOnGraph?.(next.result ?? null);
+    return next;
+  }, {});
   const first = sources
     .flatMap((source) => source.messages.slice(0, 1).map((message) => ({ source, message })))
     .at(0);
@@ -50,31 +57,31 @@ export function TryItPanel({
         <input type="hidden" name="sourceRef" value={sourceRef} />
         <label className="flex flex-col gap-1 text-sm font-medium">
           Message
-          <select
+          <NativeSelect
             value={picked}
             onChange={(event) => {
               setPicked(event.target.value);
             }}
-            className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+            className="w-full"
           >
             {sources.map((source) => (
-              <optgroup key={source.connectionId} label={source.accountEmail}>
+              <NativeSelectOptGroup key={source.connectionId} label={source.accountEmail}>
                 {source.unavailable ? (
-                  <option disabled value="">
+                  <NativeSelectOption disabled value="">
                     Couldn&apos;t read this inbox just now
-                  </option>
+                  </NativeSelectOption>
                 ) : null}
                 {source.messages.map((message) => (
-                  <option
+                  <NativeSelectOption
                     key={message.sourceRef}
                     value={key(source.connectionId, message.sourceRef)}
                   >
                     {message.subject || "(no subject)"} · {message.from}
-                  </option>
+                  </NativeSelectOption>
                 ))}
-              </optgroup>
+              </NativeSelectOptGroup>
             ))}
-          </select>
+          </NativeSelect>
         </label>
         <p className="text-xs text-muted-foreground">
           Model and read steps run for real and use credits. Nothing is written to Gmail, Sheets or

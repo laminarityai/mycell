@@ -26,7 +26,7 @@ export function WorkingSpecEditor({ workflow }: { workflow: EditableWorkflow }) 
   const current = useLiveCheck(specText, true);
   const issues = current?.issues ?? [];
   const changed = !sameValue(draft, workflow.workingSpec);
-  const ready = current !== null && current.error === undefined && issues.length === 0;
+  const ready = current !== null && issues.length === 0;
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex min-h-0 flex-1 flex-col">
@@ -43,9 +43,7 @@ export function WorkingSpecEditor({ workflow }: { workflow: EditableWorkflow }) 
           <div className="flex items-center justify-between gap-2">
             <p aria-live="polite">
               <span className="font-medium">Unsaved changes.</span>{" "}
-              <span className="text-muted-foreground">
-                {saveHint(true, current, issues.length)}
-              </span>
+              <span className="text-muted-foreground">{saveHint(current, issues.length)}</span>
             </p>
             <Button type="submit" size="sm" disabled={saving || !ready}>
               Save

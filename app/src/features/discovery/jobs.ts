@@ -1,5 +1,6 @@
 // Discovery's Inngest functions. Thin: each calls server.ts. The backfill runs as the user who
 // connected the source; polling, started by a cron, as the org's system ctx (ADR-0009).
+import "server-only";
 import { connectionAppsGranted, connectionRecorded } from "@/features/connections/server";
 import { systemCtx, type Ctx } from "@/lib/ctx";
 import { inngest, stepRunner } from "@/lib/inngest";

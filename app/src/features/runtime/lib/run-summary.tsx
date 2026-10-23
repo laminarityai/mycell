@@ -1,53 +1,75 @@
 // The strip at the top of a run's page: how it ended, when, on whose inbox and which message,
-// the version that ran and what it cost; and why it failed, when it failed as a whole. The
-// message, with its link into Gmail, shows only to the inbox's readers (ADR-0001).
+// the version that ran and what it cost, the run it retries or its retry, and Retry; and why it
+// failed, when it failed as a whole. The message, with its link into Gmail, shows only to the
+// inbox's readers (ADR-0001).
 import { ExternalLink, Lock } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { DateTime } from "@/components/date-time";
-import type { RunMessage, RunRecord } from "../types";
+import type { RetryCheck, RunMessage, RunRecord } from "../types";
 import { FailureNote } from "./failure-note";
-import { creditsText, inboxLabel, RunStatusLabel } from "./runs-table";
+import { RetryForm } from "./retry-form";
+import { creditsText, inboxLabel, runHref, RunStatusLabel } from "./runs-table";
 
 export function RunSummary({
   run,
   message,
   versionHref,
+  retry,
 }: {
   run: RunRecord;
   /** The run's message, for a reader of its inbox; null otherwise. */
   message: RunMessage | null;
   /** Where the version that ran is shown, for those who may open it. */
   versionHref: string | null;
+  /** Whether the caller may retry the run, and why not. */
+  retry: RetryCheck;
 }) {
   const version =
     run.version === null ? "A deleted version" : `Version ${String(run.version.number)}`;
   return (
     <section aria-label="Run" className="flex flex-col gap-3">
-      <dl className="flex flex-wrap gap-x-8 gap-y-3 rounded-lg border px-4 py-3 text-sm">
-        <Item label="Status">
-          <RunStatusLabel status={run.status} />
-        </Item>
-        <Item label="Started">
-          <DateTime value={run.startedAt} />
-        </Item>
-        <Item label="Inbox">{inboxLabel(run.inbox)}</Item>
-        <Item label="Message">
-          <MessageLink run={run} message={message} />
-        </Item>
-        <Item label="Version">
-          {versionHref === null ? (
-            version
-          ) : (
-            <Link href={versionHref} className="underline underline-offset-4">
-              {version}
-            </Link>
+      <div className="flex flex-wrap items-start gap-x-8 gap-y-3 rounded-lg border px-4 py-3 text-sm">
+        <dl className="flex flex-wrap gap-x-8 gap-y-3">
+          <Item label="Status">
+            <RunStatusLabel status={run.status} />
+          </Item>
+          <Item label="Started">
+            <DateTime value={run.startedAt} />
+          </Item>
+          <Item label="Inbox">{inboxLabel(run.inbox)}</Item>
+          <Item label="Message">
+            <MessageLink run={run} message={message} />
+          </Item>
+          <Item label="Version">
+            {versionHref === null ? (
+              version
+            ) : (
+              <Link href={versionHref} className="underline underline-offset-4">
+                {version}
+              </Link>
+            )}
+          </Item>
+          <Item label="Credits">
+            <span className="tabular-nums">{creditsText(run.costCredits)}</span>
+          </Item>
+          {run.retryOfRunId === null ? null : (
+            <Item label="Retry of">
+              <Link href={runHref(run.retryOfRunId)} className="underline underline-offset-4">
+                The run that failed
+              </Link>
+            </Item>
           )}
-        </Item>
-        <Item label="Credits">
-          <span className="tabular-nums">{creditsText(run.costCredits)}</span>
-        </Item>
-      </dl>
+          {run.retriedByRunId === null ? null : (
+            <Item label="Retried">
+              <Link href={runHref(run.retriedByRunId)} className="underline underline-offset-4">
+                The retry
+              </Link>
+            </Item>
+          )}
+        </dl>
+        <RetryForm runId={run.id} check={retry} />
+      </div>
       {run.errorCode === null ? null : <FailureNote code={run.errorCode} message={null} />}
     </section>
   );

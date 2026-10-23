@@ -15,8 +15,8 @@
 // item that's gone ends learning quietly. An item learning can't pay for (the org is out of
 // credits), or can't screen on the job's last attempt (the injection screen keeps failing), is
 // postponed rather than lost, and learned again once credits are granted or the screen recovers.
-import { getConnection } from "@/features/connections/server";
-import type { ConnectionDetails } from "@/features/connections/types";
+import { sourceClient } from "@/features/connections/server";
+import type { SourceClient } from "@/features/connections/types";
 import { embed, screenForInjection } from "@/features/models/server";
 import { InjectionScreenError } from "@/features/models/types";
 import { getWorkspaceDomain } from "@/features/orgs/server";
@@ -125,7 +125,7 @@ async function decide(ctx: Ctx, item: ItemToLearn): Promise<Decision> {
   }
   const source = await read(ctx, item);
   if (typeof source === "string") return { decision: source };
-  if (await isExcluded(ctx, item.connectionId, source.item)) {
+  if (await isExcluded(ctx, source.client, source.item)) {
     // What its older versions taught goes too.
     await retireOlderVersions(ctx, source);
     return { decision: "excluded" };
@@ -150,7 +150,7 @@ async function extractAndStore(ctx: Ctx, item: ItemToLearn): Promise<Learned> {
   if (typeof source === "string") return { decision: source };
   // Again: an exclusion added since the first step, whose job may have run between the two
   // steps and found nothing learned yet, keeps the item out.
-  if (await isExcluded(ctx, item.connectionId, source.item)) {
+  if (await isExcluded(ctx, source.client, source.item)) {
     await retireOlderVersions(ctx, source);
     return { decision: "excluded" };
   }
@@ -186,15 +186,24 @@ async function screen(ctx: Ctx, item: SourceItem): Promise<"flagged" | "unscreen
   return null;
 }
 
-type Source = { connection: ConnectionDetails; app: MemoryApp; item: SourceItem };
+// The item, and the connection's source it was read through: its access checked once a step,
+// and every later call to its app in the step (an exclusion's labels or folders) made through it.
+type Source = {
+  client: SourceClient;
+  connection: SourceClient["connection"];
+  app: MemoryApp;
+  item: SourceItem;
+};
 
 async function read(ctx: Ctx, item: ItemToLearn): Promise<Source | Unread> {
-  const connection = await getConnection(ctx, item.connectionId);
+  const client = await sourceClient(ctx, item.connectionId);
   const read =
     item.app === "drive"
-      ? await readDoc(ctx, connection.id, item.sourceRef)
-      : ((await readEmail(ctx, connection, item.sourceRef)) ?? "gone");
-  return typeof read === "string" ? read : { connection, app: item.app, item: read };
+      ? await readDoc(ctx, client, item.sourceRef)
+      : ((await readEmail(client, item.sourceRef)) ?? "gone");
+  return typeof read === "string"
+    ? read
+    : { client, connection: client.connection, app: item.app, item: read };
 }
 
 // Postponing the item, rather than failing, when learning can't pay for it or (on the job's last

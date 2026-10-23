@@ -39,9 +39,13 @@ export async function listCompanyWideLists(ctx: Ctx): Promise<CompanyWideList[]>
   return rows.map(({ address, markedAt }) => ({ address, markedAt }));
 }
 
-/** Every address marked company-wide in the org: for visibility, so any ctx may ask. */
+/**
+ * Every address marked company-wide in the org: for visibility, so any ctx may ask. A read
+ * resolves them once (`readingOf`), not once per check.
+ */
 export async function markedAddresses(ctx: Ctx): Promise<string[]> {
-  return (await forOrg(ctx).select(companyWideLists)).map((row) => row.address);
+  const rows = await forOrg(ctx).select(companyWideLists, { columns: ["address"] });
+  return rows.map((row) => row.address);
 }
 
 async function listAddress(ctx: Ctx, input: string): Promise<string> {

@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { member, user } from "@/db/auth-schema";
 import { getDb } from "@/db/client";
 import { roleSchema, type Ctx } from "@/lib/ctx";
@@ -24,6 +24,28 @@ export async function findUser(ctx: Ctx, userId: string): Promise<OrgUser | null
     .limit(1);
   const row = rows.at(0);
   return row === undefined ? null : { ...row, role: roleSchema.parse(row.role) };
+}
+
+/**
+ * The org's users whose address is one of `emails`, matched regardless of case: none for an
+ * address no one in the caller's org has. Any role may ask.
+ */
+export async function findUsersByEmail(ctx: Ctx, emails: string[]): Promise<OrgUser[]> {
+  if (emails.length === 0) return [];
+  const rows = await getDb()
+    .select({ id: user.id, name: user.name, email: user.email, role: member.role })
+    .from(member)
+    .innerJoin(user, eq(user.id, member.userId))
+    .where(
+      and(
+        eq(member.organizationId, ctx.orgId),
+        inArray(
+          sql`lower(${user.email})`,
+          emails.map((email) => email.toLowerCase()),
+        ),
+      ),
+    );
+  return rows.map((row) => ({ ...row, role: roleSchema.parse(row.role) }));
 }
 
 /**

@@ -3,6 +3,7 @@ import { integer, pgTable, serial, text } from "drizzle-orm/pg-core";
 import { beforeAll, beforeEach, describe, expect, expectTypeOf, it } from "vitest";
 import { getDb } from "../client";
 import { forOrg } from "../for-org";
+import { countQueries } from "../testing/count-queries";
 import { resetDatabase } from "../testing/reset";
 import { seedTwoOrgs, type TwoOrgs } from "../testing/two-org-fixture";
 
@@ -214,6 +215,17 @@ describe("forOrg(ctx).update", () => {
     expect(bodies(await forOrg(orgs.orgA.admin.ctx).select(notes))).toEqual(["a2", "moved"]);
     expect(bodies(await forOrg(orgs.orgB.admin.ctx).select(notes))).toEqual(["b1"]);
   });
+
+  it("sets each row its own value from SQL, still only in the caller's org", async () => {
+    const renamed = sql`case ${notes.body} when 'a1' then 'first' when 'b1' then 'hijacked' else ${notes.body} end`;
+    const counted = await countQueries(() =>
+      forOrg(orgs.orgA.admin.ctx).update(notes, { body: renamed }),
+    );
+
+    expect(counted.queries).toBe(1);
+    expect(bodies(await forOrg(orgs.orgA.admin.ctx).select(notes))).toEqual(["a2", "first"]);
+    expect(bodies(await forOrg(orgs.orgB.admin.ctx).select(notes))).toEqual(["b1"]);
+  });
 });
 
 describe("forOrg(ctx).delete", () => {
@@ -229,6 +241,29 @@ describe("forOrg(ctx).delete", () => {
 
     expect(deleted).toEqual([]);
     expect(bodies(await forOrg(orgs.orgB.admin.ctx).select(notes))).toEqual(["b1"]);
+  });
+});
+
+describe("forOrg(ctx).deleteCount", () => {
+  it("deletes only the caller's org's rows, counting them", async () => {
+    expect(await forOrg(orgs.orgA.admin.ctx).deleteCount(notes)).toBe(2);
+
+    expect(await forOrg(orgs.orgA.admin.ctx).select(notes)).toEqual([]);
+    expect(bodies(await forOrg(orgs.orgB.admin.ctx).select(notes))).toEqual(["b1"]);
+  });
+
+  it("can't delete another org's row even when the filter names it", async () => {
+    expect(await forOrg(orgs.orgA.admin.ctx).deleteCount(notes, eq(notes.body, "b1"))).toBe(0);
+
+    expect(bodies(await forOrg(orgs.orgB.admin.ctx).select(notes))).toEqual(["b1"]);
+  });
+
+  it("returns no rows from the database", async () => {
+    const counted = await countQueries(() =>
+      forOrg(orgs.orgA.admin.ctx).deleteCount(notes, eq(notes.body, "a1")),
+    );
+
+    expect(counted).toEqual({ queries: 1, rows: 0 });
   });
 });
 

@@ -13,7 +13,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, gte, inArray, isNull, lt, ne } from "drizzle-orm";
 import { forOrg, type OrgScopedDb } from "@/db/for-org";
-import type { ConnectionDetails } from "@/features/connections/types";
+import type { SourceClient } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
 import type { MemoryApp } from "../types";
 import { driveVersion } from "./drive";
@@ -34,7 +34,7 @@ import {
 /** How many objects and facts a stored item is linked to. */
 export type Stored = { objects: number; facts: number };
 
-type Source = { connection: ConnectionDetails; app: MemoryApp; item: SourceItem };
+type Source = { connection: SourceClient["connection"]; app: MemoryApp; item: SourceItem };
 
 /**
  * Whether the connection's copy of the item is learned already: for a Drive file, this version

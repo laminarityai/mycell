@@ -2,8 +2,7 @@
 // message's text: in memory only, never stored, returned from a step or put in an error
 // (invariant 8). Only its pointers, item key and the addresses on it are stored.
 import { GMAIL, headerValues, messageBody, messageSchema } from "@/features/connections/gmail";
-import { proxyGet } from "@/features/connections/server";
-import type { Ctx } from "@/lib/ctx";
+import type { SourceClient } from "@/features/connections/types";
 import { emailAddressesIn } from "@/lib/email-addresses";
 import type { SourceItem } from "./source-item";
 
@@ -45,14 +44,12 @@ const SHOWN_HEADERS = ["From", "To", "Cc", "Date", "Subject"];
  * Gmail moves it there, and memory forgets what a deleted message taught.
  */
 export async function readEmail(
-  ctx: Ctx,
-  connection: { id: string; accountEmail: string },
+  source: SourceClient,
   messageId: string,
 ): Promise<EmailToLearn | null> {
+  const { connection } = source;
   const connectionId = connection.id;
-  const message = await proxyGet(
-    ctx,
-    connectionId,
+  const message = await source.get(
     `${GMAIL}/messages/${encodeURIComponent(messageId)}?format=full`,
     emailSchema,
   );

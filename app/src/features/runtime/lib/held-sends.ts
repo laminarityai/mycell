@@ -114,7 +114,7 @@ export async function putBackHeldSend(ctx: Ctx, row: HeldSendRow): Promise<void>
 
 /** Deletes the held send; false when it was already gone. */
 export async function deleteHeldSend(ctx: Ctx, id: string): Promise<boolean> {
-  return (await forOrg(ctx).delete(heldSends, eq(heldSends.id, id))).length > 0;
+  return (await forOrg(ctx).deleteCount(heldSends, eq(heldSends.id, id))) > 0;
 }
 
 /**
@@ -122,5 +122,5 @@ export async function deleteHeldSend(ctx: Ctx, id: string): Promise<boolean> {
  * one is 30 days, and one whose run stopped before its approval step has no review to end it.
  */
 export async function deleteHeldSendsBefore(ctx: Ctx, before: Date): Promise<number> {
-  return (await forOrg(ctx).delete(heldSends, lt(heldSends.createdAt, before))).length;
+  return forOrg(ctx).deleteCount(heldSends, lt(heldSends.createdAt, before));
 }

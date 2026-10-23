@@ -4,9 +4,10 @@
 // triggers remove each fact left with no source, and each object left with no fact (migration
 // 0026). A fact another item still supports stays.
 import { randomUUID } from "node:crypto";
-import { and, asc, eq, inArray, like, or, type SQL } from "drizzle-orm";
+import { and, asc, eq, inArray, like, or, sql, type SQL } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { listConnectionsForJobs } from "@/features/connections/server";
+import type { SourceClient } from "@/features/connections/types";
 import { type Ctx, requireRole, requireSystem } from "@/lib/ctx";
 import { ConflictError, NotFoundError, ValidationError } from "@/lib/errors";
 import type { RunStep } from "@/lib/inngest";
@@ -33,11 +34,12 @@ export async function addExclusion(ctx: Ctx, input: ExclusionInput): Promise<Exc
     throw new ValidationError(parsed.error.issues[0]?.message ?? "That can't be excluded.");
   }
   const { kind, value } = parsed.data;
-  const existing = await listExclusions(ctx);
   // Gmail matches label names regardless of case, so "HR" and "hr" are one exclusion.
-  if (existing.some((e) => e.kind === kind && e.value.toLowerCase() === value.toLowerCase())) {
-    throw new ConflictError("That's excluded already.");
-  }
+  const existing = await forOrg(ctx).count(
+    exclusions,
+    and(eq(exclusions.kind, kind), sql`lower(${exclusions.value}) = ${value.toLowerCase()}`),
+  );
+  if (existing > 0) throw new ConflictError("That's excluded already.");
   const inserted = await forOrg(ctx).insert(
     exclusions,
     { id: randomUUID(), kind, value },
@@ -55,38 +57,64 @@ export async function addExclusion(ctx: Ctx, input: ExclusionInput): Promise<Exc
  */
 export async function removeExclusion(ctx: Ctx, exclusionId: string): Promise<void> {
   requireRole(ctx, "admin", "system");
-  const deleted = await forOrg(ctx).delete(exclusions, eq(exclusions.id, exclusionId));
-  if (deleted.length === 0) throw new NotFoundError("exclusion");
+  const deleted = await forOrg(ctx).deleteCount(exclusions, eq(exclusions.id, exclusionId));
+  if (deleted === 0) throw new NotFoundError("exclusion");
 }
 
 /**
- * Whether an exclusion covers the item, read from `connectionId`: an address on it (an email's
- * From, To, Cc or Bcc; a doc's sharing list), or one at an excluded domain; an email's label;
- * or a doc's folder, or one it's under.
+ * Whether an exclusion covers the item, read from `source`: an address on it (an email's From,
+ * To, Cc or Bcc; a doc's sharing list), or one at an excluded domain; an email's label; or a
+ * doc's folder, or one it's under. One query reads only the exclusions that could cover it.
  */
 export async function isExcluded(
   ctx: Ctx,
-  connectionId: string,
+  source: SourceClient,
   item: SourceItem,
 ): Promise<boolean> {
-  const all = await listExclusions(ctx);
   const addresses = [
-    ...item.addresses,
-    ...item.access.flatMap((entry) => (entry.kind === "address" ? [entry.value] : [])),
+    ...new Set([
+      ...item.addresses,
+      ...item.access.flatMap((entry) => (entry.kind === "address" ? [entry.value] : [])),
+    ]),
   ];
-  if (all.some((exclusion) => coversAddresses(exclusion, addresses))) return true;
+  const domains = [...new Set(addresses.flatMap((address) => domainsOf(address)))];
+  const labelled = item.labelIds !== undefined && item.labelIds.length > 0;
+  const filed = item.parentIds !== undefined;
+  const could = [
+    addresses.length === 0
+      ? undefined
+      : and(eq(exclusions.kind, "address"), inArray(exclusions.value, addresses)),
+    domains.length === 0
+      ? undefined
+      : and(eq(exclusions.kind, "domain"), inArray(exclusions.value, domains)),
+    labelled ? eq(exclusions.kind, "gmail_label") : undefined,
+    filed ? eq(exclusions.kind, "drive_folder") : undefined,
+  ].filter((where) => where !== undefined);
+  if (could.length === 0) return false;
+  const found = await forOrg(ctx).select(exclusions, {
+    columns: ["kind", "value"],
+    where: or(...could),
+  });
+  if (found.some(({ kind }) => kind === "address" || kind === "domain")) return true;
   const values = (kind: Exclusion["kind"]) =>
-    all.filter((exclusion) => exclusion.kind === kind).map((exclusion) => exclusion.value);
+    found.filter((exclusion) => exclusion.kind === kind).map((exclusion) => exclusion.value);
   const labels = values("gmail_label");
-  if (labels.length > 0 && item.labelIds !== undefined && item.labelIds.length > 0) {
-    const names = await labelNames(ctx, connectionId, item.labelIds);
+  if (labels.length > 0 && item.labelIds !== undefined) {
+    const names = await labelNames(source, item.labelIds);
     if (labels.some((label) => names.has(label.toLowerCase()))) return true;
   }
   const folders = values("drive_folder");
   if (folders.length > 0 && item.parentIds !== undefined) {
-    return inFolders(ctx, connectionId, item.parentIds, folders);
+    return inFolders(source, item.parentIds, folders);
   }
   return false;
+}
+
+// The domains an excluded domain covers the address by: its own, and each it's under
+// (mail.acme.com is in acme.com).
+function domainsOf(address: string): string[] {
+  const labels = (address.split("@").at(-1) ?? "").split(".");
+  return labels.map((_, i) => labels.slice(i).join("."));
 }
 
 function coversAddresses(exclusion: Exclusion, addresses: string[]): boolean {
@@ -111,7 +139,12 @@ export async function forgetExcluded(
   runStep: RunStep,
 ): Promise<{ sourceRecords: number }> {
   requireSystem(ctx);
-  const exclusion = (await listExclusions(ctx)).find((e) => e.id === exclusionId);
+  const exclusion = (
+    await forOrg(ctx).select(exclusions, {
+      columns: ["id", "kind", "value", "createdAt"],
+      where: eq(exclusions.id, exclusionId),
+    })
+  ).at(0);
   if (exclusion === undefined) return { sourceRecords: 0 };
   if (exclusion.kind === "address" || exclusion.kind === "domain") {
     const done = await runStep("forget", () => forgetAddressed(ctx, exclusion));
@@ -151,9 +184,5 @@ async function forgetAddressed(ctx: Ctx, exclusion: Exclusion): Promise<{ delete
 
 async function deleteRecords(ctx: Ctx, ids: string[]): Promise<number> {
   if (ids.length === 0) return 0;
-  const deleted = await forOrg(ctx).delete(
-    sourceRecords,
-    inArray(sourceRecords.id, [...new Set(ids)]),
-  );
-  return deleted.length;
+  return forOrg(ctx).deleteCount(sourceRecords, inArray(sourceRecords.id, [...new Set(ids)]));
 }

@@ -64,24 +64,24 @@ export async function applyRetention(ctx: Ctx): Promise<RetentionApplied> {
   const db = forOrg(ctx);
   const months = (await settingsOf(ctx))?.retentionMonths ?? MAX_RETENTION_MONTHS;
   const before = { facts: await db.count(facts), objects: await db.count(memoryObjects) };
-  const records = await db.delete(
+  const records = await db.deleteCount(
     sourceRecords,
     lt(sourceRecords.occurredAt, retentionCutoff(months)),
   );
   // What the triggers left: a learned fact with no source, an object with no fact.
-  await db.delete(
+  await db.deleteCount(
     facts,
     and(
       eq(facts.origin, "source"),
       sql`not exists (select 1 from ${factSources} where ${factSources.factId} = ${facts.id})`,
     ),
   );
-  await db.delete(
+  await db.deleteCount(
     memoryObjects,
     sql`not exists (select 1 from ${facts} where ${facts.subjectId} = ${memoryObjects.id} or ${facts.objectId} = ${memoryObjects.id})`,
   );
   return {
-    sourceRecords: records.length,
+    sourceRecords: records,
     facts: before.facts - (await db.count(facts)),
     objects: before.objects - (await db.count(memoryObjects)),
   };

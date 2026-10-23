@@ -11,7 +11,26 @@ import { countForgotten } from "./forget";
 
 export async function getMemorySettings(ctx: Ctx): Promise<MemorySettings> {
   requireAdmin(ctx);
-  const settings = await settingsOf(ctx);
+  // Each read stands alone, so they run at once.
+  const [
+    settings,
+    spent,
+    postponedItems,
+    estimated,
+    exclusions,
+    companyWideLists,
+    workspaceDomain,
+    forgottenPeople,
+  ] = await Promise.all([
+    settingsOf(ctx),
+    spentThisMonth(ctx),
+    countPostponed(ctx),
+    estimate(ctx),
+    listExclusions(ctx),
+    listCompanyWideLists(ctx),
+    getWorkspaceDomain(ctx),
+    countForgotten(ctx),
+  ]);
   return {
     started:
       settings === null
@@ -22,12 +41,12 @@ export async function getMemorySettings(ctx: Ctx): Promise<MemorySettings> {
             retentionMonths: settings.retentionMonths,
           },
     monthStart: monthStart(),
-    spentThisMonth: await spentThisMonth(ctx),
-    postponedItems: await countPostponed(ctx),
-    estimate: await estimate(ctx),
-    exclusions: await listExclusions(ctx),
-    companyWideLists: await listCompanyWideLists(ctx),
-    workspaceDomain: await getWorkspaceDomain(ctx),
-    forgottenPeople: await countForgotten(ctx),
+    spentThisMonth: spent,
+    postponedItems,
+    estimate: estimated,
+    exclusions,
+    companyWideLists,
+    workspaceDomain,
+    forgottenPeople,
   };
 }

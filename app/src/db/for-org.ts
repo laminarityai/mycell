@@ -43,15 +43,22 @@ type ColumnOf<T extends TenantTable> = T["_"]["columns"][keyof T["_"]["columns"]
 export type NumberColumn<T extends TenantTable> = Extract<ColumnOf<T>, { _: { data: number } }>;
 
 /**
- * The columns `countBy` groups by, each under the name its value comes back as. `count` is
- * taken: it's the group's count.
+ * The columns `countBy` and `sumBy` group by, each under the name its value comes back as.
+ * `count` and `total` are taken: they're the group's count and sum.
  */
-export type GroupColumns<T extends TenantTable> = Record<string, ColumnOf<T>> & { count?: never };
+export type GroupColumns<T extends TenantTable> = Record<string, ColumnOf<T>> & {
+  count?: never;
+  total?: never;
+};
+
+/** One group's value of each group column. */
+type GroupValues<G> = { [K in keyof G]: G[K] extends Column ? GetColumnData<G[K]> : never };
 
 /** One group `countBy` found: its value of each group column, and how many rows it has. */
-export type GroupCount<G> = {
-  [K in keyof G]: G[K] extends Column ? GetColumnData<G[K]> : never;
-} & { count: number };
+export type GroupCount<G> = GroupValues<G> & { count: number };
+
+/** One group `sumBy` found: its value of each group column, and the total of its rows. */
+export type GroupSum<G> = GroupValues<G> & { total: number };
 
 export type SelectOptions<K extends string = string> = {
   /**
@@ -84,6 +91,18 @@ export type OrgScopedDb = {
   count(table: TenantTable, where?: SQL): Promise<number>;
   /** The total of `column` over the org's rows matching `where`; 0 when none do. */
   sum<T extends TenantTable>(table: T, column: NumberColumn<T>, where?: SQL): Promise<number>;
+  /**
+   * The total of `column` over the org's rows matching `where`, per distinct value of
+   * `groupBy`'s columns: one row per group, with its values under `groupBy`'s names and its
+   * `total` (spending by purpose, or by workflow, in one query). Groups no row has aren't
+   * returned. Name at least one column; `sum` adds up with none.
+   */
+  sumBy<T extends TenantTable, G extends GroupColumns<T>>(
+    table: T,
+    column: NumberColumn<T>,
+    groupBy: G,
+    where?: SQL,
+  ): Promise<GroupSum<G>[]>;
   /**
    * The org's rows matching `where`, counted per distinct value of `groupBy`'s columns: one
    * row per group, with its values under `groupBy`'s names and its `count`. Groups no row has
@@ -157,10 +176,22 @@ function scoped(ctx: Ctx, db: Executor): OrgScopedDb {
 
     async sum(table, column, where) {
       const source: PgTable = table;
-      // A sum over no rows is null, and Postgres returns numeric and bigint sums as strings.
-      const total = sql<number>`coalesce(sum(${column}), 0)`.mapWith(Number);
-      const rows = await db.select({ total }).from(source).where(inOrg(table, where));
+      const rows = await db
+        .select({ total: total(column) })
+        .from(source)
+        .where(inOrg(table, where));
       return rows.at(0)?.total ?? 0;
+    },
+
+    async sumBy(table, column, groupBy, where) {
+      const source: PgTable = table;
+      const columns: Record<string, PgColumn> = groupBy;
+      const rows = await db
+        .select({ ...columns, total: total(column) })
+        .from(source)
+        .where(inOrg(table, where))
+        .groupBy(...Object.values(columns));
+      return rows as GroupSum<typeof groupBy>[];
     },
 
     async countBy(table, groupBy, where) {
@@ -214,6 +245,12 @@ function scoped(ctx: Ctx, db: Executor): OrgScopedDb {
       return db.transaction((tx) => fn(scoped(ctx, tx)));
     },
   };
+}
+
+// A column's sum, as a number. A sum over no rows (or only nulls) is null, and Postgres returns
+// numeric and bigint sums as strings.
+function total(column: Column): SQL<number> {
+  return sql<number>`coalesce(sum(${column}), 0)`.mapWith(Number);
 }
 
 // The table's columns with these names, as a select's fields.

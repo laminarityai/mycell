@@ -67,7 +67,7 @@ export async function streamTurn(
   const [, context, opened] = await Promise.all([
     appendMessage(ctx, conversation, { role: "user", parts: [{ type: "text", text }] }),
     gatherContext(ctx, turn),
-    openMeteredStream(ctx, "smart").then(
+    openMeteredStream(ctx, "smart", { purpose: "builder" }).then(
       (stream) => ({ ok: true as const, stream }),
       (error: unknown) => ({ ok: false as const, error }),
     ),

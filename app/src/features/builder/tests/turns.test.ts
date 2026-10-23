@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { getBalance, listLedger } from "@/features/credits/server";
+import { spendingKindOf } from "@/features/credits/types";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import { getConversation, startConversation, streamTurn } from "../server";
 import { fundOrg, readTurn } from "./turn-helpers";
@@ -101,13 +102,16 @@ describe("a turn's credits", () => {
     await readTurn(await streamTurn(admin, id, "What does my workflow do?"));
 
     expect(await getBalance(admin)).toBe(970);
-    expect((await listLedger(admin)).at(0)).toMatchObject({
+    const [entry] = await listLedger(admin);
+    expect(entry).toMatchObject({
       kind: "usage",
       role: "smart",
       modelId: "test/smart-default",
       outcome: "succeeded",
       costUsd: 0.03,
+      purpose: "builder",
     });
+    expect(spendingKindOf(entry)).toBe("builder");
   });
 
   it("records the cost of the steps that ran when a turn ends early", async () => {
@@ -125,7 +129,11 @@ describe("a turn's credits", () => {
 
     expect(turn.errors).not.toEqual([]);
     expect(await getBalance(admin)).toBe(990);
-    expect((await listLedger(admin)).at(0)).toMatchObject({ outcome: "failed", costUsd: 0.01 });
+    expect((await listLedger(admin)).at(0)).toMatchObject({
+      outcome: "failed",
+      costUsd: 0.01,
+      purpose: "builder",
+    });
     const reply = (await getConversation(admin, id)).messages.at(-1);
     expect(reply?.parts.at(-1)).toMatchObject({ type: "notice", kind: "failed" });
   });

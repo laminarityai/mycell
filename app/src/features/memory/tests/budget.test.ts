@@ -17,6 +17,7 @@ import {
   resumePostponed,
   setMemoryBudget,
   startMemory,
+  summarizeObject,
 } from "../server";
 import { classifiedAs, grantOnly, learnStoredItems, scriptLearning } from "./memory-helpers";
 
@@ -192,6 +193,59 @@ describe("the monthly budget", () => {
     expect(await learnStoredItems(orgA.id)).toEqual([
       { outcome: "skipped", reason: "not_business" },
     ]);
+  });
+
+  it("caps learning only: a member's summaries don't count toward it", async () => {
+    const { orgA } = await setup();
+    // 5 credits: less than the summary below, more than the first classify call.
+    await startMemory(orgA.admin.ctx, { monthlyBudget: 5 });
+    const mailbox = await connectMailbox(orgA.member.ctx, orgA.member.email, [
+      {
+        from: `Dana Ruiz <${DANA}>`,
+        to: [orgA.member.email],
+        text: "I lead procurement at Acme.",
+        at: daysAgo(2),
+      },
+    ]);
+    await backfillConnection(orgA.member.ctx, mailbox.id);
+    scriptLearning({
+      objects: [{ ref: "dana", kind: "person", name: "Dana Ruiz", email: DANA }],
+      facts: [{ about: "dana", statement: ROLE, evidence: "I lead procurement at Acme" }],
+    });
+    expect(await learnStoredItems(orgA.id)).toEqual([{ outcome: "learned", objects: 1, facts: 1 }]);
+    const afterLearning = (await getMemorySettings(orgA.admin.ctx)).spentThisMonth;
+
+    // The member's summary costs 50 credits, ten times the budget, and isn't added up.
+    fakeAiGateway.text("Dana Ruiz leads procurement at Acme.", { costUsd: 0.05 });
+    await summarizeObject(orgA.member.ctx, { key: { kind: "email", value: DANA } });
+    expect((await getMemorySettings(orgA.admin.ctx)).spentThisMonth).toBe(afterLearning);
+
+    // So learning goes on, and what it spends still counts: a 3-credit classify call...
+    const next = (text: string) => {
+      mailbox.mailbox.add({
+        from: "news@deals.example",
+        to: [orgA.member.email],
+        text,
+        at: new Date(),
+      });
+    };
+    next("Offers");
+    await pollConnection(systemCtx(orgA.id), mailbox.id);
+    classifiedAs("newsletter", "email", { costUsd: 0.003 });
+    expect(await learnStoredItems(orgA.id)).toEqual([
+      { outcome: "skipped", reason: "not_business" },
+    ]);
+    expect((await getMemorySettings(orgA.admin.ctx)).spentThisMonth).toBeCloseTo(afterLearning + 3);
+    // ...and another reaches the budget, which postpones the next item.
+    next("More offers");
+    await pollConnection(systemCtx(orgA.id), mailbox.id);
+    classifiedAs("newsletter", "email", { costUsd: 0.003 });
+    expect(await learnStoredItems(orgA.id)).toEqual([
+      { outcome: "skipped", reason: "not_business" },
+    ]);
+    next("Even more offers");
+    await pollConnection(systemCtx(orgA.id), mailbox.id);
+    expect(await learnStoredItems(orgA.id)).toEqual([{ outcome: "skipped", reason: "postponed" }]);
   });
 
   it("can't be changed before memory starts", async () => {

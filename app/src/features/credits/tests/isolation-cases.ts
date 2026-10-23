@@ -24,6 +24,13 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await server.getBalance(orgs.orgA.admin.ctx)).toBe(0);
   },
 
+  isOutOfCredits: async (orgs) => {
+    await seedOrgBLedger(orgs);
+
+    expect(await server.isOutOfCredits(orgs.orgA.admin.ctx)).toBe(true);
+    expect(await server.isOutOfCredits(orgs.orgB.admin.ctx)).toBe(false);
+  },
+
   checkCredits: async (orgs) => {
     await seedOrgBLedger(orgs);
 

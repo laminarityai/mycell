@@ -1,11 +1,10 @@
 // The Workflows page as a member sees it: each workflow published to one of their tags, what it
 // does and needs, whether it's on, and the switch for one that runs on their own account.
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ReconnectButton } from "@/features/connections/ui";
 import type { VisibleWorkflow, WorkflowSwitch } from "../types";
 import { EnableSwitch } from "./enable-switch";
-import { pausedChangeText, pausedText } from "./paused-text";
+import { PausedNotice, StateBadge } from "./pause-display";
 import { RiskBadge } from "./risk-badge";
 
 export function VisibleWorkflowsList({ workflows }: { workflows: VisibleWorkflow[] }) {
@@ -64,43 +63,6 @@ function VisibleWorkflowCard({ workflow }: { workflow: VisibleWorkflow }) {
         </ol>
       </CardContent>
     </Card>
-  );
-}
-
-/**
- * Whether the workflow is on for the member: their own enablement (on, or paused and why), the
- * org switch, or off.
- */
-function StateBadge({ current }: { current: WorkflowSwitch | null }) {
-  if (current === null) return <Badge variant="secondary">Off</Badge>;
-  if (current.status === "paused") {
-    return (
-      <Badge variant="secondary">
-        Paused: {pausedText(current.pausedReason, current.pausedChange)}
-      </Badge>
-    );
-  }
-  return (
-    <Badge variant="outline">
-      {current.kind === "member" ? "On for your Google account" : "On for the shared inbox"}
-    </Badge>
-  );
-}
-
-// What a paused enablement is waiting for the member's OK on: what the new version changed.
-function PausedNotice({ current }: { current: WorkflowSwitch | null }) {
-  if (current?.status !== "paused") return null;
-  const changes = pausedChangeText(current.pausedChange);
-  if (changes.length === 0) return null;
-  return (
-    <div role="group" aria-label="What changed" className="flex flex-col gap-1">
-      <p>An admin published a new version. It stays paused until you switch it on again:</p>
-      <ul className="list-disc pl-5">
-        {changes.map((change) => (
-          <li key={change}>{change}</li>
-        ))}
-      </ul>
-    </div>
   );
 }
 

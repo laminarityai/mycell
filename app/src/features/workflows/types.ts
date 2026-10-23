@@ -168,19 +168,24 @@ export type WorkflowDetails = {
 
 /**
  * Where a workflow is switched on: by the caller's own enablement (`member`) or the org switch
- * (`org`), the connection it runs on, since when, and whether it's paused (an enablement only).
- * `needsReconnect` when Google refused the connection's token: nothing runs on it until its
- * owner reconnects, though the switch stays as it is (a connection state, not a pause).
+ * (`org`), the connection it runs on, since when, and what pauses it. `status` and
+ * `pausedReason` are what's stored (an enablement only); `pauses` is every pause that holds,
+ * stored or worked out. `needsReconnect` when Google refused the connection's token: nothing
+ * runs on it until its owner reconnects, though the switch stays as it is (a connection state,
+ * not a pause).
  */
 export type WorkflowSwitch = {
   kind: "member" | "org";
   connectionId: string;
   since: Date;
+  /** The stored status: `paused` only until its user enables it again. */
   status: EnablementStatus;
-  /** Why it's paused; null while on. */
-  pausedReason: PausedReason | null;
+  /** Why it's stored paused; null while stored on. */
+  pausedReason: StoredPausedReason | null;
   /** What a `needs_reenable` pause is about; null while on. */
   pausedChange: PausedChange | null;
+  /** Every pause that holds, in `PAUSED_REASONS`' order; empty while it runs. */
+  pauses: PausedReason[];
   needsReconnect: boolean;
 };
 
@@ -188,10 +193,18 @@ export type WorkflowSwitch = {
 export type EnablementStatus = "on" | "paused";
 
 /**
- * Why an enablement is paused. `needs_reenable`: a new version is riskier or needs more of the
- * connection than the one its user switched on. M7 and M8 add budget and credit reasons.
+ * Why a switch is paused, in the order its effective state picks from: the first that holds is
+ * the one shown (M7). M7's budgets add `budget_reached`, and M8's `failures`, between the two.
+ * - `out_of_credits`: the company's balance is at or below zero, so no workflow starts a run.
+ *   Worked out from the ledger when it's needed, never stored; a grant lifts it.
+ * - `needs_reenable`: a new version is riskier or needs more of the connection than the one its
+ *   user switched on. Stored on the enablement until they enable it again.
  */
-export type PausedReason = "needs_reenable";
+export const PAUSED_REASONS = ["out_of_credits", "needs_reenable"] as const;
+export type PausedReason = (typeof PAUSED_REASONS)[number];
+
+/** The pauses an enablement stores, which only its user lifts; the rest are worked out. */
+export type StoredPausedReason = Extract<PausedReason, "needs_reenable">;
 
 /**
  * What a `needs_reenable` pause is about: what the versions published since its member last
@@ -221,9 +234,12 @@ export type EnableResult =
 export type EnablementSummary = {
   userId: string;
   name: string;
+  /** Stored, as on `WorkflowSwitch`. */
   status: EnablementStatus;
-  pausedReason: PausedReason | null;
+  pausedReason: StoredPausedReason | null;
   pausedChange: PausedChange | null;
+  /** Every pause that holds, in `PAUSED_REASONS`' order; empty while it runs. */
+  pauses: PausedReason[];
   since: Date;
 };
 

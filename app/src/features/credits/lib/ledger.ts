@@ -15,6 +15,15 @@ export async function getBalance(ctx: Ctx): Promise<number> {
   return forOrg(ctx).sum(creditLedger, creditLedger.amount);
 }
 
+/**
+ * Whether the org is out of credits: its balance is at or below zero. Every workflow is then
+ * paused (no run starts) until a grant lifts it. Worked out from the ledger whenever it's asked,
+ * so nothing is written when it starts or ends.
+ */
+export async function isOutOfCredits(ctx: Ctx): Promise<boolean> {
+  return (await getBalance(ctx)) <= 0;
+}
+
 /** The credits usage for `purpose` has used up since `since`. Admins (and jobs) only. */
 export async function getSpending(ctx: Ctx, query: SpendingQuery): Promise<number> {
   requireRole(ctx, "admin", "system");

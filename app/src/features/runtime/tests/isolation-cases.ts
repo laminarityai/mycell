@@ -1,6 +1,7 @@
 import { expect } from "vitest";
 import { defineIsolationCases } from "@/db/testing/isolation";
 import type { TwoOrgs } from "@/db/testing/two-org-fixture";
+import { grantCredits } from "@/features/credits/server";
 import { enable, switchWorkflowOn } from "@/features/workflows/server";
 import { systemCtx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
@@ -193,6 +194,7 @@ export const isolationCases = defineIsolationCases(server, {
 async function seedOrgBCalendar({ orgB }: TwoOrgs) {
   const { admin } = orgB;
   const google = await connectGoogle(admin.ctx, admin.email);
+  await grantCredits(systemCtx(orgB.id), 100);
   await tagUsers(admin.ctx, "sales", [admin]);
   const { workflowId } = await publishTo(admin.ctx, "Invites", inviteSpec(), ["sales"]);
   await enable(admin.ctx, workflowId);

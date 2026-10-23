@@ -9,8 +9,17 @@ import type { FakeMessageInput } from "@/testing/fake-gmail";
 import { fakeNango } from "@/testing/fake-nango";
 import { storedStepOutput } from "@/testing/inngest-step-state";
 import { startRun } from "../server";
-import type { RetryPolicy } from "../types";
+import type { RetryPolicy, RunRecord } from "../types";
 import type { RunStep } from "@/lib/inngest";
+
+/**
+ * What a run's records hold, as JSON, for a scan for content: its record from `getRun` without
+ * the spec it ran and the trace's words for its checks, which are the spec's literals, not the
+ * message's.
+ */
+export function recordsOf(run: RunRecord): string {
+  return JSON.stringify({ ...run, version: null, trace: null });
+}
 
 /** Connects the user's Gmail as a member connection and seeds its mailbox. */
 export async function connectInbox(ctx: Ctx, emailAddress: string, messages: FakeMessageInput[]) {

@@ -6,7 +6,7 @@ import { resetDatabase } from "@/db/testing/reset";
 import { disable } from "@/features/workflows/server";
 import { deliver } from "@/testing/connect-helpers";
 import { fakeNango } from "@/testing/fake-nango";
-import { listRuns, pollCalendar, startInviteRuns } from "../server";
+import { getRunMessage, listRuns, pollCalendar, startInviteRuns } from "../server";
 import { announced, announcedIds, calendarSwitchedOn } from "./calendar-helpers";
 
 beforeEach(resetDatabase);
@@ -42,10 +42,33 @@ describe("polling a calendar for new invites", () => {
 
     expect(runIds).toHaveLength(2);
     for (const workflowId of workflowIds) {
-      expect(await listRuns(admin.ctx, workflowId)).toEqual([
-        expect.objectContaining({ sourceRef: invite.id, connectionId: google.id }),
-      ]);
+      const { runs } = await listRuns(admin.ctx, { workflowId });
+      expect(
+        runs.map((run) => ({ connectionId: run.connectionId, sourceRef: run.message?.sourceRef })),
+      ).toEqual([{ connectionId: google.id, sourceRef: invite.id }]);
     }
+  });
+
+  it("shows a run's invite on the Runs page and the run's page: its title, organizer and link", async () => {
+    const { system, admin, google, calendar, workflowIds } = await calendarSwitchedOn();
+    await pollCalendar(system, google.id);
+    const invite = calendar.invite({
+      title: "Intro call",
+      organizer: "ada@customer.test",
+      description: "Agenda: pricing",
+    });
+    await pollCalendar(system, google.id);
+    const { runIds } = await startInviteRuns(system, announced()[0]);
+
+    const shown = {
+      sourceRef: invite.id,
+      subject: "Intro call",
+      from: "ada@customer.test",
+      link: invite.htmlLink,
+    };
+    const [listed] = (await listRuns(admin.ctx, { workflowId: workflowIds[0] })).runs;
+    expect(listed.message).toEqual(shown);
+    expect(await getRunMessage(admin.ctx, runIds[0] ?? "")).toEqual(shown);
   });
 
   it("starts nothing more for an invite listed again after its organizer changes it", async () => {
@@ -63,7 +86,7 @@ describe("polling a calendar for new invites", () => {
     expect(new Set(announcedIds()).size).toBe(1);
     expect(again.runIds).toEqual(first.runIds);
     for (const workflowId of workflowIds) {
-      expect(await listRuns(admin.ctx, workflowId)).toHaveLength(1);
+      expect((await listRuns(admin.ctx, { workflowId })).runs).toHaveLength(1);
     }
   });
 
@@ -194,6 +217,6 @@ describe("polling a calendar for new invites", () => {
     });
 
     expect(runIds).toEqual([]);
-    expect(await listRuns(admin.ctx, workflowIds[0])).toEqual([]);
+    expect((await listRuns(admin.ctx, { workflowId: workflowIds[0] })).runs).toEqual([]);
   });
 });

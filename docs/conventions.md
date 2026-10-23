@@ -6,21 +6,22 @@ The always-on rules live in `AGENTS.md` ("Invariants", "Writing code"). This fil
 
 Every `app/src/features/<name>/` has the same shape. Root files are the public entry points (each optional), and subfolders are private. dependency-cruiser makes it a lint error to import a subfolder from outside its feature.
 
-| File                             | Exports                                                                   | Imported by                                |
-| -------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------ |
-| `server.ts`                      | server-side functions, each taking `ctx` first                            | Server Components, other features, jobs    |
-| `actions.ts`                     | Server Actions (`"use server"`)                                           | client components                          |
-| `ui.tsx`                         | the feature's React components                                            | pages in `src/app/`                        |
-| `jobs.ts`                        | the feature's Inngest functions                                           | the single Inngest route                   |
-| `types.ts`                       | public types and Zod schemas                                              | anyone                                     |
-| `connections/delegation.ts`      | `delegatedCtx`: a ctx delegated one connection (ADR-0016)                 | `reviews` only (a dependency-cruiser rule) |
-| `runtime/adapters.ts`            | the pending-form adapters (ADR-0013), clear of `reviews` to avoid a cycle | `reviews`                                  |
-| `connections/registered-apps.ts` | the registered apps' configuration (ADR-0018): pure, no IO                | anyone, client code included               |
-| `connections/gmail.ts`           | Gmail's path, response schemas, header lookup and body text: pure, no IO  | anyone that reads Gmail                    |
-| `connections/drive.ts`           | Drive's files path: pure, no IO                                           | anyone that reads Drive                    |
-| `custom-actions/description.ts`  | checking a custom action and the action it makes (ADR-0018): pure, no IO  | anyone, client code included               |
-| `custom-actions/api-index.ts`    | building a registered app's operation index (ADR-0018): pure, no IO       | `pnpm api-index` and tests                 |
-| `orgs/form-action.ts`            | `runFormAction` and `runValueAction`: how every Server Action runs        | every `actions.ts` (a lint rule)           |
+| File                             | Exports                                                                    | Imported by                                |
+| -------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------ |
+| `server.ts`                      | server-side functions, each taking `ctx` first                             | Server Components, other features, jobs    |
+| `actions.ts`                     | Server Actions (`"use server"`)                                            | client components                          |
+| `ui.tsx`                         | the feature's React components                                             | pages in `src/app/`                        |
+| `jobs.ts`                        | the feature's Inngest functions                                            | the single Inngest route                   |
+| `types.ts`                       | public types and Zod schemas                                               | anyone                                     |
+| `connections/delegation.ts`      | `delegatedCtx`: a ctx delegated one connection (ADR-0016)                  | `reviews` only (a dependency-cruiser rule) |
+| `runtime/adapters.ts`            | the pending-form adapters (ADR-0013), clear of `reviews` to avoid a cycle  | `reviews`                                  |
+| `runtime/failure-texts.ts`       | what a run's failure means and what to do, from its code: pure, no IO      | anyone, client code included               |
+| `connections/registered-apps.ts` | the registered apps' configuration (ADR-0018): pure, no IO                 | anyone, client code included               |
+| `connections/gmail.ts`           | Gmail's path, schemas, header lookup, body text and web links: pure, no IO | anyone that reads Gmail                    |
+| `connections/drive.ts`           | Drive's files path: pure, no IO                                            | anyone that reads Drive                    |
+| `custom-actions/description.ts`  | checking a custom action and the action it makes (ADR-0018): pure, no IO   | anyone, client code included               |
+| `custom-actions/api-index.ts`    | building a registered app's operation index (ADR-0018): pure, no IO        | `pnpm api-index` and tests                 |
+| `orgs/form-action.ts`            | `runFormAction` and `runValueAction`: how every Server Action runs         | every `actions.ts` (a lint rule)           |
 
 - A pure feature (no tables, no IO, no `ctx`, like `spec` and `policy`) has no `server.ts`. Its functions live in root files named for what they hold (`spec/validate.ts`, `policy/catalog.ts`, `policy/engine.ts`), which anyone may import, client code included.
 - `server.ts` functions that exist before any `ctx` does (sign-in, resolving the session to `ctx`, the auth route) are the only ones that don't take it first; they live in `orgs`.

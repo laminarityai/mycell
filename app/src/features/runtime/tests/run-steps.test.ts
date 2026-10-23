@@ -7,8 +7,8 @@ import { stepTypes } from "@/features/spec/types";
 import { systemCtx } from "@/lib/ctx";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import { executorCoverage } from "../coverage";
-import { executeRun, getRun, listRuns, startRun } from "../server";
-import { connectInbox, pricingQuestion, publish, threadSpec } from "./run-helpers";
+import { executeRun, getRun, startRun } from "../server";
+import { connectInbox, pricingQuestion, publish, recordsOf, threadSpec } from "./run-helpers";
 
 beforeEach(resetDatabase);
 
@@ -127,7 +127,7 @@ describe("the steps", () => {
   });
 
   it("keeps no subject, body or extracted value in the run's records", async () => {
-    const { admin, system, workflowId, runId } = await run([
+    const { admin, system, runId } = await run([
       classify,
       {
         id: "gate",
@@ -153,7 +153,7 @@ describe("the steps", () => {
 
     expect(await executeRun(system, runId)).toEqual({ status: "succeeded" });
 
-    const records = JSON.stringify([await getRun(admin, runId), await listRuns(admin, workflowId)]);
+    const records = recordsOf(await getRun(admin, runId));
     for (const content of [SUBJECT, BODY, "oak chairs", "Leeds", "ada@customer.test"]) {
       expect(records).not.toContain(content);
     }

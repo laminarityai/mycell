@@ -67,7 +67,7 @@ describe("tryInConversation", () => {
     for (const said of ['"yes"', "went on", 'the label "Pricing"', "drafted a reply", "review"]) {
       expect(lines).toContain(said);
     }
-    expect(await listRuns(admin, workflowId)).toEqual([]);
+    expect((await listRuns(admin, { workflowId })).runs).toEqual([]);
     expect(google.mailbox.writes.log).toEqual([]);
 
     fakeAiGateway.reply({ text: "I'll make the draft less formal." });

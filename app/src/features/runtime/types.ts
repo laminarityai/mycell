@@ -1,7 +1,9 @@
 // Runtime's public types: runs, their steps and records, and what a dry run returns.
 import type { ActionName } from "@/features/policy/catalog";
-import type { ModelRole, StepType } from "@/features/spec/types";
+import type { GraphTrace } from "@/features/spec/graph";
+import type { ModelRole, Spec, StepType } from "@/features/spec/types";
 import type { Json } from "@/lib/inngest";
+import { z } from "zod";
 
 /**
  * How often a failing step is tried, and how long it waits before attempt `attempt + 1`. The
@@ -79,28 +81,171 @@ export type RunStepRecord = {
   modelRole: ModelRole | null;
   modelId: string | null;
   costUsd: number;
+  /** What it cost in credits, at the config's credits-per-dollar ratio. */
+  costCredits: number;
   startedAt: Date;
   finishedAt: Date;
+  /** The step's checks, as the spec lists them, and how each went. */
+  checks: RunStepCheck[];
 };
 
-/** A run of a workflow version on one message, with its steps in order. */
+/** One of a step's checks on its output: `schema`, `minP` (confidence) or `requiredFields`. */
+export type RunStepCheck = {
+  check: "schema" | "minP" | "requiredFields";
+  /** `not_checked`: the step broke, or an earlier check failed, before this one was checked. */
+  status: "passed" | "failed" | "not_checked";
+  /** Why it failed, from check names and field paths only; null unless it failed. */
+  reason: string | null;
+};
+
+/**
+ * A run of a workflow version on one message, with its steps in order, as the caller may see it
+ * (`getRun`). It's shown in full only to its connection's readers (its owner, or any admin for
+ * an org connection); to an admin who isn't one it's redacted: `full` is false, `sourceRef` null
+ * and every step's `output` null, so nothing the run read or handed on is given (ADR-0001).
+ */
 export type RunRecord = {
   id: string;
   workflowId: string;
+  workflowName: string;
   workflowVersionId: string;
+  /** The version that ran, spec and all; null if it's gone. */
+  version: { id: string; number: number; spec: Spec } | null;
   connectionId: string;
   ownerScope: "member" | "org";
   enablementId: string | null;
-  /** The triggering Gmail message's ID. */
-  sourceRef: string;
+  startedBy: RunStartedBy;
+  inbox: RunInbox;
+  /** Shown in full to the caller: its message, and what its steps handed on. */
+  full: boolean;
+  /** The triggering Gmail message's ID; null when redacted. */
+  sourceRef: string | null;
   status: RunStatus;
   /** Why the run failed as a whole; null when it didn't, or failed at its steps. */
   errorCode: RunErrorCode | null;
   costUsd: number;
+  /** What it cost in credits, at the config's credits-per-dollar ratio. */
+  costCredits: number;
   startedAt: Date;
   finishedAt: Date | null;
   steps: RunStepRecord[];
+  /**
+   * The steps it reached and the paths each branch took, for the workflow graph to light up as
+   * it lights a Try it. A path's checks are given only in full: which of them passed says
+   * something of the message.
+   */
+  trace: GraphTrace;
 };
+
+/** What started a run: an admin by hand, a member's enablement, or an org workflow's switch. */
+export type RunStartedBy = "manual" | "enablement" | "org_switch";
+
+/** Which runs `listRuns` lists: each filter left out lets every value through. */
+export type RunFilters = { workflowId?: string; status?: RunStatus; connectionId?: string };
+
+/**
+ * Which page of runs: the newest, or the page just older or newer than a run another page
+ * showed (its `older` or `newer`). `size` runs a page, 25 unless given, at most 100.
+ */
+export type RunPageRequest = { olderThan?: string; newerThan?: string; size?: number };
+
+/** Whose inbox a run ran on, as the person listing it may know it. */
+export type RunInbox =
+  | { kind: "yours"; accountEmail: string }
+  | { kind: "org"; accountEmail: string }
+  /** Another member's own: their name alone (ADR-0001). */
+  | { kind: "colleague"; ownerName: string };
+
+/**
+ * The message that started a run, for someone who may read its connection: its subject and
+ * sender fetched from Gmail for display only, never stored (invariant 8). Both are null, and so
+ * is the link, when Gmail no longer has it or can't be reached.
+ */
+export type RunMessage = {
+  sourceRef: string;
+  subject: string | null;
+  from: string | null;
+  /** Its thread in Gmail's web app, opened in the inbox's account. */
+  link: string | null;
+};
+
+/** A step that failed, as a list of runs shows it: codes and words only, so anyone may see it. */
+export type RunFailure = {
+  stepId: string;
+  /** The path it's on, as `RunStepRecord.path` says it. */
+  path: string | null;
+  status: "failed" | "check_failed";
+  errorCode: string | null;
+  errorMessage: string | null;
+};
+
+/**
+ * One run on the Runs page. A run is shown in full only to its connection's readers (its
+ * owner, or any admin for an org connection); to anyone else it's redacted: `message` is null,
+ * and nothing it read or handed between its steps is given at all (ADR-0001).
+ */
+export type RunListItem = {
+  id: string;
+  workflowId: string;
+  workflowName: string;
+  connectionId: string;
+  ownerScope: "member" | "org";
+  startedBy: RunStartedBy;
+  inbox: RunInbox;
+  /** Null when the run is redacted for the caller. */
+  message: RunMessage | null;
+  status: RunStatus;
+  /** Why it failed as a whole (its job crashed); null when it didn't, or failed at its steps. */
+  errorCode: RunErrorCode | null;
+  costUsd: number;
+  /** What it cost in credits, at the config's credits-per-dollar ratio. */
+  costCredits: number;
+  startedAt: Date;
+  finishedAt: Date | null;
+  /** Its failed steps, in spec order. */
+  failures: RunFailure[];
+};
+
+// A query parameter's one value: the first of several, and none for an empty one.
+const queryValue = (value: unknown) => {
+  const first: unknown = Array.isArray(value) ? value[0] : value;
+  return typeof first === "string" && first.trim() !== "" ? first.trim() : undefined;
+};
+const queryText = z.preprocess(queryValue, z.string().optional());
+
+/**
+ * The Runs page's address query: its filters (`workflow`, `status`, `connection`) and the page
+ * (`older` or `newer`, a run ID). A value that isn't one is left out, so a stale or edited
+ * address lists every run rather than failing.
+ */
+export const runsQuerySchema = z
+  .object({
+    workflow: queryText,
+    status: z.preprocess(queryValue, z.enum(runStatuses).optional()).catch(undefined),
+    connection: queryText,
+    older: queryText,
+    newer: queryText,
+  })
+  .transform((query): { filters: RunFilters; page: RunPageRequest } => ({
+    filters: {
+      workflowId: query.workflow,
+      status: query.status,
+      connectionId: query.connection,
+    },
+    page: query.older !== undefined ? { olderThan: query.older } : { newerThan: query.newer },
+  }));
+
+/** What the Runs page's filters offer: the workflows and inboxes the caller's runs are on. */
+export type RunFilterOptions = {
+  workflows: { id: string; name: string }[];
+  connections: { id: string; inbox: RunInbox }[];
+};
+
+/**
+ * A page of runs, newest first, with the cursors of the pages either side: `newer` for
+ * `newerThan`, `older` for `olderThan`. Null when there's no such page.
+ */
+export type RunPage = { runs: RunListItem[]; newer: string | null; older: string | null };
 
 /**
  * What one step of a dry run read or would have written, shown to the admin who tried it and

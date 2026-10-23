@@ -14,6 +14,7 @@ import {
   publishWorkflow,
   saveWorkflow,
   switchWorkflowOn,
+  versionsById,
 } from "../server";
 import { draftSpec, labelSpec } from "./specs";
 
@@ -35,6 +36,31 @@ describe("the latest-version read's query budget", () => {
     expect(one).toEqual({ queries: 1, rows: 1 });
     expect(ten).toEqual(one);
     expect(await currentVersionIds(admin, [id])).toEqual(new Map([[id, latest.id]]));
+  });
+});
+
+// The Runs page reads the versions its runs ran, to say which path each failed step was on.
+describe("reading versions by ID: its query budget", () => {
+  it("makes one query for 1 version as for 3, for any role", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const admin = orgA.admin.ctx;
+    await connectGmail(admin, orgA.admin.email);
+    const { id } = await saveWorkflow(admin, { name: "Pricing", spec: draftSpec() });
+    const versions = [
+      await publishWorkflow(admin, id),
+      await publishWorkflow(admin, id),
+      await publishWorkflow(admin, id),
+    ];
+    const ids = versions.map((version) => version.id);
+
+    const one = await countQueries(() => versionsById(orgA.member.ctx, ids.slice(0, 1)));
+    const three = await countQueries(() => versionsById(orgA.member.ctx, ids));
+
+    expect(one).toEqual({ queries: 1, rows: 1 });
+    expect(three).toEqual({ queries: 1, rows: 3 });
+    const read = await versionsById(orgA.member.ctx, [...ids, "no-such-version"]);
+    expect([...read.values()].map((version) => version.number)).toEqual([1, 2, 3]);
+    expect(read.get(ids[0])?.spec).toMatchObject({ id: draftSpec().id });
   });
 });
 

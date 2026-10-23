@@ -1,5 +1,6 @@
 // What the isolation cases (isolation-cases.ts) seed in org B, for each case to check org A
 // can't reach it.
+import { expect } from "vitest";
 import { FUNDED_CREDITS, type TwoOrgs } from "@/db/testing/two-org-fixture";
 import { grantCredits } from "@/features/credits/server";
 import { listTags } from "@/features/tags/server";
@@ -39,4 +40,16 @@ export async function publishedToSalesInOrgB({ orgB }: TwoOrgs) {
 // Org B's tag IDs.
 export async function orgBTags({ orgB }: TwoOrgs): Promise<string[]> {
   return (await listTags(orgB.admin.ctx)).map((tag) => tag.id);
+}
+
+// versionsById's isolation case: org A reads none of org B's versions, whoever asks, and org B
+// reads its own.
+export async function versionsOfOrgBUnread(orgs: TwoOrgs) {
+  const b = await publishedToSalesInOrgB(orgs);
+
+  for (const ctx of [orgs.orgA.admin.ctx, orgs.orgA.member.ctx, systemCtx(orgs.orgA.id)]) {
+    expect(await server.versionsById(ctx, [b.version.id])).toEqual(new Map());
+  }
+  const own = await server.versionsById(orgs.orgB.member.ctx, [b.version.id]);
+  expect([...own.keys()]).toEqual([b.version.id]);
 }

@@ -63,6 +63,8 @@ export const runs = pgTable(
     unique("runs_org_id_id_unique").on(table.orgId, table.id),
     unique("runs_org_id_trigger_key_unique").on(table.orgId, table.triggerKey),
     index("runs_org_id_workflow_id_idx").on(table.orgId, table.workflowId),
+    // The Runs page's keyset paging: newest first, by start time and then ID.
+    index("runs_org_id_started_at_id_idx").on(table.orgId, table.startedAt.desc(), table.id.desc()),
     index("runs_enablement_id_idx").on(table.enablementId),
     // On the enablement's ID alone, so switching off nulls it and the run's row stays: the run
     // then ends `cancelled` before its next step.

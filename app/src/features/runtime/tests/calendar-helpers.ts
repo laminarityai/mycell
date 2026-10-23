@@ -1,6 +1,7 @@
 // Shared by the Calendar trigger's tests: Calendar-triggered workflows switched on for an
 // admin's own Google connection, and the invites its poll announced.
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
+import { grantCredits } from "@/features/credits/server";
 import { enable } from "@/features/workflows/server";
 import { systemCtx } from "@/lib/ctx";
 import { connectGoogle } from "@/testing/connect-helpers";
@@ -44,7 +45,7 @@ export function inviteSpec(id = "customer-invites"): Record<string, unknown> {
 }
 
 /**
- * Org A's admin connects Google, and two Calendar-triggered workflows are switched on for that
+ * Org A's admin connects Google, the org has credits, and two Calendar-triggered workflows are switched on for that
  * connection. `before` runs between connecting and switching on, to seed what came earlier.
  */
 export async function calendarSwitchedOn(
@@ -53,6 +54,8 @@ export async function calendarSwitchedOn(
   const orgs = await seedTwoOrgs();
   const { admin } = orgs.orgA;
   const google = await connectGoogle(admin.ctx, admin.email);
+  // With no credits, every workflow is paused and nothing is polled.
+  await grantCredits(systemCtx(orgs.orgA.id), 100);
   before?.(google.calendar);
   await tagUsers(admin.ctx, "sales", [admin]);
   const customers = await publishTo(admin.ctx, "Customer invites", inviteSpec(), ["sales"]);

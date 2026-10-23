@@ -155,7 +155,12 @@ describe("a workflow that labels an email and adds a follow-up task", () => {
 
     await executeRun(system, runId, runner.runStep);
 
-    const runs = [await getRun(admin, runId), await listRuns(admin, { workflowId })];
+    // The run list's `message` is the triggering email, read live for display only: not a record.
+    const listed = (await listRuns(admin, { workflowId })).runs.map((run) => ({
+      ...run,
+      message: null,
+    }));
+    const runs = [await getRun(admin, runId), listed];
     const records = JSON.stringify(runs);
     for (const text of [TITLE, NOTES, "Leeds", "oak chairs", "Added by"]) {
       expect(records).not.toContain(text);

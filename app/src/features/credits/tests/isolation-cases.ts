@@ -4,6 +4,7 @@ import type { TwoOrgs } from "@/db/testing/two-org-fixture";
 import { systemCtx } from "@/lib/ctx";
 import { OutOfCreditsError } from "@/lib/errors";
 import * as server from "../server";
+import { monthRange } from "../types";
 
 // Org B gets credits and a usage, so every case can check org B is left exactly as it was.
 async function seedOrgBLedger({ orgB }: TwoOrgs) {
@@ -78,5 +79,34 @@ export const isolationCases = defineIsolationCases(server, {
     await seedOrgBLedger(orgs);
 
     expect(await server.listLedger(orgs.orgA.admin.ctx)).toEqual([]);
+    expect(await server.listLedger(orgs.orgA.admin.ctx, { kind: "grant" })).toEqual([]);
+  },
+
+  getSpendingSummary: async (orgs) => {
+    await seedOrgBLedger(orgs);
+    await server.recordUsage(systemCtx(orgs.orgB.id), {
+      role: "fast",
+      modelId: "openai/x",
+      costUsd: 0.01,
+      outcome: "succeeded",
+      workflowId: "wf_b",
+      runId: "run_b",
+    });
+
+    const summary = await server.getSpendingSummary(orgs.orgA.admin.ctx, monthRange(new Date()));
+
+    expect(summary).toMatchObject({ openingBalance: 0, spent: 0, granted: 0, byWorkflow: [] });
+    expect(summary.days.every((day) => day.spent === 0 && day.granted === 0)).toBe(true);
+  },
+
+  getRunway: async (orgs) => {
+    await seedOrgBLedger(orgs);
+
+    expect(await server.getRunway(orgs.orgA.admin.ctx)).toEqual({
+      balance: 0,
+      dailyRate: null,
+      days: null,
+      zeroAt: null,
+    });
   },
 });

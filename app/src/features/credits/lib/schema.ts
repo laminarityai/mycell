@@ -30,6 +30,8 @@ export const creditLedger = pgTable(
     // What the usage was spent on when no run or Try it made it: memory's learning, a person's
     // summary, or the builder chat.
     purpose: text("purpose", { enum: CREDIT_PURPOSES }),
+    // Grants only: what our team granted it for ("October allowance"), shown on the Credits page.
+    note: text("note"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [

@@ -1,0 +1,5 @@
+# What the credits feature's tests ask a model (tests/spend.ts), only so that the ledger's rows
+# come from real metered calls. What it says doesn't matter.
+
+hi: |-
+  Hi

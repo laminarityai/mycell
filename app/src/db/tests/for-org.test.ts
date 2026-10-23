@@ -175,6 +175,10 @@ describe("forOrg(ctx).sumBy", () => {
     expect(
       await db.sumBy(notes, notes.position, { body: notes.body }, eq(notes.body, "b1")),
     ).toEqual([]);
+    // A group may be SQL computed from the row, typed by what it returns.
+    const even = await db.sumBy(notes, notes.position, { even: sql<boolean>`position % 2 = 0` });
+    expectTypeOf(even).toEqualTypeOf<({ even: boolean } & { total: number })[]>();
+    expect(even.find((group) => group.even)).toEqual({ even: true, total: 2 });
   });
 });
 

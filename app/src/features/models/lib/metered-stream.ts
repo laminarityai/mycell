@@ -3,15 +3,13 @@
 // credit check before anything is sent; the caller meters each model step as it ends and
 // finishes once, which records exactly one usage entry with the steps' summed gateway cost,
 // however the stream ended (invariant 7).
-import { createGateway } from "ai";
 import { checkCredits } from "@/features/credits/server";
 import type { ModelRole } from "@/features/spec/types";
 import type { Ctx } from "@/lib/ctx";
-import { env } from "@/env";
 import type { CallAttribution, MeteredStream } from "../types";
 import { CREDIT_ESTIMATES } from "./call-model";
 import { recordCallUsage } from "./failed-call-costs";
-import { meteringOf } from "./gateway";
+import { gatewayProvider, meteringOf } from "./gateway";
 import { resolveModel } from "./model-roles";
 
 /** Throws OutOfCreditsError, before any request, when the balance can't cover the role. */
@@ -27,10 +25,7 @@ export async function openMeteredStream(
 
   // A plain gateway provider: the metering fetch of `meteredGateway` reads JSON bodies, which
   // would hold back a stream. A streamed step reports its cost on its finish part instead.
-  const provider = createGateway({
-    apiKey: env.AI_GATEWAY_API_KEY,
-    baseURL: env.AI_GATEWAY_BASE_URL,
-  });
+  const provider = gatewayProvider();
   let costUsd = 0;
   let generationId: string | undefined;
   let finished = false;

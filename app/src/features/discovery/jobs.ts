@@ -61,9 +61,18 @@ export const pollCron = inngest.createFunction(
   },
 );
 
-/** Polls one connection: what's new since its cursor, or a recovery if the cursor expired. */
+/**
+ * Polls one connection: what's new since its cursor, or a recovery if the cursor expired. A
+ * burst of poll-due events for one connection (Gmail notifies up to once a second, ADR-0026)
+ * becomes one poll, 5 seconds after the last; a steady stream still polls every 30 seconds.
+ */
 export const pollJob = inngest.createFunction(
-  { id: "poll-connection", triggers: [connectionPollDue], concurrency: [...INGEST_CONCURRENCY] },
+  {
+    id: "poll-connection",
+    triggers: [connectionPollDue],
+    concurrency: [...INGEST_CONCURRENCY],
+    debounce: { key: "event.data.connectionId", period: "5s", timeout: "30s" },
+  },
   async ({ event, step }) =>
     pollConnection(systemCtx(event.data.orgId), event.data.connectionId, stepRunner(step)),
 );

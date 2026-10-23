@@ -1,5 +1,6 @@
 import { seedGoogleConnection } from "@/db/testing/seed-connection";
 import { seedRun } from "@/db/testing/seed-run";
+import type { FixtureOrg } from "@/db/testing/two-org-fixture";
 import { publishWorkflow, saveWorkflow } from "@/features/workflows/server";
 import { googleScope } from "@/lib/google";
 import { expect, test } from "./fixtures";
@@ -21,33 +22,32 @@ const READ_SPEC = {
   autonomy: { rung: 3 },
 };
 
-test("an admin opens Runs, sees a colleague's runs without their mail, and filters to failed", async ({
-  page,
-  orgs: { orgA },
-  signInAs,
-}) => {
+/**
+ * The admin's published read workflow, and two runs of it on the member's own Gmail: one
+ * succeeded, then one failed reading its message. The admin isn't their reader, so the pages
+ * fetch nothing from Gmail.
+ */
+async function memberRuns(org: FixtureOrg) {
   const gmail = [googleScope("gmail.modify")];
   // The admin publishes the workflow, which needs a Gmail connection of their own.
   await seedGoogleConnection({
-    orgId: orgA.id,
-    ownerUserId: orgA.admin.id,
-    accountEmail: orgA.admin.email,
+    orgId: org.id,
+    ownerUserId: org.admin.id,
+    accountEmail: org.admin.email,
     scopes: gmail,
   });
-  const { id: workflowId } = await saveWorkflow(orgA.admin.ctx, {
+  const { id: workflowId } = await saveWorkflow(org.admin.ctx, {
     name: "Pricing reads",
     spec: READ_SPEC,
   });
-  const version = await publishWorkflow(orgA.admin.ctx, workflowId);
-  // Two runs on the member's own Gmail: one succeeded, then one failed reading its message.
-  // The admin isn't their reader, so the page fetches nothing from Gmail.
+  const version = await publishWorkflow(org.admin.ctx, workflowId);
   const { id: connectionId } = await seedGoogleConnection({
-    orgId: orgA.id,
-    ownerUserId: orgA.member.id,
-    accountEmail: orgA.member.email,
+    orgId: org.id,
+    ownerUserId: org.member.id,
+    accountEmail: org.member.email,
     scopes: gmail,
   });
-  const run = { orgId: orgA.id, connectionId, ownerScope: "member" as const, workflowId };
+  const run = { orgId: org.id, connectionId, ownerScope: "member" as const, workflowId };
   await seedRun({
     ...run,
     workflowVersionId: version.id,
@@ -66,6 +66,14 @@ test("an admin opens Runs, sees a colleague's runs without their mail, and filte
       errorMessage: "Gmail has no such item.",
     },
   });
+}
+
+test("an admin opens Runs, sees a colleague's runs without their mail, and filters to failed", async ({
+  page,
+  orgs: { orgA },
+  signInAs,
+}) => {
+  await memberRuns(orgA);
   await signInAs(orgA.admin);
 
   await page.goto("/reviews");
@@ -84,4 +92,38 @@ test("an admin opens Runs, sees a colleague's runs without their mail, and filte
   await expect(rows.nth(1)).toContainText("Failed");
   await expect(rows.nth(1)).toContainText("Gmail has no such item.");
   await expect(page.getByLabel("Status")).toHaveValue("failed");
+});
+
+test("an admin opens a colleague's failed run from Runs and sees its steps, not its mail", async ({
+  page,
+  orgs: { orgA },
+  signInAs,
+}) => {
+  await memberRuns(orgA);
+  await signInAs(orgA.admin);
+
+  await page.goto("/runs?status=failed");
+  await page
+    .getByRole("table", { name: "Runs" })
+    .getByRole("link", { name: `Message hidden: ${orgA.member.email}'s inbox` })
+    .click();
+
+  await expect(page).toHaveURL(/\/runs\/[^/?]+$/);
+  await expect(page.getByRole("heading", { name: "Run", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Pricing reads" })).toBeVisible();
+  const summary = page.getByRole("region", { name: "Run" });
+  await expect(summary).toContainText("Failed");
+  await expect(summary).toContainText(`Hidden: ${orgA.member.email}'s inbox`);
+  // Its steps in order, and the one it failed at opened beside the graph.
+  const steps = page.getByRole("list", { name: "Steps in order" });
+  await expect(steps.getByRole("button", { name: /read/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("region", { name: "Workflow graph" })).toBeVisible();
+  const panel = page.getByRole("complementary", { name: "Step read" });
+  await expect(panel).toContainText("Failed");
+  await expect(panel).toContainText("The item isn't in its app");
+  await expect(panel).toContainText("What to do:");
+  await expect(panel).toContainText("Output hidden");
+  await expect(page.getByRole("region", { name: "Reviews" })).toContainText(
+    "This run created no reviews.",
+  );
 });

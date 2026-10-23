@@ -1,17 +1,13 @@
-// Run records: starting a run by hand, and reading runs back. Reads and the manual start are
-// admin-only in M3; the interpreter writes as the system ctx (interpreter.ts). A run is read
-// only by whoever may read its connection (connections' rule): a run on a member connection
-// holds what that member's mail made, so it stays with them (invariant 2, ADR-0001).
+// Run records: starting a run by hand, and reading a run's rows back. The manual start is
+// admin-only; the interpreter writes as the system ctx (interpreter.ts). What a person may read
+// of a run is run-details.ts's and run-list.ts's business.
 import { randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
-import { getConnection, readableConnectionIds } from "@/features/connections/server";
-import { describePathTo } from "@/features/spec/describe";
-import type { Spec } from "@/features/spec/types";
-import { getWorkflow, getWorkflowVersion, versionsById } from "@/features/workflows/server";
+import { getConnection } from "@/features/connections/server";
+import { getWorkflow, getWorkflowVersion } from "@/features/workflows/server";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
-import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
-import type { RunRecord, RunStepRecord } from "../types";
+import { ValidationError } from "@/lib/errors";
 import { sendRunRequested } from "./events";
 import { runs, runSteps } from "./schema";
 
@@ -58,18 +54,6 @@ export async function startRun(
   return { runId };
 }
 
-/** One run with its steps, on a connection the caller may read. */
-export async function getRun(ctx: Ctx, runId: string): Promise<RunRecord> {
-  requireAdmin(ctx);
-  const run = await findRun(ctx, runId);
-  if (run === undefined) throw new NotFoundError("run");
-  const readable = await readableConnectionIds(ctx);
-  if (!readable.includes(run.connectionId)) throw new ForbiddenError();
-  const record = (await withSteps(ctx, [run])).at(0);
-  if (record === undefined) throw new NotFoundError("run");
-  return record;
-}
-
 export async function findRun(ctx: Ctx, runId: string): Promise<Run | undefined> {
   return (await forOrg(ctx).select(runs, { where: eq(runs.id, runId), limit: 1 })).at(0);
 }
@@ -81,52 +65,4 @@ export async function stepsOf(ctx: Ctx, runIds: string[]): Promise<RunStepRow[]>
     where: inArray(runSteps.runId, runIds),
     orderBy: [runSteps.position],
   });
-}
-
-async function withSteps(ctx: Ctx, rows: Run[]): Promise<RunRecord[]> {
-  const steps = await stepsOf(
-    ctx,
-    rows.map((row) => row.id),
-  );
-  // Each version's spec, which names the path each step is on, read together.
-  const versions = await versionsById(
-    ctx,
-    rows.map((row) => row.workflowVersionId),
-  );
-  return rows.map((row) => ({
-    id: row.id,
-    workflowId: row.workflowId,
-    workflowVersionId: row.workflowVersionId,
-    connectionId: row.connectionId,
-    ownerScope: row.ownerScope,
-    enablementId: row.enablementId,
-    sourceRef: row.sourceRef,
-    status: row.status,
-    errorCode: row.errorCode,
-    costUsd: row.costUsd,
-    startedAt: row.startedAt,
-    finishedAt: row.finishedAt,
-    steps: steps
-      .filter((step) => step.runId === row.id)
-      .map((step) => stepRecord(step, versions.get(row.workflowVersionId)?.spec)),
-  }));
-}
-
-function stepRecord(row: RunStepRow, spec: Spec | undefined): RunStepRecord {
-  return {
-    stepId: row.stepId,
-    type: row.type,
-    path: spec === undefined ? null : describePathTo(spec, row.stepId),
-    status: row.status,
-    attempts: row.attempts,
-    lastAttemptAt: row.lastAttemptAt,
-    output: row.output ?? null,
-    errorCode: row.errorCode,
-    errorMessage: row.errorMessage,
-    modelRole: row.modelRole,
-    modelId: row.modelId,
-    costUsd: row.costUsd,
-    startedAt: row.startedAt,
-    finishedAt: row.finishedAt,
-  };
 }

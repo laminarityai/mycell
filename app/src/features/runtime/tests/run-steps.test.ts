@@ -8,7 +8,7 @@ import { systemCtx } from "@/lib/ctx";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import { executorCoverage } from "../coverage";
 import { executeRun, getRun, startRun } from "../server";
-import { connectInbox, pricingQuestion, publish, threadSpec } from "./run-helpers";
+import { connectInbox, pricingQuestion, publish, recordsOf, threadSpec } from "./run-helpers";
 
 beforeEach(resetDatabase);
 
@@ -153,7 +153,7 @@ describe("the steps", () => {
 
     expect(await executeRun(system, runId)).toEqual({ status: "succeeded" });
 
-    const records = JSON.stringify(await getRun(admin, runId));
+    const records = recordsOf(await getRun(admin, runId));
     for (const content of [SUBJECT, BODY, "oak chairs", "Leeds", "ada@customer.test"]) {
       expect(records).not.toContain(content);
     }

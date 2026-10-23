@@ -156,7 +156,7 @@ export function PathNode({ data }: Of<"path">) {
           Before: {path.before}
         </p>
       )}
-      <PathRunSummary run={path.run} />
+      <PathRunSummary run={path.run} otherwise={otherwise} />
       <Handles />
     </div>
   );

@@ -18,7 +18,7 @@ import { SpecEditor } from "./lib/spec-editor";
 import { SwitchForm, type SwitchConnectionOption } from "./lib/switch-form";
 import type { Tag } from "@/features/tags/types";
 import { PublishDialog } from "./lib/workflow-editor";
-import { WorkflowGraph, type WorkflowGraphProps } from "./lib/workflow-graph";
+import { WorkflowGraph, type GraphSelection, type WorkflowGraphProps } from "./lib/workflow-graph";
 import { WorkingSpecEditor, type EditableWorkflow } from "./lib/working-spec-editor";
 import { PauseBadge, PausedNotice, StateBadge } from "./lib/pause-display";
 import { pausedText } from "./lib/paused-text";
@@ -45,6 +45,7 @@ export {
   WorkflowGraph,
   WorkingSpecEditor,
   type EditableWorkflow,
+  type GraphSelection,
   type WorkflowGraphProps,
 };
 

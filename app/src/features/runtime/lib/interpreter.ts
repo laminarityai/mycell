@@ -21,6 +21,7 @@ import { actionExecutors } from "./actions";
 import { holdCustomWrite } from "./custom-action";
 import { linkHeldSendReview } from "./held-sends";
 import { attemptStep } from "./executors";
+import { mayPause, pauseIfFailing } from "./failure-streak";
 import { isConnectionGone, logInternalError, type Failure } from "./failures";
 import { defaultRetryPolicy, withRetries } from "./run-step";
 import { findRun, stepsOf } from "./runs";
@@ -54,7 +55,12 @@ export async function executeRun(
   requireSystem(ctx);
   const run = await findRun(ctx, runId);
   if (run === undefined) return { status: "cancelled" };
-  if (run.status !== "running") return { status: run.status };
+  if (run.status !== "running") {
+    // A retry after the run was ended: whether it pauses its workflow is worked out again, in
+    // case the invocation that ended it stopped before.
+    if (mayPause(run.status)) await pauseIfFailing(ctx, run.workflowId);
+    return { status: run.status };
+  }
   const { spec } = await getWorkflowVersion(ctx, run.workflowVersionId);
   const actionSet = await getActionSet(ctx);
 
@@ -64,6 +70,7 @@ export async function executeRun(
   // The one place a run's status is written, once the walk has ended. It's outside any step,
   // so it writes only a run still running: a retry that replays the walk changes nothing.
   await finishRun(ctx, run.id, status);
+  if (mayPause(status)) await pauseIfFailing(ctx, run.workflowId);
   return { status };
 }
 
@@ -193,12 +200,15 @@ async function recordStep(
 
 /**
  * The run job crashed past Inngest's retries (its onFailure handler): a run it left running
- * ends `failed` with `internal_error`, and the log records it. A run that finished, or that a
- * call before this one ended, is left as it was, and logged once.
+ * ends `failed` with `internal_error`, and the log records it, and it counts toward pausing its
+ * workflow. A run that finished, or that a call before this one ended, is left as it was, and
+ * logged once.
  */
 export async function failCrashedRun(ctx: Ctx, runId: string): Promise<void> {
   requireSystem(ctx);
   if (await finishRun(ctx, runId, "failed", "internal_error")) logInternalError({ runId });
+  const run = await findRun(ctx, runId);
+  if (run !== undefined && mayPause(run.status)) await pauseIfFailing(ctx, run.workflowId);
 }
 
 /**

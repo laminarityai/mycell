@@ -49,6 +49,14 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await server.listRuns(orgs.orgA.admin.ctx, workflowId)).toEqual([]);
   },
 
+  pausingRuns: async (orgs) => {
+    const { runId } = await seedOrgBRun(orgs);
+    await server.failCrashedRun(systemCtx(orgs.orgB.id), runId);
+
+    expect(await server.pausingRuns(orgs.orgA.admin.ctx, [runId])).toEqual([]);
+    expect(await server.pausingRuns(orgs.orgB.admin.ctx, [runId])).toHaveLength(1);
+  },
+
   startTriggeredRuns: async (orgs) => {
     // Org B's workflow is switched on for its admin's inbox; org A's fan-out is handed org B's
     // connection, as a forged or misrouted event would.

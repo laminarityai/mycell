@@ -3,6 +3,8 @@
 import "server-only";
 export { executeRun, failCrashedRun } from "./lib/interpreter";
 export { getRun, listRuns, startRun } from "./lib/runs";
+// For a workflow paused for failing: the runs that paused it, as its Health check lists them.
+export { pausingRuns } from "./lib/pausing-runs";
 // "Try it": a spec on one message, in memory, with every write stubbed. Nothing is stored.
 export { dryRun } from "./lib/dry-run";
 export { recentMessages } from "./lib/recent-messages";

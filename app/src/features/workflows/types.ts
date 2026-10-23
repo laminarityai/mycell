@@ -162,6 +162,8 @@ export type WorkflowDetails = {
   switch: WorkflowSwitch | null;
   /** When an admin archived it, which stops it everywhere; null while not archived. */
   archivedAt: Date | null;
+  /** Set while its runs' failures pause it, until an admin resumes it (M8). */
+  failurePause: FailurePause | null;
   createdBy: string;
   updatedAt: Date;
 };
@@ -194,14 +196,40 @@ export type EnablementStatus = "on" | "paused";
 
 /**
  * Why a switch is paused, in the order its effective state picks from: the first that holds is
- * the one shown (M7). M7's budgets add `budget_reached`, and M8's `failures`, between the two.
+ * the one shown (M7). M7's budgets add `budget_reached`, after `failures`.
  * - `out_of_credits`: the company's balance is at or below zero, so no workflow starts a run.
  *   Worked out from the ledger when it's needed, never stored; a grant lifts it.
+ * - `failures`: three of the workflow's runs in a row failed (M8). Stored on the workflow, with
+ *   the runs, for every switch of it; only an admin resuming it lifts it.
  * - `needs_reenable`: a new version is riskier or needs more of the connection than the one its
  *   user switched on. Stored on the enablement until they enable it again.
  */
-export const PAUSED_REASONS = ["out_of_credits", "needs_reenable"] as const;
+export const PAUSED_REASONS = ["out_of_credits", "failures", "needs_reenable"] as const;
 export type PausedReason = (typeof PAUSED_REASONS)[number];
+
+/** The pause a workflow stores for every switch of it: its runs' failures. */
+export type WorkflowPausedReason = Extract<PausedReason, "failures">;
+
+/**
+ * A workflow paused for its runs' failures: since when, and the three runs in a row that
+ * paused it, newest first.
+ */
+export type FailurePause = { pausedAt: Date; runIds: string[] };
+
+/**
+ * One of the runs that paused a workflow, as its Health check lists it: when it ended, whose
+ * inbox it ran on, the step that failed and the error, in words with no content. Runtime reads
+ * it (`pausingRuns`), since workflows can't read runs.
+ */
+export type PausingRun = {
+  runId: string;
+  finishedAt: Date | null;
+  /** "support@org-a.test", "Your inbox", or "Ada's inbox" for a colleague's. */
+  inbox: string;
+  /** The step that failed; null when the run failed as a whole (its job crashed). */
+  failedStep: string | null;
+  error: string;
+};
 
 /** The pauses an enablement stores, which only its user lifts; the rest are worked out. */
 export type StoredPausedReason = Extract<PausedReason, "needs_reenable">;

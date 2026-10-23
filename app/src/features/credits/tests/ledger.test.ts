@@ -12,6 +12,7 @@ import {
   listLedger,
   recordUsage,
 } from "../server";
+import { spendingKindOf } from "../types";
 
 beforeEach(resetDatabase);
 
@@ -143,5 +144,31 @@ describe("getSpending", () => {
       null,
       null,
     ]);
+  });
+});
+
+describe("spendingKindOf", () => {
+  it("puts each usage in the kind of use its attribution names, and a grant in none", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const ctx = systemCtx(orgA.id);
+    const grant = await grantCredits(ctx, 100);
+    const call = { role: "fast" as const, modelId: "openai/x", outcome: "succeeded" as const };
+    const usage = [
+      await recordUsage(ctx, { ...call, costUsd: 0.001, workflowId: "wf_1", runId: "run_1" }),
+      await recordUsage(ctx, { ...call, costUsd: 0.001, workflowId: "wf_1", dryRun: true }),
+      await recordUsage(ctx, { ...call, costUsd: 0.001, purpose: "builder" }),
+      await recordUsage(ctx, { ...call, costUsd: 0.001, purpose: "memory" }),
+      await recordUsage(ctx, { ...call, costUsd: 0.001, purpose: "memory_summary" }),
+    ];
+
+    // A person's summaries are memory's here, though memory's budget adds up only learning.
+    expect(usage.map(spendingKindOf)).toEqual([
+      "workflow",
+      "try_it",
+      "builder",
+      "memory",
+      "memory",
+    ]);
+    expect(spendingKindOf(grant)).toBeNull();
   });
 });

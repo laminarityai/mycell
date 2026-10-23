@@ -5,10 +5,10 @@ import { getWorkflow, saveWorkflow } from "@/features/workflows/server";
 import { NotFoundError } from "@/lib/errors";
 import { connectGmail, connectGoogle } from "@/testing/connect-helpers";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
+import { fundOrg, readTurn } from "@/testing/streamed-turn";
 import * as server from "../server";
 import { proposeInTurn } from "./proposal-helpers";
 import { draftSpec, labelSpec } from "./specs";
-import { fundOrg, readTurn } from "./turn-helpers";
 
 // Org B has a workflow and a conversation about it with one turn, so every case can check
 // org B is left exactly as it was.

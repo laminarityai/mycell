@@ -1,6 +1,6 @@
 {
-  "id": "cf67f24e-973e-4d39-a568-16b473252ee7",
-  "prevId": "1fc4ed66-8e09-481c-b9f2-1ff6d3c74422",
+  "id": "eeb51252-076d-4e71-bc92-003d67220675",
+  "prevId": "c5511de3-2e46-4f86-aac5-96a265285da4",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1442,6 +1442,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "corrects_id": {
+          "name": "corrects_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -1492,9 +1498,38 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "credit_ledger_corrects_id_unique": {
+          "name": "credit_ledger_corrects_id_unique",
+          "columns": [
+            {
+              "expression": "corrects_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "credit_ledger_corrects_id_fk": {
+          "name": "credit_ledger_corrects_id_fk",
+          "tableFrom": "credit_ledger",
+          "tableTo": "credit_ledger",
+          "columnsFrom": [
+            "corrects_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -4160,12 +4195,6 @@
           "notNull": true,
           "default": "'manual'"
         },
-        "retry_of_run_id": {
-          "name": "retry_of_run_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "enablement_id": {
           "name": "enablement_id",
           "type": "text",
@@ -4325,19 +4354,6 @@
         }
       },
       "foreignKeys": {
-        "runs_retry_of_fk": {
-          "name": "runs_retry_of_fk",
-          "tableFrom": "runs",
-          "tableTo": "runs",
-          "columnsFrom": [
-            "retry_of_run_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
         "runs_enablement_fk": {
           "name": "runs_enablement_fk",
           "tableFrom": "runs",
@@ -4398,13 +4414,6 @@
           "columns": [
             "org_id",
             "trigger_key"
-          ]
-        },
-        "runs_retry_of_run_id_unique": {
-          "name": "runs_retry_of_run_id_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "retry_of_run_id"
           ]
         }
       },

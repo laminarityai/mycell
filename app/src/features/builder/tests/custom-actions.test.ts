@@ -13,6 +13,7 @@ import type { Ctx } from "@/lib/ctx";
 import { ConflictError } from "@/lib/errors";
 import { connectApp, connectGmail } from "@/testing/connect-helpers";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
+import { fundOrg, readTurn } from "@/testing/streamed-turn";
 import {
   acceptProposal,
   getConversation,
@@ -22,7 +23,6 @@ import {
   streamTurn,
 } from "../server";
 import { SUMMARY } from "./proposal-helpers";
-import { fundOrg, readTurn } from "./turn-helpers";
 
 beforeEach(resetDatabase);
 

@@ -3,12 +3,9 @@
 import "server-only";
 import { systemCtx } from "@/lib/ctx";
 import { gmailMessageReceived } from "@/lib/events";
-import { inngest, stepRunner } from "@/lib/inngest";
+import { inngest, PER_ORG_LIMIT, stepRunner } from "@/lib/inngest";
 import { runRequested } from "./lib/events";
 import { executeRun, failCrashedRun, startTriggeredRuns } from "./server";
-
-// At most this many runs execute at once for one org, as for ingest.
-const PER_ORG_LIMIT = 3;
 
 /**
  * Starts the runs one new inbound message starts: one per enablement or org workflow switched

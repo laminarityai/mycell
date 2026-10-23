@@ -6,7 +6,7 @@
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { CircleCheck, CircleX, Inbox, Octagon } from "lucide-react";
 import type { RiskLevel } from "@/features/policy/types";
-import type { LayoutNode } from "@/features/spec/layout";
+import { boxLabel, type LayoutNode } from "@/features/spec/layout";
 import { cn } from "@/lib/utils";
 import type { BoxMarks } from "./graph-drawing";
 import {
@@ -50,7 +50,7 @@ export function TriggerNode({ data }: Of<"trigger">) {
   return (
     <div
       role="group"
-      aria-label="Trigger"
+      aria-label={boxLabel(data)}
       className={cn(
         "flex h-full flex-col gap-0.5 rounded-lg border bg-card px-3 py-2 shadow-sm",
         data.run === "taken" && "border-emerald-500",
@@ -72,7 +72,7 @@ export function StepNode({ data }: Of<"step">) {
   return (
     <div
       role="group"
-      aria-label={`Step ${step.id}`}
+      aria-label={boxLabel(data)}
       className={cn(
         "flex h-full flex-col gap-1 overflow-hidden rounded-lg border bg-card px-3 py-2 shadow-sm",
         step.type === "branch" && "border-violet-300 bg-violet-50/60",
@@ -124,7 +124,7 @@ export function PathNode({ data }: Of<"path">) {
   return (
     <div
       role="group"
-      aria-label={`Path ${path.name ?? "Otherwise"}`}
+      aria-label={boxLabel(data)}
       className={cn(
         "flex h-full flex-col gap-0.5 overflow-hidden rounded-xl border border-violet-200 bg-violet-50 px-3 py-1.5",
         otherwise && "border-dashed bg-muted/50",

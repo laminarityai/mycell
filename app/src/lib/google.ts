@@ -16,6 +16,16 @@ export const GOOGLE_HOSTS = {
 export const GOOGLE_APPS = ["gmail", "drive", "sheets", "calendar", "docs", "tasks"] as const;
 export type GoogleApp = (typeof GOOGLE_APPS)[number];
 
+/** How the UI names each Google app: the catalog's actions name the app they act in the same way. */
+export const GOOGLE_APP_NAMES: Record<GoogleApp, string> = {
+  gmail: "Gmail",
+  drive: "Drive",
+  sheets: "Sheets",
+  calendar: "Calendar",
+  docs: "Docs",
+  tasks: "Tasks",
+};
+
 /**
  * Each Google API's host, and the Google app whose permission its calls need, by the prefix its
  * paths start with. Every proxied call names its host with Nango's Base-Url-Override, since one

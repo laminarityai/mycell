@@ -127,10 +127,11 @@ async function executeStep(ctx: Ctx, run: Run, step: Step, place: RunPlace): Pro
 /**
  * Whether the run may start its next step: its connection is still there, and a triggered
  * run's enablement or org switch is still on for it. Switching off takes effect here, so a step
- * already under way finishes first.
+ * already under way finishes first. A run someone started by hand (a retry too) needs only its
+ * connection.
  */
 async function mayGoOn(ctx: Ctx, run: Run): Promise<boolean> {
-  if (run.startedBy !== "manual") {
+  if (run.startedBy === "enablement" || run.startedBy === "org_switch") {
     // Lists nothing for a connection that's gone.
     const on = await listSwitchedOn(ctx, run.connectionId);
     return on.some(({ switch: by }) =>

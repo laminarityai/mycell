@@ -14,7 +14,7 @@ import type { RunMessage, RunRecord, RunStepRecord } from "../types";
 import { inboxOf, visibleRuns } from "./run-list";
 import { messagesOf } from "./run-messages";
 import { stepChecks, runTrace } from "./run-trace";
-import { findRun, stepsOf } from "./runs";
+import { findRetry, findRun, stepsOf } from "./runs";
 
 /**
  * The run with its steps, its version and its path, as the caller may see it: in full on a
@@ -29,12 +29,13 @@ export async function getRun(ctx: Ctx, runId: string): Promise<RunRecord> {
   const own = owner?.kind === "member" && owner.readable;
   if (!isAdmin(ctx) && !own) throw new ForbiddenError();
   const full = owner?.readable === true;
-  const [rows, versions, names, actions] = await Promise.all([
+  const [rows, versions, names, actions, retry] = await Promise.all([
     stepsOf(ctx, [run.id]),
     versionsById(ctx, [run.workflowVersionId]),
     workflowNames(ctx, [run.workflowId]),
     // What each check of a path tests, in the editor's words: only for a run shown in full.
     full ? getActionSet(ctx) : null,
+    findRetry(ctx, run.id),
   ]);
   const version = versions.get(run.workflowVersionId);
   const spec = version?.spec;
@@ -74,6 +75,8 @@ export async function getRun(ctx: Ctx, runId: string): Promise<RunRecord> {
     ownerScope: run.ownerScope,
     enablementId: run.enablementId,
     startedBy: run.startedBy,
+    retryOfRunId: run.retryOfRunId,
+    retriedByRunId: retry?.id ?? null,
     inbox: inboxOf(owner),
     full,
     sourceRef: full ? run.sourceRef : null,

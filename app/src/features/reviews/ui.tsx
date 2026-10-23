@@ -10,7 +10,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { ItemView, MailView } from "@/features/runtime/adapters";
-import { cn } from "@/lib/utils";
 import {
   EscalationActions,
   HandOffForm,
@@ -66,24 +65,6 @@ function ending(review: Review): string {
   if (review.status === "gone") return "The message is no longer in Gmail.";
   if (review.endedByUserId === null) return "It was replied to from Gmail.";
   return `It was marked done${by}.`;
-}
-
-/**
- * The app navigation's link to the Reviews page, with how many reviews wait for the caller
- * (`countWaitingReviews`, read on each page load).
- */
-export function ReviewsNavLink({ count, className }: { count: number; className?: string }) {
-  return (
-    <Link href="/reviews" className={cn("inline-flex items-center gap-1.5", className)}>
-      Reviews
-      {count > 0 ? (
-        <Badge>
-          {count}
-          <span className="sr-only"> waiting</span>
-        </Badge>
-      ) : null}
-    </Link>
-  );
 }
 
 /** Who has a handed-on review, as the viewer reads it. */

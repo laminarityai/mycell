@@ -6,21 +6,17 @@ import { reviewPeriodSchema } from "@/features/reviews/types";
 import { ReviewCountsSection } from "@/features/reviews/ui";
 import { listVisibleWorkflows } from "@/features/workflows/server";
 import { VisibleWorkflowsList, WorkflowsList } from "@/features/workflows/ui";
-import { AppNav } from "@/app/app-nav";
+import { AppShell } from "@/app/_shell/app-shell";
 import { isAdmin } from "@/lib/ctx";
 import { adminWorkflows } from "./admin-workflows";
 
 export default function WorkflowsPage({ searchParams }: PageProps<"/workflows">) {
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold tracking-tight">Workflows</h1>
-        <AppNav />
-      </header>
+    <AppShell current="workflows" title="Workflows" width="wide">
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading workflows…</p>}>
         <Workflows searchParams={searchParams} />
       </Suspense>
-    </main>
+    </AppShell>
   );
 }
 

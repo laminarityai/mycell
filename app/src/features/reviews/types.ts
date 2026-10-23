@@ -2,25 +2,28 @@
 // shows of it. A review holds pointers only (invariant 8); its item is fetched live.
 import { z } from "zod";
 import type { ItemView, PendingFormAdapter, ReviewEdits } from "@/features/runtime/adapters";
+import type { PendingDetails } from "@/features/runtime/types";
 
 /**
  * What a review waits on, which chooses its pending-form adapter: `approval` is a Gmail draft an
  * `approval` step left waiting; `escalation` is a message an `escalate` step (or a gate's
  * `else: "escalate"`) handed to a person; `held_send` is a custom write's request, which Mycel
- * holds until the review ends (ADR-0020). M11 adds Calendar and Docs.
+ * holds until the review ends (ADR-0020); `calendar_event` is a meeting booked on the person's
+ * calendar with no guests until approved (ADR-0013). M11 adds Docs.
  */
-export const reviewKinds = ["approval", "escalation", "held_send"] as const;
+export const reviewKinds = ["approval", "escalation", "held_send", "calendar_event"] as const;
 export type ReviewKind = (typeof reviewKinds)[number];
 
 /**
  * What a person may do with a waiting review of each kind: a draft or a held send is approved
- * (as it is, or edited) or declined; an escalated message is only marked done, as Mycel changes
- * nothing in Gmail for it.
+ * (as it is, or edited) or declined; a meeting is approved or declined, and changed, if at all,
+ * in Calendar; an escalated message is only marked done, as Mycel changes nothing in Gmail for it.
  */
 export const reviewActions = {
   approval: ["approve", "edit", "decline"],
   escalation: ["done"],
   held_send: ["approve", "edit", "decline"],
+  calendar_event: ["approve", "decline"],
 } as const satisfies Record<ReviewKind, readonly string[]>;
 export type ReviewAction = (typeof reviewActions)[ReviewKind][number];
 
@@ -75,6 +78,8 @@ export type NewReview = {
   sourceRef: string;
   /** Why an escalate step handed the message over: the spec's words, never the message's. */
   reason?: string;
+  /** What approving it needs that its app doesn't hold: a booked meeting's guests. */
+  details?: PendingDetails;
 };
 
 /** A user, as a review names them. */

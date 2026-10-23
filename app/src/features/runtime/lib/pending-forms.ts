@@ -1,27 +1,36 @@
 // The pending-form adapter seam (ADR-0013): every `external_send` catalog action holds what it
-// prepared in its app's own pending form (a Gmail draft; M11 adds a Calendar event with no
-// guests and suggested edits in a Doc), and a custom write, whose app has none, is held by Mycel
+// prepared in its app's own pending form (a Gmail draft, or a Calendar event with no guests;
+// M11 adds suggested edits in a Doc), and a custom write, whose app has none, is held by Mycel
 // itself (ADR-0020). One adapter per pending form is the only code that prepares, carries out,
 // removes, checks or shows a waiting item. The `reviews` feature calls
 // adapters only, chosen by the review's kind, and never the app's API.
 import type { Ctx } from "@/lib/ctx";
+import type { PendingDetails } from "../types";
 
 /** Where a waiting item is: pointers only, never its content (invariant 8). */
 export type PendingItem = {
   /** The connection it waits on; every operation acts through it. */
   connectionId: string;
-  /** The item in its app: a Gmail draft's ID, an escalated message's (its source_ref), or a held send's. */
+  /**
+   * The item in its app: a Gmail draft's ID, an escalated message's (its source_ref), a held
+   * send's, or a Calendar event's.
+   */
   itemRef: string;
-  /** The thread it belongs to: a Gmail thread's ID, or a held send's own ID. */
+  /** The thread it belongs to: a Gmail thread's ID, or a held send's or an event's own ID. */
   threadRef: string;
-  /** The message that started the run that prepared it. */
+  /** The message (or invite) that started the run that prepared it. */
   sourceRef: string;
   /** When its review was created: only what happened after it can have finished it. */
   createdAt: Date;
+  /** What approving it needs that its app doesn't hold yet: a booked event's guests. */
+  details: PendingDetails | null;
 };
 
-/** What an adapter's `prepare` made: the pointers a review keeps. */
-export type PreparedItem = { itemRef: string; threadRef: string };
+/**
+ * What an adapter's `prepare` made: the pointers a review keeps, and what approving it will need
+ * that the app doesn't hold yet, if anything.
+ */
+export type PreparedItem = { itemRef: string; threadRef: string; details?: PendingDetails };
 
 /**
  * Where a waiting item stands in its app: still waiting, finished there by the person (a draft
@@ -42,12 +51,32 @@ export type MailView = { from: string; to: string; subject: string; date: string
 export type HeldSendField = { name: string; description: string; value: string; editable: boolean };
 
 /**
+ * A booked meeting as its review shows it: the event as it is on the calendar now, with a link
+ * to it and its Meet link, if any, and the guests approving invites and how it then shows.
+ */
+export type EventView = {
+  kind: "event";
+  title: string;
+  description: string;
+  start: string;
+  end: string;
+  location: string;
+  link: string;
+  meetLink: string | null;
+  guests: string[];
+  visibility: PendingDetails["visibility"];
+  transparency: PendingDetails["transparency"];
+};
+
+/**
  * A waiting item as its review shows it, fetched live: for a Gmail draft, the message it
  * replies to (null when that message is gone) and the draft itself; for an escalated message,
  * the message and a link to it in Gmail; for a held send, the app, the custom action, the
- * request's method and address, and each input it sends, decrypted in memory.
+ * request's method and address, and each input it sends, decrypted in memory; for a booked
+ * meeting, the event.
  */
 export type ItemView =
+  | EventView
   | { kind: "draft"; message: MailView | null; draft: MailView }
   | { kind: "message"; message: MailView; link: string }
   | {

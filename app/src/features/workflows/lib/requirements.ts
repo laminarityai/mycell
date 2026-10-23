@@ -18,7 +18,11 @@ import type { WorkflowVersion } from "../types";
 import { scopeName } from "./scope-check";
 
 /** Each catalog app as connections name it. */
-const CATALOG_APPS: Record<ConnectionApp, GoogleApp> = { Gmail: "gmail", Sheets: "sheets" };
+const CATALOG_APPS: Record<ConnectionApp, GoogleApp> = {
+  Gmail: "gmail",
+  Sheets: "sheets",
+  Calendar: "calendar",
+};
 
 /** What a connection is short of: Google apps as the UI names them, scopes by short name. */
 export type MissingAccess = { apps: string[]; scopes: string[] };

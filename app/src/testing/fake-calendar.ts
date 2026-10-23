@@ -1,13 +1,16 @@
 // A fake Google Calendar, served through the fake Nango's proxy: the account's primary calendar,
 // answering the Calendar API v3 calls Mycel makes (events.list, with sync tokens, and
-// events.get) in the shapes Google documents, from events a test seeds. Like Google, a sync
+// events.get; the writes are in `fake-calendar-writes.ts`) in the shapes Google documents, from
+// events a test seeds or Mycel makes. Like Google, a sync
 // token lists only what changed since it was handed out, deletions included as `cancelled`; it
 // answers 410 once a test expires the tokens; and it answers 400 to a sync token combined with
 // a filter, or to a request whose other parameters differ from the request that made the token
 // (https://developers.google.com/workspace/calendar/api/guides/sync).
 import { randomBytes } from "node:crypto";
 import { HttpResponse } from "msw";
+import { CalendarWrites, calendarWrite } from "./fake-calendar-writes";
 import { parseFields, project } from "./fake-drive-fields";
+import type { WriteMethod } from "./fake-proxied-sources";
 
 /** An invite to seed: an event someone else organised, with the account among its guests. */
 export type FakeInviteInput = {
@@ -23,7 +26,7 @@ export type FakeInviteInput = {
   attendeesOmitted?: boolean;
 };
 
-type Attendee = {
+export type Attendee = {
   email: string;
   self?: boolean;
   organizer?: boolean;
@@ -39,8 +42,11 @@ export type CalendarEventResource = {
   updated: string;
   summary: string;
   description?: string;
-  start: { dateTime: string };
-  end: { dateTime: string };
+  location?: string;
+  start: { dateTime: string; timeZone?: string };
+  end: { dateTime: string; timeZone?: string };
+  visibility?: "default" | "public" | "private" | "confidential";
+  transparency?: "opaque" | "transparent";
   organizer: { email: string; self?: boolean };
   creator: { email: string; self?: boolean };
   attendees?: Attendee[];
@@ -48,6 +54,8 @@ export type CalendarEventResource = {
   eventType: "default" | "fromGmail" | "focusTime" | "outOfOffice" | "workingLocation";
   htmlLink: string;
   iCalUID: string;
+  hangoutLink?: string;
+  conferenceData?: Record<string, unknown>;
 };
 
 // Query parameters a sync token can't be combined with, as Google lists them.
@@ -80,6 +88,8 @@ export class FakeCalendar {
   readonly listRequests: URLSearchParams[] = [];
   /** The sync token handed out last, if any. */
   lastSyncToken: string | undefined;
+  /** Every write made (events.insert, patch, update, delete), and who each one emailed. */
+  readonly writes = new CalendarWrites();
 
   constructor(readonly emailAddress: string) {}
 
@@ -164,6 +174,36 @@ export class FakeCalendar {
     const event = this.events.get(id);
     if (event === undefined) throw new Error(`The fake Calendar has no event ${id}`);
     return event;
+  }
+
+  /** The event, a cancelled one included, or undefined when the calendar never had it. */
+  find(id: string): CalendarEventResource | undefined {
+    return this.events.get(id);
+  }
+
+  /** Every event Mycel or the account made on the calendar that isn't cancelled. */
+  organized(): CalendarEventResource[] {
+    return [...this.events.values()].filter(
+      (event) => event.organizer.self === true && event.status !== "cancelled",
+    );
+  }
+
+  /** The account deletes the event in Calendar: it stays, `cancelled`, as Google keeps it. */
+  delete(id: string): void {
+    this.cancel(id);
+  }
+
+  /** The account adds guests to the event in Calendar itself, as invited people. */
+  addGuests(id: string, emails: string[]): void {
+    const event = this.event(id);
+    event.attendees = [
+      ...(event.attendees ?? [
+        { email: this.emailAddress, self: true, organizer: true, responseStatus: "accepted" },
+      ]),
+      ...emails.map((email) => ({ email, responseStatus: "needsAction" as const })),
+    ];
+    event.updated = new Date().toISOString();
+    this.save(event);
   }
 
   /** events.list on the primary calendar: everything, or what changed since a sync token. */
@@ -256,7 +296,8 @@ export class FakeCalendar {
     return event;
   }
 
-  private save(event: CalendarEventResource): void {
+  /** Stores the event as changed now, so a sync token lists it. */
+  save(event: CalendarEventResource): void {
     this.change += 1;
     this.events.set(event.id, event);
     this.changedAt.set(event.id, this.change);
@@ -288,12 +329,26 @@ function mismatch(): ListError {
 }
 
 // Calendar's event IDs: base32hex, lowercase.
-function eventId(): string {
+export function eventId(): string {
   const digits = "0123456789abcdefghijklmnopqrstuv";
   return [...randomBytes(20)].map((byte) => digits[byte % 32]).join("");
 }
 
 const PRIMARY_EVENTS = "/calendar/v3/calendars/primary/events";
+
+// A write to the Calendar API behind the proxy, made on the connection's calendar.
+export function calendarWriteResponse(
+  calendar: FakeCalendar,
+  path: string,
+  params: URLSearchParams,
+  body: unknown,
+  method: WriteMethod,
+): Response {
+  if (!path.startsWith(PRIMARY_EVENTS)) throw new Error(`The fake Calendar doesn't serve ${path}`);
+  const rest = path.slice(PRIMARY_EVENTS.length);
+  const id = rest === "" ? undefined : decodeURIComponent(rest.slice(1));
+  return calendarWrite(calendar, { id, params, body, method });
+}
 
 // The Calendar API behind the proxy, answering from the connection's calendar.
 export function calendarResponse(calendar: FakeCalendar, path: string, params: URLSearchParams) {

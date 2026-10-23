@@ -6,6 +6,7 @@
 import type { DryRunEffect } from "../types";
 import { actionExecutors } from "./actions";
 import { renderCustomCall, type HoldSend } from "./custom-action";
+import { guestAddresses, type Booking } from "./calendar-events";
 import { RunStepError } from "./failures";
 import { messageRef } from "./gmail";
 import { replyTarget } from "./gmail-drafts";
@@ -49,6 +50,22 @@ export function dryRunActions(report: (effect: DryRunEffect) => void): ActionExe
         const text = await compose();
         report({ kind: "draft", to: target.to, subject: target.subject, text });
         return { draftId: DRY_RUN_ID, threadId: target.threadId };
+      },
+    },
+    "google-calendar.read-event": actionExecutors["google-calendar.read-event"],
+    // The meeting as it would wait on the calendar: nothing is booked and nobody invited.
+    "google-calendar.create-event": {
+      status: "ready",
+      run: (_ctx, _connectionId, booking: Booking) => {
+        const guests = guestAddresses(booking.guests);
+        const { title, start, end, meet } = booking;
+        report({ kind: "event", title, start, end, guests, meet });
+        return Promise.resolve({
+          eventId: DRY_RUN_ID,
+          guests,
+          visibility: booking.visibility,
+          transparency: booking.transparency,
+        });
       },
     },
     // A read, so it runs for real, in the view a run on the connection would have. Try it is

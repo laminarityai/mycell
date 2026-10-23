@@ -252,8 +252,30 @@ export type RunPage = { runs: RunListItem[]; newer: string | null; older: string
  * never stored (invariant 8): the rows a read-range read, the draft it would have made, the
  * label or row it would have added, the review it would have waited for.
  */
+/**
+ * What a waiting item's approval needs that its app doesn't hold yet, kept on its review: for a
+ * booked Calendar event, the guests to invite and how the event shows once approved. Addresses
+ * and settings only, never the event's title or description (invariant 8).
+ */
+export const pendingDetailsSchema = z.object({
+  kind: z.literal("calendar_event"),
+  guests: z.array(z.string().min(1)).min(1),
+  visibility: z.enum(["default", "public", "private", "confidential"]),
+  transparency: z.enum(["opaque", "transparent"]),
+});
+export type PendingDetails = z.infer<typeof pendingDetailsSchema>;
+
 export type DryRunEffect =
   | { kind: "rows_read"; range: string; rows: string[][] }
+  /** A booking, as it would wait on the calendar until approved (nothing is made). */
+  | {
+      kind: "event";
+      title: string;
+      start: string;
+      end: string;
+      guests: string[];
+      meet: boolean;
+    }
   | { kind: "draft"; to: string; subject: string; text: string }
   | { kind: "label"; label: string }
   | { kind: "row"; range: string; values: (string | number | boolean | null)[] }

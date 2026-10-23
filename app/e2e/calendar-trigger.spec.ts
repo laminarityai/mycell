@@ -53,6 +53,8 @@ test("an admin moves a workflow onto new invites, and the editor says what that 
     "When a new invite lands on the calendar",
   );
   await expect(settings.getByRole("textbox", { name: /Gmail messages/ })).toBeHidden();
+  // The connection checks run on the server, so saving is where the editor says what's missing.
+  await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByText(/allowed Calendar/).first()).toBeVisible();
 
   // An invite has no message to reply to or hand over.

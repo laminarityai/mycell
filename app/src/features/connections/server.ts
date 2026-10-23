@@ -19,6 +19,8 @@ export {
 // Called only by the nightly reconciliation job and tests: it walks every org itself, acting
 // inside each as its system ctx (ADR-0009).
 export { reconcileConnections } from "./lib/reconcile";
+// Called only by the Gmail push route, as the org's system ctx it found from the address.
+export { gmailPushConnectionIds } from "./lib/gmail-push";
 export { startReconnect } from "./lib/reconnect";
 // How other features use a connection, without touching Nango or the table: what it is and
 // was granted, which ones the caller may read, GETs, POSTs, PUTs, PATCHes and DELETEs to its app,

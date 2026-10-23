@@ -3,7 +3,7 @@ import { z } from "zod";
 import { defineIsolationCases, notTenantScoped } from "@/db/testing/isolation";
 import type { TwoOrgs } from "@/db/testing/two-org-fixture";
 import { systemCtx } from "@/lib/ctx";
-import { NotFoundError } from "@/lib/errors";
+import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import { fakeNango } from "@/testing/fake-nango";
 import * as server from "../server";
 import type { ConnectionsListing } from "../types";
@@ -158,6 +158,26 @@ export const isolationCases = defineIsolationCases(server, {
 
     for (const ctx of [orgA.admin.ctx, orgA.member.ctx, systemCtx(orgA.id)]) {
       expect(await server.readableConnectionIds(ctx)).toEqual([]);
+    }
+  },
+
+  gmailPushConnectionIds: async (orgs) => {
+    await seedOrgBConnection(orgs);
+    const { orgA, orgB } = orgs;
+    const inbox = `support@${orgB.workspaceDomain}`;
+    const orgBIds = (await server.listConnectionsForJobs(systemCtx(orgB.id))).map((c) => c.id);
+    for (const id of orgBIds) {
+      await server.recordIngestState(systemCtx(orgB.id), id, "gmail", { status: "active" });
+    }
+
+    for (const address of [orgB.member.email, inbox]) {
+      const own = await server.gmailPushConnectionIds(systemCtx(orgB.id), address);
+      expect(own).toHaveLength(1);
+      expect(orgBIds).toContain(own[0]);
+      expect(await server.gmailPushConnectionIds(systemCtx(orgA.id), address)).toEqual([]);
+      for (const ctx of [orgB.admin.ctx, orgB.member.ctx]) {
+        await expect(server.gmailPushConnectionIds(ctx, address)).rejects.toThrow(ForbiddenError);
+      }
     }
   },
 

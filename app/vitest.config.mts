@@ -47,6 +47,11 @@ process.env.VERCEL_OIDC_TOKEN = [
   .map((part) => Buffer.from(JSON.stringify(part)).toString("base64url"))
   .concat("signature")
   .join(".");
+// Gmail push is configured (ADR-0026): its route checks each push's token against the key set the
+// fake Google push serves (src/testing/fake-google-push.ts), for this audience and sender.
+process.env.GMAIL_PUSH_TOPIC = "projects/mycel-test/topics/gmail-push";
+process.env.GOOGLE_PUSH_AUDIENCE = "http://localhost:3000/api/google/gmail-push";
+process.env.GOOGLE_PUSH_SERVICE_ACCOUNT = "gmail-push-sender@mycel-test.iam.gserviceaccount.com";
 // The key store reaches the fake KMS (src/testing/fake-kms.ts) at AWS's regional endpoint, and
 // the fake checks requests are signed with this access key.
 process.env.KMS_REGION = "us-east-1";

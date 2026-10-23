@@ -1,5 +1,6 @@
 // Turns one Drive file, as files.list or a change shows it, into one event. Drive is never asked
 // for the file's name or content, so neither can reach an event.
+import { unique } from "@/lib/utils";
 import type { NormalizedEvent } from "../connector";
 import { normalizeKey } from "../object-refs";
 import type { DriveFile } from "./api";
@@ -38,8 +39,4 @@ export function normalizeFile(file: DriveFile): NormalizedEvent {
 
 function address(email: string | undefined): string | null {
   return email === undefined || email === "" ? null : normalizeKey("email", email);
-}
-
-function unique(values: string[]): string[] {
-  return [...new Set(values)];
 }

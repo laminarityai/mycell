@@ -10,8 +10,15 @@ import { env } from "@/env";
 /** What the gateway reported for the call, once it answered. */
 export type Metering = { costUsd: number; generationId: string | undefined };
 
+export type GatewayProvider = ReturnType<typeof createGateway>;
+
+/** A provider for the AI Gateway under Mycel's key, sending its requests through `fetch`. */
+export function gatewayProvider(fetch?: typeof globalThis.fetch): GatewayProvider {
+  return createGateway({ apiKey: env.AI_GATEWAY_API_KEY, baseURL: env.AI_GATEWAY_BASE_URL, fetch });
+}
+
 export type MeteredGateway = {
-  provider: ReturnType<typeof createGateway>;
+  provider: GatewayProvider;
   /**
    * The summed cost of the call's responses so far (0 if none reported one), and the last
    * generation ID one reported.
@@ -72,11 +79,7 @@ export function meteredGateway(): MeteredGateway {
   };
 
   return {
-    provider: createGateway({
-      apiKey: env.AI_GATEWAY_API_KEY,
-      baseURL: env.AI_GATEWAY_BASE_URL,
-      fetch: meteringFetch,
-    }),
+    provider: gatewayProvider(meteringFetch),
     metering: () => ({ ...total }),
   };
 }

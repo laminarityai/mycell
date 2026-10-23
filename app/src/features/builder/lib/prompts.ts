@@ -92,7 +92,6 @@ export const toolResultPrompts = definePrompts(toolResultsFile, {
   customActionStored: [],
   customActionNotAdded: [],
   customActionNameTaken: ["name"],
-  toolFailed: [],
 });
 
 export const tryItPrompts = definePrompts(tryItFile, {

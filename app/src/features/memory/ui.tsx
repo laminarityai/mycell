@@ -90,6 +90,8 @@ function Reader({
       return <>{name}</>;
     case "builder":
       return <>The builder chat, for {name}</>;
+    case "agent":
+      return <>Ask Mycel, for {name}</>;
     case "workflow_run": {
       const workflow = workflowNames.get(reader.workflowId ?? "") ?? "A workflow";
       return (

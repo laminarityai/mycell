@@ -20,6 +20,9 @@ export { searchCompanyWideMemory } from "./lib/logged-reads";
 // A summary of one object, from only the facts the caller can see: one metered `fast` call, its
 // read logged as the reader named, and nothing stored.
 export { summarizeObject } from "./lib/summarize";
+// Where facts a reader already read came from, for Ask Mycel's footnotes: their sources and
+// markers in the reader's view, never what they say, so not logged again.
+export { citeFacts } from "./lib/cite";
 // The access log: admins see the company's, members the reads of facts from their own sources.
 // Pruned nightly, as the org's system ctx.
 export { listAccessLog, pruneAccessLog } from "./lib/access-log";

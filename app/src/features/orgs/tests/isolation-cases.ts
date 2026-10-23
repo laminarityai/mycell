@@ -2,6 +2,7 @@ import { expect } from "vitest";
 import { NotFoundError } from "@/lib/errors";
 import { defineIsolationCases, notTenantScoped } from "@/db/testing/isolation";
 import { seedUserWithoutOrg } from "@/db/testing/seed-user";
+import { seedUser } from "@/db/testing/two-org-fixture";
 import * as server from "../server";
 
 export const isolationCases = defineIsolationCases(server, {
@@ -29,6 +30,20 @@ export const isolationCases = defineIsolationCases(server, {
     "lists every org's ID for scheduled jobs, which then act inside one org at a time",
   ),
 
+  // Cross-org by design: a Gmail notification names only an address. What it must keep
+  // straight is that each address finds its own org, and only an org ID comes back.
+  findOrgIdForAddress: async ({ orgA, orgB }) => {
+    const pat = await seedUser(orgB.id, "pat@secondary-b.test", "member");
+
+    expect(await server.findOrgIdForAddress(orgA.member.email)).toBe(orgA.id);
+    expect(await server.findOrgIdForAddress(orgB.admin.email.toUpperCase())).toBe(orgB.id);
+    expect(await server.findOrgIdForAddress(pat.email)).toBe(orgB.id);
+    expect(await server.findOrgIdForAddress(`support@${orgA.workspaceDomain}`)).toBe(orgA.id);
+    expect(await server.findOrgIdForAddress(`support@${orgB.workspaceDomain}`)).toBe(orgB.id);
+    expect(await server.findOrgIdForAddress("someone@secondary-b.test")).toBeUndefined();
+    expect(await server.findOrgIdForAddress("someone@elsewhere.test")).toBeUndefined();
+  },
+
   findCtx: async ({ orgA, orgB }) => {
     expect(await server.findCtx(orgA.member.id)).toEqual(orgA.member.ctx);
     expect(await server.findCtx(orgB.admin.id)).toEqual(orgB.admin.ctx);
@@ -38,6 +53,27 @@ export const isolationCases = defineIsolationCases(server, {
     const users = await server.listUsers(orgA.member.ctx);
 
     expect(users.map((u) => u.id).sort()).toEqual([orgA.admin.id, orgA.member.id].sort());
+  },
+
+  findUser: async ({ orgA, orgB }) => {
+    expect(await server.findUser(orgA.member.ctx, orgB.admin.id)).toBeNull();
+    expect(await server.findUser(orgA.member.ctx, orgA.admin.id)).toEqual(
+      expect.objectContaining({ id: orgA.admin.id, role: "admin" }),
+    );
+  },
+
+  findUsersByEmail: async ({ orgA, orgB }) => {
+    const found = await server.findUsersByEmail(orgA.member.ctx, [
+      orgB.admin.email,
+      orgA.admin.email.toUpperCase(),
+    ]);
+
+    expect(found.map((user) => user.id)).toEqual([orgA.admin.id]);
+  },
+
+  userCtx: async ({ orgA, orgB }) => {
+    expect(await server.userCtx(orgA.member.ctx, orgB.admin.id)).toBeNull();
+    expect(await server.userCtx(orgA.member.ctx, orgA.admin.id)).toEqual(orgA.admin.ctx);
   },
 
   userNames: async ({ orgA, orgB }) => {

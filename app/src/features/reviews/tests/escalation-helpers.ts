@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { seedTwoOrgs, type TwoOrgs } from "@/db/testing/two-org-fixture";
 import { grantCredits } from "@/features/credits/server";
 import { executeRun, startRun } from "@/features/runtime/server";
-import type { RunStep } from "@/features/runtime/types";
+import type { RunStep } from "@/lib/inngest";
 import { systemCtx } from "@/lib/ctx";
 import { connectMailbox } from "@/testing/connect-helpers";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";

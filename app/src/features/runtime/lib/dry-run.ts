@@ -7,6 +7,8 @@
 // check and are recorded, marked as a dry run's (invariant 7).
 import { randomUUID } from "node:crypto";
 import { requireBuildableConnection } from "@/features/connections/server";
+import { getActionSet } from "@/features/custom-actions/server";
+import { CREDIT_ESTIMATES } from "@/features/models/server";
 import { eachStep } from "@/features/spec/tree";
 import { triggers } from "@/features/spec/triggers";
 import type { Spec } from "@/features/spec/types";
@@ -15,8 +17,7 @@ import { checkCredits } from "@/features/credits/server";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { OutOfCreditsError, SpecInvalidError } from "@/lib/errors";
 import type { DryRunEffect, DryRunResult, DryRunStep } from "../types";
-import { CREDIT_ESTIMATES } from "./call-model";
-import { dryRunActions } from "./dry-run-actions";
+import { dryRunActions, dryRunHoldSend } from "./dry-run-actions";
 import { attemptStep } from "./executors";
 import { describeFailure } from "./failures";
 import type { StepContext, StepExecution } from "./step-context";
@@ -55,9 +56,12 @@ export async function dryRun(ctx: Ctx, spec: unknown, options: DryRunOptions) {
   const steps: DryRunStep[] = [];
   // What the step running now read or would have written, as its stub reports it.
   const current: { effect: DryRunEffect | null } = { effect: null };
-  const actions = dryRunActions((effect) => {
+  const actionSet = await getActionSet(ctx);
+  const report = (effect: DryRunEffect) => {
     current.effect = effect;
-  });
+  };
+  const actions = dryRunActions(report);
+  const holdSend = dryRunHoldSend(report);
   const ended = await walkSteps(validated.applied, async (step, { outputs }) => {
     current.effect = null;
     const context: StepContext = {
@@ -66,7 +70,9 @@ export async function dryRun(ctx: Ctx, spec: unknown, options: DryRunOptions) {
       attribution: { workflowId: options.workflowId, dryRun: true },
       spec: validated.applied,
       outputs,
+      actionSet,
       actions,
+      holdSend,
       // Its approvals are reported as reviews it would wait for: nothing is recorded.
       awaitReview: () => Promise.resolve(),
     };

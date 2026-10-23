@@ -4,11 +4,11 @@
 import { and, eq } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { listUsers } from "@/features/orgs/server";
-import type { Ctx } from "@/lib/ctx";
-import { ConflictError, ForbiddenError, NotFoundError } from "@/lib/errors";
+import { type Ctx, isAdmin, requireAdmin } from "@/lib/ctx";
+import { ConflictError, ForbiddenError, NangoRequestError, NotFoundError } from "@/lib/errors";
 import { deleteNangoConnection } from "./nango";
 import { connections } from "./schema";
-import { INTEGRATIONS } from "./google";
+import { integrationOf } from "./apps";
 
 type Connection = typeof connections.$inferSelect;
 
@@ -31,7 +31,7 @@ export async function disconnect(ctx: Ctx, connectionId: string): Promise<void> 
  * connections stay. Their unfinished connect attempts went with their member row.
  */
 export async function deleteMemberConnectionsOf(ctx: Ctx, userId: string): Promise<void> {
-  if (ctx.role !== "admin") throw new ForbiddenError();
+  requireAdmin(ctx);
   // While they're still a member, their connections are theirs alone to disconnect.
   const users = await listUsers(ctx);
   if (users.some((user) => user.id === userId)) {
@@ -56,7 +56,7 @@ export async function forgetNangoConnection(
     where: eq(connections.nangoConnectionId, nangoConnectionId),
   });
   const connection = rows.at(0);
-  if (connection === undefined || INTEGRATIONS[connection.source] !== integration) return;
+  if (connection === undefined || integrationOf(connection.source) !== integration) return;
   await forOrg(orgCtx).delete(connections, eq(connections.id, connection.id));
 }
 
@@ -65,20 +65,20 @@ export async function forgetNangoConnection(
  * connection, any admin for an org connection.
  */
 export function mayManage(ctx: Ctx, connection: Pick<Connection, "kind" | "ownerUserId">): boolean {
-  return connection.kind === "member"
-    ? connection.ownerUserId === ctx.userId
-    : ctx.role === "admin";
+  return connection.kind === "member" ? connection.ownerUserId === ctx.userId : isAdmin(ctx);
 }
 
 /**
  * Revokes Mycel's access at Nango, then deletes the row, and the cascade everything derived
- * from it. A failed Nango delete doesn't keep the row: Mycel forgets the connection either
- * way, and reconciliation deletes the Nango connection it no longer has a row for.
+ * from it. Nango failing the delete, or not answering, doesn't keep the row: Mycel forgets the
+ * connection either way, and reconciliation deletes the Nango connection it no longer has a row
+ * for. Any other error is Mycel's own (a bug, or how it's set up): it's thrown, and the row stays.
  */
 export async function deleteConnection(ctx: Ctx, connection: Connection): Promise<void> {
   try {
-    await deleteNangoConnection(connection.nangoConnectionId, INTEGRATIONS[connection.source]);
+    await deleteNangoConnection(connection.nangoConnectionId, integrationOf(connection.source));
   } catch (error) {
+    if (!(error instanceof NangoRequestError)) throw error;
     console.warn(
       `Deleting Nango connection ${connection.nangoConnectionId} failed; reconciliation will retry.`,
       error,

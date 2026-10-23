@@ -9,7 +9,7 @@ import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import { fakeInngest } from "@/testing/fake-inngest";
 import { fakeNango } from "@/testing/fake-nango";
 import { executeRun, getRun, listRuns, startRun } from "../server";
-import type { RunStep } from "../types";
+import type { RunStep } from "@/lib/inngest";
 import {
   connectInbox,
   pricingQuestion,
@@ -81,7 +81,10 @@ describe("executeRun", () => {
         stepId: "thread",
         type: "tool",
         status: "succeeded",
-        output: { threadId: "thread-1", messageCount: 2 },
+        // The result's fields by kind and size, never their values (ADR-0021).
+        output: {
+          fields: { threadId: { kind: "text", size: 8 }, messageCount: { kind: "number" } },
+        },
         modelRole: null,
         costUsd: 0,
       },

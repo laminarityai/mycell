@@ -1,9 +1,9 @@
 import { and, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { listUsers } from "@/features/orgs/server";
-import type { Ctx } from "@/lib/ctx";
+import { type Ctx, isAdmin } from "@/lib/ctx";
 import type { ConnectionOwner, ConnectionSummary, ConnectionsListing } from "../types";
-import { grantedApps, missingApps } from "./google";
+import { grantedApps, missingApps } from "./apps";
 import { backfilledItems, ingestStatesOf, lastPolledAt, overallStatus } from "./ingest-states";
 import { connectAttempts, connections, type ingestStates } from "./schema";
 
@@ -21,9 +21,9 @@ type IngestState = typeof ingestStates.$inferSelect;
  */
 export async function listConnections(ctx: Ctx): Promise<ConnectionsListing> {
   const db = forOrg(ctx);
-  const isAdmin = ctx.role === "admin";
+  const admin = isAdmin(ctx);
   const rows = await db.select(connections, {
-    where: isAdmin
+    where: admin
       ? undefined
       : and(eq(connections.ownerUserId, ctx.userId), eq(connections.kind, "member")),
     orderBy: [connections.accountEmail, connections.source],
@@ -73,6 +73,23 @@ export async function listConnections(ctx: Ctx): Promise<ConnectionsListing> {
           ],
     ),
   };
+}
+
+/**
+ * The address of each org connection among `connectionIds`, by ID: the shared inbox an org
+ * switch runs on, which anyone in the org may see beside the workflow. A member connection, or
+ * one in another org, is left out. One query however many are asked; none for none.
+ */
+export async function sharedInboxes(
+  ctx: Ctx,
+  connectionIds: readonly string[],
+): Promise<Map<string, string>> {
+  if (connectionIds.length === 0) return new Map();
+  const rows = await forOrg(ctx).select(connections, {
+    columns: ["id", "accountEmail"],
+    where: and(inArray(connections.id, [...connectionIds]), eq(connections.kind, "org")),
+  });
+  return new Map(rows.map((row) => [row.id, row.accountEmail]));
 }
 
 function summary(row: Connection, states: IngestState[]): ConnectionSummary {

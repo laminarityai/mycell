@@ -1,0 +1,80 @@
+# A try-it result as the conversation keeps it (builder/lib/try-it-summary.ts): a line per step
+# saying what it did, then how the run ended. The admin's page shows the same lines, and the agent
+# reads them, as the admin's words, in the next turn. They hold the spec's own literals and
+# counts only, never what the message said (invariant 8).
+
+# How the agent reads them.
+summary: |-
+  [I tried the workflow's working spec on one real message or invite (Try it). Nothing was written to any app. What each step did:]
+summaryLine: |-
+  - {{line}}
+
+# Each step, by `step` below.
+step: |-
+  {{id}} ({{type}})
+stepFailed: |-
+  {{step}}: failed, {{code}}: {{message}}
+wouldReview: |-
+  {{step}}: would wait for a review.
+wouldReviewByPolicy: |-
+  {{step}}: would wait for a review (required by policy).
+drafted: |-
+  {{step}}: drafted a reply (not saved).
+wouldLabel: |-
+  {{step}}: would add {{label}}.
+wouldAppendRow: |-
+  {{step}}: would append a row to {{range}}.
+readRows: |-
+  {{step}}: read {{count}} rows from {{range}}.
+# `label` and `p` as JSON.
+chose: |-
+  {{step}}: chose {{label}} with probability {{p}}.
+tookOtherwise: |-
+  {{step}}: no path applied, so it took the otherwise path.
+# `paths` are the names of the paths taken, as JSON, comma-separated.
+wentOn: |-
+  {{step}}: went on along {{paths}}.
+filled: |-
+  {{step}}: filled {{fields}}.
+filledNone: |-
+  {{step}}: filled no fields.
+done: |-
+  {{step}}: done.
+
+# A tool step's input as the spec writes it: a literal, as JSON, or a reference to a step above.
+literalInput: |-
+  the {{field}} {{value}}
+referenceInput: |-
+  a {{field}} from {{reference}}
+unknownInput: |-
+  the {{field}} the spec names
+
+# A line per path out of a branch, with each of its checks in the condition editor's words.
+path: |-
+  {{branch}}, path {{name}}: {{status}}.
+pathWithChecks: |-
+  {{branch}}, path {{name}}: {{status}}. {{checks}}.
+pathTaken: |-
+  ran
+pathNotTaken: |-
+  didn't apply
+pathNotChecked: |-
+  not checked, since an earlier path ran
+pathNotNeeded: |-
+  not needed, since another path applied
+checkPassed: |-
+  {{check}}: passed
+checkFailed: |-
+  {{check}}: failed
+
+# How the run ended.
+succeeded: |-
+  It ran to the end.
+skipped: |-
+  It stopped at a branch: the workflow would do nothing more with it.
+escalated: |-
+  It escalated: the workflow would hand this message to a person.
+failed: |-
+  It failed at the step above.
+partlyFailed: |-
+  It partly failed: a step above failed and ended its own path, and the other paths ran on.

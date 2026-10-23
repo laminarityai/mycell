@@ -14,7 +14,9 @@ It must also be something such a company can trust with its mail. We build first
 
 ## What "good" looks like for v1
 
-Two bars, one for each way of making workflows:
+v1 is complete when M9 (the agent) ships, after M7 (credits and budgets) and M8 (observability and failure handling); see `docs/roadmap.md`. Discovery (M2), shadow eval (M4) and external readiness (M10) come after v1.
+
+Two bars, one for each way of making workflows. Only the builder bar gates v1; the discovery bar is measured once M2 ships:
 
 1. **Builder (the ship bar).** At least one workflow that an admin described in the builder chat (not written by us) runs live on at least two of our own inboxes for **two days and at least 20 reviews, whichever comes later**. At least 80% of its reviews are approved without edits, and the teammates who enabled it never needed our help.
 2. **Discovery.** At least 3 of the top 5 suggestions are rated "real and worth automating" by the people whose work they describe.

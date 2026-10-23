@@ -2,6 +2,7 @@
 // pending form, on the person's Reviews page. It reaches the app only through runtime's
 // pending-form adapters.
 // Called by a run's approval step, as the org's system ctx.
+import "server-only";
 export { createReview } from "./lib/reviews";
 export { listReviews } from "./lib/reviews";
 // Ending the reviews in a thread their people finished in Gmail: a job calls it, as the system
@@ -23,5 +24,5 @@ export {
   openReview,
 } from "./lib/acting";
 // The daily check job, as each org's system ctx: ends the waiting reviews whose item was
-// finished in its app or is gone.
+// finished in its app or is gone, and expires held sends older than 30 days (ADR-0020).
 export { checkWaitingReviews } from "./lib/acting";

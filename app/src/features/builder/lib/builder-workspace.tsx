@@ -5,11 +5,13 @@
 // Under 768px the two become tabs, Chat and Workflow, which turn to Workflow when a proposal or
 // a Try it is shown. Both stay mounted, so a turn streams on while the graph is looked at.
 import { MessageSquare, Workflow } from "lucide-react";
-import { useEffect, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { CustomActionRecord } from "@/features/custom-actions/types";
 import {
+  ActionSetProvider,
   GraphTraceProvider,
   useGraphTrace,
-  useShowOnGraph,
   WorkflowGraph,
   WorkingSpecEditor,
   type EditableWorkflow,
@@ -24,30 +26,41 @@ export type WorkspaceWorkflow = EditableWorkflow;
 export function BuilderWorkspace({
   proposals,
   workflow,
+  customActions,
   chat,
 }: {
   proposals: Proposal[];
+  /** The company's custom actions, which the graph looks actions up in with the catalog. */
+  customActions: CustomActionRecord[];
   /** The conversation's workflow; null until a proposal for a new one is accepted. */
   workflow: WorkspaceWorkflow | null;
   chat: ReactNode;
 }) {
+  // A Try it is of the working spec at one revision, before the newest proposal so far: a new
+  // revision or a new proposal takes the graph over from it.
+  const newest = proposals.filter((proposal) => proposal.status === "proposed").at(-1)?.id;
+  const [arrived, setArrived] = useState(newest);
+  if (newest !== undefined && newest !== arrived) setArrived(newest);
   return (
-    <GraphTraceProvider>
+    <GraphTraceProvider of={`${revisionOf(workflow) ?? ""}/${arrived ?? ""}`}>
       <ProposalOnGraphProvider proposals={proposals}>
-        <Split workflow={workflow} chat={chat} />
+        <ActionSetProvider customActions={customActions}>
+          <Split workflow={workflow} customActions={customActions} chat={chat} />
+        </ActionSetProvider>
       </ProposalOnGraphProvider>
     </GraphTraceProvider>
   );
 }
 
+function revisionOf(workflow: WorkspaceWorkflow | null): string | null {
+  return workflow === null ? null : `${workflow.id}@${String(workflow.revision)}`;
+}
+
 type Tab = "chat" | "workflow";
 
-const TABS: { id: Tab; label: string; Icon: typeof Workflow }[] = [
-  { id: "chat", label: "Chat", Icon: MessageSquare },
-  { id: "workflow", label: "Workflow", Icon: Workflow },
-];
+type PaneProps = { workflow: WorkspaceWorkflow | null; customActions: CustomActionRecord[] };
 
-function Split({ workflow, chat }: { workflow: WorkspaceWorkflow | null; chat: ReactNode }) {
+function Split({ workflow, customActions, chat }: PaneProps & { chat: ReactNode }) {
   const trace = useGraphTrace();
   const drawn = useProposalOnGraph()?.drawn ?? null;
   const [tab, setTab] = useState<Tab>("chat");
@@ -58,42 +71,42 @@ function Split({ workflow, chat }: { workflow: WorkspaceWorkflow | null; chat: R
     setRevealed(reveal);
     if (reveal !== null) setTab("workflow");
   }
+  // Both panels stay mounted (forceMount): the hidden one only isn't shown.
   return (
-    <div className="flex min-h-0 flex-1 flex-col md:grid md:grid-cols-[minmax(320px,420px)_1fr]">
-      <div role="tablist" aria-label="Builder" className="grid grid-cols-2 border-b md:hidden">
-        {TABS.map(({ id, label, Icon }) => (
-          <button
-            key={id}
-            id={`builder-tab-${id}`}
-            role="tab"
-            type="button"
-            aria-selected={tab === id}
-            aria-controls={`builder-panel-${id}`}
-            onClick={() => {
-              setTab(id);
-            }}
-            className={cn(
-              "flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium",
-              tab === id ? "border-b-2 border-primary" : "text-muted-foreground",
-            )}
-          >
-            <Icon aria-hidden className="size-4" /> {label}
-          </button>
-        ))}
-      </div>
-      <div
-        id="builder-panel-chat"
-        className={cn("min-h-0 flex-1 md:border-r", tab !== "chat" && "max-md:hidden")}
+    <Tabs
+      value={tab}
+      onValueChange={(value) => {
+        if (value === "chat" || value === "workflow") setTab(value);
+      }}
+      className="flex min-h-0 flex-1 flex-col gap-0 md:grid md:grid-cols-[minmax(320px,420px)_1fr]"
+    >
+      <TabsList
+        variant="line"
+        aria-label="Builder"
+        className="grid h-auto w-full grid-cols-2 rounded-none border-b p-0 md:hidden"
+      >
+        <TabsTrigger value="chat" className="py-2.5">
+          <MessageSquare aria-hidden /> Chat
+        </TabsTrigger>
+        <TabsTrigger value="workflow" className="py-2.5">
+          <Workflow aria-hidden /> Workflow
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent
+        value="chat"
+        forceMount
+        className="min-h-0 data-[state=inactive]:max-md:hidden md:border-r"
       >
         {chat}
-      </div>
-      <div
-        id="builder-panel-workflow"
-        className={cn("min-h-0 min-w-0 flex-1", tab !== "workflow" && "max-md:hidden")}
+      </TabsContent>
+      <TabsContent
+        value="workflow"
+        forceMount
+        className="min-h-0 min-w-0 data-[state=inactive]:max-md:hidden"
       >
-        <GraphPane workflow={workflow} />
-      </div>
-    </div>
+        <GraphPane workflow={workflow} customActions={customActions} />
+      </TabsContent>
+    </Tabs>
   );
 }
 
@@ -101,14 +114,14 @@ function Split({ workflow, chat }: { workflow: WorkspaceWorkflow | null; chat: R
  * The graph, filling the right side. Its frame is the anchor for what slides over its right
  * edge, such as a side panel.
  */
-function GraphPane({ workflow }: { workflow: WorkspaceWorkflow | null }) {
-  const showTrace = useShowOnGraph();
+function GraphPane({ workflow, customActions }: PaneProps) {
   const drawn = useProposalOnGraph()?.drawn ?? null;
-  // A Try it was of the working spec before it changed.
-  const revision = workflow === null ? null : `${workflow.id}@${String(workflow.revision)}`;
-  useEffect(() => {
-    showTrace?.(null);
-  }, [revision, showTrace]);
+  // A drawn proposal's steps may use the custom actions it brings, not stored until accepted.
+  const drawnActions = useMemo(
+    () => [...customActions, ...(drawn?.customActionRecords ?? [])],
+    [customActions, drawn],
+  );
+  const revision = revisionOf(workflow);
   return (
     <section
       aria-label="Workflow"
@@ -122,22 +135,24 @@ function GraphPane({ workflow }: { workflow: WorkspaceWorkflow | null }) {
         </div>
       )}
       {workflow !== null && drawn === null ? null : (
-        <WorkflowGraph
-          spec={drawn === null ? null : drawn.baseSpec}
-          proposal={drawn?.spec}
-          placeholder
-          fill
-        >
-          {drawn === null ? null : (
-            <p
-              role="status"
-              className="absolute top-3 left-3 z-10 max-w-sm rounded-lg border bg-background/95 px-3 py-2 text-xs shadow-sm"
-            >
-              <span className="font-medium">Showing the proposal</span> “{drawn.name}” as its
-              changes. Accept or reject it in the chat.
-            </p>
-          )}
-        </WorkflowGraph>
+        <ActionSetProvider customActions={drawnActions}>
+          <WorkflowGraph
+            spec={drawn === null ? null : drawn.baseSpec}
+            proposal={drawn?.spec}
+            placeholder
+            fill
+          >
+            {drawn === null ? null : (
+              <p
+                role="status"
+                className="absolute top-3 left-3 z-10 max-w-sm rounded-lg border bg-background/95 px-3 py-2 text-xs shadow-sm"
+              >
+                <span className="font-medium">Showing the proposal</span> “{drawn.name}” as its
+                changes. Accept or reject it in the chat.
+              </p>
+            )}
+          </WorkflowGraph>
+        </ActionSetProvider>
       )}
     </section>
   );

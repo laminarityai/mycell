@@ -1,0 +1,18 @@
+# What the models feature's tests ask models (tests/requests.ts). What they say doesn't matter:
+# only that a model call takes text rendered from a prompt file.
+
+hi: |-
+  Hi
+writeAReply: |-
+  Write a reply.
+extractTheOrder: |-
+  Extract the order.
+isItAQuote: |-
+  Is this message asking for a quote?
+which: |-
+  Which?
+# A second chat's instructions and tool (tests/chat-turn.test.ts).
+answerFromTools: |-
+  Answer from your tools only.
+lookUp: |-
+  Looks up a person by name.

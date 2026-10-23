@@ -1,26 +1,29 @@
 // Backfilling a connection: for each app still backfilling on it (on a new connection, every
-// ingested app it was granted; after a reconnect, the ones it newly allows), record where
-// polling will start, then store the last 90 days page by page. Each page is one step, so
-// Inngest retries a failed page without redoing the others. A connection deleted while this
-// runs ends it quietly: a missing connection is NotFoundError, and a write for it breaks its
-// foreign key.
-import { getConnection, recordIngestState } from "@/features/connections/server";
+// ingested app it was granted; after a reconnect, the ones it newly allows and any whose
+// backfill failed), record where polling will start, then store the last 90 days page by page.
+// Each page is one step, so Inngest retries a failed page without redoing the others. A
+// connection deleted while this runs ends it quietly: a missing connection is NotFoundError,
+// and a write for it breaks its foreign key. Finishing sets only the app's ingest status, so a
+// `needs_reauth` Nango reported meanwhile (kept on the connection itself) stays.
+import { getConnection, recordIngestState, sourceClient } from "@/features/connections/server";
 import { ingestedAppSchema, type IngestedApp } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
+import { runInline, type RunStep } from "@/lib/inngest";
+import { DAY_MS } from "@/lib/time";
 import type { BackfillOutcome } from "../types";
-import { CONNECTORS, runInline, sourceClient, storeWindow, untilGone } from "./ingest-steps";
-import type { RunStep } from "./ingest-steps";
+import { CONNECTORS, storeWindow, whileConnected } from "./ingest-steps";
 
 /** How far back a backfill reaches. */
 export const BACKFILL_DAYS = 90;
-export const DAY_MS = 24 * 60 * 60 * 1000;
 
 export async function backfillConnection(
   ctx: Ctx,
   connectionId: string,
   runStep: RunStep = runInline,
 ): Promise<BackfillOutcome> {
-  const start = await runStep("start", () => untilGone(() => startBackfill(ctx, connectionId)));
+  const start = await runStep("start", () =>
+    whileConnected(() => startBackfill(ctx, connectionId)),
+  );
   if (start.gone) return { outcome: "gone" };
   let items = 0;
   for (const app of start.apps) {
@@ -32,7 +35,7 @@ export async function backfillConnection(
     });
     if (stored.gone) return { outcome: "gone" };
     const end = await runStep(`${app}-finish`, () =>
-      untilGone(async () => {
+      whileConnected(async () => {
         await recordIngestState(ctx, connectionId, app, {
           status: "active",
           backfilledItems: stored.items,
@@ -48,7 +51,7 @@ export async function backfillConnection(
 
 /** The backfill gave up (Inngest ran out of retries): each app it hadn't finished failed. */
 export async function markBackfillFailed(ctx: Ctx, connectionId: string): Promise<void> {
-  await untilGone(async () => {
+  await whileConnected(async () => {
     for (const app of await backfillingApps(ctx, connectionId)) {
       await recordIngestState(ctx, connectionId, app, { status: "failed" });
     }
@@ -58,9 +61,10 @@ export async function markBackfillFailed(ctx: Ctx, connectionId: string): Promis
 
 async function startBackfill(ctx: Ctx, connectionId: string) {
   const apps = await backfillingApps(ctx, connectionId);
+  const client = await sourceClient(ctx, connectionId);
   for (const app of apps) {
     // Read before listing, so whatever arrives during the backfill is polled after it.
-    const cursor = await CONNECTORS[app].readStartCursor(sourceClient(ctx, connectionId));
+    const cursor = await CONNECTORS[app].readStartCursor(client);
     await recordIngestState(ctx, connectionId, app, { backfilledItems: 0, cursor });
   }
   return { apps, since: new Date(Date.now() - BACKFILL_DAYS * DAY_MS).toISOString() };

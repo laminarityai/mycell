@@ -1,6 +1,7 @@
 // `reviews` reaches the app only through the pending-form adapter of the review's kind: given a
 // fake adapter, opening and acting on reviews call its operations and nothing reaches Gmail.
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { heldSend } from "@/db/testing/held-sends";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import type { ItemState, PendingItem, ReviewEdits } from "@/features/runtime/adapters";
@@ -9,6 +10,7 @@ import { fakeNango } from "@/testing/fake-nango";
 import {
   approveEditedReview,
   approveReview,
+  checkWaitingReviews,
   declineReview,
   listReviews,
   markDone,
@@ -50,8 +52,12 @@ function recordingAdapter(state: ItemState = "waiting") {
       record("view", item);
       return Promise.resolve(VIEW);
     },
+    purge: () => {
+      calls.push({ operation: "purge", itemRef: "" });
+      return Promise.resolve();
+    },
   };
-  const adapters: PendingForms = { approval: adapter, escalation: adapter };
+  const adapters: PendingForms = { approval: adapter, escalation: adapter, held_send: adapter };
   return { adapters, calls };
 }
 
@@ -136,5 +142,57 @@ describe("the adapter seam", () => {
 
     expect(calls).toEqual([{ operation: "approve", itemRef: message.id }]);
     expect(proxied).toEqual([]);
+  });
+
+  describe("for a held send", () => {
+    // A held send's review, with every proxied request from here on recorded.
+    async function held() {
+      const orgs = await seedTwoOrgs();
+      const sent = await heldSend(orgs);
+      const proxied: string[] = [];
+      fakeNango.beforeProxy((path) => {
+        proxied.push(path);
+      });
+      return { ...sent, proxied };
+    }
+
+    it("opens, approves, edits and declines through its adapter only", async () => {
+      const { owner, reviewId, proxied } = await held();
+      const { adapters, calls } = recordingAdapter();
+
+      await openReview(owner, reviewId, adapters);
+      await approveEditedReview(owner, reviewId, { fields: { comment: "Edited" } }, adapters);
+
+      expect(calls.map(({ operation, edits }) => ({ operation, edits }))).toEqual([
+        { operation: "check", edits: undefined },
+        { operation: "view", edits: undefined },
+        { operation: "approve", edits: { fields: { comment: "Edited" } } },
+      ]);
+      expect(new Set(calls.map((call) => call.itemRef)).size).toBe(1);
+      expect(proxied).toEqual([]);
+    });
+
+    it("declines through its adapter only", async () => {
+      const { owner, reviewId, proxied } = await held();
+      const { adapters, calls } = recordingAdapter();
+
+      await declineReview(owner, reviewId, adapters);
+
+      expect(calls.map((call) => call.operation)).toEqual(["decline"]);
+      expect(proxied).toEqual([]);
+    });
+
+    it("expires through its adapter's decline and purge only", async () => {
+      const { system, proxied } = await held();
+      const { adapters, calls } = recordingAdapter();
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(Date.now() + 31 * 24 * 60 * 60 * 1000);
+
+      await checkWaitingReviews(system, adapters);
+      vi.useRealTimers();
+
+      expect(calls.map((call) => call.operation)).toEqual(["decline", "purge"]);
+      expect(proxied).toEqual([]);
+    });
   });
 });

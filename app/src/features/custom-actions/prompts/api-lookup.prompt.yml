@@ -1,0 +1,13 @@
+# The builder chat's API lookup (custom-actions/lib/api-lookup.ts): what Mycel's fixed rule makes
+# of each operation it finds, and its answer when a type isn't there.
+
+# `reason` is the rule's own (policy/custom-risk.ts).
+refused: |-
+  refused: {{reason}}
+read: |-
+  a read: runs on its own
+write: |-
+  a write: waits for a person's approval every time it runs
+
+noType: |-
+  {{app}}'s API has no type "{{type}}".

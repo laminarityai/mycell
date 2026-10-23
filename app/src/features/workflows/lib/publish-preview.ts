@@ -1,11 +1,12 @@
 // The publish dialog's warning: what publishing would do to members' enablements, before the
 // admin confirms.
 import { forOrg } from "@/db/for-org";
+import { getActionSet } from "@/features/custom-actions/server";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import type { PublishPreview } from "../types";
 import { findWorkflow } from "./access";
 import { enablements } from "./schema";
-import { checkedByPolicy } from "./validation";
+import { checkedByPolicy } from "./policy-check";
 import { gainedForEnablements, gainedSince, onEnablements } from "./version-pauses";
 import { latestVersions } from "./latest-versions";
 
@@ -22,10 +23,11 @@ export async function previewPublish(
 ): Promise<PublishPreview> {
   requireAdmin(ctx);
   await findWorkflow(ctx, workflowId);
-  const next = checkedByPolicy(spec);
+  const actions = await getActionSet(ctx);
+  const next = checkedByPolicy(spec, actions);
   const latest = (await latestVersions(ctx, [workflowId])).get(workflowId);
-  const gained = latest === undefined ? null : gainedSince(latest, next);
-  const pausing = gainedForEnablements(latest, next);
+  const gained = latest === undefined ? null : gainedSince(latest, next, actions);
+  const pausing = gainedForEnablements(latest, next, actions);
   if (pausing === null) return { gained, pauses: 0 };
   const on = await forOrg(ctx).select(enablements, { where: onEnablements(workflowId) });
   return { gained, pauses: on.length };

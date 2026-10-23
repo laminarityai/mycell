@@ -4,7 +4,7 @@
 // step. The item is a Gmail message or a calendar invite, as the spec's trigger says.
 import { subjectParts } from "@/features/spec/conditions";
 import type { BranchStep } from "@/features/spec/types";
-import type { Json } from "../types";
+import type { Json } from "@/lib/inngest";
 import { inviteFacts, inviteText } from "./calendar";
 import { messageFacts, messageText } from "./gmail";
 import type { StepContext } from "./step-context";

@@ -31,7 +31,14 @@ export type BackfillPage = { events: NormalizedEvent[]; nextPageToken: string | 
 
 /** What a poll found since a cursor, and where the next poll starts. */
 export type PollResult =
-  | { events: NormalizedEvent[]; nextCursor: string }
+  | {
+      events: NormalizedEvent[];
+      // The items gone from the account since the cursor, in the order they went: Gmail
+      // messages deleted or trashed (by message ID), Drive files deleted, trashed or no longer
+      // shared with it (by file ID).
+      removed: string[];
+      nextCursor: string;
+    }
   // The source no longer knows the cursor (it expired): backfill from the last stored event.
   | { cursorExpired: true };
 
@@ -40,6 +47,6 @@ export type Connector = {
   readStartCursor(client: SourceClient): Promise<string>;
   /** One page of the items that occurred since `since`, starting at `pageToken`. */
   backfillPage(client: SourceClient, since: Date, pageToken: string | null): Promise<BackfillPage>;
-  /** Everything new since `cursor`. */
+  /** Everything new, and every item removed, since `cursor`. */
   poll(client: SourceClient, cursor: string): Promise<PollResult>;
 };

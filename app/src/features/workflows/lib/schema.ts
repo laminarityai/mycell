@@ -1,23 +1,26 @@
 // Workflows, their published versions, and what switches them on. All are tenant-owned. A
 // version is immutable: the feature has no update path for it, only inserts.
+import "server-only";
 import { sql } from "drizzle-orm";
 import {
   check,
   foreignKey,
+  index,
   integer,
-  jsonb,
   pgTable,
   primaryKey,
   text,
   timestamp,
   unique,
 } from "drizzle-orm/pg-core";
+import { z } from "zod";
 import { member } from "@/db/auth-schema";
+import { zodJsonb } from "@/db/columns";
 // A switch names the connection it runs on, and goes when the connection does (invariant 3).
 import { connections } from "@/features/connections/lib/schema";
-import type { RiskLevel } from "@/features/policy/types";
-import type { StoredSpec } from "@/features/spec/stored";
-import type { EnablementStatus, PausedChange, PausedReason } from "../types";
+import { requirementsGainedSchema, type RiskLevel } from "@/features/policy/types";
+import { storedSpecSchema } from "@/features/spec/stored";
+import type { EnablementStatus, StoredPausedReason } from "../types";
 // A version's tags reference the tag itself, so renaming a tag keeps who sees the workflow.
 import { tags } from "@/features/tags/lib/schema";
 
@@ -30,7 +33,7 @@ export const workflows = pgTable(
     // The spec's own `id`, unique in the org.
     specId: text("spec_id").notNull(),
     // The working spec, as `validateSpec` parsed it: before the policy engine runs.
-    workingSpec: jsonb("working_spec").$type<StoredSpec>().notNull(),
+    workingSpec: zodJsonb("working_spec", storedSpecSchema).notNull(),
     // Counts the working spec's saves, so a save made from an older one can be refused.
     revision: integer("revision").notNull().default(1),
     // Plain user IDs: a workflow outlives the admin who made it.
@@ -48,6 +51,7 @@ export const workflows = pgTable(
   (table) => [
     unique("workflows_org_id_spec_id_unique").on(table.orgId, table.specId),
     unique("workflows_org_id_id_unique").on(table.orgId, table.id),
+    index("workflows_org_connection_id_idx").on(table.orgConnectionId),
     // On the connection's ID alone, so deleting it can null this column and keep org_id. The
     // switch-on checks the connection is in the workflow's org.
     foreignKey({
@@ -77,11 +81,11 @@ export const enablements = pgTable(
       .notNull()
       .default("on"),
     // Set exactly while paused.
-    pausedReason: text("paused_reason", { enum: ["needs_reenable"] }).$type<PausedReason>(),
+    pausedReason: text("paused_reason", { enum: ["needs_reenable"] }).$type<StoredPausedReason>(),
     // What a `needs_reenable` pause is about: what the new version needs that the old didn't.
-    pausedChange: jsonb("paused_change").$type<PausedChange>(),
-    // Written from JS, like the message times it's compared with (no default: the column has
-    // no time zone, and the database's now() would be read back hours off).
+    pausedChange: zodJsonb("paused_change", requirementsGainedSchema),
+    // Written from JS (no default), like the message times it's compared with, so both come
+    // from the same clock.
     enabledAt: timestamp("enabled_at", { withTimezone: true }).notNull(),
   },
   (table) => [
@@ -96,11 +100,13 @@ export const enablements = pgTable(
       columns: [table.orgId, table.workflowId],
       foreignColumns: [workflows.orgId, workflows.id],
     }).onDelete("cascade"),
+    index("enablements_org_id_connection_id_idx").on(table.orgId, table.connectionId),
     foreignKey({
       name: "enablements_connection_fk",
       columns: [table.orgId, table.connectionId],
       foreignColumns: [connections.orgId, connections.id],
     }).onDelete("cascade"),
+    index("enablements_org_id_user_id_idx").on(table.orgId, table.userId),
     foreignKey({
       name: "enablements_member_fk",
       columns: [table.orgId, table.userId],
@@ -117,13 +123,13 @@ export const workflowVersions = pgTable(
     workflowId: text("workflow_id").notNull(),
     number: integer("number").notNull(),
     // The spec after `applyPolicy`: inserted approvals included.
-    spec: jsonb("spec").$type<StoredSpec>().notNull(),
+    spec: zodJsonb("spec", storedSpecSchema).notNull(),
     maxRisk: text("max_risk", {
       enum: ["read", "internal_reversible", "external_send", "financial", "destructive"],
     })
       .$type<RiskLevel>()
       .notNull(),
-    requiredActions: jsonb("required_actions").$type<string[]>().notNull(),
+    requiredActions: zodJsonb("required_actions", z.array(z.string())).notNull(),
     publishedBy: text("published_by").notNull(),
     publishedAt: timestamp("published_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -158,6 +164,7 @@ export const workflowVersionTags = pgTable(
       columns: [table.orgId, table.workflowVersionId],
       foreignColumns: [workflowVersions.orgId, workflowVersions.id],
     }).onDelete("cascade"),
+    index("workflow_version_tags_org_id_tag_id_idx").on(table.orgId, table.tagId),
     foreignKey({
       name: "workflow_version_tags_tag_fk",
       columns: [table.orgId, table.tagId],

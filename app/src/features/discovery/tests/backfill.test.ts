@@ -128,6 +128,27 @@ describe("backfillConnection", () => {
     ]);
   });
 
+  it("stores an HTML-only message whose character codes are out of range", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const connection = await connectMailbox(orgA.member.ctx, orgA.member.email, [
+      {
+        from: "alice@customer.example",
+        to: [orgA.member.email],
+        // Past U+10FFFF, which no character has, then a valid "@" written as a character code.
+        html: "<p>&#99999999; &#x110000; Write to dave&#64;partner.example</p>",
+        at: daysAgo(1),
+      },
+    ]);
+
+    expect(await backfillConnection(orgA.member.ctx, connection.id)).toMatchObject({
+      outcome: "done",
+      items: 1,
+    });
+    expect(await findEventsByObject(orgA.member.ctx, "email", "dave@partner.example")).toHaveLength(
+      1,
+    );
+  });
+
   it("never returns a subject, body, snippet or file name", async () => {
     const { orgA } = await seedTwoOrgs();
     const connection = await connectMailbox(orgA.member.ctx, orgA.member.email, [

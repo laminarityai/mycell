@@ -3,11 +3,12 @@
 // mailbox, so an admin sees a member's counts and nothing of their mail (ADR-0001). A person's
 // reviews are those waiting in their own mailbox; a shared inbox's belong to nobody. No model is
 // called, so nothing is debited.
-import { and, eq, gte, type SQL } from "drizzle-orm";
-import { forOrg } from "@/db/for-org";
+import { and, eq, gte, inArray, type SQL } from "drizzle-orm";
+import { forOrg, type GroupCount } from "@/db/for-org";
 import { userNames } from "@/features/orgs/server";
+import type { UserNames } from "@/features/orgs/types";
 import { currentVersionIds } from "@/features/workflows/server";
-import type { Ctx } from "@/lib/ctx";
+import { type Ctx, isAdmin, isSystem } from "@/lib/ctx";
 import { ForbiddenError } from "@/lib/errors";
 import {
   reviewStatuses,
@@ -16,8 +17,17 @@ import {
   type ReviewStatsQuery,
   type ReviewTally,
 } from "../types";
-import type { ReviewRow } from "./reviews";
 import { reviews } from "./schema";
+
+// What reviews are counted by: the Postgres groups every tally adds up.
+const groupColumns = {
+  workflowId: reviews.workflowId,
+  workflowVersionId: reviews.workflowVersionId,
+  ownerUserId: reviews.ownerUserId,
+  kind: reviews.kind,
+  status: reviews.status,
+};
+type Group = GroupCount<typeof groupColumns>;
 
 /**
  * Counts the reviews `query` asks about. Admins (and the system ctx) may ask about anyone's and
@@ -25,63 +35,92 @@ import { reviews } from "./schema";
  * counting by person.
  */
 export async function reviewStats(ctx: Ctx, query: ReviewStatsQuery): Promise<ReviewStats> {
-  const userId = whose(ctx, query);
-  const rows = await counted(ctx, query, userId);
-  if (query.groupBy !== "user") return { ...tally(rows), byUser: [] };
-  const nameOf = await userNames(ctx);
-  const owners = [...new Set(rows.map((row) => row.ownerUserId))];
-  const byUser = owners
-    .map((owner) => ({
-      user: owner === null ? null : { id: owner, name: nameOf(owner) },
-      ...tally(rows.filter((row) => row.ownerUserId === owner)),
-    }))
-    // People by name, then the shared inbox.
-    .sort((a, b) =>
-      a.user === null ? 1 : b.user === null ? -1 : a.user.name.localeCompare(b.user.name),
-    );
-  return { ...tally(rows), byUser };
+  const workflowIds = query.workflowId === undefined ? undefined : [query.workflowId];
+  const { groups, nameOf } = await counted(ctx, query, workflowIds);
+  return statsOf(groups, nameOf);
+}
+
+/**
+ * `reviewStats` for each of these workflows, by workflow ID, counted together: the same few
+ * queries for one workflow or a hundred. A workflow with no reviews has every count zero.
+ */
+export async function reviewStatsByWorkflow(
+  ctx: Ctx,
+  workflowIds: readonly string[],
+  query: Omit<ReviewStatsQuery, "workflowId">,
+): Promise<Map<string, ReviewStats>> {
+  if (workflowIds.length === 0) return new Map();
+  const { groups, nameOf } = await counted(ctx, query, [...new Set(workflowIds)]);
+  const byWorkflow = Map.groupBy(groups, (group) => group.workflowId);
+  return new Map(workflowIds.map((id) => [id, statsOf(byWorkflow.get(id) ?? [], nameOf)]));
 }
 
 // Whose reviews the caller may count: a member only their own, and never by person; an admin
 // anyone's (undefined for everyone's).
-function whose(ctx: Ctx, query: ReviewStatsQuery): string | undefined {
-  if (ctx.role === "admin" || ctx.role === "system") return query.userId;
+function whose(ctx: Ctx, query: Omit<ReviewStatsQuery, "workflowId">): string | undefined {
+  if (isAdmin(ctx) || isSystem(ctx)) return query.userId;
   if (query.groupBy !== undefined) throw new ForbiddenError();
   if (query.userId !== undefined && query.userId !== ctx.userId) throw new ForbiddenError();
   return ctx.userId;
 }
 
+// The groups of reviews `query` counts, of these workflows (or every one), and, when it counts
+// by person, their names. Counted in the database: no review row is read.
 async function counted(
   ctx: Ctx,
-  query: ReviewStatsQuery,
-  userId: string | undefined,
-): Promise<ReviewRow[]> {
+  query: Omit<ReviewStatsQuery, "workflowId">,
+  workflowIds: string[] | undefined,
+): Promise<{ groups: Group[]; nameOf: UserNames | undefined }> {
+  const userId = whose(ctx, query);
   const where: SQL[] = [];
-  if (query.workflowId !== undefined) where.push(eq(reviews.workflowId, query.workflowId));
+  if (workflowIds !== undefined) where.push(inArray(reviews.workflowId, workflowIds));
   if (userId !== undefined) where.push(eq(reviews.ownerUserId, userId));
   if (query.since instanceof Date) where.push(gte(reviews.createdAt, query.since));
-  const rows = await forOrg(ctx).select(reviews, { where: and(...where) });
-  if (query.since !== "current_version") return rows;
+  const [groups, nameOf] = await Promise.all([
+    forOrg(ctx).countBy(reviews, groupColumns, and(...where)),
+    query.groupBy === "user" ? userNames(ctx) : undefined,
+  ]);
+  if (query.since !== "current_version") return { groups, nameOf };
   const current = await currentVersionIds(
     ctx,
-    rows.map((row) => row.workflowId),
+    groups.map((group) => group.workflowId),
   );
-  return rows.filter((row) => current.get(row.workflowId) === row.workflowVersionId);
+  return {
+    groups: groups.filter((group) => current.get(group.workflowId) === group.workflowVersionId),
+    nameOf,
+  };
 }
 
-function tally(rows: ReviewRow[]): ReviewTally {
-  const approvals = countsOf(rows.filter((row) => row.kind === "approval"));
+// The groups' tally, and with `nameOf` each person's apart: people by name, then the shared
+// inbox.
+function statsOf(groups: Group[], nameOf: UserNames | undefined): ReviewStats {
+  if (nameOf === undefined) return { ...tally(groups), byUser: [] };
+  const owners = [...new Set(groups.map((group) => group.ownerUserId))];
+  const byUser = owners
+    .map((owner) => ({
+      user: owner === null ? null : { id: owner, name: nameOf(owner) },
+      ...tally(groups.filter((group) => group.ownerUserId === owner)),
+    }))
+    .sort((a, b) =>
+      a.user === null ? 1 : b.user === null ? -1 : a.user.name.localeCompare(b.user.name),
+    );
+  return { ...tally(groups), byUser };
+}
+
+function tally(groups: Group[]): ReviewTally {
+  const approvals = countsOf(groups.filter((group) => group.kind === "approval"));
   const { approved, edited_approved, declined, gone } = approvals;
   const ended = approved + edited_approved + declined + gone;
   return {
     approvals,
-    escalations: countsOf(rows.filter((row) => row.kind === "escalation")),
+    escalations: countsOf(groups.filter((group) => group.kind === "escalation")),
+    heldSends: countsOf(groups.filter((group) => group.kind === "held_send")),
     approvedWithoutEdits: ended === 0 ? null : approved / ended,
   };
 }
 
-function countsOf(rows: ReviewRow[]): ReviewCounts {
+function countsOf(groups: Group[]): ReviewCounts {
   const counts = Object.fromEntries(reviewStatuses.map((status) => [status, 0])) as ReviewCounts;
-  for (const row of rows) counts[row.status] += 1;
+  for (const group of groups) counts[group.status] += group.count;
   return counts;
 }

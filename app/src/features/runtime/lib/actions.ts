@@ -1,9 +1,11 @@
 // Every catalog action's executor, typed so that a catalog action without one fails the
 // typecheck. The tool step checks each one's input and output against the catalog's schemas.
 // Actions not built yet are pending, with the ticket that builds them.
-import { messageRef, threadRef } from "./gmail";
+import { RunStepError } from "./failures";
+import { messageWithText, threadRef } from "./gmail";
 import { gmailDraftAdapter } from "./gmail-draft-adapter";
 import { addLabel } from "./gmail-labels";
+import { lookUp, type LookupInput } from "./memory-lookup";
 import { appendRow, readRange } from "./sheets";
 import type { ActionExecutors } from "./step-context";
 
@@ -11,8 +13,8 @@ export const actionExecutors: ActionExecutors = {
   "google-mail.read-message": {
     status: "ready",
     run: async (ctx, connectionId, input: { messageId: string }) => {
-      const ref = await messageRef(ctx, connectionId, input.messageId);
-      return { messageId: ref.id, threadId: ref.threadId, labelIds: ref.labelIds };
+      const { id, ...message } = await messageWithText(ctx, connectionId, input.messageId);
+      return { messageId: id, ...message };
     },
   },
   "google-mail.read-thread": {
@@ -38,7 +40,18 @@ export const actionExecutors: ActionExecutors = {
       return { draftId: prepared.itemRef, threadId: prepared.threadRef };
     },
   },
-  // Records the range's counts; a draft step that names it re-reads the values (invariant 8).
+  // Hands on the range's counts; a draft step that names it re-reads the values.
   "google-sheet.read-range": { status: "ready", run: readRange },
   "google-sheet.append-row": { status: "ready", run: appendRow },
+  // Reads as the run: in its member's view, or company-wide only (memory-lookup.ts).
+  "memory.lookup": {
+    status: "ready",
+    run: async (ctx, connectionId, input: LookupInput, _marker, _compose, run) => {
+      if (run.workflowId === undefined) {
+        throw new RunStepError("not_available", "Only a workflow's run can look up memory.");
+      }
+      const reader = { kind: "workflow_run" as const, runId: run.id, workflowId: run.workflowId };
+      return lookUp(ctx, { connectionId, sourceRef: run.sourceRef }, input, reader);
+    },
+  },
 };

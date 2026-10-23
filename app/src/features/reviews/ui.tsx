@@ -10,8 +10,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { ItemView, MailView } from "@/features/runtime/adapters";
-import { cn } from "@/lib/utils";
-import { EscalationActions, HandOffForm, ReviewActions } from "./lib/review-actions";
+import {
+  EscalationActions,
+  HandOffForm,
+  HeldSendActions,
+  ReviewActions,
+} from "./lib/review-actions";
 import type {
   HandOff,
   OpenedReview,
@@ -26,6 +30,7 @@ export { ReviewCountsSection } from "./lib/review-counts";
 const KIND_LABELS: Record<ReviewKind, string> = {
   approval: "Draft reply",
   escalation: "Escalated message",
+  held_send: "Held send",
 };
 
 const ENDINGS: Record<Exclude<ReviewStatus, "waiting">, string> = {
@@ -34,6 +39,16 @@ const ENDINGS: Record<Exclude<ReviewStatus, "waiting">, string> = {
   declined: "It was declined, and its draft deleted",
   done_in_app: "It was sent from Gmail",
   gone: "Its draft is no longer in Gmail",
+  expired: "It expired",
+  unconfirmed: "It was approved, but its app didn't confirm it was sent",
+};
+
+// A held send's own words where they differ: Mycel held the request, not Gmail.
+const HELD_SEND_ENDINGS: Partial<Record<ReviewStatus, string>> = {
+  declined: "It was declined, and its request deleted",
+  gone: "Its request is no longer held",
+  expired: "Nobody acted on it within 30 days, so it expired and its request was deleted",
+  unconfirmed: "It was approved, but its app didn't confirm it was sent, so it may have gone",
 };
 
 /**
@@ -43,28 +58,13 @@ const ENDINGS: Record<Exclude<ReviewStatus, "waiting">, string> = {
 function ending(review: Review): string {
   if (review.status === "waiting") return "";
   const by = review.endedBy === null ? "" : ` by ${review.endedBy}`;
+  if (review.kind === "held_send") {
+    return `${HELD_SEND_ENDINGS[review.status] ?? ENDINGS[review.status]}${by}.`;
+  }
   if (review.kind !== "escalation") return `${ENDINGS[review.status]}${by}.`;
   if (review.status === "gone") return "The message is no longer in Gmail.";
   if (review.endedByUserId === null) return "It was replied to from Gmail.";
   return `It was marked done${by}.`;
-}
-
-/**
- * The app navigation's link to the Reviews page, with how many reviews wait for the caller
- * (`countWaitingReviews`, read on each page load).
- */
-export function ReviewsNavLink({ count, className }: { count: number; className?: string }) {
-  return (
-    <Link href="/reviews" className={cn("inline-flex items-center gap-1.5", className)}>
-      Reviews
-      {count > 0 ? (
-        <Badge>
-          {count}
-          <span className="sr-only"> waiting</span>
-        </Badge>
-      ) : null}
-    </Link>
-  );
 }
 
 /** Who has a handed-on review, as the viewer reads it. */
@@ -135,8 +135,8 @@ export function ReviewsList({
 
 /**
  * An open review: the message and the drafted reply, fetched live, with approve, edit and
- * decline; or the escalated message, why it was handed over and a link to it in Gmail, with
- * done. While it waits, who it was handed to, and a colleague to hand it to when the caller
+ * decline; the escalated message, why it was handed over and a link to it in Gmail, with done;
+ * or a held send's request and the fields it sends, with approve, edit and decline. While it waits, who it was handed to, and a colleague to hand it to when the caller
  * may. Once it has ended, how it ended and by whom.
  */
 export function ReviewDetail({
@@ -171,6 +171,34 @@ export function ReviewDetail({
 }
 
 function WaitingItem({ review, view }: { review: Review; view: ItemView }) {
+  if (view.kind === "held_send") {
+    return (
+      <>
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              {view.app}: {view.action}
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">{view.description}</p>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <p className="font-mono text-xs break-all">
+              {view.method} {view.url}
+            </p>
+            <dl className="flex flex-col gap-2 text-sm">
+              {view.fields.map((field) => (
+                <div key={field.name}>
+                  <dt className="font-medium">{field.description}</dt>
+                  <dd className="whitespace-pre-wrap">{field.value}</dd>
+                </div>
+              ))}
+            </dl>
+          </CardContent>
+        </Card>
+        <HeldSendActions reviewId={review.id} fields={view.fields} />
+      </>
+    );
+  }
   if (view.kind === "message") {
     return (
       <>

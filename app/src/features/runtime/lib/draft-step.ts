@@ -5,25 +5,22 @@
 // review of it, which the person approves, edits or declines on the Reviews page (or finishes in
 // Gmail), and the run goes on to its later steps.
 import { z } from "zod";
-import { findAction } from "@/features/policy/catalog";
+import { callModel } from "@/features/models/server";
+import { catalog } from "@/features/policy/catalog";
 import { findStep, stepsAbove } from "@/features/spec/tree";
 import type { Step } from "@/features/spec/types";
-import type { Json } from "../types";
-import { callModel } from "./call-model";
+import { joinPrompts, type PromptText } from "@/lib/prompts";
+import type { Json } from "@/lib/inngest";
 import { RunStepError } from "./failures";
 import { messageRef, messageText, threadText } from "./gmail";
+import { lookupText, MEMORY_LOOKUP } from "./memory-lookup";
+import { draftPrompts } from "./prompts";
 import { resolveInput } from "./references";
 import { runAction } from "./run-action";
 import { rangeText } from "./sheets";
 import type { StepContext, StepExecution } from "./step-context";
 
 type StepOf<T extends Step["type"]> = Extract<Step, { type: T }>;
-
-const SYSTEM = [
-  "You write the body of an email reply on behalf of the mailbox's owner.",
-  "Write only the reply's text: no subject line, no headers, no placeholders.",
-  "Follow these instructions:",
-].join(" ");
 
 export async function draftStep(
   step: StepOf<"draft">,
@@ -34,7 +31,7 @@ export async function draftStep(
   // Called by the action only when the step hasn't made its draft yet.
   const compose = async () => {
     const result = await callModel(ctx, step.role, {
-      system: `${SYSTEM}\n\n${step.instructions}`,
+      system: draftPrompts.system({ instructions: step.instructions }),
       prompt: await contextText(step, context),
       ...context.attribution,
     });
@@ -48,37 +45,47 @@ export async function draftStep(
 }
 
 /** The step's context, as the model reads it, fetched inside the step and held in memory. */
-async function contextText(step: StepOf<"draft">, context: StepContext): Promise<string> {
+async function contextText(step: StepOf<"draft">, context: StepContext): Promise<PromptText> {
   const { ctx, run } = context;
-  const parts: string[] = [];
+  const parts: PromptText[] = [];
   for (const name of step.context) {
     if (name === "trigger.message") {
-      const text = await messageText(ctx, run.connectionId, run.sourceRef);
-      parts.push(`The message you're replying to:\n\n${text}`);
+      const message = await messageText(ctx, run.connectionId, run.sourceRef);
+      parts.push(draftPrompts.triggerMessage({ message }));
     } else if (name === "trigger.thread") {
       const { threadId } = await messageRef(ctx, run.connectionId, run.sourceRef);
-      parts.push(`The thread so far:\n\n${await threadText(ctx, run.connectionId, threadId)}`);
+      const thread = await threadText(ctx, run.connectionId, threadId);
+      parts.push(draftPrompts.triggerThread({ thread }));
     } else {
       const output = context.outputs[name] as Json | undefined;
       if (output === undefined) {
         throw new RunStepError("bad_reference", `The step ${name} has no output.`);
       }
       const sheet = await sheetText(name, context);
-      parts.push(sheet ?? `What the step "${name}" found: ${JSON.stringify(output)}`);
+      const lookup = isLookup(name, context) ? lookupText(name, output) : undefined;
+      parts.push(
+        sheet ?? lookup ?? draftPrompts.stepOutput({ step: name, output: JSON.stringify(output) }),
+      );
     }
   }
-  return parts.join("\n\n");
+  return joinPrompts(parts, "\n\n");
 }
 
-const RANGE_READ = findAction("google-sheet.read-range");
+/** Whether the step `name` is a memory lookup, whose facts read as a list. */
+function isLookup(name: string, context: StepContext): boolean {
+  const step = findStep(context.spec, name);
+  return step?.type === "tool" && step.action === MEMORY_LOOKUP;
+}
+
+const RANGE_READ = catalog["google-sheet.read-range"];
 
 /**
  * The values an earlier read-range step read, re-read here: that step handed on only the
  * range's counts, so the values never crossed a step boundary. Undefined for any other step.
  */
-async function sheetText(name: string, context: StepContext): Promise<string | undefined> {
+async function sheetText(name: string, context: StepContext): Promise<PromptText | undefined> {
   const step = findStep(context.spec, name);
-  if (step?.type !== "tool" || RANGE_READ === undefined || step.action !== RANGE_READ.name) {
+  if (step?.type !== "tool" || step.action !== RANGE_READ.name) {
     return undefined;
   }
   const input = RANGE_READ.input.safeParse(await resolveInput(context, step.input));
@@ -87,23 +94,57 @@ async function sheetText(name: string, context: StepContext): Promise<string | u
   }
   const range = input.data as { spreadsheetId: string; range: string };
   const values = await rangeText(context.ctx, context.run.connectionId, range);
-  return `What the sheet range ${range.range} holds, one row per line, cells separated by tabs:\n\n${values}`;
+  return draftPrompts.sheetRange({ range: range.range, values });
+}
+
+// Whether the step is a tool step calling a custom write, whose output is its held send.
+function isCustomWrite(step: Step, context: StepContext): boolean {
+  if (step.type !== "tool") return false;
+  const action = context.actionSet.find(step.action);
+  return action?.kind === "custom" && action.risk !== "read";
 }
 
 const draftOutput = z.object({ draftId: z.string(), threadId: z.string() });
+const heldSendOutput = z.object({ heldSendId: z.string(), connectionId: z.string() });
 
 /**
- * Records that the drafts above it on its own path await a person: every one, those an approval
+ * Records that what its channel reviews above it on its own path awaits a person: every Gmail
+ * draft (`gmail_drafts`) or every held send of a custom write (`held_send`), those an approval
  * above it recorded too, as a v1 approval recorded every draft before it. Each gets a review on
- * its owner's Reviews page (one per draft, however often the step or the run is retried). It
- * holds nothing back: a Gmail draft is never sent by a run, so the steps after it still run.
+ * its owner's Reviews page (one per item, however often the step or the run is retried). It
+ * holds nothing back: a run never sends either, so the steps after it still run.
  */
 export async function approvalStep(
   step: StepOf<"approval">,
   context: StepContext,
 ): Promise<StepExecution> {
-  const drafts = stepsAbove(context.spec, step.id).flatMap((earlier) => {
-    const parsed = draftOutput.safeParse(context.outputs[earlier.id]);
+  const stepsAboveIt = stepsAbove(context.spec, step.id);
+  const above = stepsAboveIt.map((earlier) => context.outputs[earlier.id]);
+  if (step.channel === "held_send") {
+    // Only a custom write's step holds a send: a read's result, filled from the app's answer,
+    // may look like one.
+    const sends = stepsAboveIt.flatMap((earlier) => {
+      if (!isCustomWrite(earlier, context)) return [];
+      const parsed = heldSendOutput.safeParse(context.outputs[earlier.id]);
+      return parsed.success ? [parsed.data] : [];
+    });
+    for (const { heldSendId, connectionId } of sends) {
+      await context.awaitReview({
+        kind: "held_send",
+        itemRef: heldSendId,
+        threadRef: heldSendId,
+        connectionId,
+      });
+    }
+    const record = {
+      awaiting: "human",
+      channel: step.channel,
+      heldSendIds: sends.map((send) => send.heldSendId),
+    };
+    return { next: "continue", output: record, record };
+  }
+  const drafts = above.flatMap((output) => {
+    const parsed = draftOutput.safeParse(output);
     return parsed.success ? [parsed.data] : [];
   });
   for (const { draftId, threadId } of drafts) {

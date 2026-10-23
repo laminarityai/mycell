@@ -1,3 +1,4 @@
+import type { CustomActionRecord } from "@/features/custom-actions/types";
 import type { InsertedApproval, RequirementsGained, RiskLevel } from "@/features/policy/types";
 import type { Spec, SpecIssue } from "@/features/spec/types";
 import type { Tag } from "@/features/tags/types";
@@ -13,6 +14,12 @@ export type WorkflowInput = {
    * ConflictError if the working spec has moved on since.
    */
   baseRevision?: number;
+  /**
+   * Custom actions the spec brings with it, as accepted from the builder proposal `proposalId`
+   * (ADR-0018): stored in the same transaction as the spec, so neither is stored without the
+   * other.
+   */
+  newCustomActions?: { actions: readonly CustomActionRecord[]; proposalId: string };
 };
 
 /** What saving showed: the working spec's max risk and the approvals the policy inserted. */
@@ -20,6 +27,18 @@ export type SavedWorkflow = {
   id: string;
   /** The working spec's revision after this save. */
   revision: number;
+  maxRisk: RiskLevel;
+  inserted: InsertedApproval[];
+};
+
+/** A save read and validated before its transaction (checkWorkflowSave), ready to write. */
+export type CheckedSave = {
+  workflowId: string | undefined;
+  /** The revision an existing workflow's working spec must still be at. */
+  baseRevision: number;
+  values: { name: string; specId: string; workingSpec: Spec };
+  /** The custom actions it brings, checked again, and the proposal they came from. */
+  newCustomActions: { actions: CustomActionRecord[]; proposalId: string } | undefined;
   maxRisk: RiskLevel;
   inserted: InsertedApproval[];
 };
@@ -42,6 +61,19 @@ export type PublishSettings = {
  * one), by name; and whether that version lets a review be handed on (`review.handoff`).
  */
 export type ReviewSharing = { seen: boolean; handOff: boolean; tags: string[] };
+
+/**
+ * A workflow that uses an action, as the custom actions page lists it: in its working spec, in
+ * its latest version (the one that runs), or both.
+ */
+export type ActionUse = {
+  workflowId: string;
+  name: string;
+  inWorkingSpec: boolean;
+  /** The latest version's number when that version uses it; null when it doesn't or none is. */
+  publishedVersion: number | null;
+  archived: boolean;
+};
 
 /** An immutable snapshot of a workflow's spec, after the policy engine ran on it. */
 export type WorkflowVersion = {
@@ -69,6 +101,8 @@ export type WorkflowSummary = {
   latestVersion: WorkflowVersionSummary | null;
   /** Whose connections the latest version runs on; null while not published. */
   credentials: Spec["credentials"] | null;
+  /** The apps the latest version uses, as admins name them; none while not published. */
+  requiredApps: string[];
   /** The caller's enablement, or the org switch; null while off. */
   switch: WorkflowSwitch | null;
   /** Who the latest version is published to; null while not published. */
@@ -76,6 +110,15 @@ export type WorkflowSummary = {
   /** When an admin archived it, which stops it everywhere; null while not archived. */
   archivedAt: Date | null;
   updatedAt: Date;
+};
+
+/** A workflow's working spec, as the builder chat's context lists every workflow's. */
+export type WorkingSpecSummary = {
+  id: string;
+  name: string;
+  workingSpec: Spec;
+  /** The latest version's number; null while not published. */
+  latestVersionNumber: number | null;
 };
 
 /**
@@ -87,11 +130,13 @@ export type VisibleWorkflow = {
   name: string;
   /** What the latest version does, a sentence per step. */
   description: string[];
-  /** The apps the latest version uses, as the catalog names them ("Gmail", "Sheets"). */
+  /** The apps the latest version uses, as admins name them ("Gmail", "Sheets", "Calendar"). */
   requiredApps: string[];
   maxRisk: RiskLevel;
   /** `org` runs on a shared inbox that only admins switch on. */
   credentials: Spec["credentials"];
+  /** The address of the shared inbox the org switch is on; null for a member workflow, or off. */
+  sharedInbox: string | null;
   versionNumber: number;
   /** The caller's enablement, or the org switch; null while off. */
   switch: WorkflowSwitch | null;
@@ -127,19 +172,24 @@ export type WorkflowDetails = {
 
 /**
  * Where a workflow is switched on: by the caller's own enablement (`member`) or the org switch
- * (`org`), the connection it runs on, since when, and whether it's paused (an enablement only).
- * `needsReconnect` when Google refused the connection's token: nothing runs on it until its
- * owner reconnects, though the switch stays as it is (a connection state, not a pause).
+ * (`org`), the connection it runs on, since when, and what pauses it. `status` and
+ * `pausedReason` are what's stored (an enablement only); `pauses` is every pause that holds,
+ * stored or worked out. `needsReconnect` when Google refused the connection's token: nothing
+ * runs on it until its owner reconnects, though the switch stays as it is (a connection state,
+ * not a pause).
  */
 export type WorkflowSwitch = {
   kind: "member" | "org";
   connectionId: string;
   since: Date;
+  /** The stored status: `paused` only until its user enables it again. */
   status: EnablementStatus;
-  /** Why it's paused; null while on. */
-  pausedReason: PausedReason | null;
+  /** Why it's stored paused; null while stored on. */
+  pausedReason: StoredPausedReason | null;
   /** What a `needs_reenable` pause is about; null while on. */
   pausedChange: PausedChange | null;
+  /** Every pause that holds, in `PAUSED_REASONS`' order; empty while it runs. */
+  pauses: PausedReason[];
   needsReconnect: boolean;
 };
 
@@ -147,10 +197,18 @@ export type WorkflowSwitch = {
 export type EnablementStatus = "on" | "paused";
 
 /**
- * Why an enablement is paused. `needs_reenable`: a new version is riskier or needs more of the
- * connection than the one its user switched on. M7 and M8 add budget and credit reasons.
+ * Why a switch is paused, in the order its effective state picks from: the first that holds is
+ * the one shown (M7). M7's budgets add `budget_reached`, and M8's `failures`, between the two.
+ * - `out_of_credits`: the company's balance is at or below zero, so no workflow starts a run.
+ *   Worked out from the ledger when it's needed, never stored; a grant lifts it.
+ * - `needs_reenable`: a new version is riskier or needs more of the connection than the one its
+ *   user switched on. Stored on the enablement until they enable it again.
  */
-export type PausedReason = "needs_reenable";
+export const PAUSED_REASONS = ["out_of_credits", "needs_reenable"] as const;
+export type PausedReason = (typeof PAUSED_REASONS)[number];
+
+/** The pauses an enablement stores, which only its user lifts; the rest are worked out. */
+export type StoredPausedReason = Extract<PausedReason, "needs_reenable">;
 
 /**
  * What a `needs_reenable` pause is about: what the versions published since its member last
@@ -180,9 +238,12 @@ export type EnableResult =
 export type EnablementSummary = {
   userId: string;
   name: string;
+  /** Stored, as on `WorkflowSwitch`. */
   status: EnablementStatus;
-  pausedReason: PausedReason | null;
+  pausedReason: StoredPausedReason | null;
   pausedChange: PausedChange | null;
+  /** Every pause that holds, in `PAUSED_REASONS`' order; empty while it runs. */
+  pauses: PausedReason[];
   since: Date;
 };
 
@@ -217,8 +278,6 @@ export type SpecCheck = ({ ok: true } & ValidatedSpec) | { ok: false; issues: Sp
 
 /** The editor's live validation: the spec's issues, or what the policy engine made of it. */
 export type SpecCheckResult = {
-  /** Set when the check itself was refused (a member, say). */
-  error?: string;
   issues: SpecIssue[];
   /** Null while the spec has issues. */
   maxRisk: RiskLevel | null;

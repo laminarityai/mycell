@@ -1,14 +1,14 @@
 // The model and control steps: classify, extract, branch and escalate. A model step fetches
 // the triggering message or invite inside itself and holds its text in memory only (invariant 8).
 import { z } from "zod";
+import { callModel, classify } from "@/features/models/server";
 import { checkWords } from "@/features/policy/condition-fields";
 import type { Step } from "@/features/spec/types";
 import { ItemGoneError } from "@/lib/errors";
-import type { Json } from "../types";
-import { callModel } from "./call-model";
-import { classify } from "./classify";
+import type { Json } from "@/lib/inngest";
 import { chooseEveryMatch, chooseFirstMatch } from "./conditions";
 import { escalationAdapter } from "./escalation-adapter";
+import { stepPrompts } from "./prompts";
 import type { StepContext, StepExecution } from "./step-context";
 import { triggerText, withTriggerFacts } from "./trigger-facts";
 
@@ -21,7 +21,7 @@ export async function classifyStep(
   const { ctx } = context;
   const state = await triggerText(context);
   const result = await classify(ctx, {
-    question: step.question,
+    question: stepPrompts.classifyQuestion({ question: step.question }),
     labels: step.labels,
     state,
     ...context.attribution,
@@ -60,8 +60,8 @@ export async function extractStep(
     ),
   );
   const result = await callModel(ctx, step.role, {
-    system: "Extract the fields from the text. Use null for a field the text doesn't give.",
-    prompt: text,
+    system: stepPrompts.extractSystem(),
+    prompt: stepPrompts.extractPrompt({ message: text }),
     schema,
     ...context.attribution,
   });
@@ -93,7 +93,7 @@ export async function branchStep(
 ): Promise<StepExecution> {
   const choose = step.mode === "every" ? chooseEveryMatch : chooseFirstMatch;
   const outputs = await withTriggerFacts(step, context);
-  const { taken, paths } = choose(step, outputs, checkWords(context.spec));
+  const { taken, paths } = choose(step, outputs, checkWords(context.spec, context.actionSet));
   const stops = taken.includes(step.otherwise.id) && step.otherwise.steps.length === 0;
   // The paths checked, with each check's pass or fail; never a reason, which may quote a value.
   const checked = paths

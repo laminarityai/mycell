@@ -6,6 +6,11 @@
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  NativeSelect,
+  NativeSelectOptGroup,
+  NativeSelectOption,
+} from "@/components/ui/native-select";
 import type { CheckChoices } from "@/features/policy/condition-fields";
 import {
   checkOn,
@@ -15,9 +20,6 @@ import {
   type ValueCheck,
 } from "@/features/spec/conditions";
 import type { Check } from "@/features/spec/types";
-
-const SELECT =
-  "h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2 text-sm font-normal";
 
 /** A new check: the first classify answer offered, or else the first field. */
 export function firstCheck(choices: CheckChoices): Check {
@@ -58,9 +60,9 @@ export function CheckEditor({
   return (
     <div className="flex flex-col gap-1.5 rounded-md border bg-muted/30 p-2">
       <div className="flex items-center gap-1">
-        <select
+        <NativeSelect
           aria-label="What to test"
-          className={SELECT}
+          className="w-full min-w-0"
           value={chosen}
           onChange={(event) => {
             const [kind, at] = event.target.value.split(":");
@@ -75,25 +77,28 @@ export function CheckEditor({
           }}
         >
           {chosen === "current" ? (
-            <option value="current">{current} (not above this path)</option>
+            <NativeSelectOption value="current">{current} (not above this path)</NativeSelectOption>
           ) : null}
           {choices.answers.length === 0 ? null : (
-            <optgroup label="Classify answers">
+            <NativeSelectOptGroup label="Classify answers">
               {choices.answers.map((answer, at) => (
-                <option key={`${answer.classify}:${answer.is}`} value={`answer:${String(at)}`}>
+                <NativeSelectOption
+                  key={`${answer.classify}:${answer.is}`}
+                  value={`answer:${String(at)}`}
+                >
                   {answer.label}
-                </option>
+                </NativeSelectOption>
               ))}
-            </optgroup>
+            </NativeSelectOptGroup>
           )}
-          <optgroup label="Values">
+          <NativeSelectOptGroup label="Values">
             {choices.fields.map((field, at) => (
-              <option key={field.from} value={`field:${String(at)}`}>
+              <NativeSelectOption key={field.from} value={`field:${String(at)}`}>
                 {field.label} ({field.from})
-              </option>
+              </NativeSelectOption>
             ))}
-          </optgroup>
-        </select>
+          </NativeSelectOptGroup>
+        </NativeSelect>
         {onRemove === undefined ? null : (
           <Button
             type="button"
@@ -145,20 +150,20 @@ function ValueTest({
 }) {
   return (
     <div className="flex items-center gap-1">
-      <select
+      <NativeSelect
         aria-label="Operator"
-        className={SELECT}
+        className="w-full min-w-0"
         value={check.op}
         onChange={(event) => {
           onChange(withOperator(check, event.target.value as Operator));
         }}
       >
         {operators.map((op) => (
-          <option key={op} value={op}>
+          <NativeSelectOption key={op} value={op}>
             {operatorWords(op)}
-          </option>
+          </NativeSelectOption>
         ))}
-      </select>
+      </NativeSelect>
       {"value" in check ? (
         <Input
           aria-label="Value"

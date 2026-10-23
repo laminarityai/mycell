@@ -5,8 +5,7 @@
 // ends `done_in_app`, not `approved`.
 import { and, eq } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
-import type { Ctx } from "@/lib/ctx";
-import { ForbiddenError } from "@/lib/errors";
+import { type Ctx, requireSystem } from "@/lib/ctx";
 import type { GmailMessageSent } from "@/lib/events";
 import type { PendingForms } from "../types";
 import { checkWaiting } from "./acting";
@@ -22,7 +21,7 @@ export async function endReviewsInThread(
   sent: Pick<GmailMessageSent, "connectionId" | "threadId">,
   adapters?: PendingForms,
 ): Promise<void> {
-  if (ctx.role !== "system") throw new ForbiddenError();
+  requireSystem(ctx);
   const waiting = await forOrg(ctx).select(reviews, {
     where: and(
       eq(reviews.connectionId, sent.connectionId),

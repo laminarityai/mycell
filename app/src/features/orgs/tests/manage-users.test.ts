@@ -94,6 +94,16 @@ describe("removeUser", () => {
     expect(await hasSession(orgB.member.id)).toBe(true);
   });
 
+  // removeUserAction relies on it: tried again after deleting their connections failed, it
+  // finds the user gone and goes on to delete their connections.
+  it("treats a user already removed as if they don't exist", async () => {
+    const { orgA } = await seedTwoOrgs();
+    await removeUser(orgA.admin.ctx, orgA.member.id);
+
+    await expect(removeUser(orgA.admin.ctx, orgA.member.id)).rejects.toThrow(NotFoundError);
+    expect(await roles(orgA.admin.ctx)).toEqual({ [orgA.admin.id]: "admin" });
+  });
+
   it("refuses to remove the org's last admin", async () => {
     const { orgA } = await seedTwoOrgs();
 

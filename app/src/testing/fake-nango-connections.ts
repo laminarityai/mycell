@@ -53,8 +53,8 @@ export function connectionsApiHandlers(
         return HttpResponse.json({ error }, { status: 404 });
       }
       // The full connection, which names its times as created_at and updated_at (the listing
-      // says `created`). `raw` is Google's whole token response, whose `scope` lists what was
-      // granted.
+      // says `created`). `raw` is the app's whole token response, whose `scope` lists what was
+      // granted, space-separated.
       const { created, ...rest } = listed(connection);
       return HttpResponse.json({
         ...rest,

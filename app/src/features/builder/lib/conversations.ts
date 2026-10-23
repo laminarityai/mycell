@@ -5,13 +5,12 @@ import { asc, desc, eq } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { getWorkflow } from "@/features/workflows/server";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
-import { NotFoundError } from "@/lib/errors";
-import {
-  storedPartSchema,
-  type BuilderConversation,
-  type BuilderMessage,
-  type ConversationSummary,
-  type StoredPart,
+import { InvariantError, NotFoundError } from "@/lib/errors";
+import type {
+  BuilderConversation,
+  BuilderMessage,
+  ConversationSummary,
+  StoredPart,
 } from "../types";
 import { builderConversations, builderMessages } from "./schema";
 
@@ -35,7 +34,7 @@ export async function startConversation(
   });
   const row = inserted.at(0);
   // An insert returns its row, so this is a bug, not something a user can act on.
-  if (row === undefined) throw new Error("The conversation wasn't recorded.");
+  if (row === undefined) throw new InvariantError("The conversation wasn't recorded.");
   return summary(row);
 }
 
@@ -85,8 +84,8 @@ export async function messagesOf(ctx: Ctx, conversationId: string): Promise<Buil
     id: row.id,
     role: row.role,
     authorId: row.authorId,
-    // Parsed on the way out: the rows feed the model and the page.
-    parts: storedPartSchema.array().parse(row.parts),
+    // Its column parsed it as it was read: the rows feed the model and the page.
+    parts: row.parts,
     createdAt: row.createdAt,
   }));
 }

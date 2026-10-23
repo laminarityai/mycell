@@ -1,5 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 import { checkoutIsolation } from "./checkout-isolation";
+// The features the tests seed through load prompt files, which Node can't on its own. The config
+// loads in every worker, so each gets the hooks.
+import "./prompt-hooks.cjs";
 
 // End-to-end tests drive the production build (`pnpm build` first; `pnpm verify` builds before
 // it runs them) against their own database, never the one in .env or Vitest's: mycel_e2e_<suffix>,
@@ -26,12 +29,16 @@ const e2eEnv = {
   INNGEST_DEV: "0",
   INNGEST_EVENT_KEY: "e2e-inngest-event-key",
   INNGEST_SIGNING_KEY: "signkey-e2e-00000000000000000000000000000000",
+  INNGEST_ENCRYPTION_KEY: "e2e-inngest-encryption-key-of-32-chars-at-least",
+  // Required away from the Inngest dev server; no e2e test encrypts, so it's never reached.
+  KMS_REGION: "us-east-1",
   AI_GATEWAY_API_KEY: "e2e-ai-gateway-api-key",
   AI_GATEWAY_BASE_URL: `http://localhost:${String(fakeAiGatewayPort)}/v4/ai`,
   MODEL_CLASSIFY: "typesafe-ai/jev-1.14.0",
   MODEL_FAST: "e2e/fast",
   MODEL_SMART: "e2e/smart",
   MODEL_JUDGE: "e2e/judge",
+  MODEL_EMBED: "e2e/embed",
 };
 // The test workers seed that database and sign cookies through src/env, like the app does.
 Object.assign(process.env, e2eEnv);
@@ -59,14 +66,14 @@ export default defineConfig({
       stderr: "pipe",
     },
     {
-      command: `node --disable-warning=DEP0205 --import tsx e2e/fake-ai-gateway-server.ts ${String(fakeAiGatewayPort)}`,
+      command: `node --disable-warning=DEP0205 --import tsx --import ./prompt-hooks.cjs e2e/fake-ai-gateway-server.ts ${String(fakeAiGatewayPort)}`,
       url: `http://localhost:${String(fakeAiGatewayPort)}/health`,
       reuseExistingServer: false,
       stdout: "ignore",
       stderr: "pipe",
     },
     {
-      command: `node --disable-warning=DEP0205 --import tsx e2e/fake-nango-server.ts ${String(fakeNangoPort)}`,
+      command: `node --disable-warning=DEP0205 --import tsx --import ./prompt-hooks.cjs e2e/fake-nango-server.ts ${String(fakeNangoPort)}`,
       url: `http://localhost:${String(fakeNangoPort)}/health`,
       // It runs the Vitest fake, which reads the API key and signing key from src/env.
       env: e2eEnv,

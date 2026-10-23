@@ -2,17 +2,19 @@
 // (M5): an enablement each. Enabling first checks the member may see the workflow and that their
 // connection allows what its latest version needs; when it doesn't, it says what's missing so
 // the page can take them through connecting or reconnecting, then enable again.
-import { eq } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { listConnections } from "@/features/connections/server";
+import { getActionSet } from "@/features/custom-actions/server";
 import { userNames } from "@/features/orgs/server";
-import { requireAdmin, type Ctx } from "@/lib/ctx";
-import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
+import { type Ctx, requireAdmin } from "@/lib/ctx";
+import { NotFoundError, ValidationError } from "@/lib/errors";
 import type { EnablementSummary, EnableResult } from "../types";
 import { findWorkflow } from "./access";
 import { deleteEnablement, switchOnEnablement } from "./enablement-rows";
+import { pausesOf, readHolds } from "./pauses";
 import { enablements } from "./schema";
-import { missingAccess } from "./requirements";
+import { missingAccess, unconnectedApps } from "./requirements";
 import { latestVersions } from "./latest-versions";
 import { getVisibleWorkflow } from "./visibility";
 
@@ -25,7 +27,7 @@ import { getVisibleWorkflow } from "./visibility";
 export async function enable(ctx: Ctx, workflowId: string): Promise<EnableResult> {
   const visible = await getVisibleWorkflow(ctx, workflowId);
   if (visible.credentials === "org") {
-    if (ctx.role !== "admin") throw new ForbiddenError();
+    requireAdmin(ctx);
     throw new ValidationError(
       "This workflow runs on an org connection: switch it on from its page.",
     );
@@ -33,11 +35,20 @@ export async function enable(ctx: Ctx, workflowId: string): Promise<EnableResult
   const version = (await latestVersions(ctx, [workflowId])).get(workflowId);
   // A visible workflow is published: none means it went since it was read, so it's not found.
   if (version === undefined) throw new NotFoundError("workflow version");
-  const connection = (await listConnections(ctx)).connections.find(
-    (own) => own.source === "google",
-  );
-  if (connection === undefined) return { needs: "connect", ...missingAccess(version, null) };
-  const missing = missingAccess(version, connection);
+  const own = (await listConnections(ctx)).connections;
+  const connection = own.find((candidate) => candidate.source === "google");
+  const actions = await getActionSet(ctx);
+  const unconnected = unconnectedApps(version.requiredActions, own, actions);
+  if (unconnected.length > 0) {
+    const apps = unconnected.join(" and ");
+    throw new ValidationError(
+      `This workflow uses ${apps}: connect your ${apps} account first, then switch it on.`,
+    );
+  }
+  if (connection === undefined) {
+    return { needs: "connect", ...missingAccess(version, null, actions) };
+  }
+  const missing = missingAccess(version, connection, actions);
   if (missing.apps.length > 0 || missing.scopes.length > 0) {
     return { needs: "reconnect", connectionId: connection.id, ...missing };
   }
@@ -61,17 +72,38 @@ export async function disable(ctx: Ctx, workflowId: string): Promise<void> {
 export async function listEnablements(ctx: Ctx, workflowId: string): Promise<EnablementSummary[]> {
   requireAdmin(ctx);
   await findWorkflow(ctx, workflowId);
-  const rows = await forOrg(ctx).select(enablements, {
-    where: eq(enablements.workflowId, workflowId),
-    orderBy: [enablements.enabledAt],
-  });
-  const nameOf = await userNames(ctx);
-  return rows.map((row) => ({
-    userId: row.userId,
-    name: nameOf(row.userId),
-    status: row.status,
-    pausedReason: row.pausedReason,
-    pausedChange: row.pausedChange,
-    since: row.enabledAt,
-  }));
+  return (await listEnablementsFor(ctx, [workflowId])).get(workflowId) ?? [];
+}
+
+/**
+ * Each workflow's enablements, as listEnablements gives them, by workflow ID: read together,
+ * for the Workflows page. A workflow not in the caller's org has none. Admins only.
+ */
+export async function listEnablementsFor(
+  ctx: Ctx,
+  workflowIds: string[],
+): Promise<Map<string, EnablementSummary[]>> {
+  requireAdmin(ctx);
+  if (workflowIds.length === 0) return new Map();
+  const [rows, nameOf, holds] = await Promise.all([
+    forOrg(ctx).select(enablements, {
+      where: inArray(enablements.workflowId, workflowIds),
+      orderBy: [enablements.enabledAt],
+    }),
+    userNames(ctx),
+    readHolds(ctx, workflowIds),
+  ]);
+  const byWorkflow = new Map(workflowIds.map((id): [string, EnablementSummary[]] => [id, []]));
+  for (const row of rows) {
+    byWorkflow.get(row.workflowId)?.push({
+      userId: row.userId,
+      name: nameOf(row.userId),
+      status: row.status,
+      pausedReason: row.pausedReason,
+      pausedChange: row.pausedChange,
+      pauses: pausesOf(row, holds(row.workflowId)),
+      since: row.enabledAt,
+    });
+  }
+  return byWorkflow;
 }

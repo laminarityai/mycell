@@ -3,9 +3,10 @@
 import Nango from "@nangohq/frontend";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import type { ActionResult } from "@/lib/errors";
 
 /** A Server Action that starts a connect (or reconnect) session. */
-type StartSession = () => Promise<{ token: string } | { error: string }>;
+type StartSession = () => Promise<{ token: string } | ActionResult>;
 
 /**
  * Opens Nango's Connect UI with the session `start` creates, and refreshes the page once the
@@ -34,7 +35,7 @@ export function useConnectUI(start: StartSession, onDone?: () => void) {
     });
     startTransition(async () => {
       const result = await start();
-      if ("error" in result) {
+      if (!("token" in result)) {
         connectUI.close();
         setError(result.error);
         return;

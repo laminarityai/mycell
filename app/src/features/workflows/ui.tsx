@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { AppMarks } from "@/components/app-mark";
+import { DateTime } from "@/components/date-time";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -8,6 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ActionSetProvider } from "./lib/action-set-context";
 import { ArchiveForm } from "./lib/archive-form";
 import { blankSpec } from "./lib/blank-spec";
 import { GraphTraceProvider, useGraphTrace, useShowOnGraph } from "./lib/graph-trace";
@@ -18,6 +21,7 @@ import type { Tag } from "@/features/tags/types";
 import { PublishDialog } from "./lib/workflow-editor";
 import { WorkflowGraph, type WorkflowGraphProps } from "./lib/workflow-graph";
 import { WorkingSpecEditor, type EditableWorkflow } from "./lib/working-spec-editor";
+import { PauseBadge, PausedNotice, StateBadge } from "./lib/pause-display";
 import { pausedText } from "./lib/paused-text";
 import type {
   Audience,
@@ -29,9 +33,12 @@ import type {
 } from "./types";
 
 export { VisibleWorkflowsList } from "./lib/visible-workflows";
+// How a switch's state shows: its badge and the notice explaining its pauses.
+export { PausedNotice, StateBadge };
 export type { SwitchConnectionOption };
 
 export {
+  ActionSetProvider,
   GraphTraceProvider,
   RiskBadge,
   useGraphTrace,
@@ -82,7 +89,7 @@ export function WorkflowArchiveSection({ workflow }: { workflow: WorkflowDetails
 }
 
 /**
- * The admin's workflows: name, latest version, its max risk level, the tags it's published to
+ * The admin's workflows: name, latest version, the apps it uses and its max risk level, the tags it's published to
  * and how many users they reach, whether it's on for them or the org, who has it on or paused
  * (`enablements`, by workflow ID), and Archive or Restore. A published org workflow has its org
  * switch right in the row, over the connections it may run on (`orgConnections`, by workflow
@@ -106,6 +113,7 @@ export function WorkflowsList({
         <TableRow>
           <TableHead>Workflow</TableHead>
           <TableHead>Latest version</TableHead>
+          <TableHead>Apps</TableHead>
           <TableHead>Max risk</TableHead>
           <TableHead>Published to</TableHead>
           <TableHead>Reach</TableHead>
@@ -134,6 +142,9 @@ export function WorkflowsList({
               {workflow.latestVersion === null
                 ? "Not published"
                 : `Version ${String(workflow.latestVersion.number)}`}
+            </TableCell>
+            <TableCell>
+              {workflow.latestVersion === null ? "—" : <AppMarks apps={workflow.requiredApps} />}
             </TableCell>
             <TableCell>
               {workflow.latestVersion === null ? (
@@ -196,9 +207,11 @@ function reach(audience: Audience | null): string {
   return audience.reach === 1 ? "1 user" : `${String(audience.reach)} users`;
 }
 
-/** Whether the workflow is on: for the admin's own connection, for the org's, or off. */
+/** Whether the workflow is on: for the admin's own connection, for the org's, paused, or off. */
 function SwitchBadge({ current }: { current: WorkflowSwitch | null }) {
   if (current === null) return <Badge variant="secondary">Off</Badge>;
+  const shown = current.pauses.at(0);
+  if (shown !== undefined) return <PauseBadge reason={shown} change={current.pausedChange} />;
   return (
     <Badge variant="outline">
       {current.kind === "member" ? "On for your connection" : "On for the org"}
@@ -211,14 +224,17 @@ function EnabledBy({ enablements }: { enablements: EnablementSummary[] }) {
   if (enablements.length === 0) return <span className="text-muted-foreground">Nobody</span>;
   return (
     <ul className="flex flex-col gap-1">
-      {enablements.map((enablement) => (
-        <li key={enablement.userId}>
-          {enablement.name}
-          {enablement.status === "paused"
-            ? ` (paused: ${pausedText(enablement.pausedReason, enablement.pausedChange)})`
-            : null}
-        </li>
-      ))}
+      {enablements.map((enablement) => {
+        const shown = enablement.pauses.at(0);
+        return (
+          <li key={enablement.userId}>
+            {enablement.name}
+            {shown === undefined
+              ? null
+              : ` (paused: ${pausedText(shown, enablement.pausedChange)})`}
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -269,7 +285,7 @@ export function WorkflowEditor({
           <ul className="flex flex-col gap-1 text-sm">
             {workflow.versions.map((version) => (
               <li key={version.id} className="flex items-center gap-2">
-                Version {version.number}, published {version.publishedAt.toLocaleString("en-US")}
+                Version {version.number}, published <DateTime value={version.publishedAt} />
                 <RiskBadge risk={version.maxRisk} />
               </li>
             ))}

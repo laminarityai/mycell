@@ -1,13 +1,7 @@
-// The runtime feature: the interpreter and its run records, model roles and the AI Gateway
-// client.
-export { callModel } from "./lib/call-model";
-export { classify } from "./lib/classify";
+// The runtime feature: the interpreter and its run records.
 // Called by the run-workflow job and tests, as the org's system ctx.
-export { executeRun } from "./lib/interpreter";
-export { resolveModel, setModelRole } from "./lib/model-roles";
-// For callers that stream a model themselves (the builder chat): the role's model, behind the
-// credit check, and its one usage entry when the stream ends.
-export { openMeteredStream } from "./lib/metered-stream";
+import "server-only";
+export { executeRun, failCrashedRun } from "./lib/interpreter";
 export { getRun, listRuns, startRun } from "./lib/runs";
 // "Try it": a spec on one message, in memory, with every write stubbed. Nothing is stored.
 export { dryRun } from "./lib/dry-run";

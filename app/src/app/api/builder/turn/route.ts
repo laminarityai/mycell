@@ -3,7 +3,8 @@
 import { z } from "zod";
 import { streamTurn } from "@/features/builder/server";
 import { findSessionCtx } from "@/features/orgs/server";
-import { ForbiddenError, routeError } from "@/lib/errors";
+import { requireAdmin } from "@/lib/ctx";
+import { routeError } from "@/lib/errors";
 
 // A turn may take several model steps (Vercel's limit; docs/research/stack-verification.md §2).
 export const maxDuration = 300;
@@ -16,7 +17,7 @@ export async function POST(request: Request): Promise<Response> {
   const body = bodySchema.safeParse(await request.json().catch(() => undefined));
   if (!body.success) return new Response("Send a conversation ID and a message.", { status: 400 });
   try {
-    if (ctx.role !== "admin") throw new ForbiddenError();
+    requireAdmin(ctx);
     return await streamTurn(ctx, body.data.conversationId, body.data.message);
   } catch (error) {
     return routeError(error);

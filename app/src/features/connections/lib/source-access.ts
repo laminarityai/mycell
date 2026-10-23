@@ -6,18 +6,27 @@
 import { and, eq } from "drizzle-orm";
 import type { z } from "zod";
 import { forOrg } from "@/db/for-org";
-import type { Ctx } from "@/lib/ctx";
+import { type Ctx, isAdmin, isSystem, requireSystem } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
-import type { ConnectionDetails, IngestedApp, IngestStateUpdate } from "../types";
+import type {
+  ConnectionDetails,
+  IngestedApp,
+  IngestStateUpdate,
+  ProxyCall,
+  SourceClient,
+} from "../types";
 import { isDelegated } from "./delegation";
-import { grantedApps, INTEGRATIONS, proxyTarget } from "./google";
+import { grantedApps, integrationOf, proxyTargetFor } from "./apps";
 import { ingestByApp, ingestStatesOf } from "./ingest-states";
 import {
   NangoConnectionGoneError,
   nangoProxyDelete,
   nangoProxyGet,
+  nangoProxyGetText,
+  nangoProxyPatch,
   nangoProxyPost,
   nangoProxyPut,
+  type ProxyTarget,
 } from "./nango";
 import { connections, ingestStates } from "./schema";
 
@@ -29,10 +38,8 @@ type Connection = typeof connections.$inferSelect;
  * act as, may read every connection in its org (ADR-0009): it ingests for their owners.
  */
 export function isReadableBy(ctx: Ctx, connection: Pick<Connection, "kind" | "ownerUserId">) {
-  if (ctx.role === "system") return true;
-  return connection.kind === "member"
-    ? connection.ownerUserId === ctx.userId
-    : ctx.role === "admin";
+  if (isSystem(ctx)) return true;
+  return connection.kind === "member" ? connection.ownerUserId === ctx.userId : isAdmin(ctx);
 }
 
 /** One connection the caller may read, or was delegated. */
@@ -65,7 +72,7 @@ export async function readableConnectionIds(ctx: Ctx): Promise<string[]> {
  * system ctx. Anyone else is ForbiddenError: users list connections with listConnections.
  */
 export async function listConnectionsForJobs(ctx: Ctx): Promise<ConnectionDetails[]> {
-  if (ctx.role !== "system") throw new ForbiddenError();
+  requireSystem(ctx);
   const rows = await forOrg(ctx).select(connections, { orderBy: [connections.createdAt] });
   const states = await ingestStatesOf(
     ctx,
@@ -78,6 +85,10 @@ function details(
   connection: Connection,
   states: Parameters<typeof ingestByApp>[0] = [],
 ): ConnectionDetails {
+  return { ...described(connection), ingest: ingestByApp(states) };
+}
+
+function described(connection: Connection): Omit<ConnectionDetails, "ingest"> {
   return {
     id: connection.id,
     source: connection.source,
@@ -87,29 +98,72 @@ function details(
     needsReauth: connection.needsReauth,
     grantedScopes: connection.grantedScopes,
     apps: grantedApps(connection.source, connection.grantedScopes),
-    ingest: ingestByApp(states),
   };
 }
 
 /**
- * A GET to a Google API through the Nango proxy (never Nango syncs), parsed with `schema`. The
- * path is the API's own (`/gmail/v1/users/me/...`, `/drive/v3/...`, `/v4/spreadsheets/...`)
- * and decides which API host the call reaches. Nango retries the source's 429s and 5xx. Null
- * means the source has no such item; a connection gone here or at Nango is NotFoundError.
+ * The connection's source, its access checked once here as each proxy call below checks its own
+ * (a connection the caller may read, or was delegated), for a job step that makes several calls.
+ */
+export async function sourceClient(ctx: Ctx, connectionId: string): Promise<SourceClient> {
+  const connection = await readable(ctx, connectionId, { delegated: true });
+  return {
+    connection: described(connection),
+    get: (path, schema, call) =>
+      through(connection, path, (to, target) => nangoProxyGet(to, target, schema), call),
+    getText: (path) => through(connection, path, (to, target) => nangoProxyGetText(to, target)),
+    post: (path, body, schema, call) =>
+      through(connection, path, (to, target) => nangoProxyPost(to, target, body, schema), call),
+    put: (path, body, schema, call) =>
+      through(connection, path, (to, target) => nangoProxyPut(to, target, body, schema), call),
+    patch: (path, body, schema, call) =>
+      through(connection, path, (to, target) => nangoProxyPatch(to, target, body, schema), call),
+    delete: (path) => through(connection, path, (to, target) => nangoProxyDelete(to, target)),
+  };
+}
+
+/**
+ * A GET to the connection's app through the Nango proxy (never Nango syncs), parsed with
+ * `schema`. A Google path is the API's own (`/gmail/v1/users/me/...`, `/drive/v3/...`,
+ * `/v4/spreadsheets/...`) and decides which API host the call reaches; any other app's goes to
+ * the host Nango keeps for the connection (Microsoft Graph's `/v1.0/...`, say). Nango retries the
+ * source's 429s and 5xx. Null means the source has no such item; a connection gone here or at
+ * Nango is NotFoundError. A custom call passes its path template in `call`, for its errors to
+ * name it by.
  */
 export async function proxyGet<T>(
   ctx: Ctx,
   connectionId: string,
   path: string,
   schema: z.ZodType<T>,
+  call: ProxyCall = {},
 ): Promise<T | null> {
-  return proxied(ctx, connectionId, (connection) =>
-    nangoProxyGet(connection, proxyTarget(path), schema),
+  return proxied(
+    ctx,
+    connectionId,
+    path,
+    (connection, target) => nangoProxyGet(connection, target, schema),
+    call,
   );
 }
 
 /**
- * A POST with a JSON body to a Google API through the Nango proxy, checked and answered like
+ * A GET whose answer is text rather than JSON (Drive's files.export as text/plain), checked and
+ * answered like proxyGet. The text is the source's content: callers hold it in memory only
+ * (invariant 8).
+ */
+export async function proxyGetText(
+  ctx: Ctx,
+  connectionId: string,
+  path: string,
+): Promise<string | null> {
+  return proxied(ctx, connectionId, path, (connection, target) =>
+    nangoProxyGetText(connection, target),
+  );
+}
+
+/**
+ * A POST with a JSON body to the connection's app through the Nango proxy, checked and answered like
  * proxyGet. Nango doesn't retry it, since a write whose answer was lost may still have happened:
  * a caller that tries again checks first for what its earlier try did. A connection not granted
  * the scope the write needs gets the source's 403 as SourceRequestError.
@@ -120,9 +174,14 @@ export async function proxyPost<T>(
   path: string,
   body: unknown,
   schema: z.ZodType<T>,
+  call: ProxyCall = {},
 ): Promise<T | null> {
-  return proxied(ctx, connectionId, (connection) =>
-    nangoProxyPost(connection, proxyTarget(path), body, schema),
+  return proxied(
+    ctx,
+    connectionId,
+    path,
+    (connection, target) => nangoProxyPost(connection, target, body, schema),
+    call,
   );
 }
 
@@ -133,9 +192,32 @@ export async function proxyPut<T>(
   path: string,
   body: unknown,
   schema: z.ZodType<T>,
+  call: ProxyCall = {},
 ): Promise<T | null> {
-  return proxied(ctx, connectionId, (connection) =>
-    nangoProxyPut(connection, proxyTarget(path), body, schema),
+  return proxied(
+    ctx,
+    connectionId,
+    path,
+    (connection, target) => nangoProxyPut(connection, target, body, schema),
+    call,
+  );
+}
+
+/** A PATCH with a JSON body (a custom write's), checked and answered like proxyPost. */
+export async function proxyPatch<T>(
+  ctx: Ctx,
+  connectionId: string,
+  path: string,
+  body: unknown,
+  schema: z.ZodType<T>,
+  call: ProxyCall = {},
+): Promise<T | null> {
+  return proxied(
+    ctx,
+    connectionId,
+    path,
+    (connection, target) => nangoProxyPatch(connection, target, body, schema),
+    call,
   );
 }
 
@@ -144,22 +226,41 @@ export async function proxyPut<T>(
  * source had no such item.
  */
 export async function proxyDelete(ctx: Ctx, connectionId: string, path: string): Promise<boolean> {
-  return proxied(ctx, connectionId, (connection) =>
-    nangoProxyDelete(connection, proxyTarget(path)),
+  return proxied(ctx, connectionId, path, (connection, target) =>
+    nangoProxyDelete(connection, target),
   );
 }
+
+type Send<T> = (
+  connection: { connectionId: string; integration: string },
+  target: ProxyTarget,
+) => Promise<T>;
 
 async function proxied<T>(
   ctx: Ctx,
   connectionId: string,
-  call: (connection: { connectionId: string; integration: string }) => Promise<T>,
+  path: string,
+  send: Send<T>,
+  call: ProxyCall = {},
 ): Promise<T> {
-  const connection = await readable(ctx, connectionId, { delegated: true });
+  return through(await readable(ctx, connectionId, { delegated: true }), path, send, call);
+}
+
+// One call through the Nango proxy, to a connection whose access was checked.
+async function through<T>(
+  connection: Connection,
+  path: string,
+  send: Send<T>,
+  { template }: ProxyCall = {},
+): Promise<T> {
   try {
-    return await call({
-      connectionId: connection.nangoConnectionId,
-      integration: INTEGRATIONS[connection.source],
-    });
+    return await send(
+      { connectionId: connection.nangoConnectionId, integration: integrationOf(connection.source) },
+      {
+        ...proxyTargetFor(connection.source, path),
+        ...(template === undefined ? {} : { template }),
+      },
+    );
   } catch (error) {
     if (error instanceof NangoConnectionGoneError) throw new NotFoundError("connection");
     throw error;

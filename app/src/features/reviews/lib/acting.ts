@@ -10,25 +10,39 @@ import { delegatedCtx } from "@/features/connections/delegation";
 import {
   escalationAdapter,
   gmailDraftAdapter,
+  heldSendAdapter,
   type ItemState,
   type PendingFormAdapter,
   type PendingItem,
   type ReviewEdits,
 } from "@/features/runtime/adapters";
-import type { Ctx } from "@/lib/ctx";
+import { type Ctx, requireSystem } from "@/lib/ctx";
 import {
   AlreadyHandledError,
   ConflictError,
-  ForbiddenError,
   ItemGoneError,
+  SendUnconfirmedError,
   ValidationError,
 } from "@/lib/errors";
-import { reviewActions, type OpenedReview, type PendingForms, type ReviewAction } from "../types";
+import { DAY_MS } from "@/lib/time";
+import {
+  REVIEW_EXPIRY_DAYS,
+  reviewActions,
+  reviewKinds,
+  type OpenedReview,
+  type PendingForms,
+  type ReviewAction,
+  type ReviewKind,
+} from "../types";
 import { handOffTo } from "./hand-off";
 import { endReview, handledBy, itemOf, reviewOf, visibleReview, type ReviewRow } from "./reviews";
 import { reviews } from "./schema";
 
-const pendingForms: PendingForms = { approval: gmailDraftAdapter, escalation: escalationAdapter };
+const pendingForms: PendingForms = {
+  approval: gmailDraftAdapter,
+  escalation: escalationAdapter,
+  held_send: heldSendAdapter,
+};
 
 /**
  * Opens a review the caller may see: asks its adapter where the item stands, ends the review
@@ -72,22 +86,51 @@ export async function checkWaiting(
 }
 
 /**
- * Runs checkWaiting on every waiting review in the org. For the daily check job, as the org's
- * system ctx. A review whose app can't be asked now (a connection needing
+ * Runs checkWaiting on every waiting review in the org, but ends a review of an item Mycel holds
+ * (a held send) `expired` once it has waited longer than its kind allows, deleting the item
+ * (ADR-0020); then has each such kind's adapter delete anything it still holds from before then,
+ * such as a held send whose run stopped before its approval step. For the daily check job, as
+ * the org's system ctx. A review whose app can't be asked now (a connection needing
  * reauthorization) waits on.
  */
 export async function checkWaitingReviews(
   ctx: Ctx,
   adapters: PendingForms = pendingForms,
 ): Promise<void> {
-  if (ctx.role !== "system") throw new ForbiddenError();
+  requireSystem(ctx);
+  const now = Date.now();
   const waiting = await forOrg(ctx).select(reviews, { where: eq(reviews.status, "waiting") });
   for (const row of waiting) {
     try {
-      await checkWaiting(ctx, row, adapters);
+      const cutoff = expiryCutoff(row.kind, now);
+      if (cutoff !== undefined && row.createdAt < cutoff) await expire(ctx, row, adapters);
+      else await checkWaiting(ctx, row, adapters);
     } catch (error) {
       console.warn(`Couldn't check review ${row.id}; it waits on.`, error);
     }
+  }
+  for (const kind of reviewKinds) {
+    const cutoff = expiryCutoff(kind, now);
+    if (cutoff !== undefined) await adapters[kind].purge?.(ctx, cutoff);
+  }
+}
+
+// When a review of `kind` made before now expires, or undefined when the kind never does.
+function expiryCutoff(kind: ReviewKind, now: number): Date | undefined {
+  const days = REVIEW_EXPIRY_DAYS[kind];
+  return days === undefined ? undefined : new Date(now - days * DAY_MS);
+}
+
+// Ends the review `expired`, by nobody, and deletes its item; if that fails, it waits on, to
+// expire at the next check.
+async function expire(ctx: Ctx, row: ReviewRow, adapters: PendingForms): Promise<void> {
+  if ((await endReview(ctx, row.id, "expired", null)) === undefined) return;
+  try {
+    await adapters[row.kind].decline?.(delegatedCtx(ctx, row.connectionId), itemOf(row));
+  } catch (error) {
+    if (error instanceof ItemGoneError) return;
+    await undoClaim(ctx, row, "expired", false);
+    throw error;
   }
 }
 
@@ -102,14 +145,19 @@ export async function approveReview(
   );
 }
 
-/** Sends the item with the caller's edits, held in memory only. Ends it `edited_approved`. */
+/**
+ * Sends the item with the caller's edits (a draft's text, or a held send's editable fields),
+ * held in memory only. Ends it `edited_approved`.
+ */
 export async function approveEditedReview(
   ctx: Ctx,
   reviewId: string,
   edits: ReviewEdits,
   adapters: PendingForms = pendingForms,
 ): Promise<void> {
-  if (edits.text.trim() === "") throw new ValidationError("Write the reply before sending it.");
+  if ("text" in edits && edits.text.trim() === "") {
+    throw new ValidationError("Write the reply before sending it.");
+  }
   await act(ctx, reviewId, "edit", adapters, (adapter, item, acting) =>
     adapter.approve(acting, item, edits),
   );
@@ -146,14 +194,16 @@ const ENDINGS = {
   decline: "declined",
   done: "done_in_app",
 } as const satisfies Record<ReviewAction, string>;
-type Ending = (typeof ENDINGS)[ReviewAction];
+type Ending = (typeof ENDINGS)[ReviewAction] | "expired";
 
 /**
  * Claims the review by the caller with the ending `action` gives it, then carries the action
  * out through its adapter, delegated the review's connection. ValidationError when the review's
  * kind doesn't offer the action, and AlreadyHandledError (naming who handled it) when it isn't
  * waiting any more, each with nothing carried out. If carrying
- * it out fails, the claim is undone: the review waits again, or ends `gone` with its item.
+ * it out fails, the claim is undone: the review waits again, or ends `gone` with its item. A
+ * send its app may have carried out without confirming it ends `unconfirmed` instead, so nobody
+ * can send it again (ADR-0020).
  */
 async function act(
   ctx: Ctx,
@@ -172,6 +222,12 @@ async function act(
   try {
     await carryOut(adapters[row.kind], itemOf(row), delegatedCtx(ctx, row.connectionId));
   } catch (error) {
+    if (error instanceof SendUnconfirmedError) {
+      await endUnconfirmed(ctx, row, ending);
+      throw new ConflictError(
+        "It was approved, but its app didn't confirm it was sent, so it may have gone. Check there before sending it again yourself; the review has ended.",
+      );
+    }
     const gone = error instanceof ItemGoneError;
     await undoClaim(ctx, row, ending, gone);
     if (gone)
@@ -186,6 +242,15 @@ const ACTION_WORDS: Record<ReviewAction, string> = {
   decline: "declined",
   done: "marked done",
 };
+
+// Ends a claimed review `unconfirmed`, still by whoever approved it.
+async function endUnconfirmed(ctx: Ctx, row: ReviewRow, ending: Ending) {
+  await forOrg(ctx).update(
+    reviews,
+    { status: "unconfirmed", endedAt: new Date() },
+    and(eq(reviews.id, row.id), eq(reviews.status, ending)),
+  );
+}
 
 async function undoClaim(ctx: Ctx, row: ReviewRow, ending: Ending, gone: boolean) {
   await forOrg(ctx).update(

@@ -1,7 +1,7 @@
 // The `schema` check's matcher for the JSON Schema subset `features/spec` allows. Each problem
 // names where in the output it is and what kind of value is there, never the value (invariant 8).
 import type { JsonSchemaSubset, JsonSchemaType } from "@/features/spec/types";
-import type { Json } from "../types";
+import type { Json } from "@/lib/inngest";
 
 /** What's wrong with `value` against `schema`, in order; empty when it matches. */
 export function schemaProblems(schema: JsonSchemaSubset, value: Json, path = ""): string[] {

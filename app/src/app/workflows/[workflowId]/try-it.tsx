@@ -7,6 +7,7 @@ import { recentInvites, recentMessages } from "@/features/runtime/server";
 import { TryItPanel } from "@/features/runtime/ui";
 import { triggers } from "@/features/spec/triggers";
 import { getWorkflow } from "@/features/workflows/server";
+import { isAdmin } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
 
 /**
@@ -16,7 +17,7 @@ import { NotFoundError } from "@/lib/errors";
  */
 export async function TryIt({ params, searchParams }: PageProps<"/workflows/[workflowId]">) {
   const ctx = await getCtx();
-  if (ctx.role !== "admin") return null;
+  if (!isAdmin(ctx)) return null;
   const { workflowId } = await params;
   const open = (await searchParams).try !== undefined;
   const workflow = await getWorkflow(ctx, workflowId).catch((error: unknown) => {

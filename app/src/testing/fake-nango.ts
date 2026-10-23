@@ -10,6 +10,7 @@ import { connectionsApiHandlers, type ListingBehaviour } from "./fake-nango-conn
 import { FakeIntegrations } from "./fake-nango-integrations";
 import { authorised, NANGO_API, unauthorised } from "./fake-nango-http";
 import { proxyHandlers } from "./fake-nango-proxy";
+import { FakeMicrosoft } from "./fake-microsoft";
 import { type FakeReconnectSession, type FakeSession, FakeSessions } from "./fake-nango-sessions";
 import { DEFAULT_SCOPES } from "./fake-proxied-sources";
 import { FakeSheets } from "./fake-sheets";
@@ -25,15 +26,16 @@ export type FakeConnection = {
   integration: string;
   tags: Record<string, string>;
   account: FakeAccount;
-  // The OAuth scopes Google granted, as Nango reports them in the token response.
+  // The OAuth scopes the app granted, as Nango reports them in the token response.
   scopes: readonly string[];
-  // The account's Gmail mailbox, Drive, spreadsheets and primary calendar. The proxy reaches
-  // each through its API's host, if the connection's scopes allow that API.
+  // The account's Gmail mailbox, Drive, spreadsheets and primary calendar, and its Microsoft 365.
+  // The proxy reaches each through its API's host, if the connection's scopes allow that API.
   mailbox: FakeMailbox;
   drive: FakeDrive;
   sheets: FakeSheets;
   calendar: FakeCalendar;
-  // Google refused the refresh token (access revoked): the proxy can't call the source.
+  microsoft: FakeMicrosoft;
+  // The app refused the refresh token (access revoked): the proxy can't call the source.
   refreshFails?: boolean;
 };
 
@@ -47,19 +49,24 @@ class FakeNango {
   private sessions = new FakeSessions();
   private connections = new Map<string, FakeConnection>();
   private deletesFail = false;
+  private answering = true;
   private rateLimitsLeft = 0;
   private rateLimitsServed = 0;
   private writeFailuresLeft = 0;
   private proxyHook: ProxyHook | undefined;
   private nextId = 1;
   private listing: ListingBehaviour = { pageCap: undefined, empty: false };
-  /** The integrations: `google`, `google-mail` and `google-drive`, until a test changes them. */
+  /**
+   * The integrations: `google`, `google-mail`, `google-drive` and `microsoft`, until a test
+   * changes them.
+   */
   readonly integrations = new FakeIntegrations();
 
   reset(): void {
     this.sessions.reset();
     this.connections.clear();
     this.deletesFail = false;
+    this.answering = true;
     this.rateLimitsLeft = 0;
     this.rateLimitsServed = 0;
     this.writeFailuresLeft = 0;
@@ -80,6 +87,9 @@ class FakeNango {
 
   /** The connected account's primary calendar, for seeding invites. */
   calendar = (connectionId: string): FakeCalendar => this.connection(connectionId).calendar;
+
+  /** The connected account's Microsoft 365, for reading what was sent to it. */
+  microsoft = (connectionId: string): FakeMicrosoft => this.connection(connectionId).microsoft;
 
   private connection(connectionId: string): FakeConnection {
     const connection = this.connections.get(connectionId);
@@ -110,7 +120,7 @@ class FakeNango {
     this.proxyHook = hook;
   }
 
-  /** Google stops refreshing the connection's token: Nango keeps it, and its proxy refuses. */
+  /** The app stops refreshing the connection's token: Nango keeps it, and its proxy refuses. */
   revokeAccess(connectionId: string): void {
     this.connection(connectionId).refreshFails = true;
   }
@@ -118,6 +128,14 @@ class FakeNango {
   /** Makes Nango's connection delete endpoint answer 500, until `failDeletes(false)` or reset. */
   failDeletes(failing = true): void {
     this.deletesFail = failing;
+  }
+
+  /**
+   * Nango stops answering (an outage, or a network fault on the way to it): every request to its
+   * API, the proxy's included, fails as fetch does when nothing answers, until the next reset.
+   */
+  stopAnswering(): void {
+    this.answering = false;
   }
 
   /** Serves at most `size` connections per page of the list endpoint, whatever is asked. */
@@ -183,6 +201,7 @@ class FakeNango {
       drive: new FakeDrive(account.emailAddress),
       sheets: new FakeSheets(),
       calendar: new FakeCalendar(account.emailAddress),
+      microsoft: new FakeMicrosoft(account.emailAddress),
     });
     return connectionId;
   }
@@ -195,14 +214,16 @@ class FakeNango {
   /**
    * A user finishes OAuth in Connect UI opened with a reconnect session: Nango replaces the
    * connection's credentials and returns the `override` webhook it then sends. Choosing a
-   * different Google account than before swaps in that account's (empty) mailbox, Drive,
-   * spreadsheets and calendar.
+   * different account than before swaps in that account's (empty) mailbox, Drive, spreadsheets,
+   * calendar and Microsoft 365. The new token refreshes again, so a revoked connection reaches
+   * its source.
    * `scopes`, when given, are what the new token was granted; otherwise they stay as they were.
    */
   completeReconnect(token: string, account?: FakeAccount, scopes?: readonly string[]): FakeWebhook {
     const session = this.sessions.reconnects.find((s) => s.token === token);
     if (session === undefined) throw new Error(`Unknown reconnect session token ${token}`);
     const connection = this.connection(session.connectionId);
+    connection.refreshFails = false;
     if (scopes !== undefined) connection.scopes = scopes;
     if (account !== undefined && account.emailAddress !== connection.account.emailAddress) {
       connection.account = account;
@@ -210,6 +231,7 @@ class FakeNango {
       connection.drive = new FakeDrive(account.emailAddress);
       connection.sheets = new FakeSheets();
       connection.calendar = new FakeCalendar(account.emailAddress);
+      connection.microsoft = new FakeMicrosoft(account.emailAddress);
     }
     return this.authWebhook(session.connectionId, "override", true);
   }
@@ -265,6 +287,8 @@ class FakeNango {
   }
 
   readonly handlers = [
+    // Checked first; a resolver that returns nothing hands the request on to the next.
+    http.all(`${NANGO_API}/*`, () => (this.answering ? undefined : HttpResponse.error())),
     ...connectionsApiHandlers(
       () => [...this.connections.values()],
       () => this.listing,

@@ -1,29 +1,28 @@
 // The fields a branch's condition may test that come from declarations rather than steps
 // (ADR-0015): the trigger's facts and the result fields catalog actions declare, each with its
-// type. Static: it reads only the spec's and the catalog's declarations.
-import { catalog } from "@/features/policy/catalog";
+// type. Static: it reads only the spec's declarations and those of the company's action set.
+import type { ActionSet } from "@/features/policy/types";
 import { triggers, triggerTypes } from "@/features/spec/triggers";
-
-const type = (name: string, kind: string, label: string) => `${name} (${kind}): ${label}`;
+import type { PromptText } from "@/lib/prompts";
+import { contextPrompts } from "./prompts";
 
 /** Lines for the condition-fields context section: trigger facts and declared action results. */
-export function declaredFieldLines(): string[] {
+export function declaredFieldLines(actions: ActionSet): PromptText[] {
   const facts = triggerTypes.flatMap((trigger) => [
-    `- The ${trigger} trigger's facts about the ${triggers[trigger].item}, as { "subject": { "from": "trigger.<fact>" }, ... }:`,
-    ...triggers[trigger].facts.map(
-      (fact) => `  - ${type(`trigger.${fact.name}`, fact.type, fact.label)}`,
+    contextPrompts.triggerFacts({ trigger, item: triggers[trigger].item }),
+    ...triggers[trigger].facts.map((fact) =>
+      contextPrompts.triggerFact({ name: fact.name, type: fact.type, label: fact.label }),
     ),
   ]);
-  const actions = Object.values(catalog).flatMap((action) =>
-    (action.conditionFields ?? []).map(
-      (field) => `  - ${action.name}: ${type(`<step>.${field.name}`, field.type, field.label)}`,
+  const results = actions.actions.flatMap((action) =>
+    (action.conditionFields ?? []).map((field) =>
+      contextPrompts.resultField({
+        action: action.name,
+        name: field.name,
+        type: field.type,
+        label: field.label,
+      }),
     ),
   );
-  return [
-    ...facts,
-    '- A tool step\'s result fields, as { "subject": { "from": "<tool step id>.<field>" }, ... }, ' +
-      "for the actions that declare them:",
-    ...actions,
-    "Nothing else can be tested.",
-  ];
+  return [...facts, contextPrompts.resultFields(), ...results, contextPrompts.nothingElse()];
 }

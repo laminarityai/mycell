@@ -1,9 +1,11 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { FormError } from "@/components/form-error";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import type { ActionResult } from "@/lib/errors";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import type { HeldSendField } from "@/features/runtime/adapters";
 import {
   approveReviewAction,
   declineReviewAction,
@@ -29,7 +31,13 @@ export function ReviewActions({ reviewId, draftText }: { reviewId: string; draft
         <input type="hidden" name="reviewId" value={reviewId} />
         <label className="flex flex-col gap-1 text-sm font-medium">
           Your reply
-          <Textarea name="text" defaultValue={draftText} rows={10} required />
+          {/* React resets the form after its action: a refused send starts from what it sent. */}
+          <Textarea
+            name="text"
+            defaultValue={approveResult.values?.text ?? draftText}
+            rows={10}
+            required
+          />
         </label>
         <div className="flex gap-2">
           <Button type="submit" disabled={busy}>
@@ -46,7 +54,7 @@ export function ReviewActions({ reviewId, draftText }: { reviewId: string; draft
             Cancel
           </Button>
         </div>
-        <Problem result={approveResult} />
+        <FormError message={approveResult.error} />
       </form>
     );
   }
@@ -76,8 +84,95 @@ export function ReviewActions({ reviewId, draftText }: { reviewId: string; draft
           </Button>
         </form>
       </div>
-      <Problem result={approveResult} />
-      <Problem result={declineResult} />
+      <FormError message={approveResult.error} />
+      <FormError message={declineResult.error} />
+    </div>
+  );
+}
+
+/**
+ * What a person does with an open held send: approve it as it is, edit its editable fields and
+ * approve the edit, or decline it. Each edited field goes to the Server Action as
+ * `field:<name>`, and on to the app; it's never stored.
+ */
+export function HeldSendActions({
+  reviewId,
+  fields,
+}: {
+  reviewId: string;
+  fields: HeldSendField[];
+}) {
+  const [approveResult, approve, approving] = useActionState(approveReviewAction, {});
+  const [declineResult, decline, declining] = useActionState(declineReviewAction, {});
+  const [editing, setEditing] = useState(false);
+  const busy = approving || declining;
+  const editable = fields.filter((field) => field.editable);
+
+  if (editing) {
+    return (
+      <form action={approve} className="flex flex-col gap-3">
+        <input type="hidden" name="reviewId" value={reviewId} />
+        {editable.map((field) => (
+          <label key={field.name} className="flex flex-col gap-1 text-sm font-medium">
+            {field.description}
+            {/* React resets the form after its action: a refused send starts from what it sent. */}
+            <Textarea
+              name={`field:${field.name}`}
+              defaultValue={approveResult.values?.[`field:${field.name}`] ?? field.value}
+              rows={6}
+              required
+            />
+          </label>
+        ))}
+        <div className="flex gap-2">
+          <Button type="submit" disabled={busy}>
+            Send edited request
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={busy}
+            onClick={() => {
+              setEditing(false);
+            }}
+          >
+            Cancel
+          </Button>
+        </div>
+        <FormError message={approveResult.error} />
+      </form>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex gap-2">
+        <form action={approve}>
+          <input type="hidden" name="reviewId" value={reviewId} />
+          <Button type="submit" disabled={busy}>
+            Approve and send
+          </Button>
+        </form>
+        {editable.length === 0 ? null : (
+          <Button
+            type="button"
+            variant="outline"
+            disabled={busy}
+            onClick={() => {
+              setEditing(true);
+            }}
+          >
+            Edit
+          </Button>
+        )}
+        <form action={decline}>
+          <input type="hidden" name="reviewId" value={reviewId} />
+          <Button type="submit" variant="outline" disabled={busy}>
+            Decline
+          </Button>
+        </form>
+      </div>
+      <FormError message={approveResult.error} />
+      <FormError message={declineResult.error} />
     </div>
   );
 }
@@ -93,7 +188,7 @@ export function EscalationActions({ reviewId }: { reviewId: string }) {
           Done
         </Button>
       </form>
-      <Problem result={result} />
+      <FormError message={result.error} />
     </div>
   );
 }
@@ -113,36 +208,27 @@ export function HandOffForm({
       <div className="flex items-end gap-2">
         <label className="flex flex-col gap-1 text-sm font-medium">
           Hand it to
-          <select
+          <NativeSelect
             name="toUserId"
             required
-            defaultValue=""
-            className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm dark:bg-input/30"
+            defaultValue={result.values?.toUserId ?? ""}
+            className="w-full"
           >
-            <option value="" disabled>
+            <NativeSelectOption value="" disabled>
               Choose a colleague…
-            </option>
+            </NativeSelectOption>
             {colleagues.map((colleague) => (
-              <option key={colleague.id} value={colleague.id}>
+              <NativeSelectOption key={colleague.id} value={colleague.id}>
                 {colleague.name}
-              </option>
+              </NativeSelectOption>
             ))}
-          </select>
+          </NativeSelect>
         </label>
         <Button type="submit" variant="outline" disabled={handing}>
           Hand on
         </Button>
       </div>
-      <Problem result={result} />
+      <FormError message={result.error} />
     </form>
-  );
-}
-
-function Problem({ result }: { result: ActionResult }) {
-  if (result.error === undefined) return null;
-  return (
-    <p role="alert" className="text-sm text-destructive">
-      {result.error}
-    </p>
   );
 }

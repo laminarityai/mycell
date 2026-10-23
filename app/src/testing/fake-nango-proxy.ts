@@ -1,4 +1,4 @@
-// The fake Nango's proxy: a GET, POST, PUT or DELETE names its connection and integration in
+// The fake Nango's proxy: a GET, POST, PUT, PATCH or DELETE names its connection and integration in
 // headers, and its API host with Base-Url-Override (or reaches the integration's own host).
 // Like Nango, it retries the source's 429s as the request's Retries header asks, and forwards a
 // write's JSON body to the source as it is.
@@ -27,6 +27,7 @@ export function proxyHandlers(state: ProxyState) {
     http.get(`${API}/proxy/*`, ({ request }) => proxy(state, request, "GET")),
     http.post(`${API}/proxy/*`, ({ request }) => proxy(state, request, "POST")),
     http.put(`${API}/proxy/*`, ({ request }) => proxy(state, request, "PUT")),
+    http.patch(`${API}/proxy/*`, ({ request }) => proxy(state, request, "PATCH")),
     http.delete(`${API}/proxy/*`, ({ request }) => proxy(state, request, "DELETE")),
   ];
 }

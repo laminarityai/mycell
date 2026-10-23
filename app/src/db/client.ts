@@ -1,4 +1,5 @@
 // The raw database client. Only src/db may import it; features use forOrg(ctx).
+import "server-only";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { env } from "@/env";

@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import type { SpecIssue } from "@/features/spec/types";
 
 type Path = (string | number)[];
@@ -27,8 +28,6 @@ export function record(value: unknown): Record<string, unknown> {
 }
 
 const LABEL = "flex flex-col gap-1 text-sm font-medium";
-const SELECT =
-  "h-8 rounded-lg border border-input bg-transparent px-2 text-sm aria-invalid:border-destructive dark:bg-input/30";
 
 export function TextField({
   label,
@@ -121,8 +120,8 @@ export function SelectField({
   return (
     <label className={LABEL}>
       {label}
-      <select
-        className={SELECT}
+      <NativeSelect
+        className="w-full"
         value={current}
         aria-invalid={invalid}
         onChange={(event) => {
@@ -130,11 +129,11 @@ export function SelectField({
         }}
       >
         {all.map((option) => (
-          <option key={option.value} value={option.value}>
+          <NativeSelectOption key={option.value} value={option.value}>
             {option.label}
-          </option>
+          </NativeSelectOption>
         ))}
-      </select>
+      </NativeSelect>
     </label>
   );
 }

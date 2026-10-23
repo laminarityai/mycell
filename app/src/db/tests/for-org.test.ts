@@ -1,8 +1,9 @@
-import { asc, eq, sql } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
 import { integer, pgTable, serial, text } from "drizzle-orm/pg-core";
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, expectTypeOf, it } from "vitest";
 import { getDb } from "../client";
 import { forOrg } from "../for-org";
+import { countQueries } from "../testing/count-queries";
 import { resetDatabase } from "../testing/reset";
 import { seedTwoOrgs, type TwoOrgs } from "../testing/two-org-fixture";
 
@@ -25,6 +26,10 @@ beforeAll(async () => {
       position integer not null default 0
     )
   `);
+  // Every foreign key is indexed (foreign-key-indexes.test.ts), this table's too.
+  await getDb().execute(
+    sql`create index if not exists test_notes_org_id_idx on test_notes (org_id)`,
+  );
 });
 
 beforeEach(async () => {
@@ -58,6 +63,142 @@ describe("forOrg(ctx).select", () => {
       limit: 1,
     });
     expect(rows.map((row) => row.body)).toEqual(["a1"]);
+  });
+
+  it("keeps the first row of each distinct value, never another org's", async () => {
+    await forOrg(orgs.orgA.admin.ctx).insert(notes, { body: "a0", position: 1 });
+
+    // Within position 1, b1 sorts first: it would win if the filter let it in.
+    const rows = await forOrg(orgs.orgA.admin.ctx).select(notes, {
+      distinctOn: [notes.position],
+      orderBy: [asc(notes.position), desc(notes.body)],
+    });
+
+    expect(rows.map((row) => row.body)).toEqual(["a1", "a2"]);
+  });
+
+  it("reads only the named columns, still within the org", async () => {
+    const rows = await forOrg(orgs.orgA.admin.ctx).select(notes, {
+      columns: ["body"],
+      orderBy: [asc(notes.position)],
+    });
+
+    expect(rows).toEqual([{ body: "a1" }, { body: "a2" }]);
+    expectTypeOf(rows).toEqualTypeOf<{ body: string }[]>();
+  });
+
+  it("can't reach another org's row through named columns, even when the filter names it", async () => {
+    const rows = await forOrg(orgs.orgA.admin.ctx).select(notes, {
+      columns: ["id", "body"],
+      where: eq(notes.body, "b1"),
+    });
+    expect(rows).toEqual([]);
+  });
+
+  it("names columns with distinctOn too", async () => {
+    await forOrg(orgs.orgA.admin.ctx).insert(notes, { body: "a0", position: 1 });
+
+    const rows = await forOrg(orgs.orgA.admin.ctx).select(notes, {
+      columns: ["position", "body"],
+      distinctOn: [notes.position],
+      orderBy: [asc(notes.position), desc(notes.body)],
+    });
+
+    expect(rows).toEqual([
+      { position: 1, body: "a1" },
+      { position: 2, body: "a2" },
+    ]);
+  });
+});
+
+describe("forOrg(ctx).count", () => {
+  it("counts only the caller's org's rows", async () => {
+    expect(await forOrg(orgs.orgA.member.ctx).count(notes)).toBe(2);
+    expect(await forOrg(orgs.orgB.member.ctx).count(notes)).toBe(1);
+  });
+
+  it("can't count another org's row even when the filter names it", async () => {
+    expect(await forOrg(orgs.orgA.admin.ctx).count(notes, eq(notes.body, "b1"))).toBe(0);
+  });
+});
+
+describe("forOrg(ctx).sum", () => {
+  it("adds up only the caller's org's rows", async () => {
+    expect(await forOrg(orgs.orgA.member.ctx).sum(notes, notes.position)).toBe(3);
+    expect(await forOrg(orgs.orgB.member.ctx).sum(notes, notes.position)).toBe(1);
+  });
+
+  it("is 0 when no row matches, even when the filter names another org's", async () => {
+    const sum = await forOrg(orgs.orgA.admin.ctx).sum(notes, notes.position, eq(notes.body, "b1"));
+    expect(sum).toBe(0);
+  });
+});
+
+describe("forOrg(ctx).sumBy", () => {
+  it("adds up each group within the caller's org only", async () => {
+    await forOrg(orgs.orgA.admin.ctx).insert(notes, [
+      { body: "a1", position: 5 },
+      { body: "a3", position: 4 },
+    ]);
+    await forOrg(orgs.orgB.admin.ctx).insert(notes, { body: "a1", position: 100 });
+
+    // Org B has an a1 too: it isn't added to org A's a1.
+    const rows = await forOrg(orgs.orgA.admin.ctx).sumBy(notes, notes.position, {
+      body: notes.body,
+    });
+
+    expectTypeOf(rows).toEqualTypeOf<({ body: string } & { total: number })[]>();
+    expect(rows.sort((a, b) => a.body.localeCompare(b.body))).toEqual([
+      { body: "a1", total: 6 },
+      { body: "a2", total: 2 },
+      { body: "a3", total: 4 },
+    ]);
+    const b = await forOrg(orgs.orgB.admin.ctx).sumBy(notes, notes.position, { body: notes.body });
+    expect(b.sort((x, y) => x.body.localeCompare(y.body))).toEqual([
+      { body: "a1", total: 100 },
+      { body: "b1", total: 1 },
+    ]);
+  });
+
+  it("groups by several columns, and can't reach another org's row when the filter names it", async () => {
+    const db = forOrg(orgs.orgA.admin.ctx);
+    await db.insert(notes, { body: "a1", position: 1 });
+
+    const groups = await db.sumBy(notes, notes.position, {
+      body: notes.body,
+      position: notes.position,
+    });
+    expect(groups.sort((a, b) => a.position - b.position)).toEqual([
+      { body: "a1", position: 1, total: 2 },
+      { body: "a2", position: 2, total: 2 },
+    ]);
+    expect(
+      await db.sumBy(notes, notes.position, { body: notes.body }, eq(notes.body, "b1")),
+    ).toEqual([]);
+  });
+});
+
+describe("forOrg(ctx).countBy", () => {
+  it("counts each group within the caller's org only", async () => {
+    await forOrg(orgs.orgA.admin.ctx).insert(notes, { body: "a3", position: 2 });
+
+    // Org B has a row at position 1 too: it isn't counted in org A's group.
+    const rows = await forOrg(orgs.orgA.admin.ctx).countBy(notes, { position: notes.position });
+
+    expectTypeOf(rows).toEqualTypeOf<({ position: number } & { count: number })[]>();
+    expect(rows.sort((a, b) => a.position - b.position)).toEqual([
+      { position: 1, count: 1 },
+      { position: 2, count: 2 },
+    ]);
+  });
+
+  it("can't count another org's row even when the filter names it", async () => {
+    const rows = await forOrg(orgs.orgA.admin.ctx).countBy(
+      notes,
+      { body: notes.body },
+      eq(notes.body, "b1"),
+    );
+    expect(rows).toEqual([]);
   });
 });
 
@@ -118,6 +259,17 @@ describe("forOrg(ctx).update", () => {
     expect(bodies(await forOrg(orgs.orgA.admin.ctx).select(notes))).toEqual(["a2", "moved"]);
     expect(bodies(await forOrg(orgs.orgB.admin.ctx).select(notes))).toEqual(["b1"]);
   });
+
+  it("sets each row its own value from SQL, still only in the caller's org", async () => {
+    const renamed = sql`case ${notes.body} when 'a1' then 'first' when 'b1' then 'hijacked' else ${notes.body} end`;
+    const counted = await countQueries(() =>
+      forOrg(orgs.orgA.admin.ctx).update(notes, { body: renamed }),
+    );
+
+    expect(counted.queries).toBe(1);
+    expect(bodies(await forOrg(orgs.orgA.admin.ctx).select(notes))).toEqual(["a2", "first"]);
+    expect(bodies(await forOrg(orgs.orgB.admin.ctx).select(notes))).toEqual(["b1"]);
+  });
 });
 
 describe("forOrg(ctx).delete", () => {
@@ -136,6 +288,29 @@ describe("forOrg(ctx).delete", () => {
   });
 });
 
+describe("forOrg(ctx).deleteCount", () => {
+  it("deletes only the caller's org's rows, counting them", async () => {
+    expect(await forOrg(orgs.orgA.admin.ctx).deleteCount(notes)).toBe(2);
+
+    expect(await forOrg(orgs.orgA.admin.ctx).select(notes)).toEqual([]);
+    expect(bodies(await forOrg(orgs.orgB.admin.ctx).select(notes))).toEqual(["b1"]);
+  });
+
+  it("can't delete another org's row even when the filter names it", async () => {
+    expect(await forOrg(orgs.orgA.admin.ctx).deleteCount(notes, eq(notes.body, "b1"))).toBe(0);
+
+    expect(bodies(await forOrg(orgs.orgB.admin.ctx).select(notes))).toEqual(["b1"]);
+  });
+
+  it("returns no rows from the database", async () => {
+    const counted = await countQueries(() =>
+      forOrg(orgs.orgA.admin.ctx).deleteCount(notes, eq(notes.body, "a1")),
+    );
+
+    expect(counted).toEqual({ queries: 1, rows: 0 });
+  });
+});
+
 describe("forOrg(ctx).transaction", () => {
   it("commits every write together, still inside the caller's org", async () => {
     const result = await forOrg(orgs.orgA.admin.ctx).transaction(async (tx) => {
@@ -147,6 +322,29 @@ describe("forOrg(ctx).transaction", () => {
     expect(result).toBe(3);
     expect(bodies(await forOrg(orgs.orgA.admin.ctx).select(notes))).toEqual(["a1", "a2", "a3"]);
     expect(bodies(await forOrg(orgs.orgB.admin.ctx).select(notes))).toEqual(["b1"]);
+  });
+
+  it("counts and sums inside the caller's org, seeing the transaction's own writes", async () => {
+    const counted = await forOrg(orgs.orgA.admin.ctx).transaction(async (tx) => {
+      await tx.insert(notes, { body: "a3", position: 1 });
+      return {
+        count: await tx.count(notes),
+        sum: await tx.sum(notes, notes.position),
+        groups: await tx.countBy(notes, { position: notes.position }),
+        totals: await tx.sumBy(notes, notes.position, { position: notes.position }),
+      };
+    });
+
+    expect(counted.count).toBe(3);
+    expect(counted.sum).toBe(4);
+    expect(counted.totals.sort((a, b) => a.position - b.position)).toEqual([
+      { position: 1, total: 2 },
+      { position: 2, total: 2 },
+    ]);
+    expect(counted.groups.sort((a, b) => a.position - b.position)).toEqual([
+      { position: 1, count: 2 },
+      { position: 2, count: 1 },
+    ]);
   });
 
   it("undoes every write when the function throws", async () => {

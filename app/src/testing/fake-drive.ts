@@ -1,13 +1,21 @@
 // A fake Google Drive, served through the fake Nango's proxy. It answers the Drive API v3 calls
-// Mycel makes (about.get, changes.getStartPageToken, files.list, changes.list) in the shapes
-// Google documents, from files a test seeds. Every file has a name, and responses carry only
-// the `fields` a request asks for, as Drive's do; asking for a file's name fails the test.
+// Mycel makes (about.get, changes.getStartPageToken, files.list, changes.list, files.get and
+// files.export) in the shapes Google documents, from files a test seeds. Every file has a name,
+// and responses carry only the `fields` a request asks for, as Drive's do; asking for a file's
+// name fails the test. Each file has a sharing list (its permissions: its owners, and the
+// people, groups, domains or anyone it's shared with), which Drive shows only to an account
+// that may share the file: an owner, or someone it's shared with as a writer. A test can share
+// and unshare a file, and remove it from the account's Drive (deleted, or no longer shared with
+// the account), each a change in the feed.
 import { randomUUID } from "node:crypto";
 import { HttpResponse } from "msw";
 import { parseFields, project } from "./fake-drive-fields";
+import { permission, type DrivePermission, type FakeShareInput } from "./fake-drive-sharing";
 
 /** A file to seed, described the way a test thinks about it. */
 export type FakeFileInput = {
+  // Another account's file shared with this one has the same ID in both Drives.
+  id?: string;
   name: string;
   mimeType: string;
   at: Date;
@@ -16,7 +24,17 @@ export type FakeFileInput = {
   owners?: string[];
   // In a shared drive rather than My Drive, which Mycel doesn't read in M1.
   sharedDrive?: boolean;
+  // A Google Doc's text, as files.export gives it in text/plain.
+  text?: string;
+  // Who it's shared with, besides its owners.
+  sharedWith?: FakeShareInput[];
+  // The folders it's in, by ID. A folder is a file too, with its own parents.
+  parents?: string[];
 };
+
+export type { DrivePermission, FakeShareInput };
+
+const GOOGLE_DOC = "application/vnd.google-apps.document";
 
 const user = (emailAddress: string, me: boolean) => ({
   kind: "drive#user",
@@ -38,16 +56,22 @@ export type DriveFileResource = {
   driveId?: string;
   lastModifyingUser: ReturnType<typeof user>;
   owners: ReturnType<typeof user>[];
+  // Shown only to an account that may share the file (see FakeDrive's view).
+  permissions?: DrivePermission[];
+  parents?: string[];
 };
 
-// One entry in the changes feed: the file changed at `time`.
-type ChangeRecord = { token: number; fileId: string; time: string };
+// One entry in the changes feed: the file changed at `time`, or left the account's Drive.
+type ChangeRecord = { token: number; fileId: string; time: string; removed: boolean };
 
 /** Thrown for a page token Drive won't accept; the fake proxy answers it with 400. */
 class InvalidPageTokenError extends Error {}
 
 export class FakeDrive {
   private files = new Map<string, DriveFileResource>();
+  // Files that left the account's Drive, for the changes feed to report.
+  private removedFiles = new Map<string, DriveFileResource>();
+  private texts = new Map<string, string>();
   private changes: ChangeRecord[] = [];
   private lastToken = 100;
   // Tokens below this one are no longer accepted.
@@ -59,26 +83,35 @@ export class FakeDrive {
   add(input: FakeFileInput): DriveFileResource {
     const time = input.at.toISOString();
     const by = input.by ?? this.emailAddress;
+    const owners = input.owners ?? [this.emailAddress];
     const file: DriveFileResource = {
       kind: "drive#file",
-      id: `1${randomUUID().replaceAll("-", "")}`,
+      id: input.id ?? `1${randomUUID().replaceAll("-", "")}`,
       name: input.name,
       mimeType: input.mimeType,
       createdTime: time,
       modifiedTime: time,
       trashed: false,
       ...(input.sharedDrive === true ? { driveId: "0AsharedDrive" } : {}),
+      ...(input.parents === undefined ? {} : { parents: input.parents }),
       lastModifyingUser: user(by, by === this.emailAddress),
-      owners: (input.owners ?? [this.emailAddress]).map((o) => user(o, o === this.emailAddress)),
+      owners: owners.map((o) => user(o, o === this.emailAddress)),
+      permissions: [
+        ...owners.map((emailAddress) => permission({ type: "user", emailAddress }, "owner")),
+        ...(input.sharedWith ?? []).map((share) => permission(share, share.role ?? "reader")),
+      ],
     };
     this.files.set(file.id, file);
+    this.removedFiles.delete(file.id);
+    if (input.text !== undefined) this.texts.set(file.id, input.text);
     this.record(file.id, time);
     return file;
   }
 
-  /** Someone (the account, by default) edits the file at `at`. */
-  modify(id: string, at: Date, by = this.emailAddress): void {
+  /** Someone (the account, by default) edits the file at `at`, giving a Doc `text` if any. */
+  modify(id: string, at: Date, by = this.emailAddress, text?: string): void {
     const file = this.file(id);
+    if (text !== undefined) this.texts.set(id, text);
     file.modifiedTime = at.toISOString();
     file.lastModifyingUser = user(by, by === this.emailAddress);
     this.record(id, file.modifiedTime);
@@ -88,6 +121,31 @@ export class FakeDrive {
   trash(id: string, at: Date): void {
     this.file(id).trashed = true;
     this.record(id, at.toISOString());
+  }
+
+  /** The file is shared with someone else, without changing its content or modified time. */
+  share(id: string, share: FakeShareInput, at = new Date()): void {
+    const file = this.file(id);
+    file.permissions = [...(file.permissions ?? []), permission(share, share.role ?? "reader")];
+    this.record(id, at.toISOString());
+  }
+
+  /** The file is no longer shared with `emailAddress`; its content and modified time stay. */
+  unshare(id: string, emailAddress: string, at = new Date()): void {
+    const file = this.file(id);
+    file.permissions = (file.permissions ?? []).filter((p) => p.emailAddress !== emailAddress);
+    this.record(id, at.toISOString());
+  }
+
+  /**
+   * The file leaves the account's Drive: deleted for good, or no longer shared with the account.
+   * The changes feed reports it removed, and the account can no longer read it.
+   */
+  remove(id: string, at = new Date()): void {
+    this.removedFiles.set(id, this.file(id));
+    this.files.delete(id);
+    this.texts.delete(id);
+    this.record(id, at.toISOString(), true);
   }
 
   /** Drive stops accepting every page token handed out so far. */
@@ -123,7 +181,7 @@ export class FakeDrive {
     const body = {
       kind: "drive#fileList",
       incompleteSearch: false,
-      files: matching.slice(offset, offset + pageSize),
+      files: matching.slice(offset, offset + pageSize).map((file) => this.view(file)),
       ...(next === undefined ? {} : { nextPageToken: next }),
     };
     return project(body, fileFields(params));
@@ -143,7 +201,9 @@ export class FakeDrive {
       latest.delete(change.fileId);
       latest.set(change.fileId, change);
     }
-    const all = [...latest.values()].filter((c) => this.visible(this.file(c.fileId), params));
+    const all = [...latest.values()].filter((c) =>
+      this.visible(this.removedFiles.get(c.fileId) ?? this.file(c.fileId), params),
+    );
     const pageSize = Math.min(Number(params.get("pageSize") ?? 100), 1000);
     const page = all.slice(0, pageSize);
     const rest = all.at(pageSize);
@@ -153,9 +213,10 @@ export class FakeDrive {
         kind: "drive#change",
         changeType: "file",
         time: change.time,
-        removed: false,
+        removed: change.removed,
         fileId: change.fileId,
-        file: this.file(change.fileId),
+        // A removed file's change has no file.
+        ...(change.removed ? {} : { file: this.view(this.file(change.fileId)) }),
       })),
       ...(rest === undefined
         ? { newStartPageToken: String(this.lastToken + 1) }
@@ -164,14 +225,44 @@ export class FakeDrive {
     return project(body, fileFields(params));
   }
 
+  /** files.get: the file's fields the request names, or null if the account has no such file. */
+  get(id: string, params: URLSearchParams) {
+    if (params.has("alt")) throw new Error("The fake Drive doesn't download files");
+    const file = this.files.get(id);
+    if (file === undefined || !this.visible(file, params)) return null;
+    return project(this.view(file), fileFields(params));
+  }
+
+  /**
+   * files.export as text/plain: a Google Doc's text, null if the account has no such file, or
+   * "not_exportable" for any other kind of file.
+   */
+  export(id: string, params: URLSearchParams): { text: string } | null | "not_exportable" {
+    if (params.get("mimeType") !== "text/plain") throw new Error("The fake Drive exports text");
+    const file = this.files.get(id);
+    if (file === undefined || !this.visible(file, params)) return null;
+    if (file.mimeType !== GOOGLE_DOC) return "not_exportable";
+    return { text: this.texts.get(id) ?? "" };
+  }
+
+  // The file as the account sees it: its sharing list only if the account may share the file.
+  private view(file: DriveFileResource): DriveFileResource {
+    const { permissions, ...rest } = file;
+    const mine = (permissions ?? []).filter(
+      (p) => p.type === "user" && p.emailAddress === this.emailAddress,
+    );
+    const canShare = mine.some((p) => p.role === "owner" || p.role === "writer");
+    return canShare ? file : rest;
+  }
+
   // Shared drives' files show only to requests that ask for all drives.
   private visible(file: DriveFileResource, params: URLSearchParams): boolean {
     return file.driveId === undefined || params.get("includeItemsFromAllDrives") === "true";
   }
 
-  private record(fileId: string, time: string): void {
+  private record(fileId: string, time: string, removed = false): void {
     this.lastToken += 1;
-    this.changes.push({ token: this.lastToken, fileId, time });
+    this.changes.push({ token: this.lastToken, fileId, time, removed });
   }
 }
 
@@ -209,6 +300,18 @@ export function driveResponse(drive: FakeDrive, path: string, params: URLSearchP
     return HttpResponse.json(drive.startPageToken());
   }
   if (path === "/drive/v3/files") return HttpResponse.json(drive.list(params));
+  const file = /^\/drive\/v3\/files\/([^/]+)$/.exec(path)?.at(1);
+  if (file !== undefined) {
+    const found = drive.get(decodeURIComponent(file), params);
+    return found === null ? driveError(404) : HttpResponse.json(found);
+  }
+  const exported = /^\/drive\/v3\/files\/([^/]+)\/export$/.exec(path)?.at(1);
+  if (exported !== undefined) {
+    const answer = drive.export(decodeURIComponent(exported), params);
+    if (answer === null) return driveError(404);
+    if (answer === "not_exportable") return driveError(403);
+    return HttpResponse.text(answer.text);
+  }
   if (path === "/drive/v3/changes") {
     try {
       return HttpResponse.json(drive.listChanges(params));
@@ -220,22 +323,36 @@ export function driveResponse(drive: FakeDrive, path: string, params: URLSearchP
   throw new Error(`The fake Drive doesn't serve ${path}`);
 }
 
-// An error as Drive returns it: a bad page token is a 400 blaming the `pageToken` parameter.
-export function driveError(code: 400 | 429) {
-  const detail =
-    code === 400
-      ? {
-          domain: "global",
-          reason: "invalid",
-          message: "Invalid Value",
-          locationType: "parameter",
-          location: "pageToken",
-        }
-      : {
-          domain: "usageLimits",
-          reason: "userRateLimitExceeded",
-          message: "User rate limit exceeded.",
-        };
+// An error as Drive returns it: a bad page token is a 400 blaming the `pageToken` parameter, a
+// file the account doesn't have a 404, and exporting a file that isn't a Docs Editors file a 403.
+export function driveError(code: 400 | 403 | 404 | 429) {
+  const details = {
+    400: {
+      domain: "global",
+      reason: "invalid",
+      message: "Invalid Value",
+      locationType: "parameter",
+      location: "pageToken",
+    },
+    403: {
+      domain: "global",
+      reason: "fileNotExportable",
+      message: "Export only supports Docs Editors files.",
+    },
+    404: {
+      domain: "global",
+      reason: "notFound",
+      message: "File not found.",
+      locationType: "parameter",
+      location: "fileId",
+    },
+    429: {
+      domain: "usageLimits",
+      reason: "userRateLimitExceeded",
+      message: "User rate limit exceeded.",
+    },
+  };
+  const detail = details[code];
   return HttpResponse.json(
     { error: { code, message: detail.message, errors: [detail] } },
     { status: code },

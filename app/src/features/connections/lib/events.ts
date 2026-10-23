@@ -23,8 +23,8 @@ export const connectionRecorded = eventType("connections/connection.recorded", {
 
 /**
  * Sent when a reconnect grants a connection an ingested app it didn't have (its owner allowed
- * Drive this time, say), which starts that app's backfill. Nobody in Mycel is acting, so it
- * carries the org's system ctx (ADR-0009).
+ * Drive this time, say), or grants again an app whose backfill failed, which starts that app's
+ * backfill. Nobody in Mycel is acting, so it carries the org's system ctx (ADR-0009).
  */
 export const connectionAppsGranted = eventType("connections/apps.granted", {
   schema: backfillDue,

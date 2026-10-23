@@ -2,10 +2,9 @@
 
 import { refresh } from "next/cache";
 import { z } from "zod";
-import { getCtx } from "@/features/orgs/server";
+import { runFormAction } from "@/features/orgs/form-action";
 import { getWorkflow } from "@/features/workflows/server";
-import { actionError, type ActionResult } from "@/lib/errors";
-import { parseForm } from "@/lib/forms";
+import type { ActionResult } from "@/lib/errors";
 import { dryRun, startRun } from "./server";
 import type { TryItState } from "./types";
 
@@ -23,9 +22,7 @@ export async function tryWorkflowAction(
   _previous: TryItState,
   form: FormData,
 ): Promise<TryItState> {
-  const ctx = await getCtx();
-  try {
-    const input = parseForm(tryInput, form);
+  return runFormAction(form, tryInput, async (ctx, input) => {
     const workflow = await getWorkflow(ctx, input.workflowId);
     return {
       result: await dryRun(ctx, workflow.workingSpec, {
@@ -34,9 +31,7 @@ export async function tryWorkflowAction(
         workflowId: workflow.id,
       }),
     };
-  } catch (error) {
-    return actionError(error);
-  }
+  });
 }
 
 const startRunInput = z.object({
@@ -50,13 +45,12 @@ export async function startRunAction(
   _previous: ActionResult,
   form: FormData,
 ): Promise<ActionResult> {
-  const ctx = await getCtx();
-  try {
-    const input = parseForm(startRunInput, form);
-    await startRun(ctx, input.workflowId, input.connectionId, input.sourceRef);
-  } catch (error) {
-    return actionError(error);
-  }
-  refresh();
-  return {};
+  return runFormAction(
+    form,
+    startRunInput,
+    async (ctx, { workflowId, connectionId, sourceRef }) => {
+      await startRun(ctx, workflowId, connectionId, sourceRef);
+    },
+    { after: refresh },
+  );
 }

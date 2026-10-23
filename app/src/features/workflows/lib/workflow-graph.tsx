@@ -1,16 +1,16 @@
 "use client";
 
 // The workflow as a graph, top to bottom: the spec as the policy engine leaves it (reviews and
-// risk levels from the catalog), a proposal drawn as its changes, or a Try it's steps and paths lit up.
+// risk levels from the company's action set), a proposal drawn as its changes, or a Try it's steps
+// and paths lit up.
 // The layout is automatic; the admin pans and zooms. It opens at full size and scrolls rather
 // than shrinking a big workflow to fit. Being edited, its boxes open a side panel and
 // "+" on its lines adds a step; the caller draws the panel and the menu over it.
 import "@xyflow/react/dist/style.css";
 import { Background, Controls, ReactFlow, ReactFlowProvider } from "@xyflow/react";
 import { useMemo, useRef, type ReactNode } from "react";
-import { findAction } from "@/features/policy/catalog";
 import { applyPolicy } from "@/features/policy/engine";
-import type { RiskLevel } from "@/features/policy/types";
+import type { ActionSet, RiskLevel } from "@/features/policy/types";
 import type { InsertAt } from "@/features/spec/edit";
 import {
   graphView,
@@ -21,6 +21,7 @@ import {
 import { layoutTree } from "@/features/spec/layout";
 import type { Spec } from "@/features/spec/types";
 import { cn } from "@/lib/utils";
+import { useActionSet } from "./action-set-context";
 import { selectionOf, toDrawing, type Drawing, type GraphEditing } from "./graph-drawing";
 import { AddMenuContext, edgeTypes } from "./graph-edges";
 import { nodeTypes } from "./graph-nodes";
@@ -63,15 +64,16 @@ export function WorkflowGraph({
   children,
   className,
 }: WorkflowGraphProps) {
+  const actions = useActionSet();
   const view = useMemo(() => {
-    const current = spec === null ? null : withPolicy(spec);
+    const current = spec === null ? null : withPolicy(spec, actions);
     return graphView<RiskLevel>(current?.spec ?? null, {
-      action: actionInfo,
+      action: (name) => actionInfo(name, actions),
       insertedApprovals: current?.insertedApprovals,
-      proposal: proposal === undefined ? undefined : withPolicy(proposal),
+      proposal: proposal === undefined ? undefined : withPolicy(proposal, actions),
       trace: trace ?? undefined,
     });
-  }, [spec, proposal, trace]);
+  }, [spec, proposal, trace, actions]);
   const layout = useMemo(
     () => toDrawing(layoutTree(view), placeholder, editing),
     [view, placeholder, editing],
@@ -92,15 +94,15 @@ export function WorkflowGraph({
   );
 }
 
-/** The spec as a version would hold it; one the catalog no longer allows is drawn as written. */
-function withPolicy(spec: Spec): GraphSide {
-  const policy = applyPolicy(spec);
+/** The spec as a version would hold it; one `actions` no longer allows is drawn as written. */
+function withPolicy(spec: Spec, actions: ActionSet): GraphSide {
+  const policy = applyPolicy(spec, actions);
   if (!policy.ok) return { spec };
   return { spec: policy.spec, insertedApprovals: policy.inserted.map((step) => step.stepId) };
 }
 
-function actionInfo(name: string): GraphActionInfo<RiskLevel> | undefined {
-  const action = findAction(name);
+function actionInfo(name: string, actions: ActionSet): GraphActionInfo<RiskLevel> | undefined {
+  const action = actions.find(name);
   if (action === undefined) return undefined;
   const { risk, description, app, conditionFields } = action;
   return { risk, description, app, conditionFields };
@@ -112,6 +114,10 @@ const FILL_TOP = 80;
 const MIN_HEIGHT = 320;
 const MIN_EDITING_HEIGHT = 560;
 const MAX_HEIGHT = 720;
+/** What a screen reader hears on a focused box: how to open it, not React Flow's own keys. */
+const ARIA_LABELS = {
+  "node.a11yDescription.default": "Press Enter or Space to open it in the side panel.",
+};
 
 function Canvas({
   layout,
@@ -152,7 +158,12 @@ function Canvas({
           edgeTypes={edgeTypes}
           nodesDraggable={false}
           nodesConnectable={false}
+          // Only a box that opens is focusable (toDrawing marks it): the rest are read, not used.
+          nodesFocusable={false}
           elementsSelectable={false}
+          ariaLabelConfig={ARIA_LABELS}
+          // Read only, no box opens, so there's nothing to do from the keyboard.
+          disableKeyboardA11y={editing === undefined}
           panOnScroll
           zoomOnScroll={false}
           minZoom={0.25}
@@ -161,6 +172,22 @@ function Canvas({
           onNodeClick={(_, node) => {
             const selection = selectionOf(node);
             if (selection !== null) editing?.onSelect(selection);
+          }}
+          onKeyDown={(event) => {
+            // Enter or Space on a focused box opens it, as a click does.
+            if (editing === undefined || (event.key !== "Enter" && event.key !== " ")) return;
+            const target = event.target;
+            if (
+              !(target instanceof HTMLElement) ||
+              !target.classList.contains("react-flow__node")
+            ) {
+              return;
+            }
+            const node = layout.nodes.find((candidate) => candidate.id === target.dataset.id);
+            const selection = node === undefined ? null : selectionOf(node);
+            if (selection === null) return;
+            event.preventDefault();
+            editing.onSelect(selection);
           }}
           onPaneClick={editing?.onPaneClick}
           onMoveStart={(event) => {

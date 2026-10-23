@@ -8,7 +8,7 @@ import { forOrg } from "@/db/for-org";
 import type { Ctx } from "@/lib/ctx";
 import { deleteConnection } from "./disconnect";
 import { sendConnectionRecorded } from "./events";
-import { grantedApps, INTEGRATIONS } from "./google";
+import { grantedApps, ingestsFrom, integrationOf } from "./apps";
 import { syncIngestStates } from "./ingest-states";
 import { deleteNangoConnection } from "./nango";
 import { connectAttempts, connections } from "./schema";
@@ -34,11 +34,12 @@ export async function recordConnection(
   const inserted = await insertConnection(ctx, attempt, account);
   if (inserted === "refused") return;
   const { id } = inserted;
-  if (id !== undefined) {
+  if (id !== undefined && ingestsFrom(attempt.source)) {
     await syncIngestStates(ctx, id, grantedApps(attempt.source, account.grantedScopes));
     if (attempt.source === "google") await replaceOneAppConnections(ctx, attempt, account);
     // Sent before the attempt is settled, so a failed send leaves the attempt pending for the
-    // redelivery. The event's ID makes Inngest drop a duplicate.
+    // redelivery. The event's ID makes Inngest drop a duplicate. Discovery ingests only from
+    // Google, so another app's connection has no ingest states and starts no backfill.
     await sendConnectionRecorded(ctx, id);
   }
   await forOrg(ctx).update(
@@ -84,7 +85,7 @@ async function insertConnection(
       return { id: await recordedConnectionId(ctx, account.nangoConnectionId) };
     }
     if (isUniqueViolation(error, "connections_org_id_source_account_unique")) {
-      await deleteNangoConnection(account.nangoConnectionId, INTEGRATIONS[attempt.source]);
+      await deleteNangoConnection(account.nangoConnectionId, integrationOf(attempt.source));
       await refuse(ctx, attempt, `${account.accountEmail} is already connected.`);
       return "refused";
     }

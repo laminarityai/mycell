@@ -6,12 +6,13 @@ export const objectRefKindSchema = z.enum(["email", "drive_file"]);
 export type ObjectRefKind = z.infer<typeof objectRefKindSchema>;
 
 /** What Mycel keeps about an attachment: never its name or content. */
-export type AttachmentMeta = {
-  mimeType: string;
-  size: number;
+export const attachmentMetaSchema = z.object({
+  mimeType: z.string(),
+  size: z.number(),
   // The Drive file behind it, when the source says which.
-  driveFileId: string | null;
-};
+  driveFileId: z.string().nullable(),
+});
+export type AttachmentMeta = z.infer<typeof attachmentMetaSchema>;
 
 export const EVENT_TYPES = [
   "email.received",
@@ -63,3 +64,20 @@ export type PollOutcome =
 
 /** One connection the polling cron fans out a poll to, with the org its job acts in. */
 export type ConnectionToPoll = { orgId: string; connectionId: string };
+
+/**
+ * An item discovery stored, as `discovery/item.stored` points at it: each Gmail message but
+ * drafts, and each Drive file version. `sourceRef` is how it's re-fetched.
+ */
+export type StoredItem = {
+  connectionId: string;
+  app: "gmail" | "drive";
+  sourceRef: string;
+  occurredAt: Date;
+};
+
+/** Which stored items to count or list: all, or only Drive files of `driveMimeType`. */
+export type StoredItemsQuery = { driveMimeType?: string };
+
+/** One page of stored items; `next` names the page after it, or is null after the last. */
+export type StoredItemsPage = { items: StoredItem[]; next: string | null };

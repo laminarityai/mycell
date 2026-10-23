@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { resetDatabase } from "@/db/testing/reset";
-import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
-import { grantCredits } from "@/features/credits/server";
+import { FUNDED_CREDITS, seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { backfillConnection, pollConnection } from "@/features/discovery/server";
 import { switchWorkflowOff, switchWorkflowOn } from "@/features/workflows/server";
 import { systemCtx, type Ctx } from "@/lib/ctx";
@@ -12,7 +11,7 @@ import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import { fakeInngest } from "@/testing/fake-inngest";
 import type { FakeMessageInput } from "@/testing/fake-gmail";
 import { executeRun, getRun, listRuns, startTriggeredRuns } from "../server";
-import type { RunStep } from "../types";
+import type { RunStep } from "@/lib/inngest";
 import { pricingQuestion, publish, threadSpec } from "./run-helpers";
 
 beforeEach(resetDatabase);
@@ -60,7 +59,7 @@ async function pollAndFanOut(orgId: string, connectionId: string) {
 }
 
 async function adminWithInbox() {
-  const orgs = await seedTwoOrgs();
+  const orgs = await seedTwoOrgs({ credits: FUNDED_CREDITS });
   const admin = orgs.orgA.admin.ctx;
   const inbox = await backfilledInbox(admin, orgs.orgA.admin.email);
   return { ...orgs, admin, inbox, system: systemCtx(orgs.orgA.id) };
@@ -214,7 +213,6 @@ describe("a triggered run that writes", () => {
   // The writing workflow switched on for the admin's inbox, and the run a new message started.
   async function writingRun() {
     const { orgA, admin, inbox, system } = await adminWithInbox();
-    await grantCredits(system, 100);
     inbox.sheets.add("log", "Log", [["Message"]]);
     const workflowId = await publish(admin, threadSpec({ id: "writes", steps: writeSteps }));
     await switchWorkflowOn(admin, workflowId, inbox.id);

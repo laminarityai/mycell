@@ -12,8 +12,8 @@ import type { UserNames } from "@/features/orgs/types";
 import type { PendingItem } from "@/features/runtime/adapters";
 import type { ReviewSharing } from "@/features/workflows/types";
 import { reviewSharing, workflowNames } from "@/features/workflows/server";
-import type { Ctx } from "@/lib/ctx";
-import { ForbiddenError, NotFoundError } from "@/lib/errors";
+import { type Ctx, isAdmin, isSystem, requireSystem } from "@/lib/ctx";
+import { InvariantError, NotFoundError } from "@/lib/errors";
 import type { HandOff, NewReview, Review, ReviewSummary } from "../types";
 import { reviews } from "./schema";
 
@@ -23,21 +23,27 @@ export type ReviewRow = typeof reviews.$inferSelect;
  * Records a `waiting` review of an item a run prepared, owned as the run's connection is: a
  * member connection's by its owner, an org connection's by the org. Called by a run's step, as
  * the org's system ctx, inside the step: one item of one run makes one review, however often
- * the step is retried.
+ * the step is retried. Returns the review's ID.
  */
-export async function createReview(ctx: Ctx, review: NewReview): Promise<void> {
-  if (ctx.role !== "system") throw new ForbiddenError();
+export async function createReview(ctx: Ctx, review: NewReview): Promise<string> {
+  requireSystem(ctx);
   const connection = await getConnection(ctx, review.connectionId);
-  await forOrg(ctx).insert(
+  const db = forOrg(ctx);
+  await db.insert(
     reviews,
     {
       ...review,
       id: randomUUID(),
+      runConnectionId: review.runConnectionId ?? review.connectionId,
       ownerScope: connection.kind,
       ownerUserId: connection.kind === "member" ? connection.ownerUserId : null,
     },
     { onConflictDoNothing: true },
   );
+  const ofItem = and(eq(reviews.runId, review.runId), eq(reviews.itemRef, review.itemRef));
+  const row = (await db.select(reviews, { where: ofItem })).at(0);
+  if (row === undefined) throw new InvariantError("The review wasn't stored.");
+  return row.id;
 }
 
 /**
@@ -90,14 +96,13 @@ export async function visibleReview(ctx: Ctx, reviewId: string): Promise<ReviewR
  * to. The system ctx, which jobs act as, sees every review in its org (ADR-0009).
  */
 async function visibleOf(ctx: Ctx, rows: ReviewRow[]): Promise<ReviewRow[]> {
-  if (ctx.role === "system") return rows;
+  if (isSystem(ctx)) return rows;
   // An admin sees every org review; anyone else those of workflows they see through a tag.
-  const sharing =
-    ctx.role === "admin" ? new Map<string, ReviewSharing>() : await sharingOf(ctx, rows);
+  const sharing = isAdmin(ctx) ? new Map<string, ReviewSharing>() : await sharingOf(ctx, rows);
   return rows.filter((row) => {
     if (row.handedToUserId === ctx.userId) return true;
     if (row.ownerScope === "member") return row.ownerUserId === ctx.userId;
-    return ctx.role === "admin" || sharing.get(row.workflowId)?.seen === true;
+    return isAdmin(ctx) || sharing.get(row.workflowId)?.seen === true;
   });
 }
 

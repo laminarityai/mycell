@@ -1,9 +1,12 @@
 "use client";
 
 import { useActionState } from "react";
+import { DateTime } from "@/components/date-time";
 import { Button } from "@/components/ui/button";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { switchWorkflowOffAction, switchWorkflowOnAction } from "../actions";
 import type { WorkflowSwitch } from "../types";
+import { PauseBadge, PausedNotice } from "./pause-display";
 import { Problems } from "./workflow-editor";
 
 /** A connection the workflow can be switched on for, as the form offers it. */
@@ -33,14 +36,26 @@ export function SwitchForm({
     const label =
       connections.find((connection) => connection.id === current.connectionId)?.label ??
       "a connection";
+    const shown = current.pauses.at(0);
     return (
       <form action={switchOff} className="flex flex-col gap-2 text-sm">
         <input type="hidden" name="workflowId" value={workflowId} />
         <p>
-          {compact
-            ? `On for ${label}`
-            : `On for ${label} since ${current.since.toLocaleString("en-US")}. It runs on each new inbound message from then on.`}
+          {compact ? (
+            `On for ${label}`
+          ) : (
+            <>
+              On for {label} since <DateTime value={current.since} />. It runs on each new inbound
+              message from then on.
+            </>
+          )}
         </p>
+        {shown === undefined ? null : (
+          <div>
+            <PauseBadge reason={shown} change={current.pausedChange} />
+          </div>
+        )}
+        {compact ? null : <PausedNotice current={current} />}
         <div>
           <Button type="submit" variant="outline" disabled={switchingOff}>
             Switch off
@@ -67,17 +82,17 @@ export function SwitchForm({
       <input type="hidden" name="workflowId" value={workflowId} />
       <label className="flex flex-col gap-1 text-sm font-medium">
         Connection
-        <select
+        <NativeSelect
           name="connectionId"
-          className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
-          defaultValue={connections[0]?.id}
+          className="w-full"
+          defaultValue={onResult.values?.connectionId ?? connections[0]?.id}
         >
           {connections.map((connection) => (
-            <option key={connection.id} value={connection.id}>
+            <NativeSelectOption key={connection.id} value={connection.id}>
               {connection.label}
-            </option>
+            </NativeSelectOption>
           ))}
-        </select>
+        </NativeSelect>
       </label>
       {compact ? null : (
         <p className="text-sm text-muted-foreground">

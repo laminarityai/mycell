@@ -1,3 +1,4 @@
+import { DateTime } from "@/components/date-time";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -9,7 +10,12 @@ import {
 } from "@/components/ui/table";
 import { RunOnMessageForm, type RunConnectionOption } from "./lib/run-on-message-form";
 import { TryItPanel } from "./lib/try-it-panel";
-import type { RunRecord, RunStatus, RunStepStatus } from "./types";
+import {
+  INTERNAL_ERROR_MESSAGE,
+  type RunRecord,
+  type RunStatus,
+  type RunStepStatus,
+} from "./types";
 
 export { RunOnMessageForm, type RunConnectionOption, TryItPanel };
 
@@ -31,6 +37,14 @@ function StatusBadge({ status }: { status: RunStatus | RunStepStatus }) {
       {STATUS_LABELS[status]}
     </Badge>
   );
+}
+
+/**
+ * A failure as people read it. An `internal_error` is ours to fix, whatever message a record
+ * from before it said so holds.
+ */
+function errorText(code: string, message: string | null): string | null {
+  return code === "internal_error" ? INTERNAL_ERROR_MESSAGE : message;
 }
 
 /** The paths a failed step is on, each once, in the order the run reached them. */
@@ -59,7 +73,7 @@ export function RecentRuns({ runs }: { runs: RunRecord[] }) {
         {runs.map((run) => (
           <TableRow key={run.id}>
             <TableCell className="whitespace-normal">
-              {run.startedAt.toLocaleString("en-US")}
+              <DateTime value={run.startedAt} />
             </TableCell>
             <TableCell className="font-mono text-xs break-all whitespace-normal">
               {run.sourceRef}
@@ -72,6 +86,9 @@ export function RecentRuns({ runs }: { runs: RunRecord[] }) {
                     Failed on {failedPaths(run).join(", ")}
                   </span>
                 )}
+                {run.errorCode === "internal_error" ? (
+                  <span className="text-xs text-destructive">{INTERNAL_ERROR_MESSAGE}</span>
+                ) : null}
               </div>
             </TableCell>
             <TableCell className="whitespace-normal">
@@ -86,7 +103,7 @@ export function RecentRuns({ runs }: { runs: RunRecord[] }) {
                     {step.attempts > 1 ? `${String(step.attempts)} attempts` : null}
                     {step.errorCode === null ? null : (
                       <span className="min-w-0 wrap-anywhere text-destructive">
-                        {step.errorMessage}
+                        {errorText(step.errorCode, step.errorMessage)}
                       </span>
                     )}
                     {step.output === null ? null : (

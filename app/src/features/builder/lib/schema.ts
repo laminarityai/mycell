@@ -1,21 +1,25 @@
 // Builder conversations and their messages. Both are tenant-owned and hold no connection_id:
 // messages keep the admins' and the agent's words and tool calls, never source content
 // (invariant 8), so disconnecting a connection leaves them alone.
+import "server-only";
 import {
   bigserial,
   foreignKey,
+  index,
   integer,
-  jsonb,
   pgTable,
   text,
   timestamp,
   unique,
 } from "drizzle-orm/pg-core";
-import type { InsertedApproval, RiskLevel } from "@/features/policy/types";
-import type { StoredSpec } from "@/features/spec/stored";
+import { z } from "zod";
+import { zodJsonb } from "@/db/columns";
+import { customActionRecordSchema } from "@/features/custom-actions/types";
+import { insertedApprovalSchema, type RiskLevel } from "@/features/policy/types";
+import { storedSpecSchema } from "@/features/spec/stored";
 // A conversation about a workflow goes with it.
 import { workflows } from "@/features/workflows/lib/schema";
-import type { StoredPart } from "../types";
+import { storedPartSchema } from "../types";
 
 export const builderConversations = pgTable(
   "builder_conversations",
@@ -32,6 +36,7 @@ export const builderConversations = pgTable(
   },
   (table) => [
     unique("builder_conversations_org_id_id_unique").on(table.orgId, table.id),
+    index("builder_conversations_org_id_workflow_id_idx").on(table.orgId, table.workflowId),
     foreignKey({
       name: "builder_conversations_workflow_fk",
       columns: [table.orgId, table.workflowId],
@@ -54,9 +59,9 @@ export const builderProposals = pgTable(
     // Null for a new workflow until it's accepted, which creates the workflow.
     workflowId: text("workflow_id"),
     baseRevision: integer("base_revision"),
-    baseSpec: jsonb("base_spec").$type<StoredSpec>(),
+    baseSpec: zodJsonb("base_spec", storedSpecSchema),
     // The proposed working spec, as `validateSpec` parsed it.
-    spec: jsonb("spec").$type<StoredSpec>().notNull(),
+    spec: zodJsonb("spec", storedSpecSchema).notNull(),
     // The workflow's name: its own for an existing workflow, one made from the spec ID for a new.
     name: text("name").notNull(),
     summary: text("summary").notNull(),
@@ -66,7 +71,12 @@ export const builderProposals = pgTable(
     })
       .$type<RiskLevel>()
       .notNull(),
-    inserted: jsonb("inserted").$type<InsertedApproval[]>().notNull(),
+    inserted: zodJsonb("inserted", z.array(insertedApprovalSchema)).notNull(),
+    // The custom actions it brings, checked, with their levels from the fixed rule: stored with
+    // the spec when it's accepted (ADR-0018), never before.
+    customActions: zodJsonb("custom_actions", z.array(customActionRecordSchema))
+      .notNull()
+      .default([]),
     status: text("status", { enum: ["proposed", "accepted", "rejected", "stale"] })
       .notNull()
       .default("proposed"),
@@ -76,11 +86,13 @@ export const builderProposals = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
+    index("builder_proposals_org_id_conversation_id_idx").on(table.orgId, table.conversationId),
     foreignKey({
       name: "builder_proposals_conversation_fk",
       columns: [table.orgId, table.conversationId],
       foreignColumns: [builderConversations.orgId, builderConversations.id],
     }).onDelete("cascade"),
+    index("builder_proposals_org_id_workflow_id_idx").on(table.orgId, table.workflowId),
     foreignKey({
       name: "builder_proposals_workflow_fk",
       columns: [table.orgId, table.workflowId],
@@ -100,10 +112,11 @@ export const builderMessages = pgTable(
     role: text("role", { enum: ["user", "assistant"] }).notNull(),
     // The admin who wrote a user message; null for the agent's.
     authorId: text("author_id"),
-    parts: jsonb("parts").$type<StoredPart[]>().notNull(),
+    parts: zodJsonb("parts", z.array(storedPartSchema)).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
+    index("builder_messages_org_id_conversation_id_idx").on(table.orgId, table.conversationId),
     foreignKey({
       name: "builder_messages_conversation_fk",
       columns: [table.orgId, table.conversationId],

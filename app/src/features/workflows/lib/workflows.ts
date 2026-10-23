@@ -2,13 +2,21 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
 import { isUniqueViolation } from "@/db/errors";
-import { forOrg } from "@/db/for-org";
+import { forOrg, type OrgScopedDb } from "@/db/for-org";
+import { actionSetWith, checkedCustomActions } from "@/features/custom-actions/description";
+import {
+  getActionSet,
+  listCustomActions,
+  storeCustomActions,
+} from "@/features/custom-actions/server";
 import { applyPolicy } from "@/features/policy/engine";
+import type { ActionSet } from "@/features/policy/types";
 import { sameValue } from "@/features/spec/diff";
 import { readStoredSpec } from "@/features/spec/stored";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { ConflictError, ValidationError } from "@/lib/errors";
 import type {
+  CheckedSave,
   SavedWorkflow,
   WorkflowDetails,
   WorkflowInput,
@@ -16,6 +24,8 @@ import type {
   WorkflowVersionSummary,
 } from "../types";
 import { findWorkflow } from "./access";
+import { latestVersions } from "./latest-versions";
+import { requiredApps } from "./requirements";
 import { workflows, workflowVersions } from "./schema";
 import { switchesOf, switchOf } from "./switches";
 import { validateWorkflowSpec } from "./validation";
@@ -31,39 +41,71 @@ type Version = typeof workflowVersions.$inferSelect;
  * with ConflictError, never merged.
  */
 export async function saveWorkflow(ctx: Ctx, input: WorkflowInput): Promise<SavedWorkflow> {
+  const checked = await checkWorkflowSave(ctx, input);
+  return forOrg(ctx).transaction((tx) => saveWorkflowIn(ctx, tx, checked));
+}
+
+/**
+ * Everything saveWorkflow reads and checks, without writing: a caller saving inside its own
+ * transaction (accepting a proposal) calls it before the transaction, then saveWorkflowIn in it.
+ */
+export async function checkWorkflowSave(ctx: Ctx, input: WorkflowInput): Promise<CheckedSave> {
   requireAdmin(ctx);
   const name = input.name.trim();
   if (name === "") throw new ValidationError("Give the workflow a name.");
   const existing =
     input.workflowId === undefined ? undefined : await findWorkflow(ctx, input.workflowId);
-  const validated = await validateWorkflowSpec(ctx, input.spec);
+  // The custom actions it brings (a proposal's, stored as JSON) are checked again first, so the
+  // spec is validated against the levels the rule sets now, not the ones the proposal carried.
+  const brought = input.newCustomActions;
+  const bringing = checkedCustomActions(brought?.actions ?? []);
+  const actions = actionSetWith([...(await listCustomActions(ctx)), ...bringing]);
+  const validated = await validateWorkflowSpec(ctx, input.spec, actions);
+  return {
+    workflowId: input.workflowId,
+    baseRevision: input.baseRevision ?? existing?.revision ?? 1,
+    values: { name, specId: validated.working.id, workingSpec: validated.working },
+    newCustomActions:
+      brought === undefined ? undefined : { actions: bringing, proposalId: brought.proposalId },
+    maxRisk: validated.maxRisk,
+    inserted: validated.inserted,
+  };
+}
 
-  const values = { name, specId: validated.working.id, workingSpec: validated.working };
-  const db = forOrg(ctx);
+/**
+ * Writes a checked save through the caller's transaction `tx`, querying nothing else: its
+ * custom actions first, which stay only if the spec saves too. ConflictError when the working
+ * spec moved on from `baseRevision`, or another workflow has the spec ID.
+ */
+export async function saveWorkflowIn(
+  ctx: Ctx,
+  tx: OrgScopedDb,
+  checked: CheckedSave,
+): Promise<SavedWorkflow> {
+  requireAdmin(ctx);
+  const { workflowId, baseRevision: base, values, newCustomActions, maxRisk, inserted } = checked;
+  if (newCustomActions !== undefined) {
+    const { actions, proposalId } = newCustomActions;
+    await storeCustomActions(ctx, actions, { proposalId }, tx);
+  }
   try {
-    if (input.workflowId === undefined) {
+    if (workflowId === undefined) {
       const id = randomUUID();
-      await db.insert(workflows, { ...values, id, createdBy: ctx.userId });
-      return { id, revision: 1, maxRisk: validated.maxRisk, inserted: validated.inserted };
+      await tx.insert(workflows, { ...values, id, createdBy: ctx.userId });
+      return { id, revision: 1, maxRisk, inserted };
     }
-    const base = input.baseRevision ?? existing?.revision ?? 1;
     // One conditional update: it saves only while the working spec is still at `base`.
-    const updated = await db.update(
+    const updated = await tx.update(
       workflows,
       { ...values, revision: base + 1, updatedAt: new Date() },
-      and(eq(workflows.id, input.workflowId), eq(workflows.revision, base)),
+      and(eq(workflows.id, workflowId), eq(workflows.revision, base)),
     );
     if (updated.length === 0) {
       throw new ConflictError(
         "The working spec was saved again since you opened it, by another admin or an accepted proposal, so your changes weren't saved. Reload to see the current one.",
       );
     }
-    return {
-      id: input.workflowId,
-      revision: base + 1,
-      maxRisk: validated.maxRisk,
-      inserted: validated.inserted,
-    };
+    return { id: workflowId, revision: base + 1, maxRisk, inserted };
   } catch (error) {
     if (isUniqueViolation(error, "workflows_org_id_spec_id_unique")) {
       throw new ConflictError(`Another workflow already has the spec ID "${values.specId}".`);
@@ -75,14 +117,27 @@ export async function saveWorkflow(ctx: Ctx, input: WorkflowInput): Promise<Save
 /** The org's workflows by name, each with its latest version and its switch. */
 export async function listWorkflows(ctx: Ctx): Promise<WorkflowSummary[]> {
   requireAdmin(ctx);
-  const db = forOrg(ctx);
-  const rows = await db.select(workflows, { orderBy: [workflows.name] });
-  const versions = await db.select(workflowVersions, { orderBy: [desc(workflowVersions.number)] });
-  const latest = new Map<string, Version>();
-  for (const version of versions) {
-    if (!latest.has(version.workflowId)) latest.set(version.workflowId, version);
-  }
-  const switches = await switchesOf(ctx, rows);
+  // Not the working specs: the list shows the latest versions'.
+  const rows = await forOrg(ctx).select(workflows, {
+    columns: [
+      "id",
+      "name",
+      "specId",
+      "orgConnectionId",
+      "orgSwitchedOnAt",
+      "archivedAt",
+      "updatedAt",
+    ],
+    orderBy: [workflows.name],
+  });
+  const [latest, switches, actions] = await Promise.all([
+    latestVersions(
+      ctx,
+      rows.map((row) => row.id),
+    ),
+    switchesOf(ctx, rows),
+    getActionSet(ctx),
+  ]);
   const audiences = await audiencesOf(
     ctx,
     [...latest.values()].map((version) => version.id),
@@ -95,6 +150,7 @@ export async function listWorkflows(ctx: Ctx): Promise<WorkflowSummary[]> {
       specId: row.specId,
       latestVersion: version === undefined ? null : versionSummary(version),
       credentials: version === undefined ? null : version.spec.credentials,
+      requiredApps: version === undefined ? [] : requiredApps(version, actions),
       switch: switches.get(row.id) ?? null,
       audience: version === undefined ? null : (audiences.get(version.id) ?? null),
       archivedAt: row.archivedAt,
@@ -103,15 +159,22 @@ export async function listWorkflows(ctx: Ctx): Promise<WorkflowSummary[]> {
   });
 }
 
-/** One workflow, with what the policy engine makes of its working spec and its versions. */
-export async function getWorkflow(ctx: Ctx, workflowId: string): Promise<WorkflowDetails> {
+/**
+ * One workflow, with what the policy engine makes of its working spec and its versions. A caller
+ * reading several passes the company's action set, resolved once, as `actions`.
+ */
+export async function getWorkflow(
+  ctx: Ctx,
+  workflowId: string,
+  actions?: ActionSet,
+): Promise<WorkflowDetails> {
   requireAdmin(ctx);
   const row = await findWorkflow(ctx, workflowId);
   const versions = await forOrg(ctx).select(workflowVersions, {
     where: eq(workflowVersions.workflowId, workflowId),
     orderBy: [desc(workflowVersions.number)],
   });
-  const policy = applyPolicy(row.workingSpec);
+  const policy = applyPolicy(row.workingSpec, actions ?? (await getActionSet(ctx)));
   const latest = versions.at(0);
   return {
     id: row.id,
@@ -132,7 +195,9 @@ export async function getWorkflow(ctx: Ctx, workflowId: string): Promise<Workflo
   };
 }
 
-export function versionSummary(version: Version): WorkflowVersionSummary {
+export function versionSummary(
+  version: Pick<Version, "id" | "number" | "maxRisk" | "publishedBy" | "publishedAt">,
+): WorkflowVersionSummary {
   return {
     id: version.id,
     number: version.number,

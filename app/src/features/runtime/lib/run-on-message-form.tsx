@@ -1,8 +1,10 @@
 "use client";
 
 import { useActionState } from "react";
+import { FormError } from "@/components/form-error";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { startRunAction } from "../actions";
 
 /** A connection the workflow can run on, as the form offers it. */
@@ -30,37 +32,39 @@ export function RunOnMessageForm({
       </p>
     );
   }
+  // React resets the form after its action: a refused run starts from what it sent.
   return (
     <form action={start} className="flex flex-col gap-3">
       <input type="hidden" name="workflowId" value={workflowId} />
       <label className="flex flex-col gap-1 text-sm font-medium">
         Connection
-        <select
+        <NativeSelect
           name="connectionId"
-          className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
-          defaultValue={connections[0]?.id}
+          className="w-full"
+          defaultValue={result.values?.connectionId ?? connections[0]?.id}
         >
           {connections.map((connection) => (
-            <option key={connection.id} value={connection.id}>
+            <NativeSelectOption key={connection.id} value={connection.id}>
               {connection.label}
-            </option>
+            </NativeSelectOption>
           ))}
-        </select>
+        </NativeSelect>
       </label>
       <label className="flex flex-col gap-1 text-sm font-medium">
         {item === "invite" ? "Calendar event ID" : "Gmail message ID"}
-        <Input name="sourceRef" required className="font-mono" />
+        <Input
+          name="sourceRef"
+          defaultValue={result.values?.sourceRef}
+          required
+          className="font-mono"
+        />
       </label>
       <div>
         <Button type="submit" variant="outline" disabled={starting}>
           Run on this {item}
         </Button>
       </div>
-      {result.error === undefined ? null : (
-        <p role="alert" className="text-sm text-destructive">
-          {result.error}
-        </p>
-      )}
+      <FormError message={result.error} />
     </form>
   );
 }

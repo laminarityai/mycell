@@ -125,6 +125,7 @@ async function withSteps(ctx: Ctx, rows: Run[]): Promise<RunRecord[]> {
     enablementId: row.enablementId,
     sourceRef: row.sourceRef,
     status: row.status,
+    errorCode: row.errorCode,
     costUsd: row.costUsd,
     startedAt: row.startedAt,
     finishedAt: row.finishedAt,

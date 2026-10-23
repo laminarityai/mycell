@@ -4,11 +4,12 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { isUniqueViolation } from "@/db/errors";
 import { forOrg } from "@/db/for-org";
+import { getActionSet } from "@/features/custom-actions/server";
 import { sameValue } from "@/features/spec/diff";
 import type { Spec } from "@/features/spec/types";
 import { findTagsByName } from "@/features/tags/server";
-import { requireAdmin, type Ctx } from "@/lib/ctx";
-import { ConflictError, ForbiddenError, NotFoundError } from "@/lib/errors";
+import { type Ctx, requireAdmin, requireRole } from "@/lib/ctx";
+import { ConflictError, InvariantError, NotFoundError } from "@/lib/errors";
 import type { PublishSettings, WorkflowVersion } from "../types";
 import { workflows, workflowVersions, workflowVersionTags } from "./schema";
 import { validateWorkflowSpec } from "./validation";
@@ -16,6 +17,7 @@ import { findWorkflow } from "./access";
 import { gainedForEnablements, pauseEnablements } from "./version-pauses";
 import { latestVersions, version } from "./latest-versions";
 import { removeInvisibleIn } from "./lost-visibility";
+import { readViewers } from "./visibility";
 
 /**
  * Re-validates the working spec (connections may have changed since it was saved) and records
@@ -35,12 +37,15 @@ export async function publishWorkflow(
   requireAdmin(ctx);
   const workflow = await findWorkflow(ctx, workflowId);
   const working = withSettings(workflow.workingSpec, settings);
-  const validated = await validateWorkflowSpec(ctx, working);
+  const actions = await getActionSet(ctx);
+  const validated = await validateWorkflowSpec(ctx, working, actions);
   // Names no tag in the org has are refused here, before anything is written.
   const tags = await findTagsByName(ctx, validated.applied.visibility?.tags ?? []);
   const db = forOrg(ctx);
   const latest = (await latestVersions(ctx, [workflowId], db)).get(workflowId);
-  const gained = gainedForEnablements(latest, validated);
+  const gained = gainedForEnablements(latest, validated, actions);
+  // Who is in the org and each one's tags, read now: the transaction queries only through `tx`.
+  const viewers = await readViewers(ctx);
   try {
     // The version, its tags, the removals and the pauses together: a version is never seen
     // without who it's for, nor runs for anyone who can't see it or hasn't agreed to it.
@@ -73,15 +78,14 @@ export async function publishWorkflow(
           publishedBy: ctx.userId,
         })
       ).at(0);
-      // An insert returns its row, so this is a bug, not something a user can act on: it's
-      // left a plain Error for the action boundary to rethrow (src/lib/errors.ts, actionError).
-      if (inserted === undefined) throw new Error("insert returned no version");
+      // An insert returns its row, so this is a bug, not something a user can act on.
+      if (inserted === undefined) throw new InvariantError("insert returned no version");
       await tx.insert(
         workflowVersionTags,
         tags.map((tag) => ({ workflowVersionId: inserted.id, tagId: tag.id })),
       );
       // Members the new tags leave out lose their enablements, before anything is paused.
-      await removeInvisibleIn(ctx, tx, { workflowId });
+      await removeInvisibleIn(ctx, { tx, viewers }, { workflowId });
       if (gained !== null) await pauseEnablements(tx, workflowId, gained);
       return inserted;
     });
@@ -106,7 +110,7 @@ function withSettings(spec: Spec, settings: PublishSettings): Spec {
 
 /** One published version, for an admin or for a run acting as the system ctx (ADR-0009). */
 export async function getWorkflowVersion(ctx: Ctx, versionId: string): Promise<WorkflowVersion> {
-  if (ctx.role !== "admin" && ctx.role !== "system") throw new ForbiddenError();
+  requireRole(ctx, "admin", "system");
   const rows = await forOrg(ctx).select(workflowVersions, {
     where: eq(workflowVersions.id, versionId),
     limit: 1,

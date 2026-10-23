@@ -3,8 +3,9 @@
 // another attempt could help, and how the run ends if it was the last.
 import { isForeignKeyViolation } from "@/db/errors";
 import { SourceRequestError } from "@/features/connections/types";
+import { ModelCallError } from "@/features/models/types";
 import { NotFoundError, OutOfCreditsError } from "@/lib/errors";
-import { ModelCallError } from "../types";
+import { INTERNAL_ERROR_MESSAGE } from "../types";
 import { StepCheckError, type StepCheck } from "./checks";
 
 export const runStepErrorCodes = [
@@ -20,6 +21,8 @@ export const runStepErrorCodes = [
   "source_forbidden",
   // An executor's result didn't match its catalog action's output schema.
   "invalid_output",
+  // A custom action's app has no connection the run may call it through (ADR-0018).
+  "app_not_connected",
 ] as const;
 export type RunStepErrorCode = (typeof runStepErrorCodes)[number];
 
@@ -115,10 +118,20 @@ function describeBreak(error: unknown): Omit<Failure, "stepStatus"> {
   }
   return {
     code: "internal_error",
-    message: "The step failed unexpectedly.",
+    message: INTERNAL_ERROR_MESSAGE,
     retryable: true,
     runStatus: "failed",
   };
+}
+
+/**
+ * Records an unexpected error, a bug of ours, in the server log, where our team finds it: its
+ * code and the run's and step's IDs, never the error's message, which may quote an app's or a
+ * model's answer (invariant 8).
+ */
+export function logInternalError(ids: { runId: string; stepId?: string }): void {
+  const step = ids.stepId === undefined ? "" : ` step=${ids.stepId}`;
+  console.error(`internal_error run=${ids.runId}${step}`);
 }
 
 /** NotFoundError from `connections`, or a write that broke the run's foreign keys. */

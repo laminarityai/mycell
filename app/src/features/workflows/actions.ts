@@ -3,12 +3,10 @@
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { getCtx } from "@/features/orgs/server";
-import { actionError, ValidationError, type ActionResult } from "@/lib/errors";
-import { parseForm } from "@/lib/forms";
+import { runFormAction, runValueAction } from "@/features/orgs/form-action";
+import { SpecInvalidError, type ActionResult } from "@/lib/errors";
 import {
   archiveWorkflow,
-  checkWorkflowSpec,
   disable,
   enable,
   publishWorkflow,
@@ -17,7 +15,7 @@ import {
   switchWorkflowOff,
   switchWorkflowOn,
 } from "./server";
-import type { EnableResult, SpecCheckResult } from "./types";
+import type { EnableResult } from "./types";
 
 const saveInput = z.object({
   workflowId: z.string().min(1).optional(),
@@ -55,51 +53,31 @@ export async function saveWorkflowAction(
   _previous: ActionResult,
   form: FormData,
 ): Promise<ActionResult> {
-  const ctx = await getCtx();
-  let input: z.infer<typeof saveInput>;
-  try {
-    input = parseForm(saveInput, form);
-  } catch (error) {
-    return actionError(error);
-  }
-  let spec: unknown;
-  try {
-    spec = JSON.parse(input.spec);
-  } catch {
-    return {
-      error: "The spec isn't valid JSON.",
-      issues: [{ path: [], message: "Check for a missing comma, quote or bracket." }],
-    };
-  }
-  let id: string;
-  try {
-    ({ id } = await saveWorkflow(ctx, {
-      workflowId: input.workflowId,
-      name: input.name,
-      spec,
-      baseRevision: input.baseRevision,
-    }));
-  } catch (error) {
-    return actionError(error);
-  }
-  if (input.workflowId === undefined) redirect(`/workflows/${id}`);
-  refresh();
-  return {};
+  return runFormAction(
+    form,
+    saveInput,
+    async (ctx, { spec, ...input }) => {
+      const { id } = await saveWorkflow(ctx, { ...input, spec: readSpecText(spec) });
+      return { id, created: input.workflowId === undefined };
+    },
+    {
+      after: ({ id, created }) => {
+        if (created) redirect(`/workflows/${id}`);
+        refresh();
+      },
+    },
+  );
 }
 
-/**
- * The editor's live validation: every issue with the spec as it stands, as saving would find
- * them, or what the policy engine makes of it. Saves nothing.
- */
-export async function checkWorkflowSpecAction(spec: unknown): Promise<SpecCheckResult> {
-  const ctx = await getCtx();
+/** The spec field's JSON, or SpecInvalidError saying it isn't JSON. */
+function readSpecText(text: string): unknown {
   try {
-    const checked = await checkWorkflowSpec(ctx, spec);
-    return checked.ok
-      ? { issues: [], maxRisk: checked.maxRisk, inserted: checked.inserted }
-      : { issues: checked.issues, maxRisk: null, inserted: [] };
-  } catch (error) {
-    return { ...actionError(error), issues: [], maxRisk: null, inserted: [] };
+    return JSON.parse(text);
+  } catch {
+    throw new SpecInvalidError(
+      [{ path: [], message: "Check for a missing comma, quote or bracket." }],
+      "The spec isn't valid JSON.",
+    );
   }
 }
 
@@ -107,30 +85,24 @@ export async function switchWorkflowOnAction(
   _previous: ActionResult,
   form: FormData,
 ): Promise<ActionResult> {
-  const ctx = await getCtx();
-  try {
-    const { workflowId, connectionId } = parseForm(switchOnInput, form);
-    await switchWorkflowOn(ctx, workflowId, connectionId);
-  } catch (error) {
-    return actionError(error);
-  }
-  refresh();
-  return {};
+  return runFormAction(
+    form,
+    switchOnInput,
+    (ctx, { workflowId, connectionId }) => switchWorkflowOn(ctx, workflowId, connectionId),
+    { after: refresh },
+  );
 }
 
 export async function switchWorkflowOffAction(
   _previous: ActionResult,
   form: FormData,
 ): Promise<ActionResult> {
-  const ctx = await getCtx();
-  try {
-    const { workflowId } = parseForm(workflowForm, form);
-    await switchWorkflowOff(ctx, workflowId);
-  } catch (error) {
-    return actionError(error);
-  }
-  refresh();
-  return {};
+  return runFormAction(
+    form,
+    workflowForm,
+    (ctx, { workflowId }) => switchWorkflowOff(ctx, workflowId),
+    { after: refresh },
+  );
 }
 
 /** Archives a workflow: it stops everywhere and members no longer see it. */
@@ -138,14 +110,12 @@ export async function archiveWorkflowAction(
   _previous: ActionResult,
   form: FormData,
 ): Promise<ActionResult> {
-  const ctx = await getCtx();
-  try {
-    await archiveWorkflow(ctx, parseForm(workflowForm, form).workflowId);
-  } catch (error) {
-    return actionError(error);
-  }
-  refresh();
-  return {};
+  return runFormAction(
+    form,
+    workflowForm,
+    (ctx, { workflowId }) => archiveWorkflow(ctx, workflowId),
+    { after: refresh },
+  );
 }
 
 /** Restores an archived workflow, with everyone's switches as they were. */
@@ -153,14 +123,12 @@ export async function restoreWorkflowAction(
   _previous: ActionResult,
   form: FormData,
 ): Promise<ActionResult> {
-  const ctx = await getCtx();
-  try {
-    await restoreWorkflow(ctx, parseForm(workflowForm, form).workflowId);
-  } catch (error) {
-    return actionError(error);
-  }
-  refresh();
-  return {};
+  return runFormAction(
+    form,
+    workflowForm,
+    (ctx, { workflowId }) => restoreWorkflow(ctx, workflowId),
+    { after: refresh },
+  );
 }
 
 /**
@@ -170,36 +138,18 @@ export async function restoreWorkflowAction(
  */
 export async function enableWorkflowAction(
   workflowId: unknown,
-): Promise<EnableResult | { error: string }> {
-  const ctx = await getCtx();
-  let result: EnableResult;
-  try {
-    result = await enable(ctx, parseWorkflowId(workflowId));
-  } catch (error) {
-    return { error: actionError(error).error ?? "Couldn't switch it on. Try again." };
-  }
-  if ("enabled" in result) refresh();
-  return result;
+): Promise<EnableResult | ActionResult> {
+  return runValueAction(workflowId, workflowIdInput, enable, {
+    after: (result) => {
+      if ("enabled" in result) refresh();
+      return result;
+    },
+  });
 }
 
 /** Switches the caller's enablement of a workflow off. */
 export async function disableWorkflowAction(workflowId: unknown): Promise<ActionResult> {
-  const ctx = await getCtx();
-  try {
-    await disable(ctx, parseWorkflowId(workflowId));
-  } catch (error) {
-    return actionError(error);
-  }
-  refresh();
-  return {};
-}
-
-function parseWorkflowId(workflowId: unknown): string {
-  const parsed = workflowIdInput.safeParse(workflowId);
-  if (!parsed.success) {
-    throw new ValidationError("Something was missing. Reload the page and try again.");
-  }
-  return parsed.data;
+  return runValueAction(workflowId, workflowIdInput, disable, { after: refresh });
 }
 
 /**
@@ -211,13 +161,12 @@ export async function publishWorkflowAction(
   _previous: ActionResult,
   form: FormData,
 ): Promise<ActionResult> {
-  const ctx = await getCtx();
-  try {
-    const { workflowId, settings } = parseForm(publishForm, form, ["tag"]);
-    await publishWorkflow(ctx, workflowId, settings);
-  } catch (error) {
-    return actionError(error);
-  }
-  refresh();
-  return {};
+  return runFormAction(
+    form,
+    publishForm,
+    async (ctx, { workflowId, settings }) => {
+      await publishWorkflow(ctx, workflowId, settings);
+    },
+    { lists: ["tag"], after: refresh },
+  );
 }

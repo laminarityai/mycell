@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { resetDatabase } from "@/db/testing/reset";
-import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
+import { FUNDED_CREDITS, seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { disconnect } from "@/features/connections/server";
 import { GOOGLE_APP_SCOPES } from "@/features/connections/types";
 import { systemCtx } from "@/lib/ctx";
@@ -22,7 +22,7 @@ beforeEach(resetDatabase);
 
 // Org A's admin with their own Google connection and a published member workflow.
 async function memberWorkflow() {
-  const orgs = await seedTwoOrgs();
+  const orgs = await seedTwoOrgs({ credits: FUNDED_CREDITS });
   const admin = orgs.orgA.admin.ctx;
   const own = await connectMailbox(admin, orgs.orgA.admin.email);
   const { id } = await saveWorkflow(admin, { name: "Label", spec: labelSpec() });
@@ -32,7 +32,7 @@ async function memberWorkflow() {
 
 // Org A's admin with an org connection and a published org workflow.
 async function orgWorkflow() {
-  const orgs = await seedTwoOrgs();
+  const orgs = await seedTwoOrgs({ credits: FUNDED_CREDITS });
   const admin = orgs.orgA.admin.ctx;
   const support = await connectMailbox(admin, "support@org-a.test", [], "org");
   const { id } = await saveWorkflow(admin, {
@@ -58,6 +58,7 @@ describe("switching a member workflow on", () => {
       status: "on",
       pausedReason: null,
       pausedChange: null,
+      pauses: [],
       needsReconnect: false,
     });
     expect(workflow.switch?.since.getTime()).toBeGreaterThanOrEqual(before.getTime() - 1000);
@@ -138,6 +139,7 @@ describe("switching an org workflow on", () => {
       status: "on",
       pausedReason: null,
       pausedChange: null,
+      pauses: [],
       needsReconnect: false,
     });
     expect(await listSwitchedOn(systemCtx(orgA.id), support.id)).toEqual([

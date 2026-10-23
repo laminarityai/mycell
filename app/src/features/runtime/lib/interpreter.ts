@@ -2,21 +2,27 @@
 // RunStep under the step's own ID, so Inngest memoizes each and a retry never repeats a
 // finished one (ADR-0006). The step walker decides which step runs next. Each step checks
 // first that the run may go on, tries its work up to the retry policy's attempts, and records
-// itself; when the walk ends, the run's status is written once. A step hands on derived data
-// only; content stays inside the step that fetched it.
+// itself; when the walk ends, the run's status is written once. A step's output may carry
+// content to later steps through the step state, which Inngest stores encrypted; its record
+// keeps none (ADR-0021).
 import { and, eq } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { getConnection } from "@/features/connections/server";
+import { getActionSet } from "@/features/custom-actions/server";
+import type { ActionSet } from "@/features/policy/types";
 import { createReview } from "@/features/reviews/server";
 import type { Spec, Step } from "@/features/spec/types";
 import { getWorkflowVersion, listSwitchedOn } from "@/features/workflows/server";
-import type { Ctx } from "@/lib/ctx";
-import { ForbiddenError, NotFoundError } from "@/lib/errors";
-import type { RetryPolicy, RunOutcome, RunStep } from "../types";
+import { type Ctx, requireSystem } from "@/lib/ctx";
+import { NotFoundError } from "@/lib/errors";
+import type { RetryPolicy, RunErrorCode, RunOutcome } from "../types";
+import { runInline, type RunStep } from "@/lib/inngest";
 import { actionExecutors } from "./actions";
+import { holdCustomWrite } from "./custom-action";
+import { linkHeldSendReview } from "./held-sends";
 import { attemptStep } from "./executors";
-import { isConnectionGone, type Failure } from "./failures";
-import { defaultRetryPolicy, runInline, withRetries } from "./run-step";
+import { isConnectionGone, logInternalError, type Failure } from "./failures";
+import { defaultRetryPolicy, withRetries } from "./run-step";
 import { findRun, stepsOf } from "./runs";
 import { runs, runSteps } from "./schema";
 import type { StepContext, StepExecution } from "./step-context";
@@ -45,14 +51,15 @@ export async function executeRun(
   runStep: RunStep = runInline,
   retry: RetryPolicy = defaultRetryPolicy,
 ): Promise<RunOutcome> {
-  if (ctx.role !== "system") throw new ForbiddenError();
+  requireSystem(ctx);
   const run = await findRun(ctx, runId);
   if (run === undefined) return { status: "cancelled" };
   if (run.status !== "running") return { status: run.status };
   const { spec } = await getWorkflowVersion(ctx, run.workflowVersionId);
+  const actionSet = await getActionSet(ctx);
 
   const status = await walkSteps(spec, (step, place) =>
-    runStep(step.id, () => executeStep(ctx, run, step, { ...place, spec, retry })),
+    runStep(step.id, () => executeStep(ctx, run, step, { ...place, spec, actionSet, retry })),
   );
   // The one place a run's status is written, once the walk has ended. It's outside any step,
   // so it writes only a run still running: a retry that replays the walk changes nothing.
@@ -60,7 +67,7 @@ export async function executeRun(
   return { status };
 }
 
-type RunPlace = StepPlace & { spec: Spec; retry: RetryPolicy };
+type RunPlace = StepPlace & { spec: Spec; actionSet: ActionSet; retry: RetryPolicy };
 
 async function executeStep(ctx: Ctx, run: Run, step: Step, place: RunPlace): Promise<StepResult> {
   const startedAt = new Date();
@@ -71,21 +78,33 @@ async function executeStep(ctx: Ctx, run: Run, step: Step, place: RunPlace): Pro
     attribution: { workflowId: run.workflowId, runId: run.id },
     spec: place.spec,
     outputs: place.outputs,
+    actionSet: place.actionSet,
     actions: actionExecutors,
-    awaitReview: (item) =>
-      createReview(ctx, {
-        ...item,
+    holdSend: holdCustomWrite,
+    awaitReview: async ({ kind, itemRef, threadRef, ...item }) => {
+      const reviewId = await createReview(ctx, {
+        kind,
+        itemRef,
+        threadRef,
+        ...("reason" in item ? { reason: item.reason } : {}),
         runId: run.id,
-        connectionId: run.connectionId,
+        connectionId: "connectionId" in item ? item.connectionId : run.connectionId,
+        runConnectionId: run.connectionId,
         workflowId: run.workflowId,
         workflowVersionId: run.workflowVersionId,
         sourceRef: run.sourceRef,
-      }),
+      });
+      // A held send goes with its review.
+      if (kind === "held_send") await linkHeldSendReview(ctx, itemRef, reviewId);
+    },
   };
   const attempted = await withRetries(place.retry, () => attemptStep(step, context));
   try {
     if (!attempted.ok) {
       if (attempted.failure.runStatus === "cancelled") return CANCELLED;
+      if (attempted.failure.code === "internal_error") {
+        logInternalError({ runId: run.id, stepId: step.id });
+      }
       await recordStep(ctx, run, step, place.position, startedAt, attempted, {
         failure: attempted.failure,
       });
@@ -172,13 +191,32 @@ async function recordStep(
   await forOrg(ctx).insert(runSteps, values, { onConflictDoNothing: true });
 }
 
-/** Ends a run still running; one an earlier invocation already ended is left as it was. */
-async function finishRun(ctx: Ctx, runId: string, status: Ended): Promise<void> {
+/**
+ * The run job crashed past Inngest's retries (its onFailure handler): a run it left running
+ * ends `failed` with `internal_error`, and the log records it. A run that finished, or that a
+ * call before this one ended, is left as it was, and logged once.
+ */
+export async function failCrashedRun(ctx: Ctx, runId: string): Promise<void> {
+  requireSystem(ctx);
+  if (await finishRun(ctx, runId, "failed", "internal_error")) logInternalError({ runId });
+}
+
+/**
+ * Ends a run still running, with what its recorded steps cost; one an earlier invocation
+ * already ended is left as it was. Whether this call ended it.
+ */
+async function finishRun(
+  ctx: Ctx,
+  runId: string,
+  status: Ended,
+  errorCode: RunErrorCode | null = null,
+): Promise<boolean> {
   const steps = await stepsOf(ctx, [runId]);
   const costUsd = steps.reduce((sum, step) => sum + step.costUsd, 0);
-  await forOrg(ctx).update(
+  const ended = await forOrg(ctx).update(
     runs,
-    { status, costUsd, finishedAt: new Date() },
+    { status, errorCode, costUsd, finishedAt: new Date() },
     and(eq(runs.id, runId), eq(runs.status, "running")),
   );
+  return ended.length > 0;
 }

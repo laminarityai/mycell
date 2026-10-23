@@ -2,7 +2,7 @@
 // enablement and for the org switch, and restoring starts them again.
 import { beforeEach, describe, expect, it } from "vitest";
 import { resetDatabase } from "@/db/testing/reset";
-import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
+import { FUNDED_CREDITS, seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import {
   archiveWorkflow,
   enable,
@@ -36,7 +36,7 @@ const readSpec = (id: string, overrides: Record<string, unknown> = {}) =>
 // Org A: a member workflow the member and the admin have on, and an org workflow switched on
 // for the shared support inbox, both published to `sales`.
 async function switchedOnEverywhere() {
-  const { orgA } = await seedTwoOrgs();
+  const { orgA } = await seedTwoOrgs({ credits: FUNDED_CREDITS });
   const { admin, member } = orgA;
   const adminInbox = await connectGoogle(admin.ctx, admin.email);
   const memberInbox = await connectGoogle(member.ctx, member.email);

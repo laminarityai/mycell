@@ -1,6 +1,8 @@
 import type { Page } from "@playwright/test";
 import { seedGoogleConnection } from "@/db/testing/seed-connection";
 import type { FixtureUser } from "@/db/testing/two-org-fixture";
+import { grantCredits } from "@/features/credits/server";
+import { systemCtx } from "@/lib/ctx";
 import { googleScope } from "@/lib/google";
 import { expect, test } from "./fixtures";
 
@@ -206,4 +208,38 @@ test("archiving hides a workflow from members, and restoring brings back their s
   await signInAs(orgA.member);
   await page.goto("/workflows");
   await expect(card).toContainText("On for your Google account");
+});
+
+// A zero balance pauses every workflow; the member's switch stays on, and a grant lifts it.
+test.describe("out of credits", () => {
+  test.use({ credits: 0 });
+
+  test("a member's switched-on workflow says it's paused: out of credits, until credits are granted", async ({
+    page,
+    orgs: { orgA },
+    signInAs,
+  }) => {
+    await withGmail(orgA.admin, orgA.id);
+    await withGmail(orgA.member, orgA.id);
+    await signInAs(orgA.admin);
+    await makeTag(page, "sales", orgA.member);
+    await publishTo(page, "Pricing labels", LABELS, "sales");
+
+    await page.context().clearCookies();
+    await signInAs(orgA.member);
+    await page.goto("/workflows");
+    const card = page.getByRole("listitem").filter({ hasText: "Pricing labels" });
+    await card.getByRole("switch", { name: "Pricing labels" }).click();
+
+    await expect(card).toContainText("Paused: out of credits");
+    await expect(card.getByRole("group", { name: "Why it's paused" })).toContainText(
+      "Your switch stays on.",
+    );
+    await expect(card.getByRole("switch", { name: "Pricing labels" })).toBeChecked();
+
+    await grantCredits(systemCtx(orgA.id), 100);
+    await page.reload();
+    await expect(card).toContainText("On for your Google account");
+    await expect(card).not.toContainText("Paused");
+  });
 });

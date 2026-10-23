@@ -5,6 +5,8 @@ import { and, eq, gt, sql } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { listOrgIds } from "@/features/orgs/server";
 import { systemCtx } from "@/lib/ctx";
+import { NangoRequestError } from "@/lib/errors";
+import { DAY_MS } from "@/lib/time";
 import type { NangoConnectionRef, ReconciliationSummary } from "../types";
 import { ATTEMPT_TAGS } from "./connect";
 import {
@@ -14,9 +16,7 @@ import {
   nangoConnectionExists,
 } from "./nango";
 import { connectAttempts, connections } from "./schema";
-import { INTEGRATIONS } from "./google";
-
-const DAY_MS = 24 * 60 * 60 * 1000;
+import { integrationOf } from "./apps";
 
 // Deleting more Nango connections than this in one run, when they are also most of what Nango
 // lists, looks like Mycel misreading its own rows rather than real orphans: the run holds them.
@@ -72,6 +72,8 @@ export async function reconcileConnections(now = new Date()): Promise<Reconcilia
       await deleteNangoConnection(orphan.nangoConnectionId, orphan.integration);
       summary.deletedAtNango.push(withoutAttempt(orphan));
     } catch (error) {
+      // Nango failed: the next run tries again. Anything else is a bug, and stops this run.
+      if (!(error instanceof NangoRequestError)) throw error;
       console.warn(`Deleting orphan Nango connection ${orphan.nangoConnectionId} failed.`, error);
     }
   }
@@ -96,7 +98,7 @@ async function readOurs(since: Date) {
       ours.push({
         orgId,
         connectionId: row.id,
-        nango: { nangoConnectionId: row.nangoConnectionId, integration: INTEGRATIONS[row.source] },
+        nango: { nangoConnectionId: row.nangoConnectionId, integration: integrationOf(row.source) },
       });
     }
   }
@@ -109,6 +111,7 @@ async function goneAtNango(ref: NangoConnectionRef): Promise<boolean> {
   try {
     return !(await nangoConnectionExists(ref.nangoConnectionId, ref.integration));
   } catch (error) {
+    if (!(error instanceof NangoRequestError)) throw error;
     console.warn(`Couldn't confirm Nango connection ${ref.nangoConnectionId} is gone.`, error);
     return false;
   }

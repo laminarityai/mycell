@@ -1,11 +1,19 @@
 // The Workflows page as a member sees it: each workflow published to one of their tags, what it
-// does and needs, whether it's on, and the switch for one that runs on their own account.
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+// does and the apps it uses, whether it's on, and the switch for one that runs on their own
+// account.
+import { AppMarks } from "@/components/app-mark";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { ReconnectButton } from "@/features/connections/ui";
 import type { VisibleWorkflow, WorkflowSwitch } from "../types";
 import { EnableSwitch } from "./enable-switch";
-import { pausedChangeText, pausedText } from "./paused-text";
+import { PausedNotice, StateBadge } from "./pause-display";
 import { RiskBadge } from "./risk-badge";
 
 export function VisibleWorkflowsList({ workflows }: { workflows: VisibleWorkflow[] }) {
@@ -32,16 +40,13 @@ function VisibleWorkflowCard({ workflow }: { workflow: VisibleWorkflow }) {
     <Card aria-label={workflow.name}>
       <CardHeader>
         <CardTitle>{workflow.name}</CardTitle>
-        <CardDescription>
-          {workflow.credentials === "org"
-            ? "Runs on a shared inbox, managed by admins."
-            : "Runs on your own Google account."}
-        </CardDescription>
+        <CardDescription>{runsOn(workflow)}</CardDescription>
+        <CardAction>
+          <AppMarks apps={workflow.requiredApps} sharedInbox={workflow.sharedInbox} />
+        </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-3 text-sm">
         <dl className="grid grid-cols-[max-content_1fr] items-center gap-x-4 gap-y-2">
-          <dt className="text-muted-foreground">Needs</dt>
-          <dd>{workflow.requiredApps.join(", ")}</dd>
           <dt className="text-muted-foreground">Risk level</dt>
           <dd>
             <RiskBadge risk={workflow.maxRisk} />
@@ -67,41 +72,11 @@ function VisibleWorkflowCard({ workflow }: { workflow: VisibleWorkflow }) {
   );
 }
 
-/**
- * Whether the workflow is on for the member: their own enablement (on, or paused and why), the
- * org switch, or off.
- */
-function StateBadge({ current }: { current: WorkflowSwitch | null }) {
-  if (current === null) return <Badge variant="secondary">Off</Badge>;
-  if (current.status === "paused") {
-    return (
-      <Badge variant="secondary">
-        Paused: {pausedText(current.pausedReason, current.pausedChange)}
-      </Badge>
-    );
-  }
-  return (
-    <Badge variant="outline">
-      {current.kind === "member" ? "On for your Google account" : "On for the shared inbox"}
-    </Badge>
-  );
-}
-
-// What a paused enablement is waiting for the member's OK on: what the new version changed.
-function PausedNotice({ current }: { current: WorkflowSwitch | null }) {
-  if (current?.status !== "paused") return null;
-  const changes = pausedChangeText(current.pausedChange);
-  if (changes.length === 0) return null;
-  return (
-    <div role="group" aria-label="What changed" className="flex flex-col gap-1">
-      <p>An admin published a new version. It stays paused until you switch it on again:</p>
-      <ul className="list-disc pl-5">
-        {changes.map((change) => (
-          <li key={change}>{change}</li>
-        ))}
-      </ul>
-    </div>
-  );
+function runsOn(workflow: VisibleWorkflow): string {
+  if (workflow.credentials === "member") return "Runs on your own Google account.";
+  return workflow.sharedInbox === null
+    ? "Runs on a shared inbox, managed by admins."
+    : `Runs on the shared inbox ${workflow.sharedInbox}, managed by admins.`;
 }
 
 // Google stopped accepting the member's connection: their switch is kept, but nothing runs on

@@ -1,13 +1,13 @@
 // What a new version does to the enablements of the workflow it's published for (M5). They
 // follow it, unless it needs what the version before it didn't (the policy engine decides that
-// from the catalog): a higher max risk, a new app or a new scope. Then every one that's on
-// pauses until its member enables it again, so a member's mailbox never does something riskier,
-// or reads something new, without their say. An org switch always follows: the admin publishing
-// is the one who would switch it on again.
+// from the company's action set): a higher max risk, a new app or a new scope. Then every one
+// that's on pauses until its member enables it again, so a member's mailbox never does something
+// riskier, or reads something new, without their say. An org switch always follows: the admin
+// publishing is the one who would switch it on again.
 import { and, eq } from "drizzle-orm";
 import type { OrgScopedDb } from "@/db/for-org";
 import { requirementsGained } from "@/features/policy/engine";
-import type { Requirements, RequirementsGained } from "@/features/policy/types";
+import type { ActionSet, Requirements, RequirementsGained } from "@/features/policy/types";
 import type { Spec } from "@/features/spec/types";
 import type { PausedChange } from "../types";
 import { enablements } from "./schema";
@@ -20,19 +20,22 @@ import { enablements } from "./schema";
 export function gainedForEnablements(
   previous: (Requirements & { spec: Pick<Spec, "trigger"> }) | undefined,
   next: Requirements & { applied: Pick<Spec, "credentials" | "trigger"> },
+  actions: ActionSet,
 ): RequirementsGained | null {
   if (previous === undefined || next.applied.credentials !== "member") return null;
-  return gainedSince(previous, next);
+  return gainedSince(previous, next, actions);
 }
 
 /** What `next` needs that `previous` didn't, each read with its own trigger. */
 export function gainedSince(
   previous: Requirements & { spec: Pick<Spec, "trigger"> },
   next: Requirements & { applied: Pick<Spec, "trigger"> },
+  actions: ActionSet,
 ): RequirementsGained | null {
   return requirementsGained(
     { ...previous, trigger: previous.spec.trigger.type },
     { ...next, trigger: next.applied.trigger.type },
+    actions,
   );
 }
 

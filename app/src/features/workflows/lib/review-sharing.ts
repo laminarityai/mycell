@@ -2,7 +2,7 @@
 // sees its workflow through its tags (and every admin), it says which of those tags it's shared
 // with, and a review is handed on only if the workflow's latest version allows it.
 import { listMyTags, tagNamesById } from "@/features/tags/server";
-import type { Ctx } from "@/lib/ctx";
+import { type Ctx, isAdmin, isSystem } from "@/lib/ctx";
 import type { ReviewSharing } from "../types";
 import { latestVersions } from "./latest-versions";
 import { tagIdsOf } from "./visibility";
@@ -24,7 +24,7 @@ export async function reviewSharing(
     ctx,
     versions.map((version) => version.id),
   );
-  const everyone = ctx.role === "admin" || ctx.role === "system";
+  const everyone = isAdmin(ctx) || isSystem(ctx);
   // The tags the caller may name: every one of these versions' for an admin, else their own.
   const known = everyone
     ? await tagNamesById(ctx, [...tagIds.values()].flat())

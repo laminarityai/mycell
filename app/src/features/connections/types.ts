@@ -1,16 +1,53 @@
 import { z } from "zod";
-import { googleScope } from "@/lib/google";
+import { GOOGLE_APPS, googleScope } from "@/lib/google";
 
 /**
- * What a connection reaches. `google` is one Google account, with every Google app it allows
- * (ADR-0014). `gmail` and `drive` are the one-app connections made before that: nothing makes
- * them any more, and connecting Google for their account replaces them. Outlook joins after v1.
+ * The apps our team has registered with their vendor and in Mycel (ADR-0018), each described
+ * in `registered-apps.ts`. People connect them; the builder writes custom actions for them.
  */
-export const sourceSchema = z.enum(["google", "gmail", "drive"]);
+export const registeredAppIdSchema = z.enum(["google", "microsoft"]);
+export type RegisteredAppId = z.infer<typeof registeredAppIdSchema>;
+
+/**
+ * What a connection reaches: one account in a registered app. `google` is one Google account,
+ * with every Google app it allows (ADR-0014). `gmail` and `drive` are the one-app connections
+ * made before that: nothing makes them any more, and connecting Google for their account
+ * replaces them. Outlook joins after v1.
+ */
+export const sourceSchema = z.enum([...registeredAppIdSchema.options, "gmail", "drive"]);
 export type Source = z.infer<typeof sourceSchema>;
 
+/** The format of an app's published API description, as its vendor publishes it. */
+export type ApiDescriptionFormat = "openapi" | "google-discovery" | "graphql";
+
+/**
+ * A registered app: configuration our team writes when we register Mycel with the app's vendor
+ * and add its Nango integration (ADR-0018). Connecting, the proxy and custom actions read it.
+ */
+export type RegisteredApp = {
+  id: RegisteredAppId;
+  // How the UI names it.
+  name: string;
+  // Its Nango integration (provider config key).
+  integration: string;
+  // The API origins its calls may reach.
+  hosts: readonly string[];
+  // The permissions (OAuth scopes) its connections ask for.
+  scopes: readonly string[];
+  // An accounting or payments app: custom actions may only read in it (ADR-0018).
+  accountingOrPayments: boolean;
+  // Its terms ban keeping stored indexes of its data, so memory asks it live (ADR-0025).
+  bansStoredIndexes: boolean;
+  // Its published API description, copied into the repo: paths relative to `app/`, and where
+  // each was copied from.
+  apiDescription: {
+    format: ApiDescriptionFormat;
+    files: readonly { path: string; source: string }[];
+  };
+};
+
 /** The Google apps a Google connection asks for, in the order the UI lists them. */
-export const googleAppSchema = z.enum(["gmail", "drive", "sheets", "calendar", "docs", "tasks"]);
+export const googleAppSchema = z.enum(GOOGLE_APPS);
 export type GoogleApp = z.infer<typeof googleAppSchema>;
 
 /**
@@ -101,6 +138,28 @@ export type ConnectionDetails = {
   ingest: Partial<Record<IngestedApp, AppIngestState>>;
 };
 
+/**
+ * What a proxied call says about itself: a custom call's path `template`, which its errors name
+ * it by, since the rendered path and query hold input values (content, an address, a search).
+ */
+export type ProxyCall = { template?: string };
+
+/**
+ * One connection's source, with the caller's access to it checked once: the connection, and
+ * calls to its app through the Nango proxy, each answered as `proxyGet`, `proxyPost` and the
+ * rest answer theirs. A job step making several calls opens one, rather than having each call
+ * read the connection again. A connection gone at Nango is still NotFoundError on the call.
+ */
+export type SourceClient = {
+  connection: Omit<ConnectionDetails, "ingest">;
+  get<T>(path: string, schema: z.ZodType<T>, call?: ProxyCall): Promise<T | null>;
+  getText(path: string): Promise<string | null>;
+  post<T>(path: string, body: unknown, schema: z.ZodType<T>, call?: ProxyCall): Promise<T | null>;
+  put<T>(path: string, body: unknown, schema: z.ZodType<T>, call?: ProxyCall): Promise<T | null>;
+  patch<T>(path: string, body: unknown, schema: z.ZodType<T>, call?: ProxyCall): Promise<T | null>;
+  delete(path: string): Promise<boolean>;
+};
+
 /** A change to one app's ingest state; fields left out stay as they are. */
 export type IngestStateUpdate = {
   status?: IngestStatus;
@@ -169,15 +228,16 @@ export type ReconciliationSummary = {
 /**
  * The source refused a proxied request (anything but a 404 or 410, which read as "no such
  * item"). It carries the source's status and parsed error body, so a connector can tell a
- * refusal it recovers from (Drive's invalid page token) from a failure.
+ * refusal it recovers from (Drive's invalid page token) from a failure. Its message names the
+ * call by its path, or a custom call by its path template, never the input values in it.
  */
 export class SourceRequestError extends Error {
   constructor(
     readonly status: number,
     readonly body: unknown,
-    path: string,
+    call: string,
   ) {
-    super(`Nango proxy ${path} failed: ${String(status)}`);
+    super(`Nango proxy ${call} failed: ${String(status)}`);
     this.name = "SourceRequestError";
   }
 }

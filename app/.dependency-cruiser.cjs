@@ -79,12 +79,32 @@ module.exports = {
       to: { path: `^${R}/connections/delegation\\.ts$` },
     },
     {
+      name: "discovery-never-imports-memory",
+      comment:
+        "Memory imports discovery's neighbours and learns from discovery's Inngest events (discovery/item.stored); discovery tells memory about changes only through those events, never by importing it.",
+      severity: "error",
+      from: { path: `^${R}/discovery/` },
+      to: { path: `^${R}/memory/` },
+    },
+    {
       name: "no-circular",
       comment:
         "No dependency cycles. Scope to `^${R}/` if you want to allow cycles outside features.",
       severity: "error",
       from: {},
       to: { circular: true },
+    },
+  ],
+  required: [
+    {
+      name: "server-entry-files-import-server-only",
+      comment:
+        "A feature's server.ts and jobs.ts, the database client and the env module import `server-only`, so a client component that reaches one (and so the database or a secret) fails the build.",
+      severity: "error",
+      module: {
+        path: [`^${R}/[^/]+/(server|jobs)\\.ts$`, "^src/db/client\\.ts$", "^src/env\\.ts$"],
+      },
+      to: { path: "(^|/)node_modules/server-only/" },
     },
   ],
   options: {

@@ -2,28 +2,20 @@
 // try a spec on, their own and the org's, granted Gmail. Subjects and senders are fetched
 // through the proxy for display only, every time, and never stored (invariant 8).
 import { z } from "zod";
-import { buildableConnections, proxyGet } from "@/features/connections/server";
-import type { ConnectionSummary } from "@/features/connections/types";
+import { GMAIL, headerValue, messageListSchema, messageSchema } from "@/features/connections/gmail";
+import { buildableConnections, sourceClient } from "@/features/connections/server";
+import { type ConnectionSummary, SourceRequestError } from "@/features/connections/types";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
+import { NangoRequestError, NotFoundError } from "@/lib/errors";
 import type { RecentMessages } from "../types";
-import { GMAIL } from "./gmail";
 
 /** How many messages the picker offers, across all its connections. */
 export const RECENT_LIMIT = 20;
 
-const listSchema = z.object({
-  messages: z.array(z.object({ id: z.string() })).default([]),
-});
-const metadataSchema = z.object({
-  id: z.string(),
-  // Milliseconds since the epoch, as a string: when Gmail received it.
-  internalDate: z.string().default("0"),
-  payload: z
-    .object({
-      headers: z.array(z.object({ name: z.string(), value: z.string() })).default([]),
-    })
-    .default({ headers: [] }),
-});
+const metadataSchema = messageSchema
+  .pick({ id: true, payload: true })
+  // When Gmail received it; the picker sorts one that doesn't say last.
+  .extend({ internalDate: z.string().default("0") });
 
 const HEADERS = ["Subject", "From", "Date"];
 
@@ -47,8 +39,9 @@ export async function recentMessages(
     tryable.map(async (connection) => {
       try {
         return { connection, messages: await newest(ctx, connection.id), unavailable: false };
-      } catch {
-        // Gmail or Nango refused; the picker says so for this connection alone.
+      } catch (error) {
+        // The picker says so for this connection alone; anything else is for the error page.
+        if (!isUnavailable(error)) throw error;
         return { connection, messages: [], unavailable: true };
       }
     }),
@@ -89,16 +82,27 @@ export function newestAcross(
   });
 }
 
+// Why a connection's inbox couldn't be read, when the picker can say so: Gmail or Nango refused
+// (SourceRequestError), Nango didn't answer (NangoRequestError), or the connection is gone
+// (NotFoundError). A database error or a bug is none of these.
+function isUnavailable(error: unknown): boolean {
+  return (
+    error instanceof SourceRequestError ||
+    error instanceof NangoRequestError ||
+    error instanceof NotFoundError
+  );
+}
+
 async function newest(ctx: Ctx, connectionId: string): Promise<Recent[]> {
   const params = new URLSearchParams({ labelIds: "INBOX", maxResults: String(RECENT_LIMIT) });
-  const found = await proxyGet(ctx, connectionId, `${GMAIL}/messages?${params}`, listSchema);
+  // One connection read for the listing and every message on it.
+  const source = await sourceClient(ctx, connectionId);
+  const found = await source.get(`${GMAIL}/messages?${params}`, messageListSchema);
   const query = new URLSearchParams({ format: "metadata" });
   for (const name of HEADERS) query.append("metadataHeaders", name);
   const messages = await Promise.all(
     (found?.messages ?? []).map((ref) =>
-      proxyGet(
-        ctx,
-        connectionId,
+      source.get(
         `${GMAIL}/messages/${encodeURIComponent(ref.id)}?${query.toString()}`,
         metadataSchema,
       ),
@@ -107,9 +111,7 @@ async function newest(ctx: Ctx, connectionId: string): Promise<Recent[]> {
   return messages
     .flatMap((message) => {
       if (message === null) return [];
-      const header = (name: string) =>
-        message.payload.headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ??
-        "";
+      const header = (name: string) => headerValue(message.payload?.headers, name) ?? "";
       return [
         {
           sourceRef: message.id,

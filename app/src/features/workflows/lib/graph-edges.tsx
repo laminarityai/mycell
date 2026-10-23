@@ -11,6 +11,7 @@ import {
 } from "@xyflow/react";
 import { Plus } from "lucide-react";
 import { createContext, useContext, type CSSProperties } from "react";
+import { Button } from "@/components/ui/button";
 import type { InsertAt } from "@/features/spec/edit";
 import type { LayoutEdge } from "@/features/spec/layout";
 
@@ -60,11 +61,13 @@ export function AddEdge({
       <BaseEdge id={id} path={path} style={style} />
       {insert === null || open === null ? null : (
         <EdgeLabelRenderer>
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="icon-xs"
             aria-label={data?.label}
             title={data?.label}
-            className="nodrag nopan absolute flex size-5 items-center justify-center rounded-full border bg-background text-muted-foreground shadow-sm hover:border-primary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            className="nodrag nopan absolute size-5 rounded-full text-muted-foreground shadow-sm hover:border-primary"
             style={{
               transform: `translate(-50%, -50%) translate(${String(x)}px, ${String(y)}px)`,
               pointerEvents: "all",
@@ -75,7 +78,7 @@ export function AddEdge({
             }}
           >
             <Plus aria-hidden className="size-3" />
-          </button>
+          </Button>
         </EdgeLabelRenderer>
       )}
     </>

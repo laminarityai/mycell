@@ -9,7 +9,8 @@ import {
   type ValueCheck,
 } from "@/features/spec/conditions";
 import type { BranchStep, Check } from "@/features/spec/types";
-import type { BranchPath, CheckResult, Json } from "../types";
+import type { BranchPath, CheckResult } from "../types";
+import type { Json } from "@/lib/inngest";
 import { RunStepError } from "./failures";
 
 type Outputs = Readonly<Record<string, Json>>;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { DateTime } from "@/components/date-time";
 import { Button } from "@/components/ui/button";
 import { archiveWorkflowAction, restoreWorkflowAction } from "../actions";
 import { Problems } from "./workflow-editor";
@@ -28,9 +29,9 @@ export function ArchiveForm({
         <input type="hidden" name="workflowId" value={workflowId} />
         {compact ? null : (
           <p>
-            Archived since {archivedAt.toLocaleString("en-US")}. Members don&apos;t see it, and new
-            mail starts no runs. Restoring brings back everyone&apos;s switches as they were, on the
-            same version.
+            Archived since <DateTime value={archivedAt} />. Members don&apos;t see it, and new mail
+            starts no runs. Restoring brings back everyone&apos;s switches as they were, on the same
+            version.
           </p>
         )}
         <div>

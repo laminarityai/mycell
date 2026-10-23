@@ -72,6 +72,7 @@ export function Conversation({
         <BuilderChat
           conversationId={conversation.id}
           initialMessages={toUIMessages(conversation.messages)}
+          summarizedThrough={conversation.summarizedThrough}
           proposals={proposals}
           workflow={workflow}
           tryIt={tryIt}

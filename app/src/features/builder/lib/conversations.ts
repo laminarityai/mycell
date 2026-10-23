@@ -14,7 +14,10 @@ import type {
 } from "../types";
 import { builderConversations, builderMessages } from "./schema";
 
-type ConversationRow = typeof builderConversations.$inferSelect;
+export type ConversationRow = typeof builderConversations.$inferSelect;
+
+/** What the conversation list reads of a conversation: never its history summary. */
+const LISTED = ["id", "title", "startedBy", "workflowId", "updatedAt"] as const;
 
 /** A conversation's title: the start of its first message. */
 const TITLE_LENGTH = 80;
@@ -45,6 +48,7 @@ export async function listConversations(
 ): Promise<ConversationSummary[]> {
   requireAdmin(ctx);
   const rows = await forOrg(ctx).select(builderConversations, {
+    columns: [...LISTED],
     where:
       filter.workflowId === undefined
         ? undefined
@@ -61,7 +65,12 @@ export async function getConversation(
 ): Promise<BuilderConversation> {
   requireAdmin(ctx);
   const row = await findConversation(ctx, conversationId);
-  return { ...summary(row), createdAt: row.createdAt, messages: await messagesOf(ctx, row.id) };
+  return {
+    ...summary(row),
+    createdAt: row.createdAt,
+    messages: await messagesOf(ctx, row.id),
+    summarizedThrough: row.historySummarizedThrough,
+  };
 }
 
 /** The conversation's row; NotFoundError when it isn't the org's. */
@@ -116,7 +125,23 @@ export async function appendMessage(
   );
 }
 
-function summary(row: ConversationRow): ConversationSummary {
+/**
+ * Stores the conversation's history summary, which covers its messages up to and including
+ * `through`, over any earlier one.
+ */
+export async function storeHistorySummary(
+  ctx: Ctx,
+  conversationId: string,
+  history: { summary: string; through: string },
+): Promise<void> {
+  await forOrg(ctx).update(
+    builderConversations,
+    { historySummary: history.summary, historySummarizedThrough: history.through },
+    eq(builderConversations.id, conversationId),
+  );
+}
+
+function summary(row: Pick<ConversationRow, (typeof LISTED)[number]>): ConversationSummary {
   return {
     id: row.id,
     title: row.title,

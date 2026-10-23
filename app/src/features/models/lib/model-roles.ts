@@ -16,6 +16,18 @@ const DEFAULT_MODELS: Record<ModelRole, string> = {
   embed: env.MODEL_EMBED,
 };
 
+/**
+ * Each role's context window in tokens, from config: the most its model reads at once. Per role,
+ * not per model, like the credit estimates; an org's own model for a role keeps the role's figure.
+ */
+export const CONTEXT_WINDOWS: Record<ModelRole, number> = {
+  classify: env.CONTEXT_WINDOW_CLASSIFY,
+  fast: env.CONTEXT_WINDOW_FAST,
+  smart: env.CONTEXT_WINDOW_SMART,
+  judge: env.CONTEXT_WINDOW_JUDGE,
+  embed: env.CONTEXT_WINDOW_EMBED,
+};
+
 /** The gateway model ID the role names in the caller's org. */
 export async function resolveModel(ctx: Ctx, role: ModelRole): Promise<string> {
   const rows = await forOrg(ctx).select(modelRoles, { where: eq(modelRoles.role, role) });

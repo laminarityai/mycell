@@ -71,6 +71,7 @@ describe("comparing a new version's requirements with the previous one's", () =>
           requiredActions: [LABEL],
           trigger: "calendar.invite_received",
         },
+        catalogActionSet,
       ),
     ).toEqual({ newApps: ["Calendar"] });
   });

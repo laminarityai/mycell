@@ -4,8 +4,8 @@
 // (ADR-0001), nor is another org's.
 import type { Ctx } from "@/lib/ctx";
 import { NotFoundError, ValidationError } from "@/lib/errors";
+import { GOOGLE_APP_NAMES } from "@/lib/google";
 import type { ConnectionSummary, GoogleApp } from "../types";
-import { APP_NAMES } from "./source-names";
 import { listConnections } from "./list";
 
 /** Which connections: the caller's own for `member` credentials, the org's for `org`. */
@@ -71,7 +71,9 @@ export async function requireBuildableConnection(
     );
   }
   if (!connection.apps.includes(app)) {
-    throw new ValidationError(`${connection.accountEmail} wasn't granted ${APP_NAMES[app]}.`);
+    throw new ValidationError(
+      `${connection.accountEmail} wasn't granted ${GOOGLE_APP_NAMES[app]}.`,
+    );
   }
   return connection;
 }

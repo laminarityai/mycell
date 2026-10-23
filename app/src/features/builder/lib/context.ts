@@ -65,7 +65,10 @@ const actionCatalog: ContextProvider = (_ctx, _turn, { actions }) => {
 
 /** What can start a run, and what a run's steps may read from what started it. */
 const triggerSection: ContextProvider = () =>
-  Promise.resolve({ title: contextPrompts.triggersTitle(), content: joinPrompts(triggerLines(), "\n") });
+  Promise.resolve({
+    title: contextPrompts.triggersTitle(),
+    content: joinPrompts(triggerLines(), "\n"),
+  });
 
 /** The checks a value of the type allows, as a check names them. */
 const checksFor = (type: ValueType) => operatorsFor(type).join(", ");

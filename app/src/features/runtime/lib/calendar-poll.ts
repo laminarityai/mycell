@@ -15,12 +15,11 @@ import { isForeignKeyViolation } from "@/db/errors";
 import { forOrg } from "@/db/for-org";
 import { getConnection } from "@/features/connections/server";
 import { listStartable } from "@/features/workflows/server";
-import type { Ctx } from "@/lib/ctx";
-import { ForbiddenError, NotFoundError } from "@/lib/errors";
-import type { Json, RunStep } from "../types";
+import { type Ctx, requireSystem } from "@/lib/ctx";
+import { InvariantError, NotFoundError } from "@/lib/errors";
+import { type Json, type RunStep, runInline } from "@/lib/inngest";
 import { listCalendarPage, type CalendarPage } from "./calendar";
 import { sendInvitesReceived } from "./events";
-import { runInline } from "./run-step";
 import { triggerCursors } from "./schema";
 
 const TRIGGER = "calendar.invite_received";
@@ -46,7 +45,7 @@ export async function pollCalendar(
   connectionId: string,
   runStep: RunStep = runInline,
 ): Promise<CalendarPollOutcome> {
-  if (ctx.role !== "system") throw new ForbiddenError();
+  requireSystem(ctx);
   const start = await runStep("calendar-start", () => untilGone(() => startOf(ctx, connectionId)));
   if (start.gone) return { outcome: "gone" };
   if (start.since === null) return { outcome: "skipped" };
@@ -58,7 +57,7 @@ export async function pollCalendar(
   const full = listing === null || listing.expired;
   if (full) listing = await listAll(ctx, connectionId, runStep);
   if (listing === null || listing.gone) return { outcome: "gone" };
-  if (listing.expired) throw new Error("Calendar refused a full sync's page token");
+  if (listing.expired) throw new InvariantError("Calendar refused a full sync's page token");
 
   const { syncToken } = listing;
   const stored = await runStep("calendar-store", () =>
@@ -147,7 +146,8 @@ async function listAll(
     if (page.nextSyncToken !== null) {
       return { gone: false, expired: false, syncToken: page.nextSyncToken, invites };
     }
-    if (page.nextPageToken === null) throw new Error("Calendar ended a listing with no token");
+    if (page.nextPageToken === null)
+      throw new InvariantError("Calendar ended a listing with no token");
     pageToken = page.nextPageToken;
   }
 }

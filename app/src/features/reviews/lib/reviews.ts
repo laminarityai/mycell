@@ -149,6 +149,7 @@ export function itemOf(row: ReviewRow): PendingItem {
     threadRef: row.threadRef,
     sourceRef: row.sourceRef,
     createdAt: row.createdAt,
+    details: row.details,
   };
 }
 

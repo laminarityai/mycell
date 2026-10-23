@@ -17,6 +17,7 @@ import {
   HeldSendActions,
   ReviewActions,
 } from "./lib/review-actions";
+import { SuggestedEditsReview } from "./lib/suggested-edits-review";
 import type {
   HandOff,
   OpenedReview,
@@ -33,6 +34,7 @@ const KIND_LABELS: Record<ReviewKind, string> = {
   approval: "Draft reply",
   escalation: "Escalated message",
   held_send: "Held send",
+  suggested_edits: "Suggested doc edits",
 };
 
 const ENDINGS: Record<Exclude<ReviewStatus, "waiting">, string> = {
@@ -53,6 +55,14 @@ const HELD_SEND_ENDINGS: Partial<Record<ReviewStatus, string>> = {
   unconfirmed: "It was approved, but its app didn't confirm it was sent, so it may have gone",
 };
 
+// Suggested edits' own words: approving and declining accept and reject them in the doc.
+const SUGGESTED_EDITS_ENDINGS: Partial<Record<ReviewStatus, string>> = {
+  approved: "Its suggestions were accepted",
+  declined: "Its suggestions were rejected",
+  done_in_app: "Its suggestions were accepted or rejected in Docs",
+  gone: "Its doc is no longer there",
+};
+
 /**
  * How a review ended, and by whom when someone in Mycel ended it. An escalation ends done by a
  * person in Mycel, or by a reply in Gmail (no one named), or with its message gone.
@@ -62,6 +72,9 @@ function ending(review: Review): string {
   const by = review.endedBy === null ? "" : ` by ${review.endedBy}`;
   if (review.kind === "held_send") {
     return `${HELD_SEND_ENDINGS[review.status] ?? ENDINGS[review.status]}${by}.`;
+  }
+  if (review.kind === "suggested_edits") {
+    return `${SUGGESTED_EDITS_ENDINGS[review.status] ?? ENDINGS[review.status]}${by}.`;
   }
   if (review.kind !== "escalation") return `${ENDINGS[review.status]}${by}.`;
   if (review.status === "gone") return "The message is no longer in Gmail.";
@@ -186,7 +199,8 @@ export function ReviewsList({
 /**
  * An open review: the message and the drafted reply, fetched live, with approve, edit and
  * decline; the escalated message, why it was handed over and a link to it in Gmail, with done;
- * or a held send's request and the fields it sends, with approve, edit and decline. While it waits, who it was handed to, and a colleague to hand it to when the caller
+ * a held send's request and the fields it sends, with approve, edit and decline; or the edits a
+ * step suggested in a Doc, with its link, approve and decline. While it waits, who it was handed to, and a colleague to hand it to when the caller
  * may. Once it has ended, how it ended and by whom.
  */
 export function ReviewDetail({
@@ -221,6 +235,8 @@ export function ReviewDetail({
 }
 
 function WaitingItem({ review, view }: { review: Review; view: ItemView }) {
+  if (view.kind === "suggested_edits")
+    return <SuggestedEditsReview reviewId={review.id} view={view} />;
   if (view.kind === "held_send") {
     return (
       <>

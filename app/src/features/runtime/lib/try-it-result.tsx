@@ -1,6 +1,7 @@
 // A "Try it" result: each step with what it did, read or would have written, and the total
 // cost. The draft's text and the rows read are shown here and nowhere else (invariant 8).
 import { Badge } from "@/components/ui/badge";
+import { documentLink } from "@/features/connections/docs";
 import type { BranchPath, DryRunEffect, DryRunResult, DryRunStep } from "../types";
 
 const ENDINGS: Record<DryRunResult["ended"], string> = {
@@ -146,6 +147,30 @@ function Effect({ effect }: { effect: DryRunEffect }) {
             {`${effect.method} ${effect.url}`}
             {effect.body === null ? "" : `\n\n${JSON.stringify(effect.body, null, 2)}`}
           </pre>
+        </div>
+      );
+    case "suggestions":
+      return (
+        <div className="flex flex-col gap-1">
+          <p className="text-muted-foreground">
+            Would suggest these edits in{" "}
+            <a
+              href={documentLink(effect.documentId)}
+              target="_blank"
+              rel="noreferrer"
+              className="underline underline-offset-4"
+            >
+              {effect.title === "" ? "the doc" : effect.title}
+            </a>
+            , waiting as suggestions until a person reviews them:
+          </p>
+          <ul aria-label="Suggested edits" className="list-disc pl-5 font-mono text-xs">
+            {effect.requests.map((request, index) => (
+              <li key={index} className="break-all">
+                {request}
+              </li>
+            ))}
+          </ul>
         </div>
       );
     case "label":

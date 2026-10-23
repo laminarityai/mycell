@@ -248,6 +248,17 @@ export type RunFilterOptions = {
 export type RunPage = { runs: RunListItem[]; newer: string | null; older: string | null };
 
 /**
+ * What a waiting item's approval needs that its app doesn't show Mycel, kept on its review: for
+ * edits suggested in a Doc, the IDs of the suggestions the step made, which tell them from the
+ * person's own (ADR-0017). IDs only, never the suggested text (invariant 8).
+ */
+export const pendingDetailsSchema = z.object({
+  kind: z.literal("suggested_edits"),
+  suggestionIds: z.array(z.string().min(1)).min(1),
+});
+export type PendingDetails = z.infer<typeof pendingDetailsSchema>;
+
+/**
  * What one step of a dry run read or would have written, shown to the admin who tried it and
  * never stored (invariant 8): the rows a read-range read, the draft it would have made, the
  * label or row it would have added, the review it would have waited for.
@@ -257,6 +268,8 @@ export type DryRunEffect =
   | { kind: "draft"; to: string; subject: string; text: string }
   | { kind: "label"; label: string }
   | { kind: "row"; range: string; values: (string | number | boolean | null)[] }
+  /** Edits a step would suggest in a Doc: its title, and each request's kind and text. */
+  | { kind: "suggestions"; documentId: string; title: string; requests: string[] }
   | { kind: "review"; channel: string }
   /** A custom write's request, exactly as it would be sent once approved (nothing is sent). */
   | {

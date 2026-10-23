@@ -1,6 +1,7 @@
 // Every catalog action's executor, typed so that a catalog action without one fails the
 // typecheck. The tool step checks each one's input and output against the catalog's schemas.
 // Actions not built yet are pending, with the ticket that builds them.
+import { readDocument } from "./docs";
 import { RunStepError } from "./failures";
 import { messageWithText, threadRef } from "./gmail";
 import { gmailDraftAdapter } from "./gmail-draft-adapter";
@@ -8,6 +9,8 @@ import { addLabel } from "./gmail-labels";
 import { lookUp, type LookupInput } from "./memory-lookup";
 import { appendRow, readRange } from "./sheets";
 import type { ActionExecutors } from "./step-context";
+import type { SuggestEditsInput } from "./suggested-edits";
+import { suggestedEditsAdapter } from "./suggested-edits-adapter";
 
 export const actionExecutors: ActionExecutors = {
   "google-mail.read-message": {
@@ -43,8 +46,20 @@ export const actionExecutors: ActionExecutors = {
   // Hands on the range's counts; a draft step that names it re-reads the values.
   "google-sheet.read-range": { status: "ready", run: readRange },
   "google-sheet.append-row": { status: "ready", run: appendRow },
-  "google-docs.read-document": { status: "pending", ticket: "#71" },
-  "google-docs.suggest-edits": { status: "pending", ticket: "#71" },
+  // Its title and text pass to later steps, never into run records (ADR-0021).
+  "google-docs.read-document": { status: "ready", run: readDocument },
+  // The edits wait in the doc as suggestions: Docs' pending form, which its adapter prepares.
+  // It hands on the document's ID and the suggestions' IDs, for the approval.
+  "google-docs.suggest-edits": {
+    status: "ready",
+    run: async (ctx, connectionId, input: SuggestEditsInput, marker) => {
+      const prepared = await suggestedEditsAdapter.prepare(ctx, { connectionId, marker, input });
+      return {
+        documentId: prepared.threadRef,
+        suggestionIds: prepared.details?.suggestionIds ?? [],
+      };
+    },
+  },
   // Reads as the run: in its member's view, or company-wide only (memory-lookup.ts).
   "memory.lookup": {
     status: "ready",

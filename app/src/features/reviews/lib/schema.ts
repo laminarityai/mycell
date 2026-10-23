@@ -4,6 +4,8 @@
 import "server-only";
 import { foreignKey, index, pgTable, text, timestamp, unique } from "drizzle-orm/pg-core";
 import { member } from "@/db/auth-schema";
+import { zodJsonb } from "@/db/columns";
+import { pendingDetailsSchema } from "@/features/runtime/types";
 import { connections } from "@/features/connections/lib/schema";
 import { reviewKinds, reviewStatuses } from "../types";
 
@@ -35,6 +37,9 @@ export const reviews = pgTable(
     // An escalation's reason, from the escalate step in the spec (never the message); null for
     // an approval.
     reason: text("reason"),
+    // What approving the item needs that its app doesn't show Mycel: the IDs of the suggestions
+    // a step made in a Doc. IDs only, never the suggested text; null for every other kind.
+    details: zodJsonb("details", pendingDetailsSchema),
     // The colleague the review was last handed to, who may then see and act on it, and who
     // handed it to them; null until it's handed on. Plain user IDs, like ended_by_user_id: a
     // colleague leaving the org doesn't take the review with them.

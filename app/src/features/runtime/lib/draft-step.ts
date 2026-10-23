@@ -106,10 +106,44 @@ function isCustomWrite(step: Step, context: StepContext): boolean {
 
 const draftOutput = z.object({ draftId: z.string(), threadId: z.string() });
 const heldSendOutput = z.object({ heldSendId: z.string(), connectionId: z.string() });
+const suggestedOutput = z.object({ documentId: z.string(), suggestionIds: z.array(z.string()) });
+
+// Whether the step is a tool step suggesting edits in a Doc, whose output is its suggestions.
+function suggestsEdits(step: Step, context: StepContext): boolean {
+  if (step.type !== "tool") return false;
+  const action = context.actionSet.find(step.action);
+  return action?.kind === "catalog" && action.channel === "suggested_edits";
+}
+
+/**
+ * Records a review of each suggest-edits step above it that suggested anything, keeping the
+ * suggestions' IDs. The run records only the documents' and suggestions' IDs.
+ */
+async function awaitSuggestions(steps: readonly Step[], context: StepContext) {
+  const suggested = steps.flatMap((earlier) => {
+    if (!suggestsEdits(earlier, context)) return [];
+    const parsed = suggestedOutput.safeParse(context.outputs[earlier.id]);
+    return parsed.success ? [parsed.data] : [];
+  });
+  const waiting = suggested.flatMap(({ documentId, suggestionIds }) => {
+    const first = suggestionIds.at(0);
+    return first === undefined ? [] : [{ documentId, first, suggestionIds }];
+  });
+  for (const { documentId, first, suggestionIds } of waiting) {
+    await context.awaitReview({
+      kind: "suggested_edits",
+      itemRef: first,
+      threadRef: documentId,
+      details: { kind: "suggested_edits", suggestionIds },
+    });
+  }
+  return waiting.map(({ documentId, suggestionIds }) => ({ documentId, suggestionIds }));
+}
 
 /**
  * Records that what its channel reviews above it on its own path awaits a person: every Gmail
- * draft (`gmail_drafts`) or every held send of a custom write (`held_send`), those an approval
+ * draft (`gmail_drafts`), every held send of a custom write (`held_send`) or the edits each tool
+ * step suggested in a Doc (`suggested_edits`), those an approval
  * above it recorded too, as a v1 approval recorded every draft before it. Each gets a review on
  * its owner's Reviews page (one per item, however often the step or the run is retried). It
  * holds nothing back: a run never sends either, so the steps after it still run.
@@ -120,6 +154,11 @@ export async function approvalStep(
 ): Promise<StepExecution> {
   const stepsAboveIt = stepsAbove(context.spec, step.id);
   const above = stepsAboveIt.map((earlier) => context.outputs[earlier.id]);
+  if (step.channel === "suggested_edits") {
+    const suggested = await awaitSuggestions(stepsAboveIt, context);
+    const record = { awaiting: "human", channel: step.channel, suggested };
+    return { next: "continue", output: record, record };
+  }
   if (step.channel === "held_send") {
     // Only a custom write's step holds a send: a read's result, filled from the app's answer,
     // may look like one.

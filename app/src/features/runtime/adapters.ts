@@ -5,6 +5,7 @@
 export { escalationAdapter } from "./lib/escalation-adapter";
 export { gmailDraftAdapter } from "./lib/gmail-draft-adapter";
 export { heldSendAdapter } from "./lib/held-send-adapter";
+export { suggestedEditsAdapter } from "./lib/suggested-edits-adapter";
 export {
   type HeldSendField,
   type ItemState,
@@ -14,4 +15,5 @@ export {
   type PendingItem,
   type PreparedItem,
   type ReviewEdits,
+  type SuggestedEditsView,
 } from "./lib/pending-forms";

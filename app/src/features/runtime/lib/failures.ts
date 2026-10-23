@@ -23,6 +23,8 @@ export const runStepErrorCodes = [
   "invalid_output",
   // A custom action's app has no connection the run may call it through (ADR-0018).
   "app_not_connected",
+  // Docs saved none of a step's suggestions, so its edits may have landed directly (ADR-0017).
+  "suggestions_not_saved",
 ] as const;
 export type RunStepErrorCode = (typeof runStepErrorCodes)[number];
 

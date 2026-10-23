@@ -16,7 +16,7 @@ export const askTools = {
     inputSchema: z.object({ name: z.string().min(1) }),
     execute(_ctx: Ctx, { name }: { name: string }, turn: AskTurn) {
       turn.lookedUp.push(name);
-      if (name === "Nobody") return Promise.reject(new NotFoundError("Nobody goes by that name."));
+      if (name === "Nobody") return Promise.reject(new NotFoundError("person"));
       return Promise.resolve({ objectId: `object-${name}`, said: `${name} fetched-words` });
     },
     // The conversation keeps only the ID, never what was fetched.

@@ -31,7 +31,7 @@ describe("a second chat's turn", () => {
     const request = fakeAiGateway.requests("language").at(0);
     expect([request?.modelId, request?.streaming]).toEqual(["test/smart-default", true]);
     expect(JSON.stringify(request?.body)).toContain("Answer from your tools only.");
-    expect((await listLedger(member)).at(0)).toMatchObject({
+    expect((await listLedger(orgA.admin.ctx)).at(0)).toMatchObject({
       kind: "usage",
       role: "smart",
       costUsd: 0.002,
@@ -85,7 +85,7 @@ describe("a second chat's turn", () => {
 
     const turn = await readTurn(await askTurn(orgA.member.ctx, "Look around", stored));
 
-    const errors = ["Nobody goes by that name.", "That tool call failed."];
+    const errors = ["That person doesn't exist.", "That tool call failed."];
     expect(turn.toolErrors.toSorted()).toEqual(errors.toSorted());
     // The page gets only these, never the SDK's error, which quotes the model's input.
     expect(turn.raw).not.toContain("Invalid input");
@@ -136,7 +136,10 @@ describe("a second chat's turn", () => {
       text: "Ask Mycel stopped before it finished.",
     });
     expect(await getBalance(member)).toBe(990);
-    expect((await listLedger(member)).at(0)).toMatchObject({ outcome: "failed", costUsd: 0.01 });
+    expect((await listLedger(orgA.admin.ctx)).at(0)).toMatchObject({
+      outcome: "failed",
+      costUsd: 0.01,
+    });
   });
 
   it("calls no model out of credits, and stores and streams a notice saying why", async () => {
@@ -150,6 +153,6 @@ describe("a second chat's turn", () => {
     const outOfCredits = { kind: "out_of_credits", text: "Your organization is out of credits." };
     expect(turn.notices).toEqual([outOfCredits]);
     expect(stored.map((message) => message.parts)).toEqual([[{ type: "notice", ...outOfCredits }]]);
-    expect(await listLedger(member)).toEqual([]);
+    expect(await listLedger(orgA.admin.ctx)).toEqual([]);
   });
 });

@@ -8,9 +8,7 @@
 // (https://developers.google.com/workspace/calendar/api/guides/sync).
 import { randomBytes } from "node:crypto";
 import { HttpResponse } from "msw";
-import { CalendarWrites, calendarWrite } from "./fake-calendar-writes";
 import { parseFields, project } from "./fake-drive-fields";
-import type { WriteMethod } from "./fake-proxied-sources";
 
 /** An invite to seed: an event someone else organised, with the account among its guests. */
 export type FakeInviteInput = {
@@ -57,6 +55,35 @@ export type CalendarEventResource = {
   hangoutLink?: string;
   conferenceData?: Record<string, unknown>;
 };
+
+/** One write the calendar made. */
+export type CalendarWrite = {
+  call: "insert" | "patch" | "update" | "delete";
+  eventId: string;
+  /** The request's `sendUpdates`, or null when it sent none (Google then emails nobody). */
+  sendUpdates: string | null;
+  /** The guests Google emailed about this write: an invitation, an update or a cancellation. */
+  notified: string[];
+  /** The request's `conferenceDataVersion`, or null. */
+  conferenceDataVersion: string | null;
+};
+
+/** The calendar's log of writes, and the answers a test asked it to lose. */
+export class CalendarWrites {
+  readonly log: CalendarWrite[] = [];
+  private answersToLose = 0;
+
+  /** The next write is made, but answered 503, as when its answer is lost on the way back. */
+  loseNextAnswer(): void {
+    this.answersToLose += 1;
+  }
+
+  takeLostAnswer(): boolean {
+    if (this.answersToLose === 0) return false;
+    this.answersToLose -= 1;
+    return true;
+  }
+}
 
 // Query parameters a sync token can't be combined with, as Google lists them.
 const NOT_WITH_SYNC_TOKEN = [
@@ -334,21 +361,7 @@ export function eventId(): string {
   return [...randomBytes(20)].map((byte) => digits[byte % 32]).join("");
 }
 
-const PRIMARY_EVENTS = "/calendar/v3/calendars/primary/events";
-
-// A write to the Calendar API behind the proxy, made on the connection's calendar.
-export function calendarWriteResponse(
-  calendar: FakeCalendar,
-  path: string,
-  params: URLSearchParams,
-  body: unknown,
-  method: WriteMethod,
-): Response {
-  if (!path.startsWith(PRIMARY_EVENTS)) throw new Error(`The fake Calendar doesn't serve ${path}`);
-  const rest = path.slice(PRIMARY_EVENTS.length);
-  const id = rest === "" ? undefined : decodeURIComponent(rest.slice(1));
-  return calendarWrite(calendar, { id, params, body, method });
-}
+export const PRIMARY_EVENTS = "/calendar/v3/calendars/primary/events";
 
 // The Calendar API behind the proxy, answering from the connection's calendar.
 export function calendarResponse(calendar: FakeCalendar, path: string, params: URLSearchParams) {

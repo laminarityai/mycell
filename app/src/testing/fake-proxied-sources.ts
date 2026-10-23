@@ -6,7 +6,8 @@
 import { HttpResponse } from "msw";
 import { REGISTERED_APPS } from "@/features/connections/registered-apps";
 import { GOOGLE_APP_SCOPES } from "@/features/connections/types";
-import { calendarError, calendarResponse, calendarWriteResponse } from "./fake-calendar";
+import { calendarError, calendarResponse } from "./fake-calendar";
+import { calendarWriteResponse } from "./fake-calendar-writes";
 import { driveError, driveResponse } from "./fake-drive";
 import { gmailError, gmailResponse, gmailWrite } from "./fake-gmail";
 import type { FakeConnection } from "./fake-nango";

@@ -14,40 +14,13 @@ import { z } from "zod";
 import {
   calendarError,
   eventId as newEventId,
+  PRIMARY_EVENTS,
   type Attendee,
   type CalendarEventResource,
+  type CalendarWrite,
   type FakeCalendar,
 } from "./fake-calendar";
 import type { WriteMethod } from "./fake-proxied-sources";
-
-/** One write the calendar made. */
-export type CalendarWrite = {
-  call: "insert" | "patch" | "update" | "delete";
-  eventId: string;
-  /** The request's `sendUpdates`, or null when it sent none (Google then emails nobody). */
-  sendUpdates: string | null;
-  /** The guests Google emailed about this write: an invitation, an update or a cancellation. */
-  notified: string[];
-  /** The request's `conferenceDataVersion`, or null. */
-  conferenceDataVersion: string | null;
-};
-
-/** The calendar's log of writes, and the answers a test asked it to lose. */
-export class CalendarWrites {
-  readonly log: CalendarWrite[] = [];
-  private answersToLose = 0;
-
-  /** The next write is made, but answered 503, as when its answer is lost on the way back. */
-  loseNextAnswer(): void {
-    this.answersToLose += 1;
-  }
-
-  takeLostAnswer(): boolean {
-    if (this.answersToLose === 0) return false;
-    this.answersToLose -= 1;
-    return true;
-  }
-}
 
 const ID = /^[a-v0-9]{5,1024}$/;
 const time = z.object({ dateTime: z.string(), timeZone: z.string().optional() });
@@ -88,8 +61,22 @@ type Request = {
   method: WriteMethod;
 };
 
+// A write to the Calendar API behind the proxy, made on the connection's calendar.
+export function calendarWriteResponse(
+  calendar: FakeCalendar,
+  path: string,
+  params: URLSearchParams,
+  body: unknown,
+  method: WriteMethod,
+): Response {
+  if (!path.startsWith(PRIMARY_EVENTS)) throw new Error(`The fake Calendar doesn't serve ${path}`);
+  const rest = path.slice(PRIMARY_EVENTS.length);
+  const id = rest === "" ? undefined : decodeURIComponent(rest.slice(1));
+  return calendarWrite(calendar, { id, params, body, method });
+}
+
 /** A write to the primary calendar's events, answered as Google answers it. */
-export function calendarWrite(calendar: FakeCalendar, request: Request): Response {
+function calendarWrite(calendar: FakeCalendar, request: Request): Response {
   const answer = write(calendar, request);
   if (answer.ok && calendar.writes.takeLostAnswer()) {
     return calendarError(503, "backendError", "Backend Error");

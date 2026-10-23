@@ -4,6 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { findStep } from "@/features/spec/tree";
 import { googleScope } from "@/lib/google";
+import { appsUsed } from "../action-set";
 import { actionsAllowedBy, catalog, catalogActionSet } from "../catalog";
 import { applyPolicy } from "../engine";
 import { specWithSteps } from "./specs";
@@ -43,6 +44,10 @@ describe("the Calendar actions", () => {
     ]);
     expect(names([googleScope("calendar.readonly")])).toEqual(["google-calendar.read-event"]);
     expect(names([googleScope("gmail.modify")])).toEqual([]);
+    expect(appsUsed(["google-calendar.create-event"], catalogActionSet)).toEqual([
+      "Gmail",
+      "Calendar",
+    ]);
   });
 });
 

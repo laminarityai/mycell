@@ -3,8 +3,8 @@
 // action in a registered app other than Google, a connection to that app (ADR-0018). All come
 // from the org's action set, never from a model.
 import { googleAppOf, REGISTERED_APPS } from "@/features/connections/registered-apps";
+import { GOOGLE_APP_NAMES } from "@/lib/google";
 import {
-  GOOGLE_APP_NAMES,
   GOOGLE_APP_SCOPES,
   registeredAppIdSchema,
   type ConnectionSummary,

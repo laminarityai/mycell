@@ -1,16 +1,16 @@
 // A streamed model call's metering, for callers that run `streamText` themselves (the builder
 // chat's turns). Opening one resolves the role to the org's model (invariant 6) and passes the
-// credit check before anything is sent; the caller meters each model step as it ends and
-// finishes once, which records exactly one usage entry with the steps' summed gateway cost,
-// however the stream ended (invariant 7).
-import { createGateway } from "ai";
-import { checkCredits, recordUsage } from "@/features/credits/server";
+// credit check before anything is sent; the caller meters each model step as it ends, and the
+// error of a step that fails, and finishes once, which records exactly one usage entry with the
+// steps' summed gateway cost, however the stream ended (invariant 7). A failed step's cost is
+// looked up later under the generation ID its error carries (`failed-call-costs.ts`).
+import { checkCredits } from "@/features/credits/server";
 import type { ModelRole } from "@/features/spec/types";
 import type { Ctx } from "@/lib/ctx";
-import { env } from "@/env";
 import type { CallAttribution, MeteredStream } from "../types";
 import { CREDIT_ESTIMATES } from "./call-model";
-import { meteringOf } from "./gateway";
+import { recordCallUsage } from "./failed-call-costs";
+import { gatewayProvider, generationIdOf, meteringOf } from "./gateway";
 import { resolveModel } from "./model-roles";
 
 /** Throws OutOfCreditsError, before any request, when the balance can't cover the role. */
@@ -26,10 +26,7 @@ export async function openMeteredStream(
 
   // A plain gateway provider: the metering fetch of `meteredGateway` reads JSON bodies, which
   // would hold back a stream. A streamed step reports its cost on its finish part instead.
-  const provider = createGateway({
-    apiKey: env.AI_GATEWAY_API_KEY,
-    baseURL: env.AI_GATEWAY_BASE_URL,
-  });
+  const provider = gatewayProvider();
   let costUsd = 0;
   let generationId: string | undefined;
   let finished = false;
@@ -41,10 +38,13 @@ export async function openMeteredStream(
       costUsd += metering.costUsd;
       generationId = metering.generationId ?? generationId;
     },
+    meterError(error) {
+      generationId = generationIdOf(error) ?? generationId;
+    },
     async finish(outcome) {
       if (finished) return;
       finished = true;
-      await recordUsage(ctx, { role, modelId, costUsd, generationId, outcome, ...attribution });
+      await recordCallUsage(ctx, { role, modelId, costUsd, generationId, outcome, ...attribution });
     },
   };
 }

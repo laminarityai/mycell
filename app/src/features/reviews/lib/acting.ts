@@ -24,6 +24,7 @@ import {
   SendUnconfirmedError,
   ValidationError,
 } from "@/lib/errors";
+import { DAY_MS } from "@/lib/time";
 import {
   REVIEW_EXPIRY_DAYS,
   reviewActions,
@@ -113,8 +114,6 @@ export async function checkWaitingReviews(
     if (cutoff !== undefined) await adapters[kind].purge?.(ctx, cutoff);
   }
 }
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 // When a review of `kind` made before now expires, or undefined when the kind never does.
 function expiryCutoff(kind: ReviewKind, now: number): Date | undefined {

@@ -1,5 +1,6 @@
+import { GOOGLE_APP_NAMES } from "@/lib/google";
 import { REGISTERED_APPS } from "../registered-apps";
-import { GOOGLE_APP_NAMES, type ConnectionKind, type GoogleApp, type Source } from "../types";
+import type { ConnectionKind, GoogleApp, Source } from "../types";
 
 /** How the UI names each source: its registered app, or a one-app connection's app. */
 export const SOURCE_NAMES: Record<Source, string> = {

@@ -8,6 +8,7 @@ import { and, arrayContains, desc, eq, inArray, lt } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { userNames } from "@/features/orgs/server";
 import { type Ctx, isAdmin, isSystem, requireRole, requireSystem } from "@/lib/ctx";
+import { DAY_MS } from "@/lib/time";
 import {
   ACCESS_LOG_RETENTION_DAYS,
   type AccessLogEntry,
@@ -165,7 +166,7 @@ export async function pruneAccessLog(
   now: Date = new Date(),
 ): Promise<{ entries: number; consents: number }> {
   requireSystem(ctx);
-  const cutoff = new Date(now.getTime() - ACCESS_LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  const cutoff = new Date(now.getTime() - ACCESS_LOG_RETENTION_DAYS * DAY_MS);
   const db = forOrg(ctx);
   const entries = await db.deleteCount(accessLogEntries, lt(accessLogEntries.readAt, cutoff));
   const consents = await db.deleteCount(staffConsents, lt(staffConsents.expiresAt, cutoff));

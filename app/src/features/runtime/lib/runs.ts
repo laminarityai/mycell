@@ -3,12 +3,12 @@
 // only by whoever may read its connection (connections' rule): a run on a member connection
 // holds what that member's mail made, so it stays with them (invariant 2, ADR-0001).
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { getConnection, readableConnectionIds } from "@/features/connections/server";
 import { describePathTo } from "@/features/spec/describe";
 import type { Spec } from "@/features/spec/types";
-import { getWorkflow, getWorkflowVersion } from "@/features/workflows/server";
+import { getWorkflow, getWorkflowVersion, versionsById } from "@/features/workflows/server";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import type { RunRecord, RunStepRecord } from "../types";
@@ -17,9 +17,6 @@ import { runs, runSteps } from "./schema";
 
 type Run = typeof runs.$inferSelect;
 type RunStepRow = typeof runSteps.$inferSelect;
-
-/** How many runs a workflow's page lists. */
-const RECENT_RUNS = 20;
 
 /**
  * Runs the workflow's latest version on one message of a connection, as a debugging aid: the
@@ -73,22 +70,6 @@ export async function getRun(ctx: Ctx, runId: string): Promise<RunRecord> {
   return record;
 }
 
-/**
- * The workflow's most recent runs on connections the caller may read, newest first, each with
- * its steps.
- */
-export async function listRuns(ctx: Ctx, workflowId: string): Promise<RunRecord[]> {
-  requireAdmin(ctx);
-  const readable = await readableConnectionIds(ctx);
-  if (readable.length === 0) return [];
-  const rows = await forOrg(ctx).select(runs, {
-    where: and(eq(runs.workflowId, workflowId), inArray(runs.connectionId, readable)),
-    orderBy: [desc(runs.startedAt)],
-    limit: RECENT_RUNS,
-  });
-  return withSteps(ctx, rows);
-}
-
 export async function findRun(ctx: Ctx, runId: string): Promise<Run | undefined> {
   return (await forOrg(ctx).select(runs, { where: eq(runs.id, runId), limit: 1 })).at(0);
 }
@@ -107,12 +88,10 @@ async function withSteps(ctx: Ctx, rows: Run[]): Promise<RunRecord[]> {
     ctx,
     rows.map((row) => row.id),
   );
-  // Each version's spec, which names the path each step is on.
-  const versionIds = [...new Set(rows.map((row) => row.workflowVersionId))];
-  const specs = new Map(
-    await Promise.all(
-      versionIds.map(async (id) => [id, (await getWorkflowVersion(ctx, id)).spec] as const),
-    ),
+  // Each version's spec, which names the path each step is on, read together.
+  const versions = await versionsById(
+    ctx,
+    rows.map((row) => row.workflowVersionId),
   );
   return rows.map((row) => ({
     id: row.id,
@@ -129,7 +108,7 @@ async function withSteps(ctx: Ctx, rows: Run[]): Promise<RunRecord[]> {
     finishedAt: row.finishedAt,
     steps: steps
       .filter((step) => step.runId === row.id)
-      .map((step) => stepRecord(step, specs.get(row.workflowVersionId))),
+      .map((step) => stepRecord(step, versions.get(row.workflowVersionId)?.spec)),
   }));
 }
 

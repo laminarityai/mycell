@@ -199,6 +199,19 @@ export type MemberConnectionMetadata = {
   createdAt: Date;
 };
 
+/**
+ * A connection waiting on whoever may reconnect it (its owner, or any admin for an org
+ * connection): `needs_reauth` when its app stopped accepting Mycel's access, `failed` when a
+ * backfill gave up. Reconnecting fixes either.
+ */
+export type ConnectionToFix = {
+  id: string;
+  source: Source;
+  kind: ConnectionKind;
+  accountEmail: string;
+  status: Extract<ConnectionStatus, "needs_reauth" | "failed">;
+};
+
 /** A connect attempt that hasn't become a connection: still waiting, or refused and why. */
 export type ConnectAttemptSummary = {
   id: string;

@@ -56,6 +56,20 @@ export const isolationCases = defineIsolationCases(server, {
     expect(admins.memberConnections.map((c) => c.owner.userId)).toEqual([orgs.orgA.member.id]);
   },
 
+  listConnectionsToFix: async (orgs) => {
+    const { before, memberBefore } = await seedOrgBConnection(orgs);
+    // Every one of org B's connections needs reconnecting.
+    for (const connection of [...memberBefore.connections, ...before.orgConnections]) {
+      await server.recordIngestState(systemCtx(orgs.orgB.id), connection.id, "gmail", {
+        status: "failed",
+      });
+    }
+
+    expect(await server.listConnectionsToFix(orgs.orgA.admin.ctx)).toEqual([]);
+    expect(await server.listConnectionsToFix(orgs.orgA.member.ctx)).toEqual([]);
+    expect(await server.listConnectionsToFix(orgs.orgB.admin.ctx)).toHaveLength(1);
+  },
+
   disconnect: async (orgs) => {
     const { before, memberBefore } = await seedOrgBConnection(orgs);
     const orgBIds = [

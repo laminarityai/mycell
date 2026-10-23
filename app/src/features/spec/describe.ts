@@ -85,7 +85,9 @@ export function describeStep(step: Step, actionDescription?: string, words?: Sub
       return `${what}: "${step.instructions}"`;
     }
     case "approval":
-      return "Waits for a person to review the Gmail drafts before they go anywhere.";
+      return step.channel === "suggested_edits"
+        ? "Waits for a person to accept or reject the suggested edits before the doc changes."
+        : "Waits for a person to review the Gmail drafts before they go anywhere.";
     case "escalate":
       return `Hands the message to a person: ${step.reason}`;
   }

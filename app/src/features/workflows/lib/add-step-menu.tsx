@@ -2,7 +2,8 @@
 
 // What "+" on the graph offers: the model steps, each action in the company's action set grouped
 // by its app with its fixed risk level, and a branch. A draft's external send isn't offered as an
-// action: a draft step writes it, and the policy engine adds its review.
+// action: a draft step writes it, and the policy engine adds its review. A send a tool step makes
+// (edits suggested in a Doc) is offered, and the policy engine adds its review too.
 import { X } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 import { z } from "zod";
@@ -27,7 +28,7 @@ const BRANCH: Item = { label: "Branch", hint: "Split into paths", kind: { type: 
 function actionGroups(actions: ActionSet): { app: string; items: Item[] }[] {
   const groups = new Map<string, Item[]>();
   for (const action of actions.actions) {
-    if (action.pendingForm !== undefined) continue;
+    if (action.channel === "gmail_drafts") continue;
     const verb = action.name.split(".").at(-1)?.replaceAll("-", " ") ?? action.name;
     const label = `${action.app} · ${verb.charAt(0).toUpperCase()}${verb.slice(1)}`;
     const inputs = action.input instanceof z.ZodObject ? Object.keys(action.input.shape) : [];

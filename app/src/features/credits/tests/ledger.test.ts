@@ -158,9 +158,17 @@ describe("spendingKindOf", () => {
       await recordUsage(ctx, { ...call, costUsd: 0.001, workflowId: "wf_1", dryRun: true }),
       await recordUsage(ctx, { ...call, costUsd: 0.001, purpose: "builder" }),
       await recordUsage(ctx, { ...call, costUsd: 0.001, purpose: "memory" }),
+      await recordUsage(ctx, { ...call, costUsd: 0.001, purpose: "memory_summary" }),
     ];
 
-    expect(usage.map(spendingKindOf)).toEqual(["workflow", "try_it", "builder", "memory"]);
+    // A person's summaries are memory's here, though memory's budget adds up only learning.
+    expect(usage.map(spendingKindOf)).toEqual([
+      "workflow",
+      "try_it",
+      "builder",
+      "memory",
+      "memory",
+    ]);
     expect(spendingKindOf(grant)).toBeNull();
   });
 });

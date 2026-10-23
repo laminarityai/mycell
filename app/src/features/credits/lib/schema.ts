@@ -27,7 +27,8 @@ export const creditLedger = pgTable(
     runId: text("run_id"),
     // Made by a dry run ("Try it"), which has no run record.
     dryRun: boolean("dry_run").notNull().default(false),
-    // What the usage was spent on when no run or Try it made it: memory, or the builder chat.
+    // What the usage was spent on when no run or Try it made it: memory's learning, a person's
+    // summary, or the builder chat.
     purpose: text("purpose", { enum: CREDIT_PURPOSES }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },

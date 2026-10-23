@@ -1,8 +1,9 @@
 // What memory costs, and the admin's control of it (ADR-0022): nothing is learned until an admin
 // has seen the estimate, made from the items discovery stored, and started memory with a
-// monthly budget. Every model call learning makes is tagged `memory` in the ledger, as is a
-// person's summary, and once a calendar month's (UTC) tagged spending reaches the budget, each
-// item is postponed until the next month starts, or the budget changes.
+// monthly budget. Every model call learning makes is tagged `memory` in the ledger, and once a
+// calendar month's (UTC) tagged spending reaches the budget, each item is postponed until the
+// next month starts, or the budget changes. The budget caps learning only: a person's summaries
+// are tagged `memory_summary`, so they neither count toward it nor wait on it.
 import { and, inArray, lte, sql } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { getSpending } from "@/features/credits/server";

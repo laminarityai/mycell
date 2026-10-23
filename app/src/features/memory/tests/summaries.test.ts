@@ -92,7 +92,7 @@ describe("a summary of an object", () => {
       kind: "usage",
       role: "fast",
       outcome: "succeeded",
-      purpose: "memory",
+      purpose: "memory_summary",
       workflowId: null,
       runId: null,
     });

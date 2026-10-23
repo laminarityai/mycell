@@ -49,7 +49,8 @@ function line(fact: MemoryFact): PromptText {
 
 /**
  * A summary is charged to whatever asked for it: a workflow's run, like the run's other model
- * calls; the builder chat; or memory, for a person's own.
+ * calls; the builder chat; or, for a person's own, `memory_summary`, which the Credits page
+ * counts as memory's but memory's budget, which caps learning, doesn't add up.
  */
 function attributionOf(reader: MemoryReader): CallAttribution {
   switch (reader.kind) {
@@ -58,6 +59,6 @@ function attributionOf(reader: MemoryReader): CallAttribution {
     case "builder":
       return { purpose: "builder" };
     case "person":
-      return { purpose: "memory" };
+      return { purpose: "memory_summary" };
   }
 }

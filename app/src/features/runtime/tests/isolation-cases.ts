@@ -38,19 +38,49 @@ export const isolationCases = defineIsolationCases(server, {
     await expect(server.startRun(admin, ownWorkflow, orgB.connectionId, "m")).rejects.toThrow(
       NotFoundError,
     );
-    expect(await server.listRuns(orgs.orgB.admin.ctx, orgB.workflowId)).toHaveLength(1);
+    expect((await server.listRuns(orgs.orgB.admin.ctx, {})).runs).toHaveLength(1);
   },
 
   getRun: async (orgs) => {
     const { runId } = await seedOrgBRun(orgs);
 
-    await expect(server.getRun(orgs.orgA.admin.ctx, runId)).rejects.toThrow(NotFoundError);
+    for (const ctx of [orgs.orgA.admin.ctx, orgs.orgA.member.ctx]) {
+      await expect(server.getRun(ctx, runId)).rejects.toThrow(NotFoundError);
+    }
+    expect(await server.getRun(orgs.orgB.admin.ctx, runId)).toMatchObject({ id: runId });
+  },
+
+  getRunMessage: async (orgs) => {
+    const { runId } = await seedOrgBRun(orgs);
+
+    for (const ctx of [orgs.orgA.admin.ctx, orgs.orgA.member.ctx]) {
+      await expect(server.getRunMessage(ctx, runId)).rejects.toThrow(NotFoundError);
+    }
+    expect(await server.getRunMessage(orgs.orgB.admin.ctx, runId)).toMatchObject({
+      subject: pricingQuestion().subject,
+    });
   },
 
   listRuns: async (orgs) => {
-    const { workflowId } = await seedOrgBRun(orgs);
+    const { workflowId, connectionId, runId } = await seedOrgBRun(orgs);
+    const { orgA } = orgs;
 
-    expect(await server.listRuns(orgs.orgA.admin.ctx, workflowId)).toEqual([]);
+    for (const ctx of [orgA.admin.ctx, orgA.member.ctx]) {
+      expect((await server.listRuns(ctx, {})).runs).toEqual([]);
+      expect((await server.listRuns(ctx, { workflowId, connectionId })).runs).toEqual([]);
+      // A cursor naming org B's run finds nothing of it either.
+      expect((await server.listRuns(ctx, {}, { olderThan: runId })).runs).toEqual([]);
+    }
+  },
+
+  listRunFilters: async (orgs) => {
+    await seedOrgBRun(orgs);
+    const { orgA } = orgs;
+
+    for (const ctx of [orgA.admin.ctx, orgA.member.ctx]) {
+      expect(await server.listRunFilters(ctx)).toEqual({ workflows: [], connections: [] });
+    }
+    expect((await server.listRunFilters(orgs.orgB.admin.ctx)).workflows).toHaveLength(1);
   },
 
   startTriggeredRuns: async (orgs) => {
@@ -69,7 +99,7 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await server.startTriggeredRuns(systemCtx(orgs.orgA.id), event)).toEqual({
       runIds: [],
     });
-    expect(await server.listRuns(orgs.orgB.admin.ctx, orgB.workflowId)).toHaveLength(1);
+    expect((await server.listRuns(orgs.orgB.admin.ctx, {})).runs).toHaveLength(1);
   },
 
   executeRun: async (orgs) => {
@@ -175,7 +205,9 @@ export const isolationCases = defineIsolationCases(server, {
     };
 
     expect(await server.startInviteRuns(systemCtx(orgs.orgA.id), event)).toEqual({ runIds: [] });
-    expect(await server.listRuns(orgs.orgB.admin.ctx, orgB.workflowId)).toEqual([]);
+    expect(
+      (await server.listRuns(orgs.orgB.admin.ctx, { workflowId: orgB.workflowId })).runs,
+    ).toEqual([]);
   },
 
   // Cross-org by design: it lists every org's calendars for the cron. What it must keep

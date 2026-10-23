@@ -85,7 +85,7 @@ export function newestAcross(
 // Why a connection's inbox couldn't be read, when the picker can say so: Gmail or Nango refused
 // (SourceRequestError), Nango didn't answer (NangoRequestError), or the connection is gone
 // (NotFoundError). A database error or a bug is none of these.
-function isUnavailable(error: unknown): boolean {
+export function isUnavailable(error: unknown): boolean {
   return (
     error instanceof SourceRequestError ||
     error instanceof NangoRequestError ||

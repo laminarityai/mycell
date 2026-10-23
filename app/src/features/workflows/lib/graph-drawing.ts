@@ -45,16 +45,27 @@ const PLACEHOLDER_GAP = 40;
 const END_WIDTH = 72;
 const END_HEIGHT = 28;
 
+/**
+ * A read-only graph whose boxes can still be selected, as a run's page selects a step to show its
+ * details: the selected box's node ID, and what a click selects.
+ */
+export type GraphSelecting = {
+  selected: string | null;
+  onSelect: (selection: GraphSelection) => void;
+};
+
 export function toDrawing(
   layout: GraphLayout<RiskLevel>,
   placeholder: boolean,
   editing: GraphEditing | undefined,
+  selecting?: GraphSelecting,
 ): Drawing {
+  const selected = (editing ?? selecting)?.selected;
   // The layout lists its boxes in reading order, which is the order a keyboard reaches them in.
   const nodes: Node[] = layout.nodes.map((node) => {
-    const marks: BoxMarks = { selected: editing?.selected === node.id, issues: issuesOf(node) };
+    const marks: BoxMarks = { selected: selected === node.id, issues: issuesOf(node) };
     const drawn = box(node.id, node.kind, node, node.width, node.height, { ...node, ...marks });
-    const opens = editing !== undefined && selectionOf(drawn) !== null;
+    const opens = (editing ?? selecting) !== undefined && selectionOf(drawn) !== null;
     if (!opens) return drawn;
     // A box that opens is a button: Tab reaches it, and Enter or Space opens it like a click.
     return {

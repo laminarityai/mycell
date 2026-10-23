@@ -42,7 +42,7 @@ describe("polling a calendar for new invites", () => {
 
     expect(runIds).toHaveLength(2);
     for (const workflowId of workflowIds) {
-      expect(await listRuns(admin.ctx, workflowId)).toEqual([
+      expect((await listRuns(admin.ctx, { workflowId })).runs).toEqual([
         expect.objectContaining({ sourceRef: invite.id, connectionId: google.id }),
       ]);
     }
@@ -63,7 +63,7 @@ describe("polling a calendar for new invites", () => {
     expect(new Set(announcedIds()).size).toBe(1);
     expect(again.runIds).toEqual(first.runIds);
     for (const workflowId of workflowIds) {
-      expect(await listRuns(admin.ctx, workflowId)).toHaveLength(1);
+      expect((await listRuns(admin.ctx, { workflowId })).runs).toHaveLength(1);
     }
   });
 
@@ -194,6 +194,6 @@ describe("polling a calendar for new invites", () => {
     });
 
     expect(runIds).toEqual([]);
-    expect(await listRuns(admin.ctx, workflowIds[0])).toEqual([]);
+    expect((await listRuns(admin.ctx, { workflowId: workflowIds[0] })).runs).toEqual([]);
   });
 });

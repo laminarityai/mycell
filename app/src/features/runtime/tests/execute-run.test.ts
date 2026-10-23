@@ -173,7 +173,7 @@ describe("executeRun", () => {
     expect(await executeRun(system, runId)).toEqual({ status: "cancelled" });
 
     await expect(getRun(admin, runId)).rejects.toThrow(NotFoundError);
-    expect(await listRuns(admin, workflowId)).toEqual([]);
+    expect((await listRuns(admin, { workflowId })).runs).toEqual([]);
   });
 
   it("does nothing for a run that went with its connection between steps", async () => {

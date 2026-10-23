@@ -119,6 +119,19 @@ export type Review = ReviewSummary & {
  */
 export type OpenedReview = { review: Review; view: ItemView | null; handOffTo: ReviewPerson[] };
 
+/**
+ * A review as its run's page lists it: what it waits on and how it stands, and whether the
+ * caller may open it. Nothing of its item, so an admin may see one in a colleague's inbox.
+ */
+export type RunReview = {
+  id: string;
+  kind: ReviewKind;
+  status: ReviewStatus;
+  createdAt: Date;
+  endedAt: Date | null;
+  openable: boolean;
+};
+
 /** How many reviews stand each way: waiting, or ended each way. */
 export type ReviewCounts = Record<ReviewStatus, number>;
 

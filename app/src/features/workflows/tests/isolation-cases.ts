@@ -12,6 +12,7 @@ import {
   publishedToSalesInOrgB,
   seedOrgBWorkflow,
   switchedOnInOrgB,
+  versionsOfOrgBUnread,
 } from "./isolation-seeds";
 import { draftSpec, labelSpec } from "./specs";
 
@@ -186,6 +187,9 @@ export const isolationCases = defineIsolationCases(server, {
       expect([...names]).toEqual([[own.id, "A"]]);
     }
   },
+
+  // In isolation-seeds.ts, for this file's length.
+  versionsById: versionsOfOrgBUnread,
 
   currentVersionIds: async (orgs) => {
     const b = await publishedToSalesInOrgB(orgs);

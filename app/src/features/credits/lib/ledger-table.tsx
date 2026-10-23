@@ -1,4 +1,4 @@
-// The latest ledger entries, with what an admin checks a surprising charge by: what it was,
+// A range's ledger entries, with what an admin checks a surprising charge by: what it was,
 // its workflow, role, model and credits. Grants show their note; failed calls are marked.
 import { DateTime } from "@/components/date-time";
 import { Badge } from "@/components/ui/badge";
@@ -16,7 +16,7 @@ import { type LedgerLine, spendingKindOf } from "../types";
 
 export function LedgerTable({ entries }: { entries: LedgerLine[] }) {
   if (entries.length === 0) {
-    return <p className="text-sm text-muted-foreground">No entries yet.</p>;
+    return <p className="text-sm text-muted-foreground">No entries in this range.</p>;
   }
   return (
     <Table>

@@ -2,7 +2,8 @@
 // and a projection sit on one ruler), recessive gridlines, a "Now" line, and the colours of each
 // kind of use and each workflow.
 import { formatCredits } from "../format";
-import { DAY_MS, type SpendingKind } from "../types";
+import { includesNow } from "../range";
+import { DAY_MS, monthRange, type SpendingKind, type SpendingSummary } from "../types";
 
 export type Frame = {
   w: number;
@@ -24,6 +25,56 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 
 /** "Oct 8", the UTC day. SVG text can't hold a <time>, so the axis spells it out. */
 export const tick = (at: Date) => `${MONTHS[at.getUTCMonth()] ?? ""} ${String(at.getUTCDate())}`;
+
+/** "Oct 1 – Oct 7, 2026", or "Oct 8, 2026" for one day: a stretch of days in a tooltip. */
+export function stretch(from: Date, days: number): string {
+  const last = new Date(from.getTime() + (days - 1) * DAY_MS);
+  const year = String(last.getUTCFullYear());
+  if (days <= 1) return `${tick(from)}, ${year}`;
+  const sameYear = from.getUTCFullYear() === last.getUTCFullYear();
+  return `${tick(from)}${sameYear ? "" : `, ${String(from.getUTCFullYear())}`} – ${tick(last)}, ${year}`;
+}
+
+/**
+ * How many days the chart's time axis spans: the range's, running on to the end of this month
+ * while the range includes today, so the days to come hold the balance's projection.
+ */
+export function axisDays(summary: SpendingSummary, now: Date): number {
+  if (!includesNow(summary.range, now)) return summary.days.length;
+  const monthEnd = monthRange(now).to.getTime();
+  return Math.max(
+    summary.days.length,
+    Math.round((monthEnd - summary.range.from.getTime()) / DAY_MS),
+  );
+}
+
+/**
+ * Where the axis's dates go: every 7 days from the start over a short range, else on each 1st,
+ * every other 1st past 7 months, with the year on the first and on January.
+ */
+function ticksOf(f: Frame): { day: number; label: string }[] {
+  if (f.days <= 45) {
+    return Array.from({ length: Math.ceil(f.days / 7) }, (_, i) => i * 7).map((day) => ({
+      day: day + 0.5,
+      label: tick(new Date(f.from.getTime() + day * DAY_MS)),
+    }));
+  }
+  const firsts = Array.from({ length: f.days }, (_, day) => day).filter(
+    (day) => new Date(f.from.getTime() + day * DAY_MS).getUTCDate() === 1,
+  );
+  const every = firsts.length > 7 ? 2 : 1;
+  return firsts
+    .filter((_, n) => n % every === 0)
+    .map((day, n) => {
+      const at = new Date(f.from.getTime() + day * DAY_MS);
+      const month = MONTHS[at.getUTCMonth()] ?? "";
+      return {
+        day,
+        label:
+          n === 0 || at.getUTCMonth() === 0 ? `${month} ${String(at.getUTCFullYear())}` : month,
+      };
+    });
+}
 
 /** Days from the range's start to `at`, fractional. */
 export const dayAt = (f: Frame, at: Date) => (at.getTime() - f.from.getTime()) / DAY_MS;
@@ -55,10 +106,9 @@ export function niceMax(v: number): number {
 export const points = (f: Frame, pts: [number, number][]) =>
   pts.map(([day, v]) => `${String(xOf(f, day))},${String(yOf(f, v))}`).join(" ");
 
-/** Gridlines with their values, and a date every 7 days along the bottom. */
+/** Gridlines with their values, and dates along the bottom. */
 export function Axes({ f, steps = 4 }: { f: Frame; steps?: number }) {
   const values = Array.from({ length: steps + 1 }, (_, i) => (f.yMax / steps) * i);
-  const ticks = Array.from({ length: Math.ceil(f.days / 7) }, (_, i) => i * 7);
   return (
     <g className="text-[11px]">
       {values.map((v) => (
@@ -80,15 +130,24 @@ export function Axes({ f, steps = 4 }: { f: Frame; steps?: number }) {
           </text>
         </g>
       ))}
-      {ticks.map((day) => (
+      <DateTicks f={f} />
+    </g>
+  );
+}
+
+/** The axis's dates along the bottom. */
+export function DateTicks({ f }: { f: Frame }) {
+  return (
+    <g className="text-[11px]">
+      {ticksOf(f).map(({ day, label }) => (
         <text
           key={day}
-          x={xOf(f, day + 0.5)}
+          x={xOf(f, day)}
           y={f.h - 8}
           textAnchor="middle"
           className="fill-muted-foreground"
         >
-          {tick(new Date(f.from.getTime() + day * DAY_MS))}
+          {label}
         </text>
       ))}
     </g>

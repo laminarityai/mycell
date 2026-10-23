@@ -1,13 +1,14 @@
 // What the Credits page shows (M7): a range's spending by kind of use, by workflow and by day,
 // and how long the balance lasts. Every sum is the database's: a range is one grouped sum and
-// the balance before it, whatever the number of workflows or entries.
-import { and, eq, gte, lt, sql } from "drizzle-orm";
+// the balance before it, whatever the number of workflows, entries or days.
+import { and, asc, eq, gte, lt, sql } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { type Ctx, requireRole } from "@/lib/ctx";
 import {
   DAY_MS,
   daysOf,
   type DailySpending,
+  monthRange,
   type Runway,
   type SpendingByKind,
   type SpendingRange,
@@ -32,11 +33,14 @@ const dayKey = (day: Date) => day.toISOString().slice(0, 10);
 /**
  * The range's spending by kind of use, by workflow and by day, what was granted, and the
  * balance as it began. A workflow's spending is its live runs': Try it and builder turns about
- * it are their own kinds. Admins (and jobs) only.
+ * it are their own kinds. Its month's spending before a range that starts after the 1st comes
+ * back too, since budgets are monthly: the grouped sum starts on that 1st. Admins (and jobs)
+ * only.
  */
 export async function getSpendingSummary(ctx: Ctx, range: SpendingRange): Promise<SpendingSummary> {
   requireRole(ctx, "admin", "system");
   const db = forOrg(ctx);
+  const monthStart = monthRange(range.from).from;
   const [groups, openingBalance] = await Promise.all([
     db.sumBy(
       creditLedger,
@@ -49,7 +53,7 @@ export async function getSpendingSummary(ctx: Ctx, range: SpendingRange): Promis
         workflowId: creditLedger.workflowId,
         madeByRun,
       },
-      inRange(range),
+      inRange({ from: monthStart, to: range.to }),
     ),
     db.sum(creditLedger, creditLedger.amount, lt(creditLedger.createdAt, range.from)),
   ]);
@@ -63,43 +67,69 @@ export async function getSpendingSummary(ctx: Ctx, range: SpendingRange): Promis
   const dayIndex = new Map(days.map((day, i) => [dayKey(day.day), i]));
   const summary = { spent: 0, granted: 0, byKind: noSpending() };
   const workflows = new Map<string, WorkflowSpending>();
+  const workflow = (workflowId: string) => {
+    const found = workflows.get(workflowId);
+    if (found !== undefined) return found;
+    const added = { workflowId, spent: 0, daily: days.map(() => 0), monthBefore: 0 };
+    workflows.set(workflowId, added);
+    return added;
+  };
   for (const group of groups) {
+    // Usage is negative in the ledger.
+    const credits = -group.total || 0;
+    // A stand-in run ID: the kind asks only whether a run made it.
+    const kind =
+      group.kind === "grant"
+        ? null
+        : spendingKindOf({ ...group, runId: group.madeByRun ? "run" : null });
     const i = dayIndex.get(group.day);
     const day = i === undefined ? undefined : days[i];
-    // Every entry in the range falls on one of its days.
-    if (i === undefined || day === undefined) continue;
+    if (i === undefined || day === undefined) {
+      // Before the range, in its first month: only where a workflow's month starts.
+      if (kind === "workflow" && group.workflowId !== null) {
+        workflow(group.workflowId).monthBefore += credits;
+      }
+      continue;
+    }
     if (group.kind === "grant") {
       day.granted += group.total;
       summary.granted += group.total;
       continue;
     }
-    // Usage is negative in the ledger.
-    const credits = -group.total || 0;
     day.spent += credits;
     summary.spent += credits;
-    // A stand-in run ID: the kind asks only whether a run made it.
-    const kind = spendingKindOf({ ...group, runId: group.madeByRun ? "run" : null });
     if (kind === null) continue;
     day.byKind[kind] += credits;
     summary.byKind[kind] += credits;
     if (kind !== "workflow" || group.workflowId === null) continue;
-    const workflow = workflows.get(group.workflowId) ?? {
-      workflowId: group.workflowId,
-      spent: 0,
-      daily: days.map(() => 0),
-    };
-    workflow.spent += credits;
-    workflow.daily[i] = (workflow.daily[i] ?? 0) + credits;
-    workflows.set(group.workflowId, workflow);
+    const line = workflow(group.workflowId);
+    line.spent += credits;
+    line.daily[i] = (line.daily[i] ?? 0) + credits;
   }
 
   return {
     range,
     openingBalance,
     ...summary,
-    byWorkflow: [...workflows.values()].sort((a, b) => b.spent - a.spent),
+    byWorkflow: [...workflows.values()].sort(
+      (a, b) => b.spent - a.spent || b.monthBefore - a.monthBefore,
+    ),
     days,
   };
+}
+
+/**
+ * When the org's first ledger entry was made, where its history starts (the Credits page keeps
+ * a range from reaching before it); null before any. Admins (and jobs) only.
+ */
+export async function getLedgerStart(ctx: Ctx): Promise<Date | null> {
+  requireRole(ctx, "admin", "system");
+  const first = await forOrg(ctx).select(creditLedger, {
+    columns: ["createdAt"],
+    orderBy: [asc(creditLedger.createdAt)],
+    limit: 1,
+  });
+  return first.at(0)?.createdAt ?? null;
 }
 
 /**

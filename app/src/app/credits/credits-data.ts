@@ -1,68 +1,98 @@
 // What the Credits page reads, apart from rendering it, so a test can pin its query budget: the
-// same queries for 1 workflow as for 20 (src/app/tests/credits-page.test.ts). Workflow names
-// and budgets are joined here, since credits can't import workflows.
-import { getRunway, getSpendingSummary, listLedger } from "@/features/credits/server";
+// same queries for 1 workflow as for 20, and for 12 months as for one
+// (src/app/tests/credits-page.test.ts). Workflow names and budgets are joined here, since
+// credits can't import workflows.
+import { resolveRange, workflowLine } from "@/features/credits/range";
 import {
-  monthRange,
-  type LedgerLine,
-  type Runway,
-  type SpendingSummary,
-  type WorkflowSpendingLine,
+  getLedgerStart,
+  getRunway,
+  getSpendingSummary,
+  listLedger,
+} from "@/features/credits/server";
+import type {
+  ChosenRange,
+  LedgerLine,
+  RangeChoice,
+  Runway,
+  SpendingSummary,
+  WorkflowSpendingLine,
 } from "@/features/credits/types";
 import { listWorkflowBudgets } from "@/features/workflows/server";
 import type { Ctx } from "@/lib/ctx";
 
-/** How many of the latest ledger entries the page lists. */
-const LATEST_ENTRIES = 25;
+/** How many of the range's entries the page lists, newest first. */
+const ENTRIES_SHOWN = 25;
 
 export type CreditsPage = {
   now: Date;
+  /** The range the page shows: the one asked for, kept inside the org's history. */
+  chosen: ChosenRange;
+  /** Now, whatever the range. */
   runway: Runway;
   summary: SpendingSummary;
   /** Most spent first, then any other workflow with a budget. */
   workflows: WorkflowSpendingLine[];
+  /** The range's newest entries. */
   entries: LedgerLine[];
+  /** The range has more entries than these. */
+  moreEntries: boolean;
 };
 
-/** This month's spending, the runway and the latest entries; admins only. */
-export async function loadCreditsPage(ctx: Ctx, now: Date): Promise<CreditsPage> {
-  const [runway, summary, entries, budgets] = await Promise.all([
+/**
+ * The range's spending and entries, with the balance and runway now; this month by default.
+ * Admins only.
+ */
+export async function loadCreditsPage(
+  ctx: Ctx,
+  now: Date,
+  choice: RangeChoice = { preset: "this_month" },
+): Promise<CreditsPage> {
+  // The range needs the org's first entry; the runway and budgets don't wait for it.
+  const inRange = getLedgerStart(ctx).then(async (start) => {
+    const chosen = resolveRange(choice, now, start);
+    const [summary, entries] = await Promise.all([
+      getSpendingSummary(ctx, chosen.range),
+      listLedger(ctx, { range: chosen.range, limit: ENTRIES_SHOWN + 1 }),
+    ]);
+    return { chosen, summary, entries };
+  });
+  const [runway, budgets, { chosen, summary, entries }] = await Promise.all([
     getRunway(ctx),
-    getSpendingSummary(ctx, monthRange(now)),
-    listLedger(ctx, { limit: LATEST_ENTRIES }),
     listWorkflowBudgets(ctx),
+    inRange,
   ]);
   const byId = new Map(budgets.map((budget) => [budget.id, budget]));
-  const spending = summary.byWorkflow.map((line): WorkflowSpendingLine => {
+  const spending = summary.byWorkflow.map((line) => {
     const budget = byId.get(line.workflowId);
-    const monthlyBudget = budget?.monthlyCredits ?? null;
-    return {
-      ...line,
+    return workflowLine(
+      summary,
+      line,
       // Usage outlives what it was for; a workflow the org no longer has is still spending.
-      name: budget?.name ?? "Unknown workflow",
-      monthlyBudget,
-      budgetReached: monthlyBudget !== null && line.spent >= monthlyBudget,
-    };
+      { name: budget?.name ?? "Unknown workflow", monthlyBudget: budget?.monthlyCredits ?? null },
+      now,
+    );
   });
   const spent = new Set(spending.map((line) => line.workflowId));
   const idle = budgets
     .filter((budget) => !budget.archived && budget.monthlyCredits !== null && !spent.has(budget.id))
-    .map((budget): WorkflowSpendingLine => ({
-      workflowId: budget.id,
-      name: budget.name,
-      monthlyBudget: budget.monthlyCredits,
-      spent: 0,
-      daily: summary.days.map(() => 0),
-      budgetReached: false,
-    }));
+    .map((budget) =>
+      workflowLine(
+        summary,
+        { workflowId: budget.id, spent: 0, daily: summary.days.map(() => 0), monthBefore: 0 },
+        { name: budget.name, monthlyBudget: budget.monthlyCredits },
+        now,
+      ),
+    );
   return {
     now,
+    chosen,
     runway,
     summary,
     workflows: [...spending, ...idle],
-    entries: entries.map((entry) => ({
+    entries: entries.slice(0, ENTRIES_SHOWN).map((entry) => ({
       ...entry,
       workflowName: entry.workflowId === null ? null : (byId.get(entry.workflowId)?.name ?? null),
     })),
+    moreEntries: entries.length > ENTRIES_SHOWN,
   };
 }

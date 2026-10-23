@@ -3,6 +3,7 @@
 // each file the same way. My Drive and files shared with the user only: no shared drives. The
 // changes feed also reports files removed: deleted, no longer shared with the account (Drive's
 // `removed`), or put in the trash.
+import { FILES } from "@/features/connections/drive";
 import { SourceRequestError } from "@/features/connections/types";
 import { InvariantError } from "@/lib/errors";
 import type { Connector, NormalizedEvent, SourceClient } from "../connector";
@@ -36,7 +37,7 @@ export const driveConnector: Connector = {
       includeItemsFromAllDrives: "false",
     });
     if (pageToken !== null) query.set("pageToken", pageToken);
-    const list = await client.get(`/drive/v3/files?${query.toString()}`, fileListSchema);
+    const list = await client.get(`${FILES}?${query.toString()}`, fileListSchema);
     return {
       events: (list?.files ?? []).map(normalizeFile).filter((event) => event.occurredAt >= since),
       nextPageToken: list?.nextPageToken ?? null,

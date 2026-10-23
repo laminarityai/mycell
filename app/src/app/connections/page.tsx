@@ -3,6 +3,7 @@ import { listConnections } from "@/features/connections/server";
 import { ConnectionsPanel } from "@/features/connections/ui";
 import { getCtx } from "@/features/orgs/server";
 import { AppNav } from "@/app/app-nav";
+import { isAdmin } from "@/lib/ctx";
 
 export default function ConnectionsPage() {
   return (
@@ -20,5 +21,5 @@ export default function ConnectionsPage() {
 
 async function Connections() {
   const ctx = await getCtx();
-  return <ConnectionsPanel listing={await listConnections(ctx)} isAdmin={ctx.role === "admin"} />;
+  return <ConnectionsPanel listing={await listConnections(ctx)} isAdmin={isAdmin(ctx)} />;
 }

@@ -4,7 +4,8 @@ import type { ActionSet } from "@/features/policy/types";
 import type { ModelRole, Spec, Step } from "@/features/spec/types";
 import type { Ctx } from "@/lib/ctx";
 import type { CallAttribution } from "@/features/models/types";
-import type { BranchPath, Json } from "../types";
+import type { BranchPath } from "../types";
+import type { Json } from "@/lib/inngest";
 import type { HoldSend } from "./custom-action";
 
 /**

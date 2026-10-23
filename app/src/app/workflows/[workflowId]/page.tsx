@@ -15,6 +15,7 @@ import {
   WorkflowEditor,
   WorkflowSwitchSection,
 } from "@/features/workflows/ui";
+import { isAdmin } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
 import { TryIt } from "./try-it";
 import { AppNav } from "@/app/app-nav";
@@ -47,7 +48,7 @@ export default function WorkflowPage({
 
 async function Workflow({ params }: Pick<PageProps<"/workflows/[workflowId]">, "params">) {
   const ctx = await getCtx();
-  if (ctx.role !== "admin") redirect("/");
+  if (!isAdmin(ctx)) redirect("/");
   const { workflowId } = await params;
   const workflow = await getWorkflow(ctx, workflowId).catch((error: unknown) => {
     if (error instanceof NotFoundError) notFound();

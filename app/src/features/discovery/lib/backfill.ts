@@ -8,9 +8,9 @@
 import { getConnection, recordIngestState, sourceClient } from "@/features/connections/server";
 import { ingestedAppSchema, type IngestedApp } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
+import { runInline, type RunStep } from "@/lib/inngest";
 import type { BackfillOutcome } from "../types";
-import { CONNECTORS, runInline, storeWindow, untilGone } from "./ingest-steps";
-import type { RunStep } from "./ingest-steps";
+import { CONNECTORS, storeWindow, whileConnected } from "./ingest-steps";
 
 /** How far back a backfill reaches. */
 export const BACKFILL_DAYS = 90;
@@ -21,7 +21,9 @@ export async function backfillConnection(
   connectionId: string,
   runStep: RunStep = runInline,
 ): Promise<BackfillOutcome> {
-  const start = await runStep("start", () => untilGone(() => startBackfill(ctx, connectionId)));
+  const start = await runStep("start", () =>
+    whileConnected(() => startBackfill(ctx, connectionId)),
+  );
   if (start.gone) return { outcome: "gone" };
   let items = 0;
   for (const app of start.apps) {
@@ -33,7 +35,7 @@ export async function backfillConnection(
     });
     if (stored.gone) return { outcome: "gone" };
     const end = await runStep(`${app}-finish`, () =>
-      untilGone(async () => {
+      whileConnected(async () => {
         await recordIngestState(ctx, connectionId, app, {
           status: "active",
           backfilledItems: stored.items,
@@ -49,7 +51,7 @@ export async function backfillConnection(
 
 /** The backfill gave up (Inngest ran out of retries): each app it hadn't finished failed. */
 export async function markBackfillFailed(ctx: Ctx, connectionId: string): Promise<void> {
-  await untilGone(async () => {
+  await whileConnected(async () => {
     for (const app of await backfillingApps(ctx, connectionId)) {
       await recordIngestState(ctx, connectionId, app, { status: "failed" });
     }

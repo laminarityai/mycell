@@ -5,8 +5,7 @@
 // checks visibility itself (startable.ts), so a slow cleanup never starts a run.
 import { and, eq, inArray, type SQL } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
-import type { Ctx } from "@/lib/ctx";
-import { ForbiddenError } from "@/lib/errors";
+import { type Ctx, requireRole } from "@/lib/ctx";
 import { latestVersions } from "./latest-versions";
 import { enablements } from "./schema";
 import { seenByUsers, type InTransaction } from "./visibility";
@@ -23,7 +22,7 @@ export async function removeInvisibleEnablements(
   ctx: Ctx,
   scope: LostVisibilityScope,
 ): Promise<number> {
-  if (ctx.role !== "admin" && ctx.role !== "system") throw new ForbiddenError();
+  requireRole(ctx, "admin", "system");
   return removeInvisible(ctx, scope);
 }
 

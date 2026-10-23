@@ -8,8 +8,8 @@ import { getActionSet } from "@/features/custom-actions/server";
 import { sameValue } from "@/features/spec/diff";
 import type { Spec } from "@/features/spec/types";
 import { findTagsByName } from "@/features/tags/server";
-import { requireAdmin, type Ctx } from "@/lib/ctx";
-import { ConflictError, ForbiddenError, InvariantError, NotFoundError } from "@/lib/errors";
+import { type Ctx, requireAdmin, requireRole } from "@/lib/ctx";
+import { ConflictError, InvariantError, NotFoundError } from "@/lib/errors";
 import type { PublishSettings, WorkflowVersion } from "../types";
 import { workflows, workflowVersions, workflowVersionTags } from "./schema";
 import { validateWorkflowSpec } from "./validation";
@@ -114,7 +114,7 @@ function withSettings(spec: Spec, settings: PublishSettings): Spec {
 
 /** One published version, for an admin or for a run acting as the system ctx (ADR-0009). */
 export async function getWorkflowVersion(ctx: Ctx, versionId: string): Promise<WorkflowVersion> {
-  if (ctx.role !== "admin" && ctx.role !== "system") throw new ForbiddenError();
+  requireRole(ctx, "admin", "system");
   const rows = await forOrg(ctx).select(workflowVersions, {
     where: eq(workflowVersions.id, versionId),
     limit: 1,

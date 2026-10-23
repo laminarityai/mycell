@@ -9,7 +9,8 @@ import type { FakeMessageInput } from "@/testing/fake-gmail";
 import { fakeNango } from "@/testing/fake-nango";
 import { storedStepOutput } from "@/testing/inngest-step-state";
 import { startRun } from "../server";
-import type { RetryPolicy, RunStep } from "../types";
+import type { RetryPolicy } from "../types";
+import type { RunStep } from "@/lib/inngest";
 
 /** Connects the user's Gmail as a member connection and seeds its mailbox. */
 export async function connectInbox(ctx: Ctx, emailAddress: string, messages: FakeMessageInput[]) {

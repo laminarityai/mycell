@@ -8,20 +8,16 @@
 // backstop for a change the feed missed. Gmail messages never change who is on them, so only
 // their deletions are followed.
 import { and, asc, eq, gt, inArray, lte } from "drizzle-orm";
-import { isForeignKeyViolation } from "@/db/errors";
 import { forOrg } from "@/db/for-org";
 import { getConnection } from "@/features/connections/server";
-import type { Ctx } from "@/lib/ctx";
-import { ForbiddenError, NotFoundError } from "@/lib/errors";
+import { type Ctx, requireSystem } from "@/lib/ctx";
+import { runInline, untilGone, type RunStep } from "@/lib/inngest";
 import type { AccessReread, ChangedItem, RemovedItem } from "../types";
 import { driveVersion, readAccess } from "./drive";
-import type { RunStep } from "./learn";
 import { accessListEntries, sourceRecords } from "./schema";
 
 // Drive source records per nightly step: each needs one files.get.
 const REREAD_BATCH = 100;
-
-const runInline: RunStep = (_id, run) => run();
 
 /**
  * Deletes the connection's source records of an item gone from its app: a Gmail message by its
@@ -29,7 +25,7 @@ const runInline: RunStep = (_id, run) => run();
  * Returns how many records went.
  */
 export async function deleteRemovedItem(ctx: Ctx, item: RemovedItem): Promise<{ records: number }> {
-  if (ctx.role !== "system") throw new ForbiddenError();
+  requireSystem(ctx);
   const deleted = await forOrg(ctx).delete(
     sourceRecords,
     and(
@@ -45,7 +41,7 @@ export async function deleteRemovedItem(ctx: Ctx, item: RemovedItem): Promise<{ 
 
 /** Reads again who may see a Drive file changed in place, and rewrites what memory keeps. */
 export async function rereadAccess(ctx: Ctx, item: ChangedItem): Promise<AccessReread> {
-  if (ctx.role !== "system") throw new ForbiddenError();
+  requireSystem(ctx);
   return reread(ctx, item.connectionId, driveVersion(item.sourceRef).fileId);
 }
 
@@ -58,7 +54,7 @@ export async function rereadDriveAccess(
   ctx: Ctx,
   runStep: RunStep = runInline,
 ): Promise<{ files: number; removed: number }> {
-  if (ctx.role !== "system") throw new ForbiddenError();
+  requireSystem(ctx);
   const { startedAt } = await runStep("start", () =>
     Promise.resolve({ startedAt: new Date().toISOString() }),
   );
@@ -123,47 +119,46 @@ async function reread(ctx: Ctx, connectionId: string, fileId: string): Promise<A
   // Memory learned nothing from it: a file that isn't a Google Doc, say.
   if (records.length === 0) return { outcome: "unknown" };
   const ids = records.map((record) => record.id);
-  let access: Awaited<ReturnType<typeof readAccess>>;
-  try {
-    // Its source can't be reached until it's reconnected; tomorrow night's run tries again.
-    if ((await getConnection(ctx, connectionId)).needsReauth) return { outcome: "unreachable" };
-    access = await readAccess(ctx, connectionId, fileId);
-  } catch (error) {
-    // The connection went meanwhile, and its records with it.
-    if (error instanceof NotFoundError) return { outcome: "unknown" };
-    throw error;
-  }
+  // The connection went meanwhile, and its records with it.
+  return untilGone(CONNECTION_FOREIGN_KEYS, () => rewrite(ctx, connectionId, fileId, ids), {
+    outcome: "unknown",
+  } satisfies AccessReread);
+}
+
+// Rewrites the access lists of the records `ids` of the file, or deletes them.
+async function rewrite(
+  ctx: Ctx,
+  connectionId: string,
+  fileId: string,
+  ids: string[],
+): Promise<AccessReread> {
+  // Its source can't be reached until it's reconnected; tomorrow night's run tries again.
+  if ((await getConnection(ctx, connectionId)).needsReauth) return { outcome: "unreachable" };
+  const access = await readAccess(ctx, connectionId, fileId);
+  const db = forOrg(ctx);
   if (access === "gone") {
     await db.delete(sourceRecords, inArray(sourceRecords.id, ids));
     return { outcome: "removed" };
   }
-  const entries = access;
-  try {
-    await db.transaction(async (tx) => {
-      await tx.delete(accessListEntries, inArray(accessListEntries.sourceRecordId, ids));
-      const kept = await tx.update(
-        sourceRecords,
-        { accessCheckedAt: new Date() },
-        inArray(sourceRecords.id, ids),
-      );
-      await tx.insert(
-        accessListEntries,
-        kept.flatMap((record) =>
-          entries.map(({ kind, value }) => ({
-            connectionId,
-            sourceRecordId: record.id,
-            kind,
-            value,
-          })),
-        ),
-        { onConflictDoNothing: true },
-      );
-    });
-  } catch (error) {
-    if (CONNECTION_FOREIGN_KEYS.some((name) => isForeignKeyViolation(error, name))) {
-      return { outcome: "unknown" };
-    }
-    throw error;
-  }
+  await db.transaction(async (tx) => {
+    await tx.delete(accessListEntries, inArray(accessListEntries.sourceRecordId, ids));
+    const kept = await tx.update(
+      sourceRecords,
+      { accessCheckedAt: new Date() },
+      inArray(sourceRecords.id, ids),
+    );
+    await tx.insert(
+      accessListEntries,
+      kept.flatMap((record) =>
+        access.map(({ kind, value }) => ({
+          connectionId,
+          sourceRecordId: record.id,
+          kind,
+          value,
+        })),
+      ),
+      { onConflictDoNothing: true },
+    );
+  });
   return { outcome: "rewritten" };
 }

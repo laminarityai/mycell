@@ -8,13 +8,12 @@
 // it's shared with as a writer). Read by anyone else, a doc has an empty access list, so only
 // the people whose own Drive holds it see what it taught.
 import { z } from "zod";
+import { FILES } from "@/features/connections/drive";
 import { proxyGet, proxyGetText } from "@/features/connections/server";
 import { SourceRequestError } from "@/features/connections/types";
 import { getWorkspaceDomain } from "@/features/orgs/server";
 import type { Ctx } from "@/lib/ctx";
 import type { AccessEntry, SourceItem } from "./source-item";
-
-const FILES = "/drive/v3/files";
 
 /** The one kind of Drive file memory learns from. */
 export const GOOGLE_DOC = "application/vnd.google-apps.document";

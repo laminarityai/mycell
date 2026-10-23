@@ -4,7 +4,7 @@
 // never the values themselves (invariant 8).
 import type { Step } from "@/features/spec/types";
 import { ModelCallError } from "@/features/models/types";
-import type { Json } from "../types";
+import type { Json } from "@/lib/inngest";
 import { schemaProblems } from "./json-schema";
 import type { StepExecution } from "./step-context";
 

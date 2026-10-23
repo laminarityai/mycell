@@ -14,8 +14,8 @@
 import { and, eq, inArray, or } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { decryptForOrg, encryptForOrg, hashForOrg } from "@/features/key-store/server";
-import { requireAdmin, type Ctx } from "@/lib/ctx";
-import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
+import { type Ctx, requireAdmin, requireSystem } from "@/lib/ctx";
+import { NotFoundError, ValidationError } from "@/lib/errors";
 import { forgetPersonSchema, type ForgetPersonInput, type Forgotten } from "../types";
 import { sendPersonForgotten } from "./events";
 import type { Extracted } from "./extract";
@@ -48,7 +48,7 @@ export async function forgetPerson(ctx: Ctx, input: ForgetPersonInput): Promise<
  * once the org's key is gone, there's nothing to forget. The org's system ctx only.
  */
 export async function forgetPersonAgain(ctx: Ctx, encryptedAddress: string): Promise<Forgotten> {
-  if (ctx.role !== "system") throw new ForbiddenError();
+  requireSystem(ctx);
   let address: string;
   try {
     address = await decryptForOrg(ctx, encryptedAddress);

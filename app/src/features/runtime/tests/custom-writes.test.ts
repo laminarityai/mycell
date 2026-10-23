@@ -12,7 +12,7 @@ import type { Ctx } from "@/lib/ctx";
 import { fakeKms } from "@/testing/fake-kms";
 import { publishTo } from "@/testing/visibility-helpers";
 import { dryRun, executeRun, getRun, startRun } from "../server";
-import type { RunStep } from "../types";
+import type { RunStep } from "@/lib/inngest";
 
 beforeEach(resetDatabase);
 

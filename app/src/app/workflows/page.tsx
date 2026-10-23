@@ -7,6 +7,7 @@ import { ReviewCountsSection } from "@/features/reviews/ui";
 import { listVisibleWorkflows } from "@/features/workflows/server";
 import { VisibleWorkflowsList, WorkflowsList } from "@/features/workflows/ui";
 import { AppNav } from "@/app/app-nav";
+import { isAdmin } from "@/lib/ctx";
 import { adminWorkflows } from "./admin-workflows";
 
 export default function WorkflowsPage({ searchParams }: PageProps<"/workflows">) {
@@ -28,7 +29,7 @@ export default function WorkflowsPage({ searchParams }: PageProps<"/workflows">)
 async function Workflows({ searchParams }: Pick<PageProps<"/workflows">, "searchParams">) {
   const ctx = await getCtx();
   const period = reviewPeriodSchema.parse((await searchParams).period);
-  if (ctx.role !== "admin") {
+  if (!isAdmin(ctx)) {
     const workflows = await listVisibleWorkflows(ctx);
     return (
       <>

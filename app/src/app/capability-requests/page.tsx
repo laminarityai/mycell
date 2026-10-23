@@ -5,6 +5,7 @@ import { listCapabilityRequests } from "@/features/custom-actions/server";
 import { CapabilityRequestList } from "@/features/custom-actions/ui";
 import { getCtx } from "@/features/orgs/server";
 import { AppNav } from "@/app/app-nav";
+import { isAdmin } from "@/lib/ctx";
 
 export default function CapabilityRequestsPage() {
   return (
@@ -27,7 +28,7 @@ export default function CapabilityRequestsPage() {
 async function Requests() {
   const ctx = await getCtx();
   // Capability requests are admin-only, like the builder chat that files them.
-  if (ctx.role !== "admin") redirect("/");
+  if (!isAdmin(ctx)) redirect("/");
   const [requests, conversations] = await Promise.all([
     listCapabilityRequests(ctx),
     listConversations(ctx),

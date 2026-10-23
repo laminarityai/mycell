@@ -18,7 +18,7 @@
 import { and, inArray, sql, type SQL } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { getWorkspaceDomain, listUsers } from "@/features/orgs/server";
-import type { Ctx } from "@/lib/ctx";
+import { type Ctx, isSystem } from "@/lib/ctx";
 import { markedAddresses } from "./company-wide-lists";
 import { facts, memoryObjects, sourceRecords } from "./schema";
 
@@ -26,7 +26,7 @@ import { facts, memoryObjects, sourceRecords } from "./schema";
 export type Viewer = { userId: string | null; addresses: string[] };
 
 export async function viewerOf(ctx: Ctx): Promise<Viewer> {
-  if (ctx.role === "system") return { userId: null, addresses: [] };
+  if (isSystem(ctx)) return { userId: null, addresses: [] };
   const me = (await listUsers(ctx)).find((user) => user.id === ctx.userId);
   return { userId: ctx.userId, addresses: me === undefined ? [] : [me.email.toLowerCase()] };
 }

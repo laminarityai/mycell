@@ -6,8 +6,7 @@ import { and, eq } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import type { StoredSpec } from "@/features/spec/stored";
 import { tagNamesById } from "@/features/tags/server";
-import type { Ctx } from "@/lib/ctx";
-import { ForbiddenError } from "@/lib/errors";
+import { type Ctx, requireRole } from "@/lib/ctx";
 import { workflows } from "./schema";
 
 // A save racing the rewrite moves the revision on; the rewrite reads the spec again and retries.
@@ -24,7 +23,7 @@ export async function followTagRename(
   ctx: Ctx,
   rename: { tagId: string; from: string },
 ): Promise<number> {
-  if (ctx.role !== "admin" && ctx.role !== "system") throw new ForbiddenError();
+  requireRole(ctx, "admin", "system");
   const to = (await tagNamesById(ctx, [rename.tagId])).get(rename.tagId);
   if (to === undefined || to === rename.from) return 0;
   const db = forOrg(ctx);

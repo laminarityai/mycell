@@ -4,8 +4,7 @@
 // under way finishes on the version it started on.
 import { and, inArray, isNotNull } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
-import type { Ctx } from "@/lib/ctx";
-import { ForbiddenError } from "@/lib/errors";
+import { type Ctx, requireSystem } from "@/lib/ctx";
 import type { SwitchedOn } from "../types";
 import { enablements, workflows } from "./schema";
 import { listSwitchedOn } from "./switches";
@@ -18,7 +17,7 @@ import { seenByUsers } from "./visibility";
  * is the caller's to check.
  */
 export async function listStartable(ctx: Ctx, connectionId: string): Promise<SwitchedOn[]> {
-  if (ctx.role !== "system") throw new ForbiddenError();
+  requireSystem(ctx);
   const switchedOn = await withoutArchived(ctx, await listSwitchedOn(ctx, connectionId));
   const enablementIds = switchedOn.flatMap(({ switch: by }) =>
     by.kind === "member" ? [by.enablementId] : [],

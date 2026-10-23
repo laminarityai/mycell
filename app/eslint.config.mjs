@@ -102,6 +102,17 @@ const promptCasts = [
   },
 ];
 
+// A role is checked through src/lib/ctx.ts's helpers, so each check reads the same way and a
+// new role can't slip past one. Only `ctx.role` (or `<name>Ctx.role`, `….ctx.role`) is matched:
+// a chat message's role is no actor's.
+const roleChecks = [
+  {
+    selector:
+      "BinaryExpression[operator=/^[!=]==$/] > MemberExpression[property.name='role']:matches([object.name=/^ctx$|Ctx$/], [object.property.name='ctx'])",
+    message: "Use requireAdmin, requireRole, isAdmin or isSystem from @/lib/ctx.",
+  },
+];
+
 // Every model call is metered (invariant 7): only the models feature's calls, and the builder
 // chat's turn and tools, which stream through openMeteredStream, use the AI SDK's model calls.
 const modelCalls = {
@@ -183,7 +194,7 @@ export default defineConfig([
     files: ["src/**/*.{ts,tsx}", "e2e/**/*.ts", "scripts/**/*.ts"],
     rules: {
       "no-restricted-imports": ["error", { paths: [modelCalls] }],
-      "no-restricted-syntax": ["error", ...promptCasts],
+      "no-restricted-syntax": ["error", ...promptCasts, ...roleChecks],
     },
   },
   {
@@ -217,17 +228,23 @@ export default defineConfig([
     files: ["src/**/*.{ts,tsx}"],
     ignores: ["src/components/date-time.tsx"],
     rules: {
-      "no-restricted-syntax": ["error", ...dateFormatting, ...plainErrors, ...promptCasts],
+      "no-restricted-syntax": [
+        "error",
+        ...dateFormatting,
+        ...plainErrors,
+        ...promptCasts,
+        ...roleChecks,
+      ],
     },
   },
   {
     // A rule's options replace, not merge: here the date rule is repeated without plainErrors.
     files: PLAIN_ERRORS_ALLOWED,
-    rules: { "no-restricted-syntax": ["error", ...dateFormatting, ...promptCasts] },
+    rules: { "no-restricted-syntax": ["error", ...dateFormatting, ...promptCasts, ...roleChecks] },
   },
   {
     files: ["src/components/date-time.tsx"],
-    rules: { "no-restricted-syntax": ["error", ...plainErrors, ...promptCasts] },
+    rules: { "no-restricted-syntax": ["error", ...plainErrors, ...promptCasts, ...roleChecks] },
   },
   {
     // A rule's options replace, not merge, so the restrictions above are repeated here.
@@ -245,6 +262,7 @@ export default defineConfig([
         ...dateFormatting,
         ...plainErrors,
         ...promptCasts,
+        ...roleChecks,
         actionParsing,
       ],
     },
@@ -262,7 +280,12 @@ export default defineConfig([
   {
     // The one place a PromptText is made.
     files: ["src/lib/prompts.ts"],
-    rules: { "no-restricted-syntax": ["error", ...dateFormatting, ...plainErrors] },
+    rules: { "no-restricted-syntax": ["error", ...dateFormatting, ...plainErrors, ...roleChecks] },
+  },
+  {
+    // Where the role helpers compare roles.
+    files: ["src/lib/ctx.ts"],
+    rules: { "no-restricted-syntax": ["error", ...dateFormatting, ...plainErrors, ...promptCasts] },
   },
   { files: ["src/env.ts"], rules: { "no-restricted-properties": "off" } },
   { files: [NEXT_DEFAULT_EXPORT_FILES], rules: { "import/no-default-export": "off" } },

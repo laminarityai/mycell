@@ -12,7 +12,7 @@ import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import { fakeInngest } from "@/testing/fake-inngest";
 import type { FakeMessageInput } from "@/testing/fake-gmail";
 import { executeRun, getRun, listRuns, startTriggeredRuns } from "../server";
-import type { RunStep } from "../types";
+import type { RunStep } from "@/lib/inngest";
 import { pricingQuestion, publish, threadSpec } from "./run-helpers";
 
 beforeEach(resetDatabase);

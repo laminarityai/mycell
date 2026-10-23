@@ -1,13 +1,13 @@
 import { and, eq } from "drizzle-orm";
 import { member, session } from "@/db/auth-schema";
 import { getDb } from "@/db/client";
-import type { Ctx, Role } from "@/lib/ctx";
-import { ConflictError, ForbiddenError, NotFoundError } from "@/lib/errors";
+import { type Ctx, requireAdmin, type Role } from "@/lib/ctx";
+import { ConflictError, NotFoundError } from "@/lib/errors";
 
 type Tx = Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0];
 
 export async function setRole(ctx: Ctx, userId: string, role: Role): Promise<void> {
-  if (ctx.role !== "admin") throw new ForbiddenError();
+  requireAdmin(ctx);
   await getDb().transaction(async (tx) => {
     const target = await findMember(tx, ctx, userId);
     if (target.role === "admin" && role === "member") await assertNotLastAdmin(tx, ctx);
@@ -17,7 +17,7 @@ export async function setRole(ctx: Ctx, userId: string, role: Role): Promise<voi
 
 /** Ends the user's access at once: their membership goes, and so do their sessions. */
 export async function removeUser(ctx: Ctx, userId: string): Promise<void> {
-  if (ctx.role !== "admin") throw new ForbiddenError();
+  requireAdmin(ctx);
   await getDb().transaction(async (tx) => {
     const target = await findMember(tx, ctx, userId);
     if (target.role === "admin") await assertNotLastAdmin(tx, ctx);

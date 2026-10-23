@@ -2,14 +2,8 @@ import { randomUUID } from "node:crypto";
 import { asc, eq, inArray } from "drizzle-orm";
 import { isUniqueViolation } from "@/db/errors";
 import { forOrg } from "@/db/for-org";
-import { requireAdmin, type Ctx } from "@/lib/ctx";
-import {
-  ConflictError,
-  ForbiddenError,
-  InvariantError,
-  NotFoundError,
-  ValidationError,
-} from "@/lib/errors";
+import { type Ctx, requireAdmin, requireRole } from "@/lib/ctx";
+import { ConflictError, InvariantError, NotFoundError, ValidationError } from "@/lib/errors";
 import type { Tag, TagSummary } from "../types";
 import { sendTagDeleted, sendTagRenamed } from "./events";
 import { tagAssignments, tags } from "./schema";
@@ -90,7 +84,7 @@ export async function tagNamesById(
   ctx: Ctx,
   tagIds: readonly string[],
 ): Promise<Map<string, string>> {
-  if (ctx.role !== "admin" && ctx.role !== "system") throw new ForbiddenError();
+  requireRole(ctx, "admin", "system");
   if (tagIds.length === 0) return new Map();
   const rows = await forOrg(ctx).select(tags, { where: inArray(tags.id, [...new Set(tagIds)]) });
   return new Map(rows.map((tag) => [tag.id, tag.name]));
@@ -103,7 +97,7 @@ export async function tagNamesById(
  * ctx may ask.
  */
 export async function findTagsByName(ctx: Ctx, names: readonly string[]): Promise<Tag[]> {
-  if (ctx.role !== "admin" && ctx.role !== "system") throw new ForbiddenError();
+  requireRole(ctx, "admin", "system");
   const wanted = [...new Set(names)];
   if (wanted.length === 0) return [];
   const rows = await forOrg(ctx).select(tags, { where: inArray(tags.name, wanted) });

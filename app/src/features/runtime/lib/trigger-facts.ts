@@ -3,7 +3,7 @@
 // record, which keep the path taken and each check's pass or fail.
 import { subjectParts } from "@/features/spec/conditions";
 import type { BranchStep } from "@/features/spec/types";
-import type { Json } from "../types";
+import type { Json } from "@/lib/inngest";
 import { messageFacts } from "./gmail";
 import type { StepContext } from "./step-context";
 

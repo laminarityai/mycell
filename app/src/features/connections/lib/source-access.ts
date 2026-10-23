@@ -6,7 +6,7 @@
 import { and, eq } from "drizzle-orm";
 import type { z } from "zod";
 import { forOrg } from "@/db/for-org";
-import type { Ctx } from "@/lib/ctx";
+import { type Ctx, isAdmin, isSystem, requireSystem } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import type {
   ConnectionDetails,
@@ -38,10 +38,8 @@ type Connection = typeof connections.$inferSelect;
  * act as, may read every connection in its org (ADR-0009): it ingests for their owners.
  */
 export function isReadableBy(ctx: Ctx, connection: Pick<Connection, "kind" | "ownerUserId">) {
-  if (ctx.role === "system") return true;
-  return connection.kind === "member"
-    ? connection.ownerUserId === ctx.userId
-    : ctx.role === "admin";
+  if (isSystem(ctx)) return true;
+  return connection.kind === "member" ? connection.ownerUserId === ctx.userId : isAdmin(ctx);
 }
 
 /** One connection the caller may read, or was delegated. */
@@ -74,7 +72,7 @@ export async function readableConnectionIds(ctx: Ctx): Promise<string[]> {
  * system ctx. Anyone else is ForbiddenError: users list connections with listConnections.
  */
 export async function listConnectionsForJobs(ctx: Ctx): Promise<ConnectionDetails[]> {
-  if (ctx.role !== "system") throw new ForbiddenError();
+  requireSystem(ctx);
   const rows = await forOrg(ctx).select(connections, { orderBy: [connections.createdAt] });
   const states = await ingestStatesOf(
     ctx,

@@ -13,15 +13,16 @@ import type { ActionSet } from "@/features/policy/types";
 import { createReview } from "@/features/reviews/server";
 import type { Spec, Step } from "@/features/spec/types";
 import { getWorkflowVersion, listSwitchedOn } from "@/features/workflows/server";
-import type { Ctx } from "@/lib/ctx";
-import { ForbiddenError, NotFoundError } from "@/lib/errors";
-import type { RetryPolicy, RunOutcome, RunStep } from "../types";
+import { type Ctx, requireSystem } from "@/lib/ctx";
+import { NotFoundError } from "@/lib/errors";
+import type { RetryPolicy, RunOutcome } from "../types";
+import { runInline, type RunStep } from "@/lib/inngest";
 import { actionExecutors } from "./actions";
 import { holdCustomWrite } from "./custom-action";
 import { linkHeldSendReview } from "./held-sends";
 import { attemptStep } from "./executors";
 import { isConnectionGone, type Failure } from "./failures";
-import { defaultRetryPolicy, runInline, withRetries } from "./run-step";
+import { defaultRetryPolicy, withRetries } from "./run-step";
 import { findRun, stepsOf } from "./runs";
 import { runs, runSteps } from "./schema";
 import type { StepContext, StepExecution } from "./step-context";
@@ -50,7 +51,7 @@ export async function executeRun(
   runStep: RunStep = runInline,
   retry: RetryPolicy = defaultRetryPolicy,
 ): Promise<RunOutcome> {
-  if (ctx.role !== "system") throw new ForbiddenError();
+  requireSystem(ctx);
   const run = await findRun(ctx, runId);
   if (run === undefined) return { status: "cancelled" };
   if (run.status !== "running") return { status: run.status };

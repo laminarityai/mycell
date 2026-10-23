@@ -10,7 +10,7 @@ import { systemCtx, type Ctx } from "@/lib/ctx";
 import { connectGoogle } from "@/testing/connect-helpers";
 import { publishTo } from "@/testing/visibility-helpers";
 import { executeRun, getRun, startTriggeredRuns } from "../server";
-import type { RunStep } from "../types";
+import type { RunStep } from "@/lib/inngest";
 import { pricingQuestion, threadSpec } from "./run-helpers";
 
 beforeEach(resetDatabase);

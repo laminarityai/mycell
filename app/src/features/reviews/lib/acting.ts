@@ -16,11 +16,10 @@ import {
   type PendingItem,
   type ReviewEdits,
 } from "@/features/runtime/adapters";
-import type { Ctx } from "@/lib/ctx";
+import { type Ctx, requireSystem } from "@/lib/ctx";
 import {
   AlreadyHandledError,
   ConflictError,
-  ForbiddenError,
   ItemGoneError,
   SendUnconfirmedError,
   ValidationError,
@@ -97,7 +96,7 @@ export async function checkWaitingReviews(
   ctx: Ctx,
   adapters: PendingForms = pendingForms,
 ): Promise<void> {
-  if (ctx.role !== "system") throw new ForbiddenError();
+  requireSystem(ctx);
   const now = Date.now();
   const waiting = await forOrg(ctx).select(reviews, { where: eq(reviews.status, "waiting") });
   for (const row of waiting) {

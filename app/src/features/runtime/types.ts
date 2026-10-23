@@ -1,15 +1,7 @@
 // Runtime's public types: runs, their steps and records, and what a dry run returns.
 import type { ActionName } from "@/features/policy/catalog";
 import type { ModelRole, StepType } from "@/features/spec/types";
-
-/** JSON: what a step hands on, since Inngest stores it and replays it instead of re-running. */
-export type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
-
-/**
- * Runs one named step: Inngest's `step.run` in the job, called straight through elsewhere. A
- * finished step's result is replayed, never re-run, so a retry repeats no earlier step.
- */
-export type RunStep = <T extends Json>(id: string, run: () => Promise<T>) => Promise<T>;
+import type { Json } from "@/lib/inngest";
 
 /**
  * How often a failing step is tried, and how long it waits before attempt `attempt + 1`. The

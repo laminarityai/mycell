@@ -7,8 +7,7 @@ import { randomUUID } from "node:crypto";
 import { and, arrayContains, desc, eq, inArray, lt } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { userNames } from "@/features/orgs/server";
-import type { Ctx } from "@/lib/ctx";
-import { ForbiddenError } from "@/lib/errors";
+import { type Ctx, isAdmin, isSystem, requireRole, requireSystem } from "@/lib/ctx";
 import {
   ACCESS_LOG_RETENTION_DAYS,
   type AccessLogEntry,
@@ -43,7 +42,7 @@ export function loggedReader(ctx: Ctx, reader: MemoryReader): LoggedReader {
   if (reader.kind === "workflow_run") {
     return { kind: "workflow_run", runId: reader.runId, workflowId: reader.workflowId };
   }
-  if (reader.kind === "person" && ctx.role === "system") return { kind: "system" };
+  if (reader.kind === "person" && isSystem(ctx)) return { kind: "system" };
   return { kind: reader.kind };
 }
 
@@ -70,7 +69,7 @@ export async function logRead(
     id: randomUUID(),
     operation: read.operation,
     readerKind: reader.kind,
-    userId: ctx.role === "system" ? null : ctx.userId,
+    userId: isSystem(ctx) ? null : ctx.userId,
     runId: reader.runId ?? null,
     workflowId: reader.workflowId ?? null,
     staffConsentId: reader.staffConsentId ?? null,
@@ -86,13 +85,10 @@ export async function logRead(
  * it. The system ctx is no one, so it has no log to see.
  */
 export async function listAccessLog(ctx: Ctx): Promise<AccessLogEntry[]> {
-  if (ctx.role === "system") throw new ForbiddenError();
+  requireRole(ctx, "admin", "member");
   const db = forOrg(ctx);
   const rows = await db.select(accessLogEntries, {
-    where:
-      ctx.role === "admin"
-        ? undefined
-        : arrayContains(accessLogEntries.sourceOwnerIds, [ctx.userId]),
+    where: isAdmin(ctx) ? undefined : arrayContains(accessLogEntries.sourceOwnerIds, [ctx.userId]),
     orderBy: [desc(accessLogEntries.readAt), desc(accessLogEntries.id)],
     limit: ACCESS_LOG_PAGE,
   });
@@ -160,7 +156,7 @@ export async function pruneAccessLog(
   ctx: Ctx,
   now: Date = new Date(),
 ): Promise<{ entries: number; consents: number }> {
-  if (ctx.role !== "system") throw new ForbiddenError();
+  requireSystem(ctx);
   const cutoff = new Date(now.getTime() - ACCESS_LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000);
   const db = forOrg(ctx);
   const entries = await db.delete(accessLogEntries, lt(accessLogEntries.readAt, cutoff));

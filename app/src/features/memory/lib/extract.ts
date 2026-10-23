@@ -6,10 +6,10 @@
 import { z } from "zod";
 import { callModel, classify } from "@/features/models/server";
 import type { Ctx } from "@/lib/ctx";
+import { emailAddressesIn } from "@/lib/email-addresses";
 import type { PromptText } from "@/lib/prompts";
 import { OBJECT_KINDS, type ObjectKeyKind, type ObjectKind } from "../types";
 import { MEMORY_USAGE } from "./budget";
-import { addressesIn } from "./gmail";
 import { extractPrompts } from "./prompts";
 import type { SourceItem } from "./source-item";
 
@@ -122,7 +122,7 @@ export async function extract(ctx: Ctx, item: SourceItem, domain: string): Promi
 function grounded(extraction: Extraction, item: SourceItem, domain: string): Extracted {
   const text = normalized(item.text);
   const runs = wordRuns(item.text);
-  const addresses = new Set([...item.addresses, ...addressesIn(item.text)]);
+  const addresses = new Set([...item.addresses, ...emailAddressesIn(item.text)]);
   const objects = new Map<string, ExtractedObject & { insider: boolean }>();
   for (const object of extraction.objects) {
     const keys = keysOf(object, addresses, text);

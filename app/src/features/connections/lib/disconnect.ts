@@ -4,7 +4,7 @@
 import { and, eq } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { listUsers } from "@/features/orgs/server";
-import type { Ctx } from "@/lib/ctx";
+import { type Ctx, isAdmin, requireAdmin } from "@/lib/ctx";
 import { ConflictError, ForbiddenError, NangoRequestError, NotFoundError } from "@/lib/errors";
 import { deleteNangoConnection } from "./nango";
 import { connections } from "./schema";
@@ -31,7 +31,7 @@ export async function disconnect(ctx: Ctx, connectionId: string): Promise<void> 
  * connections stay. Their unfinished connect attempts went with their member row.
  */
 export async function deleteMemberConnectionsOf(ctx: Ctx, userId: string): Promise<void> {
-  if (ctx.role !== "admin") throw new ForbiddenError();
+  requireAdmin(ctx);
   // While they're still a member, their connections are theirs alone to disconnect.
   const users = await listUsers(ctx);
   if (users.some((user) => user.id === userId)) {
@@ -65,9 +65,7 @@ export async function forgetNangoConnection(
  * connection, any admin for an org connection.
  */
 export function mayManage(ctx: Ctx, connection: Pick<Connection, "kind" | "ownerUserId">): boolean {
-  return connection.kind === "member"
-    ? connection.ownerUserId === ctx.userId
-    : ctx.role === "admin";
+  return connection.kind === "member" ? connection.ownerUserId === ctx.userId : isAdmin(ctx);
 }
 
 /**

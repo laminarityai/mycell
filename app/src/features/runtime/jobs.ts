@@ -3,19 +3,12 @@
 import "server-only";
 import { systemCtx } from "@/lib/ctx";
 import { gmailMessageReceived } from "@/lib/events";
-import { inngest } from "@/lib/inngest";
+import { inngest, stepRunner } from "@/lib/inngest";
 import { runRequested } from "./lib/events";
 import { executeRun, startTriggeredRuns } from "./server";
-import type { Json, RunStep } from "./types";
 
 // At most this many runs execute at once for one org, as for ingest.
 const PER_ORG_LIMIT = 3;
-
-// Step results are plain JSON already, so Inngest's serialized type is the same type.
-const stepRunner =
-  (step: { run: (id: string, run: () => Promise<unknown>) => Promise<unknown> }): RunStep =>
-  <T extends Json>(id: string, run: () => Promise<T>) =>
-    step.run(id, run) as Promise<T>;
 
 /**
  * Starts the runs one new inbound message starts: one per enablement or org workflow switched

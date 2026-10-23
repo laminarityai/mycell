@@ -4,6 +4,7 @@ import { listAccessLog, listStaffConsents } from "@/features/memory/server";
 import { AccessLog, StaffConsents } from "@/features/memory/ui";
 import { getCtx } from "@/features/orgs/server";
 import { workflowNames } from "@/features/workflows/server";
+import { isAdmin } from "@/lib/ctx";
 
 export default function AccessLogPage() {
   return (
@@ -21,7 +22,7 @@ export default function AccessLogPage() {
 
 async function Log() {
   const ctx = await getCtx();
-  const admin = ctx.role === "admin";
+  const admin = isAdmin(ctx);
   const entries = await listAccessLog(ctx);
   const [names, consents] = await Promise.all([
     workflowNames(

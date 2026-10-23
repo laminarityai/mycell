@@ -5,6 +5,7 @@
 import { Suspense } from "react";
 import { getCtx } from "@/features/orgs/server";
 import { countWaitingReviews } from "@/features/reviews/server";
+import { isAdmin } from "@/lib/ctx";
 import { NAV_CLASS, NavLinks } from "./nav-links";
 
 /** Reviews (with how many wait), Workflows, Connections, the org, and an admin's own pages. */
@@ -21,5 +22,5 @@ export function AppNav() {
 
 async function CountedNavLinks() {
   const ctx = await getCtx();
-  return <NavLinks waiting={await countWaitingReviews(ctx)} admin={ctx.role === "admin"} />;
+  return <NavLinks waiting={await countWaitingReviews(ctx)} admin={isAdmin(ctx)} />;
 }

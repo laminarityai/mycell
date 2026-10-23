@@ -9,10 +9,10 @@ import { z } from "zod";
 import { getConnection } from "@/features/connections/server";
 import { searchMemory } from "@/features/memory/server";
 import type { MemoryReader, MemorySearch } from "@/features/memory/types";
-import { findUser } from "@/features/orgs/server";
+import { userCtx } from "@/features/orgs/server";
 import { systemCtx, type Ctx } from "@/lib/ctx";
 import { joinPrompts, type PromptText } from "@/lib/prompts";
-import type { Json } from "../types";
+import type { Json } from "@/lib/inngest";
 import { RunStepError } from "./failures";
 import { messageFacts } from "./gmail";
 import { memoryLookupPrompts } from "./prompts";
@@ -87,11 +87,11 @@ async function searchFor(
 async function viewerCtx(ctx: Ctx, connectionId: string): Promise<Ctx> {
   const connection = await getConnection(ctx, connectionId);
   if (connection.kind === "org") return systemCtx(ctx.orgId);
-  const owner = await findUser(ctx, connection.ownerUserId);
+  const owner = await userCtx(ctx, connection.ownerUserId);
   if (owner === null) {
     throw new RunStepError("not_available", "The connection's owner is no longer in the org.");
   }
-  return { orgId: ctx.orgId, userId: owner.id, role: owner.role };
+  return owner;
 }
 
 /** A lookup's facts as a draft step's model reads them. */

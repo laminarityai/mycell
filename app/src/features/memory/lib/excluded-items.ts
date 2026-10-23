@@ -4,25 +4,15 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { forOrg } from "@/db/for-org";
+import { FILES } from "@/features/connections/drive";
+import { GMAIL, labelNamed, labelsSchema, messageListSchema } from "@/features/connections/gmail";
 import { proxyGet } from "@/features/connections/server";
 import type { Ctx } from "@/lib/ctx";
 import { driveVersion } from "./drive";
 import { sourceRecords } from "./schema";
 
-const GMAIL = "/gmail/v1/users/me";
-const FILES = "/drive/v3/files";
-
 // How far up a doc's folders are followed: well past any real nesting.
 const MAX_FOLDER_DEPTH = 25;
-
-const labelsSchema = z.object({
-  labels: z.array(z.object({ id: z.string(), name: z.string() })).default([]),
-});
-
-const messageListSchema = z.object({
-  messages: z.array(z.object({ id: z.string() })).default([]),
-  nextPageToken: z.string().optional(),
-});
 
 const parentsSchema = z.object({ parents: z.array(z.string()).default([]) });
 
@@ -53,7 +43,7 @@ export async function labelledRecords(
   );
   if (learned === 0) return [];
   const labels = await proxyGet(ctx, connectionId, `${GMAIL}/labels`, labelsSchema);
-  const label = labels?.labels.find((l) => l.name.toLowerCase() === name.toLowerCase());
+  const label = labelNamed(labels?.labels ?? [], name);
   if (label === undefined) return [];
   const ids: string[] = [];
   let pageToken: string | undefined;

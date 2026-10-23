@@ -1,6 +1,6 @@
 // Which Google accounts a connect attempt may reach, checked before a connection is recorded.
 import { getWorkspaceDomain, listUsers } from "@/features/orgs/server";
-import type { Ctx } from "@/lib/ctx";
+import { type Ctx, isAdmin } from "@/lib/ctx";
 import type { ConnectionKind } from "../types";
 
 /**
@@ -27,7 +27,7 @@ async function checkOwnAccount(ctx: Ctx, accountEmail: string): Promise<string |
 
 async function checkOrgAccount(ctx: Ctx, accountEmail: string): Promise<string | undefined> {
   // The role is read fresh with the webhook's ctx: an admin demoted mid-connect can't finish.
-  if (ctx.role !== "admin") return "Only admins can connect org sources.";
+  if (!isAdmin(ctx)) return "Only admins can connect org sources.";
   const domain = (await getWorkspaceDomain(ctx)).toLowerCase();
   if (accountEmail.slice(accountEmail.lastIndexOf("@") + 1) !== domain) {
     return `An org connection must be an @${domain} account, not ${accountEmail}.`;

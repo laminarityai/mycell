@@ -338,7 +338,7 @@ test("an admin publishes a workflow to a tag, and a member with that tag sees it
   await page.getByRole("link", { name: "Workflows" }).click();
   const card = page.getByRole("listitem").filter({ hasText: "Triage" });
   await expect(card).toContainText("Runs on your own Google account.");
-  await expect(card).toContainText("Gmail");
+  await expect(card.getByRole("img", { name: "Gmail" })).toBeVisible();
   await expect(card).toContainText("External send");
   await expect(card).toContainText("Off");
   await expect(page.getByRole("link", { name: "New workflow" })).toBeHidden();

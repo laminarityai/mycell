@@ -5,8 +5,10 @@ import { grantCredits, listLedger } from "@/features/credits/server";
 import { systemCtx } from "@/lib/ctx";
 import { OutOfCreditsError } from "@/lib/errors";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
+import { readTurn } from "@/testing/streamed-turn";
 import * as server from "../server";
 import { testPrompts } from "./requests";
+import { askTurn, type StoredAskMessage } from "./second-chat";
 
 // Org B points every role at its own models and has credits; org A has neither, so a call as
 // org A that read org B's rows would use org B's model or pass on org B's balance.
@@ -44,6 +46,28 @@ export const isolationCases = defineIsolationCases(server, {
     expect(stream.modelId).toBe("test/smart-default");
     expect(await listLedger(orgs.orgB.admin.ctx)).toEqual(ledgerBefore);
   },
+
+  streamChatTurn: async (orgs) => {
+    const { ledgerBefore } = await seedOrgB(orgs);
+    const member = orgs.orgA.member.ctx;
+    const stored: StoredAskMessage[] = [];
+
+    // Org B's balance doesn't cover org A.
+    const refused = await readTurn(await askTurn(member, "Hi", stored));
+    expect(refused.notices.map((notice) => notice.kind)).toEqual(["out_of_credits"]);
+    await grantCredits(systemCtx(orgs.orgA.id), 100);
+    fakeAiGateway.reply({ text: "Hello." }, { costUsd: 0.001 });
+    await readTurn(await askTurn(member, "Hi", stored));
+
+    expect(fakeAiGateway.requests().map((request) => request.modelId)).toEqual([
+      "test/smart-default",
+    ]);
+    expect(await listLedger(orgs.orgB.admin.ctx)).toEqual(ledgerBefore);
+  },
+
+  chatTool: notTenantScoped("wraps a tool definition: it takes no ctx and reads no org's data"),
+  chatModelMessages: notTenantScoped("maps the stored messages it's given: pure, no IO"),
+  chatUIPart: notTenantScoped("maps the stored part it's given: pure, no IO"),
 
   setModelRole: async (orgs) => {
     await seedOrgB(orgs);

@@ -15,7 +15,10 @@ import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { listReviews, openReview } from "@/features/reviews/server";
 import type { RunStep } from "@/lib/inngest";
-import { getRun } from "../server";
+import { grantCredits } from "@/features/credits/server";
+import { systemCtx } from "@/lib/ctx";
+import { connectGoogle } from "@/testing/connect-helpers";
+import { dryRun, getRun } from "../server";
 import { recordedBackoff, recordsOf } from "./run-helpers";
 
 beforeEach(resetDatabase);
@@ -112,5 +115,69 @@ describe("a run that books a meeting", () => {
 
     expect(calendar.organized()).toHaveLength(1);
     expect(await listReviews(owner)).toHaveLength(1);
+  });
+});
+
+describe("trying a booking", () => {
+  it("reports the meeting it would book on an invite, and books nothing", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const { admin } = orgA;
+    const google = await connectGoogle(admin.ctx, admin.email);
+    await grantCredits(systemCtx(orgA.id), 100);
+    const invite = google.calendar.invite({ title: "Renewal", organizer: GUEST });
+    const spec = {
+      specVersion: 2,
+      id: "follow-ups",
+      credentials: "member",
+      trigger: { type: "calendar.invite_received" },
+      autonomy: { rung: 3 },
+      steps: [
+        {
+          id: "read",
+          type: "tool",
+          action: "google-calendar.read-event",
+          input: { eventId: { from: "trigger.eventId" } },
+        },
+        {
+          id: "book",
+          type: "tool",
+          action: "google-calendar.create-event",
+          input: {
+            title: "Follow-up",
+            start: START,
+            end: END,
+            guests: [{ from: "read.organizer" }],
+            meet: true,
+          },
+        },
+      ],
+    };
+
+    const result = await dryRun(admin.ctx, spec, {
+      connectionId: google.id,
+      sourceRef: invite.id,
+    });
+
+    expect(result).toMatchObject({
+      ended: "succeeded",
+      steps: [
+        { stepId: "read", status: "succeeded" },
+        {
+          stepId: "book",
+          status: "succeeded",
+          effect: {
+            kind: "event",
+            title: "Follow-up",
+            start: START,
+            end: END,
+            guests: [GUEST],
+            meet: true,
+          },
+        },
+        { stepId: "book-approval", effect: { kind: "review", channel: "calendar_events" } },
+      ],
+    });
+    expect(google.calendar.writes.log).toEqual([]);
+    expect(await tablesHolding("Renewal")).toEqual([]);
   });
 });

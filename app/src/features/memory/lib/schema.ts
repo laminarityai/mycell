@@ -10,7 +10,6 @@ import "server-only";
 import { sql } from "drizzle-orm";
 import {
   boolean,
-  customType,
   foreignKey,
   index,
   integer,
@@ -24,6 +23,7 @@ import {
 } from "drizzle-orm/pg-core";
 // Derived data cascades from its connection (docs/conventions.md, "Derived data cascades from
 // its connection").
+import { tsvector } from "@/db/columns";
 import { connections } from "@/features/connections/lib/schema";
 import {
   ACCESS_LOG_READER_KINDS,
@@ -38,8 +38,6 @@ import {
 
 /** The `embed` role's default model's dimensions (openai/text-embedding-3-small). */
 export const EMBEDDING_DIMENSIONS = 1536;
-
-const tsvector = customType<{ data: string }>({ dataType: () => "tsvector" });
 
 /**
  * One item memory learned from, as one connection holds it: an email (later a Drive file

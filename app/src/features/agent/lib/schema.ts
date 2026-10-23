@@ -1,8 +1,10 @@
 // A person's Ask Mycel conversations and their messages. Both are tenant-owned. A conversation
 // references its owner as a member (org_id, user_id), so it stays in their org and goes when
 // they're removed. Messages keep the person's words, the agent's replies and its tool calls
-// with only the IDs of what they read, never fact text or fetched content (invariant 8).
+// with only the IDs of what they read, never fact text or fetched content (invariant 8). A
+// message's keyword index, for searching conversations, is made of its text parts alone.
 import "server-only";
+import { sql } from "drizzle-orm";
 import {
   bigserial,
   foreignKey,
@@ -14,7 +16,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { member } from "@/db/auth-schema";
-import { zodJsonb } from "@/db/columns";
+import { tsvector, zodJsonb } from "@/db/columns";
 import { storedPartSchema } from "../types";
 
 export const agentConversations = pgTable(
@@ -46,6 +48,9 @@ export const agentConversations = pgTable(
   ],
 );
 
+/** The JSON path to a message's text parts' words, in its `parts`: what search reads. */
+export const TEXT_PARTS = sql.raw(`'$[*] ? (@.type == "text").text'`);
+
 export const agentMessages = pgTable(
   "agent_messages",
   {
@@ -57,9 +62,17 @@ export const agentMessages = pgTable(
     role: text("role", { enum: ["user", "assistant"] }).notNull(),
     parts: zodJsonb("parts", z.array(storedPartSchema)).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    // Searching conversations' keyword index, derived by Postgres from the message's text
+    // parts only (the person's words, Mycel's reply): never a tool call or a notice.
+    keywords: tsvector("keywords")
+      .notNull()
+      .generatedAlwaysAs(
+        sql`jsonb_to_tsvector('english', jsonb_path_query_array(parts, ${TEXT_PARTS}), '["string"]')`,
+      ),
   },
   (table) => [
     index("agent_messages_org_id_conversation_id_idx").on(table.orgId, table.conversationId),
+    index("agent_messages_keywords_idx").using("gin", table.keywords),
     foreignKey({
       name: "agent_messages_conversation_fk",
       columns: [table.orgId, table.conversationId],

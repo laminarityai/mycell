@@ -1,6 +1,7 @@
 // An org's action set (ADR-0018): the actions its workflows may use, looked up by name.
 // `custom-actions` resolves one per org; everything that looks an action up takes it.
 // Pure: no IO, no ctx, so client code may import it.
+import { GOOGLE_API_PREFIXES, GOOGLE_APP_NAMES } from "@/lib/google";
 import type { Action, ActionSet } from "./types";
 
 /**
@@ -16,15 +17,23 @@ export function actionSetOf(actions: readonly Action[]): ActionSet {
 
 /**
  * The apps a workflow calling `actionNames` uses, as admins name them: Gmail, whose new mail
- * every workflow's trigger watches, then each action's app, each once. An action on what Mycel
- * itself holds (memory) uses no app.
+ * every workflow's trigger watches, then each action's app, each once. A custom Google action's
+ * app is the Google app its path reaches (Calendar, say), or Google when none does. An action on
+ * what Mycel itself holds (memory) uses no app.
  */
-export function appsUsed(actionNames: readonly string[], actions: ActionSet): Action["app"][] {
+export function appsUsed(actionNames: readonly string[], actions: ActionSet): string[] {
   const apps = actionNames.flatMap((name) => {
     const action = actions.find(name);
-    return action === undefined || isMycelAction(action) ? [] : [action.app];
+    return action === undefined || isMycelAction(action) ? [] : [appOf(action)];
   });
-  return [...new Set<Action["app"]>(["Gmail", ...apps])];
+  return [...new Set(["Gmail", ...apps])];
+}
+
+// The app an action acts in, as admins name it.
+function appOf(action: Action): string {
+  if (action.kind !== "custom" || action.registeredApp !== "google") return action.app;
+  const google = GOOGLE_API_PREFIXES.find(({ prefix }) => action.request.path.startsWith(prefix));
+  return google === undefined ? action.app : GOOGLE_APP_NAMES[google.app];
 }
 
 /**

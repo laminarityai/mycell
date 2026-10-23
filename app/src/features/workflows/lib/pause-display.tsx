@@ -1,5 +1,7 @@
 // How a switch's state shows wherever a switch is shown: a badge with its effective state (the
 // first pause that holds, or on, or off), and a notice explaining every pause that holds.
+import { Fragment, type ReactNode } from "react";
+import { AppIcon } from "@/components/app-mark";
 import { Badge } from "@/components/ui/badge";
 import type { PausedChange, PausedReason, WorkflowSwitch } from "../types";
 import { pauseLift, pauseMeaning, pausedChangeText, pausedText } from "./paused-text";
@@ -58,17 +60,47 @@ export function PausedNotice({ current }: { current: WorkflowSwitch | null }) {
   );
 }
 
-// What the versions published since the member switched it on changed.
+// What the versions published since the member switched it on changed, each new app named with
+// its mark.
 function Changes({ change }: { change: PausedChange | null }) {
-  const changes = pausedChangeText(change);
+  if (change === null) return null;
+  const { maxRiskRaised, newApps, newScopes } = change;
+  const changes = [
+    ...textItems(maxRiskRaised === undefined ? null : { maxRiskRaised }),
+    ...(newApps === undefined ? [] : [{ key: "apps", item: <NewApps apps={newApps} /> }]),
+    ...textItems(newScopes === undefined ? null : { newScopes }),
+  ];
   if (changes.length === 0) return null;
   return (
     <div role="group" aria-label="What changed">
       <ul className="list-disc pl-5">
-        {changes.map((text) => (
-          <li key={text}>{text}</li>
+        {changes.map(({ key, item }) => (
+          <li key={key}>{item}</li>
         ))}
       </ul>
     </div>
+  );
+}
+
+function textItems(change: PausedChange | null): { key: string; item: ReactNode }[] {
+  return pausedChangeText(change).map((text) => ({ key: text, item: text }));
+}
+
+// "It now uses Sheets and Calendar.", each app with its mark.
+function NewApps({ apps }: { apps: readonly string[] }) {
+  return (
+    <>
+      It now uses{" "}
+      {apps.map((app, index) => (
+        <Fragment key={app}>
+          {index === 0 ? null : " and "}
+          <span className="inline-flex items-center gap-1 align-bottom font-medium">
+            <AppIcon app={app} size={14} />
+            {app}
+          </span>
+        </Fragment>
+      ))}
+      .
+    </>
   );
 }

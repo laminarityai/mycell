@@ -3,11 +3,10 @@
 import { handleNangoWebhook, listConnections, startConnect } from "@/features/connections/server";
 import type { ConnectionKind, RegisteredAppId } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
+import { DAY_MS } from "@/lib/time";
 import type { FakeFileInput } from "./fake-drive";
 import type { FakeMessageInput } from "./fake-gmail";
 import { fakeNango } from "./fake-nango";
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** A moment `days` days ago. */
 export function daysAgo(days: number): Date {

@@ -114,6 +114,10 @@ const FILL_TOP = 80;
 const MIN_HEIGHT = 320;
 const MIN_EDITING_HEIGHT = 560;
 const MAX_HEIGHT = 720;
+/** What a screen reader hears on a focused box: how to open it, not React Flow's own keys. */
+const ARIA_LABELS = {
+  "node.a11yDescription.default": "Press Enter or Space to open it in the side panel.",
+};
 
 function Canvas({
   layout,
@@ -154,7 +158,12 @@ function Canvas({
           edgeTypes={edgeTypes}
           nodesDraggable={false}
           nodesConnectable={false}
+          // Only a box that opens is focusable (toDrawing marks it): the rest are read, not used.
+          nodesFocusable={false}
           elementsSelectable={false}
+          ariaLabelConfig={ARIA_LABELS}
+          // Read only, no box opens, so there's nothing to do from the keyboard.
+          disableKeyboardA11y={editing === undefined}
           panOnScroll
           zoomOnScroll={false}
           minZoom={0.25}
@@ -163,6 +172,22 @@ function Canvas({
           onNodeClick={(_, node) => {
             const selection = selectionOf(node);
             if (selection !== null) editing?.onSelect(selection);
+          }}
+          onKeyDown={(event) => {
+            // Enter or Space on a focused box opens it, as a click does.
+            if (editing === undefined || (event.key !== "Enter" && event.key !== " ")) return;
+            const target = event.target;
+            if (
+              !(target instanceof HTMLElement) ||
+              !target.classList.contains("react-flow__node")
+            ) {
+              return;
+            }
+            const node = layout.nodes.find((candidate) => candidate.id === target.dataset.id);
+            const selection = node === undefined ? null : selectionOf(node);
+            if (selection === null) return;
+            event.preventDefault();
+            editing.onSelect(selection);
           }}
           onPaneClick={editing?.onPaneClick}
           onMoveStart={(event) => {

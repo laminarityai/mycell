@@ -9,6 +9,7 @@ import { forOrg } from "@/db/for-org";
 import { userCtx, userNames } from "@/features/orgs/server";
 import { type Ctx, requireAdmin, requireSystem } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
+import { DAY_MS } from "@/lib/time";
 import {
   MAX_STAFF_CONSENT_DAYS,
   staffConsentInputSchema,
@@ -22,8 +23,6 @@ import {
 } from "../types";
 import { readObjectAs, searchAs } from "./logged-reads";
 import { staffConsents } from "./schema";
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 type ConsentRow = typeof staffConsents.$inferSelect;
 

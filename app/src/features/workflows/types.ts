@@ -101,6 +101,8 @@ export type WorkflowSummary = {
   latestVersion: WorkflowVersionSummary | null;
   /** Whose connections the latest version runs on; null while not published. */
   credentials: Spec["credentials"] | null;
+  /** The apps the latest version uses, as admins name them; none while not published. */
+  requiredApps: string[];
   /** The caller's enablement, or the org switch; null while off. */
   switch: WorkflowSwitch | null;
   /** Who the latest version is published to; null while not published. */
@@ -128,11 +130,13 @@ export type VisibleWorkflow = {
   name: string;
   /** What the latest version does, a sentence per step. */
   description: string[];
-  /** The apps the latest version uses, as the catalog names them ("Gmail", "Sheets"). */
+  /** The apps the latest version uses, as admins name them ("Gmail", "Sheets", "Calendar"). */
   requiredApps: string[];
   maxRisk: RiskLevel;
   /** `org` runs on a shared inbox that only admins switch on. */
   credentials: Spec["credentials"];
+  /** The address of the shared inbox the org switch is on; null for a member workflow, or off. */
+  sharedInbox: string | null;
   versionNumber: number;
   /** The caller's enablement, or the org switch; null while off. */
   switch: WorkflowSwitch | null;

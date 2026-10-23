@@ -181,6 +181,24 @@ export const isolationCases = defineIsolationCases(server, {
     }
   },
 
+  sharedInboxes: async (orgs) => {
+    const { before, memberBefore } = await seedOrgBConnection(orgs);
+    const ids = orgBIds(before, memberBefore);
+    await connectOrgInbox(orgs.orgA.admin.ctx, "support@org-a.test");
+    await connectGmail(orgs.orgA.member.ctx, orgs.orgA.member.email);
+    const orgAIds = [
+      ...(await server.listConnections(orgs.orgA.admin.ctx)).orgConnections,
+      ...(await server.listConnections(orgs.orgA.member.ctx)).connections,
+    ].map((c) => c.id);
+    expect(orgAIds).toHaveLength(2);
+
+    // Org B's connections, and org A's member connection, aren't shared inboxes of org A.
+    for (const ctx of [orgs.orgA.admin.ctx, orgs.orgA.member.ctx]) {
+      const inboxes = await server.sharedInboxes(ctx, [...ids, ...orgAIds]);
+      expect([...inboxes.values()]).toEqual(["support@org-a.test"]);
+    }
+  },
+
   listConnectionsForJobs: async (orgs) => {
     await seedOrgBConnection(orgs);
     await connectGmail(orgs.orgA.member.ctx, orgs.orgA.member.email);

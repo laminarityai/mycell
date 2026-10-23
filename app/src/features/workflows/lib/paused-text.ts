@@ -8,6 +8,8 @@ export function pausedText(reason: PausedReason, change: PausedChange | null): s
   switch (reason) {
     case "out_of_credits":
       return "out of credits";
+    case "budget_reached":
+      return "budget reached";
     case "needs_reenable":
       if (change?.maxRiskRaised !== undefined) return "needs your OK for a riskier version";
       if (change?.newApps !== undefined) return "needs your OK for a new app";
@@ -20,6 +22,8 @@ export function pauseMeaning(reason: PausedReason): string {
   switch (reason) {
     case "out_of_credits":
       return "Your company has run out of credits, so no workflow starts new runs.";
+    case "budget_reached":
+      return "This workflow has spent its monthly credit budget, so it starts no new runs this month.";
     case "needs_reenable":
       return "An admin published a new version that needs more than the one you switched on.";
   }
@@ -34,6 +38,12 @@ export function pauseLift(reason: PausedReason, kind: WorkflowSwitch["kind"]): s
     case "out_of_credits":
       return [
         "It starts again by itself once your company has more credits.",
+        "Messages that arrive until then aren't run later.",
+        kind === "member" ? "Your switch stays on." : "Its switch stays on.",
+      ].join(" ");
+    case "budget_reached":
+      return [
+        "It starts again by itself on the 1st of next month (UTC), or as soon as an admin raises or removes its budget.",
         "Messages that arrive until then aren't run later.",
         kind === "member" ? "Your switch stays on." : "Its switch stays on.",
       ].join(" ");

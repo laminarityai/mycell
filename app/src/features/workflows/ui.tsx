@@ -34,6 +34,9 @@ import type {
 export { VisibleWorkflowsList } from "./lib/visible-workflows";
 // How a switch's state shows: its badge and the notice explaining its pauses.
 export { PausedNotice, StateBadge };
+// The workflow page's Editor, Runs and Health tabs, and what Health checks.
+export { WorkflowTabs } from "./lib/workflow-tabs";
+export { WorkflowHealthChecks } from "./lib/health-checks";
 export type { SwitchConnectionOption };
 
 export {

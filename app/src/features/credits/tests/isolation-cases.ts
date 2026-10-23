@@ -1,5 +1,5 @@
 import { expect } from "vitest";
-import { defineIsolationCases } from "@/db/testing/isolation";
+import { defineIsolationCases, notTenantScoped } from "@/db/testing/isolation";
 import type { TwoOrgs } from "@/db/testing/two-org-fixture";
 import { systemCtx } from "@/lib/ctx";
 import { OutOfCreditsError } from "@/lib/errors";
@@ -79,4 +79,38 @@ export const isolationCases = defineIsolationCases(server, {
 
     expect(await server.listLedger(orgs.orgA.admin.ctx)).toEqual([]);
   },
+
+  spentThisMonthByWorkflow: async (orgs) => {
+    await seedOrgBWorkflowRun(orgs);
+
+    expect(await server.spentThisMonthByWorkflow(orgs.orgA.admin.ctx, ["wf-b"])).toEqual(
+      new Map([["wf-b", 0]]),
+    );
+    expect(await server.spentThisMonthByWorkflow(orgs.orgB.admin.ctx, ["wf-b"])).toEqual(
+      new Map([["wf-b", 10]]),
+    );
+  },
+
+  budgetsReached: async (orgs) => {
+    await seedOrgBWorkflowRun(orgs);
+    const budgets = new Map([["wf-b", 5]]);
+
+    expect(await server.budgetsReached(orgs.orgA.member.ctx, budgets)).toEqual(new Set());
+    expect(await server.budgetsReached(orgs.orgB.member.ctx, budgets)).toEqual(new Set(["wf-b"]));
+  },
+
+  nextMonthStart: notTenantScoped("a date worked out from the clock alone"),
 });
+
+// Org B's workflow `wf-b` spends 10 credits in a live run.
+async function seedOrgBWorkflowRun(orgs: TwoOrgs) {
+  await seedOrgBLedger(orgs);
+  await server.recordUsage(systemCtx(orgs.orgB.id), {
+    role: "fast",
+    modelId: "openai/x",
+    costUsd: 0.01,
+    outcome: "succeeded",
+    workflowId: "wf-b",
+    runId: "run-b",
+  });
+}

@@ -189,18 +189,40 @@ export type WorkflowSwitch = {
   needsReconnect: boolean;
 };
 
+/**
+ * What the workflow page's Health tab checks (M7): whether it would run, what stops it, the
+ * company's balance, and what its live runs spent this calendar month (UTC) against its latest
+ * version's budget.
+ */
+export type WorkflowHealth = {
+  /** Paused when anything in `pauses` holds; only a published workflow, not archived, runs. */
+  status: "not_published" | "archived" | "running" | "paused";
+  /** What holds over the workflow, in `PAUSED_REASONS`' order; empty unless it's paused. */
+  pauses: PausedReason[];
+  /** The company's credits left. */
+  balance: number;
+  spentThisMonth: number;
+  /** The latest version's monthly budget; null with none, or before it's published. */
+  monthlyBudget: number | null;
+  /** When this month's budget ends, and a budget pause with it: the 1st of next month, UTC. */
+  nextMonth: Date;
+};
+
 /** An enablement is `on`, or `paused` (always with its reason) until its user enables it again. */
 export type EnablementStatus = "on" | "paused";
 
 /**
  * Why a switch is paused, in the order its effective state picks from: the first that holds is
- * the one shown (M7). M7's budgets add `budget_reached`, and M8's `failures`, between the two.
+ * the one shown (M7). M8's `failures` comes between `out_of_credits` and `budget_reached`.
  * - `out_of_credits`: the company's balance is at or below zero, so no workflow starts a run.
  *   Worked out from the ledger when it's needed, never stored; a grant lifts it.
+ * - `budget_reached`: the workflow's live runs have spent its latest version's monthly budget
+ *   this calendar month (UTC). Worked out from the ledger, never stored; the next month, or a
+ *   published version with a higher budget or none, lifts it.
  * - `needs_reenable`: a new version is riskier or needs more of the connection than the one its
  *   user switched on. Stored on the enablement until they enable it again.
  */
-export const PAUSED_REASONS = ["out_of_credits", "needs_reenable"] as const;
+export const PAUSED_REASONS = ["out_of_credits", "budget_reached", "needs_reenable"] as const;
 export type PausedReason = (typeof PAUSED_REASONS)[number];
 
 /** The pauses an enablement stores, which only its user lifts; the rest are worked out. */

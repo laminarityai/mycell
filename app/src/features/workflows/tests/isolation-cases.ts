@@ -9,6 +9,7 @@ import { publishTo, tagUsers } from "@/testing/visibility-helpers";
 import * as server from "../server";
 import {
   orgBTags,
+  orgBWorkflowNotFound,
   publishedToSalesInOrgB,
   seedOrgBWorkflow,
   switchedOnInOrgB,
@@ -64,11 +65,9 @@ export const isolationCases = defineIsolationCases(server, {
     expect((await server.listWorkflows(orgs.orgA.admin.ctx)).map((w) => w.id)).toEqual([own.id]);
   },
 
-  getWorkflow: async (orgs) => {
-    const { id } = await seedOrgBWorkflow(orgs);
+  getWorkflow: orgBWorkflowNotFound(server.getWorkflow),
 
-    await expect(server.getWorkflow(orgs.orgA.admin.ctx, id)).rejects.toThrow(NotFoundError);
-  },
+  getWorkflowHealth: orgBWorkflowNotFound(server.getWorkflowHealth),
 
   publishWorkflow: async (orgs) => {
     const { id, before } = await seedOrgBWorkflow(orgs);

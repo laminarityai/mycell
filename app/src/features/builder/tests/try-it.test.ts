@@ -108,6 +108,54 @@ describe("tryInConversation", () => {
     expect(lines).toContain("label (tool): would add a label from details.city.");
   });
 
+  it("says a task would be added or changed, never its title or notes", async () => {
+    const { admin, google, message } = await setUp();
+    const own = google.tasks.add({ title: "Order oak" });
+    const spec = labelSpec({
+      steps: [
+        {
+          id: "details",
+          type: "extract",
+          role: "fast",
+          fields: { title: { type: "string", description: "A follow-up task" } },
+        },
+        {
+          id: "task",
+          type: "tool",
+          action: "google-tasks.create-task",
+          input: { title: { from: "details.title" }, notes: "Ask about Leeds" },
+        },
+        {
+          id: "done",
+          type: "tool",
+          action: "google-tasks.update-task",
+          input: { taskId: own.id, title: { from: "details.title" } },
+        },
+      ],
+    });
+    const { id: workflowId } = await saveWorkflow(admin, { name: "Follow-ups", spec });
+    const { id: conversationId } = await startConversation(admin, { workflowId });
+    fakeAiGateway.object({ title: "Call Ada back" }, { costUsd: 0 });
+
+    await tryInConversation(admin, conversationId, {
+      connectionId: google.id,
+      sourceRef: message.id,
+    });
+
+    const { messages } = await getConversation(admin, conversationId);
+    for (const content of ["Call Ada back", "Ask about Leeds", "Order oak", "Added by"]) {
+      expect(JSON.stringify(messages)).not.toContain(content);
+    }
+    const lines = messages.flatMap((m) =>
+      m.parts.flatMap((part) => (part.type === "try_it" ? part.lines : [])),
+    );
+    expect(lines).toContain("task (tool): would add a task to the default Tasks list.");
+    expect(lines).toContain(
+      `done (tool): would change the task named by the taskId "${own.id}" on the default Tasks list.`,
+    );
+    expect(google.tasks.writes).toEqual([]);
+  });
+
   it("names the paths and each check's result in the spec's words, never a value it tested", async () => {
     const { admin, google, message } = await setUp();
     const { id: workflowId } = await saveWorkflow(admin, { name: "Triage", spec: triageSpec() });

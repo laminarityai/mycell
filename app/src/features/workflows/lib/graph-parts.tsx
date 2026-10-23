@@ -7,6 +7,7 @@ import {
   CircleX,
   GitBranch,
   Hand,
+  ListChecks,
   Mail,
   PenLine,
   ScanText,
@@ -30,8 +31,12 @@ const STEP_ICONS: Record<StepType, LucideIcon> = {
   branch: GitBranch,
 };
 
+// A tool step's icon by the app it acts in, where that isn't Gmail's.
+const APP_ICONS: Partial<Record<string, LucideIcon>> = { Sheets: Table2, Tasks: ListChecks };
+
 export function StepIcon({ step }: { step: Pick<GraphStep, "type" | "app"> }) {
-  const Icon = step.type === "tool" && step.app === "Sheets" ? Table2 : STEP_ICONS[step.type];
+  const appIcon = step.type === "tool" && step.app !== null ? APP_ICONS[step.app] : undefined;
+  const Icon = appIcon ?? STEP_ICONS[step.type];
   return <Icon aria-hidden className="size-3.5 shrink-0" />;
 }
 

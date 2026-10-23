@@ -111,6 +111,8 @@ export const tryItPrompts = definePrompts(tryItFile, {
   drafted: ["step"],
   wouldLabel: ["step", "label"],
   wouldAppendRow: ["step", "range"],
+  wouldAddTask: ["step"],
+  wouldUpdateTask: ["step", "task"],
   readRows: ["step", "count", "range"],
   chose: ["step", "label", "p"],
   tookOtherwise: ["step"],

@@ -7,7 +7,7 @@ import { SpecInvalidError } from "@/lib/errors";
 import { connectGoogle, connectOldConnection, deliver } from "@/testing/connect-helpers";
 import { fakeNango } from "@/testing/fake-nango";
 import { saveWorkflow } from "../server";
-import { draftSpec, labelSpec, sheetSpec } from "./specs";
+import { draftSpec, labelSpec, sheetSpec, taskSpec } from "./specs";
 
 beforeEach(resetDatabase);
 
@@ -100,7 +100,7 @@ describe("saveWorkflow with Sheets actions", () => {
     ).toEqual([expect.objectContaining({ path: ["credentials"] })]);
   });
 
-  it("refuses append-row on a connection without spreadsheets, to grant write access", async () => {
+  it("refuses append-row on a connection not allowed Sheets, naming the app", async () => {
     const { orgA } = await seedTwoOrgs();
     const scopes = [GOOGLE_APP_SCOPES.gmail, GOOGLE_APP_SCOPES.drive];
     await connectGoogle(orgA.admin.ctx, orgA.admin.email, { scopes });
@@ -110,7 +110,7 @@ describe("saveWorkflow with Sheets actions", () => {
     ).toEqual([
       {
         path: ["steps", 1, "action"],
-        message: `google-sheet.append-row needs the spreadsheets scope, which ${orgA.admin.email} wasn't granted. Reconnect it to grant write access.`,
+        message: `google-sheet.append-row needs Sheets, which ${orgA.admin.email} wasn't granted. Reconnect it to allow Sheets.`,
       },
     ]);
   });
@@ -135,6 +135,78 @@ describe("saveWorkflow with Sheets actions", () => {
     expect(await issuesOf(saveWorkflow(orgA.admin.ctx, { name: "Log", spec }))).toEqual([
       expect.objectContaining({ path: ["steps", 0, "action"] }),
       expect.objectContaining({ path: ["steps", 1, "action"] }),
+    ]);
+  });
+});
+
+describe("saveWorkflow with Tasks actions", () => {
+  const allBut = (app: keyof typeof GOOGLE_APP_SCOPES) =>
+    Object.entries(GOOGLE_APP_SCOPES).flatMap(([name, scope]) => (name === app ? [] : [scope]));
+
+  it("refuses them on a connection not allowed Tasks, naming the app", async () => {
+    const { orgA } = await seedTwoOrgs();
+    await connectGoogle(orgA.admin.ctx, orgA.admin.email, { scopes: allBut("tasks") });
+
+    expect(
+      await issuesOf(saveWorkflow(orgA.admin.ctx, { name: "Follow-ups", spec: taskSpec() })),
+    ).toEqual(
+      [0, 1, 2].map((index) => ({
+        path: ["steps", index, "action"],
+        message: expect.stringMatching(
+          new RegExp(
+            `needs Tasks, which ${orgA.admin.email} wasn't granted. Reconnect it to allow Tasks.$`,
+          ),
+        ) as string,
+      })),
+    );
+  });
+
+  it("refuses the writes on Tasks' read-only scope, and saves the list alone there", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const readOnly = "https://www.googleapis.com/auth/tasks.readonly";
+    await connectGoogle(orgA.admin.ctx, orgA.admin.email, {
+      scopes: [...allBut("tasks"), readOnly],
+    });
+
+    expect(
+      await issuesOf(saveWorkflow(orgA.admin.ctx, { name: "Follow-ups", spec: taskSpec() })),
+    ).toEqual([
+      expect.objectContaining({ path: ["steps", 1, "action"] }),
+      expect.objectContaining({ path: ["steps", 2, "action"] }),
+    ]);
+    const listOnly = taskSpec({ steps: (taskSpec().steps as unknown[]).slice(0, 1) });
+    expect((await saveWorkflow(orgA.admin.ctx, { name: "Open", spec: listOnly })).maxRisk).toBe(
+      "read",
+    );
+  });
+
+  it("saves them, with no review, on a connection allowed Tasks", async () => {
+    const { orgA } = await seedTwoOrgs();
+    await connectGoogle(orgA.admin.ctx, orgA.admin.email);
+
+    const saved = await saveWorkflow(orgA.admin.ctx, { name: "Follow-ups", spec: taskSpec() });
+
+    expect(saved.maxRisk).toBe("internal_reversible");
+  });
+
+  it("refuses a due date with a time of day, which Tasks would drop", async () => {
+    const { orgA } = await seedTwoOrgs();
+    await connectGoogle(orgA.admin.ctx, orgA.admin.email);
+    const steps = taskSpec().steps as Record<string, unknown>[];
+    const withTime = taskSpec({
+      steps: [
+        steps[0],
+        { ...steps[1], input: { title: "Call back", due: "2026-11-02T09:00:00Z" } },
+      ],
+    });
+
+    expect(
+      await issuesOf(saveWorkflow(orgA.admin.ctx, { name: "Follow-ups", spec: withTime })),
+    ).toEqual([
+      {
+        path: ["steps", 1, "input", "due"],
+        message: "due: Give the due date as a date, YYYY-MM-DD: Tasks keeps no time of day.",
+      },
     ]);
   });
 });

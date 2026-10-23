@@ -13,7 +13,7 @@ export const riskLevelSchema = z.enum([
 export type RiskLevel = z.infer<typeof riskLevelSchema>;
 
 /** The connection apps a Google catalog action may act in, as admins name them. */
-export type ConnectionApp = "Gmail" | "Sheets";
+export type ConnectionApp = "Gmail" | "Sheets" | "Tasks";
 
 /** What every catalog action has, whatever it acts on. */
 type CatalogActionBase = {

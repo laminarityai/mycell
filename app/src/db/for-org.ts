@@ -25,6 +25,14 @@ export type TenantTable = PgTable & { orgId: AnyPgColumn<{ notNull: true }> };
 /** A row to insert or a change to apply, without `orgId`: that always comes from ctx. */
 export type TenantValues<T extends TenantTable> = Omit<InferInsertModel<T>, "orgId">;
 
+/**
+ * A change to apply to rows: each column's new value, or SQL computing it from the row (one
+ * update setting each row its own value, by a `case` on its ID).
+ */
+export type TenantChanges<T extends TenantTable> = {
+  [K in keyof TenantValues<T>]?: TenantValues<T>[K] | SQL;
+};
+
 /** A column's name on `table`, as its rows hold it. */
 export type ColumnName<T extends TenantTable> = keyof InferSelectModel<T> & string;
 
@@ -93,10 +101,12 @@ export type OrgScopedDb = {
   ): Promise<InferSelectModel<T>[]>;
   update<T extends TenantTable>(
     table: T,
-    set: Partial<TenantValues<T>>,
+    set: TenantChanges<T>,
     where?: SQL,
   ): Promise<InferSelectModel<T>[]>;
   delete<T extends TenantTable>(table: T, where?: SQL): Promise<InferSelectModel<T>[]>;
+  /** Deletes like `delete`, returning only how many rows went, never the rows themselves. */
+  deleteCount(table: TenantTable, where?: SQL): Promise<number>;
   /**
    * Runs `fn` in one database transaction, with a handle scoped to the same org: its writes
    * commit together, or none do when `fn` throws (the error is rethrown).
@@ -192,6 +202,12 @@ function scoped(ctx: Ctx, db: Executor): OrgScopedDb {
     async delete(table, where) {
       const deleted = await db.delete(table).where(inOrg(table, where)).returning();
       return deleted as InferSelectModel<typeof table>[];
+    },
+
+    async deleteCount(table, where) {
+      const source: PgTable = table;
+      const result = await db.delete(source).where(inOrg(table, where));
+      return result.rowCount ?? 0;
     },
 
     transaction(fn) {

@@ -74,6 +74,10 @@ export const ingestStates = pgTable(
     // When the app's watch on the account runs out (ADR-0026), as the app answered the last
     // watch or renewal. Null until a watch starts; it stays as it was when a renewal fails.
     watchExpiresAt: timestamp("watch_expires_at", { withTimezone: true }),
+    // The channel the app's watch opened, for an app whose watch is a web-hook channel (Drive's):
+    // its ID and the resource ID the app gave it, which stopping it needs. Null for Gmail's.
+    watchChannelId: text("watch_channel_id"),
+    watchResourceId: text("watch_resource_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [

@@ -6,7 +6,7 @@
 import { HttpResponse } from "msw";
 import { REGISTERED_APPS } from "@/features/connections/registered-apps";
 import { GOOGLE_APP_SCOPES } from "@/features/connections/types";
-import { driveError, driveResponse } from "./fake-drive";
+import { DRIVE_STOP, DRIVE_WATCH, driveError, driveResponse, driveWrite } from "./fake-drive";
 import { gmailError, gmailResponse, gmailWrite } from "./fake-gmail";
 import type { FakeConnection } from "./fake-nango";
 import { graphError } from "./fake-microsoft";
@@ -36,7 +36,7 @@ export type ProxiedSource = {
   // none for a read-only API.
   write?: { scopes: readonly string[]; respond: RespondToWrite };
   // POSTs that change nothing in the account, which any scope that reads allows (Gmail's
-  // users.watch). The write's `respond` answers them.
+  // users.watch, Drive's changes.watch and channels.stop). The write's `respond` answers them.
   readingPosts?: readonly string[];
   rateLimited: () => Response;
 };
@@ -81,6 +81,15 @@ export const PROXIED_SOURCES: ProxiedSource[] = [
     prefix: "/drive/v3",
     scopes: [DRIVE_READONLY, DRIVE],
     respond: (connection, path, params) => driveResponse(connection.drive, path, params),
+    write: {
+      // Mycel writes nothing to Drive; changes.watch and channels.stop take any Drive scope.
+      scopes: [DRIVE],
+      respond: (connection, path, params, body, method) => {
+        if (method !== "POST") throw new Error(`The fake Drive takes no ${method}s`);
+        return driveWrite(connection.drive, path, params, body);
+      },
+    },
+    readingPosts: [DRIVE_WATCH, DRIVE_STOP],
     rateLimited: () => driveError(429),
   },
   {

@@ -7,6 +7,7 @@
 import { GMAIL, messageListSchema, messageSchema } from "@/features/connections/gmail";
 import { InvariantError } from "@/lib/errors";
 import type { Connector, NormalizedEvent, SourceClient } from "../connector";
+import { gmailPushConfig } from "../push-config";
 import { historyListSchema, profileSchema, watchSchema } from "./api";
 import { normalizeMessage } from "./normalize";
 
@@ -84,17 +85,22 @@ export const gmailConnector: Connector = {
     return { events: events.filter(isIngested), removed: [...removed], nextCursor };
   },
 
-  // Gmail publishes to the topic whenever the mailbox changes, except for changes to a message
-  // with an excluded label. Asking again renews the watch; Gmail's lasts 7 days.
-  async watch(client, push) {
-    const body = {
-      topicName: push.topic,
-      labelFilterBehavior: "exclude",
-      labelIds: EXCLUDED_LABELS,
-    };
-    const answer = await client.post(`${GMAIL}/watch`, body, watchSchema);
-    if (answer === null) throw new InvariantError("Gmail has no mailbox to watch");
-    return new Date(Number(answer.expiration));
+  // Gmail publishes to GMAIL_PUSH_TOPIC whenever the mailbox changes, except for changes to a
+  // message with an excluded label. Asking again renews the watch; Gmail's lasts 7 days.
+  watch: {
+    configured: () => gmailPushConfig() !== null,
+    async start(client) {
+      const push = gmailPushConfig();
+      if (push === null) throw new InvariantError("Gmail push isn't configured");
+      const body = {
+        topicName: push.topic,
+        labelFilterBehavior: "exclude",
+        labelIds: EXCLUDED_LABELS,
+      };
+      const answer = await client.post(`${GMAIL}/watch`, body, watchSchema);
+      if (answer === null) throw new InvariantError("Gmail has no mailbox to watch");
+      return { expiresAt: new Date(Number(answer.expiration)), channel: null };
+    },
   },
 };
 

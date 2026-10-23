@@ -118,10 +118,27 @@ describe("the sweep", () => {
     expect(await pollAllConnections()).toEqual(due);
   });
 
+  it("polls a connection whose Gmail and Drive both watch every 15 minutes", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const connection = await connectMailbox(orgA.member.ctx, orgA.member.email);
+    await backfillConnection(orgA.member.ctx, connection.id);
+    await pollConnection(systemCtx(orgA.id), connection.id);
+    const { ingest } = await getConnection(orgA.member.ctx, connection.id);
+    expect(ingest.gmail?.watchExpiresAt?.getTime()).toBeGreaterThan(START);
+    expect(ingest.drive?.watchExpiresAt?.getTime()).toBeGreaterThan(START);
+
+    at(14);
+    expect(await pollAllConnections()).toEqual([]);
+    at(15);
+    expect(await pollAllConnections()).toEqual([{ orgId: orgA.id, connectionId: connection.id }]);
+  });
+
   it("polls a connection every minute when one of its apps has no watch", async () => {
     const { orgA } = await seedTwoOrgs();
-    // Gmail and Drive; only Gmail watches until Drive's push (#147).
+    // Gmail and Drive; Drive refuses its channel, so only Gmail watches.
     const connection = await connectMailbox(orgA.member.ctx, orgA.member.email);
+    connection.drive.channels.refuseNextWatch();
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
     await backfillConnection(orgA.member.ctx, connection.id);
     await pollConnection(systemCtx(orgA.id), connection.id);
     const { ingest } = await getConnection(orgA.member.ctx, connection.id);
@@ -160,6 +177,9 @@ describe("the sweep", () => {
       [],
       "org",
     );
+    // Its Drive refuses a channel, so the inbox is due every minute.
+    inbox.drive.channels.refuseNextWatch();
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
     await backfillConnection(orgB.admin.ctx, inbox.id);
     await pollConnection(systemCtx(orgB.id), inbox.id);
 

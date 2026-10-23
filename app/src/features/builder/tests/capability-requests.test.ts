@@ -3,8 +3,8 @@ import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { listCapabilityRequests } from "@/features/custom-actions/server";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
+import { fundOrg, readTurn } from "@/testing/streamed-turn";
 import { getConversation, startConversation, streamTurn } from "../server";
-import { fundOrg, readTurn } from "./turn-helpers";
 
 beforeEach(resetDatabase);
 

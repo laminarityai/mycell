@@ -3,20 +3,16 @@ import { Suspense } from "react";
 import { getCtx, listUsers } from "@/features/orgs/server";
 import { listTags } from "@/features/tags/server";
 import { TagsManager } from "@/features/tags/ui";
-import { AppNav } from "@/app/app-nav";
+import { AppShell } from "@/app/_shell/app-shell";
 import { isAdmin } from "@/lib/ctx";
 
 export default function TagsPage() {
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold tracking-tight">Tags</h1>
-        <AppNav />
-      </header>
+    <AppShell current="tags" title="Tags">
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading tags…</p>}>
         <Tags />
       </Suspense>
-    </main>
+    </AppShell>
   );
 }
 

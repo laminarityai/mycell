@@ -15,6 +15,15 @@ export async function getBalance(ctx: Ctx): Promise<number> {
   return forOrg(ctx).sum(creditLedger, creditLedger.amount);
 }
 
+/**
+ * Whether the org is out of credits: its balance is at or below zero. Every workflow is then
+ * paused (no run starts) until a grant lifts it. Worked out from the ledger whenever it's asked,
+ * so nothing is written when it starts or ends.
+ */
+export async function isOutOfCredits(ctx: Ctx): Promise<boolean> {
+  return (await getBalance(ctx)) <= 0;
+}
+
 /** The credits usage for `purpose` has used up since `since`. Admins (and jobs) only. */
 export async function getSpending(ctx: Ctx, query: SpendingQuery): Promise<number> {
   requireRole(ctx, "admin", "system");
@@ -41,8 +50,7 @@ export async function recordUsage(ctx: Ctx, usage: Usage): Promise<LedgerEntry> 
   const inserted = await forOrg(ctx).insert(creditLedger, {
     id: randomUUID(),
     kind: "usage",
-    // `|| 0` turns a free call's -0 into 0.
-    amount: -(usage.costUsd * env.CREDITS_PER_USD) || 0,
+    amount: usageAmount(usage.costUsd),
     role: usage.role,
     modelId: usage.modelId,
     outcome: usage.outcome,
@@ -57,6 +65,12 @@ export async function recordUsage(ctx: Ctx, usage: Usage): Promise<LedgerEntry> 
   // An insert returns its row, so this is a bug, not something a user can act on.
   if (row === undefined) throw new InvariantError("The usage entry wasn't recorded.");
   return toEntry(row);
+}
+
+/** A usage's ledger amount: its gateway cost in credits, at the config ratio, as a debit. */
+export function usageAmount(costUsd: number): number {
+  // `|| 0` turns a free call's -0 into 0.
+  return -(costUsd * env.CREDITS_PER_USD) || 0;
 }
 
 /** Adds credits to the org. Our team only, through the grant script's system ctx. */
@@ -86,7 +100,7 @@ export async function listLedger(ctx: Ctx, limit = 100): Promise<LedgerEntry[]> 
   return rows.map(toEntry);
 }
 
-function toEntry(row: typeof creditLedger.$inferSelect): LedgerEntry {
+export function toEntry(row: typeof creditLedger.$inferSelect): LedgerEntry {
   return {
     id: row.id,
     kind: row.kind,
@@ -100,6 +114,7 @@ function toEntry(row: typeof creditLedger.$inferSelect): LedgerEntry {
     runId: row.runId,
     dryRun: row.dryRun,
     purpose: row.purpose,
+    correctsId: row.correctsId,
     createdAt: row.createdAt,
   };
 }

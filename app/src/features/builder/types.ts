@@ -3,34 +3,20 @@
 import type { UIMessage } from "ai";
 import { z } from "zod";
 import type { CustomActionRecord, CustomActionWords } from "@/features/custom-actions/types";
+import { chatPartSchemas, type Notice } from "@/features/models/types";
 import type { RiskLevel } from "@/features/policy/types";
 import type { StepDescription } from "@/features/spec/describe";
 import type { Change } from "@/features/spec/diff";
 import type { Spec } from "@/features/spec/types";
 
-/** Why the agent's turn shows a notice instead of (or after) a reply. */
-export const noticeKindSchema = z.enum(["out_of_credits", "failed"]);
-export type NoticeKind = z.infer<typeof noticeKindSchema>;
-
-export type Notice = { kind: NoticeKind; text: string };
-
 /**
- * One part of a stored message: text, one tool call with its result, or a notice. A tool's
- * result is stored as the tool chooses (`read_examples` keeps only source refs), never as
- * source content (invariant 8).
+ * One part of a stored message: the parts every chat stores (text, one tool call with its
+ * result, or a notice; `models`' `chatPartSchemas`), or a try-it summary. A tool's result is
+ * stored as the tool chooses (`read_examples` keeps only source refs), never as source content
+ * (invariant 8).
  */
 export const storedPartSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("text"), text: z.string() }),
-  z.object({
-    type: z.literal("tool"),
-    toolCallId: z.string(),
-    toolName: z.string(),
-    input: z.unknown(),
-    /** What the tool returned, or the error the model was told about. */
-    output: z.unknown(),
-    isError: z.boolean(),
-  }),
-  z.object({ type: z.literal("notice"), kind: noticeKindSchema, text: z.string() }),
+  ...chatPartSchemas,
   /** An admin tried the working spec: what each step did, without the message's content. */
   z.object({
     type: z.literal("try_it"),

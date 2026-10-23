@@ -1,7 +1,7 @@
 // Members switching workflows on and off for their own Google connection (M5).
 import { beforeEach, describe, expect, it } from "vitest";
 import { resetDatabase } from "@/db/testing/reset";
-import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
+import { FUNDED_CREDITS, seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { disconnect } from "@/features/connections/server";
 import { GOOGLE_APP_SCOPES } from "@/features/connections/types";
 import { removeUser } from "@/features/orgs/server";
@@ -18,7 +18,7 @@ beforeEach(resetDatabase);
 
 // Org A: the member has `sales`, and a label workflow is published to it.
 async function publishedToSales(spec = labelSpec()) {
-  const orgs = await seedTwoOrgs();
+  const orgs = await seedTwoOrgs({ credits: FUNDED_CREDITS });
   const { admin, member } = orgs.orgA;
   await connectGmail(admin.ctx, admin.email);
   await tagUsers(admin.ctx, "sales", [member]);
@@ -148,6 +148,7 @@ describe("enabling twice and disabling", () => {
         status: "on",
         pausedReason: null,
         pausedChange: null,
+        pauses: [],
         since: first?.since,
       },
     ]);

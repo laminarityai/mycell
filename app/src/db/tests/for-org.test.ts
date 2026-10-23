@@ -134,6 +134,50 @@ describe("forOrg(ctx).sum", () => {
   });
 });
 
+describe("forOrg(ctx).sumBy", () => {
+  it("adds up each group within the caller's org only", async () => {
+    await forOrg(orgs.orgA.admin.ctx).insert(notes, [
+      { body: "a1", position: 5 },
+      { body: "a3", position: 4 },
+    ]);
+    await forOrg(orgs.orgB.admin.ctx).insert(notes, { body: "a1", position: 100 });
+
+    // Org B has an a1 too: it isn't added to org A's a1.
+    const rows = await forOrg(orgs.orgA.admin.ctx).sumBy(notes, notes.position, {
+      body: notes.body,
+    });
+
+    expectTypeOf(rows).toEqualTypeOf<({ body: string } & { total: number })[]>();
+    expect(rows.sort((a, b) => a.body.localeCompare(b.body))).toEqual([
+      { body: "a1", total: 6 },
+      { body: "a2", total: 2 },
+      { body: "a3", total: 4 },
+    ]);
+    const b = await forOrg(orgs.orgB.admin.ctx).sumBy(notes, notes.position, { body: notes.body });
+    expect(b.sort((x, y) => x.body.localeCompare(y.body))).toEqual([
+      { body: "a1", total: 100 },
+      { body: "b1", total: 1 },
+    ]);
+  });
+
+  it("groups by several columns, and can't reach another org's row when the filter names it", async () => {
+    const db = forOrg(orgs.orgA.admin.ctx);
+    await db.insert(notes, { body: "a1", position: 1 });
+
+    const groups = await db.sumBy(notes, notes.position, {
+      body: notes.body,
+      position: notes.position,
+    });
+    expect(groups.sort((a, b) => a.position - b.position)).toEqual([
+      { body: "a1", position: 1, total: 2 },
+      { body: "a2", position: 2, total: 2 },
+    ]);
+    expect(
+      await db.sumBy(notes, notes.position, { body: notes.body }, eq(notes.body, "b1")),
+    ).toEqual([]);
+  });
+});
+
 describe("forOrg(ctx).countBy", () => {
   it("counts each group within the caller's org only", async () => {
     await forOrg(orgs.orgA.admin.ctx).insert(notes, { body: "a3", position: 2 });
@@ -287,11 +331,16 @@ describe("forOrg(ctx).transaction", () => {
         count: await tx.count(notes),
         sum: await tx.sum(notes, notes.position),
         groups: await tx.countBy(notes, { position: notes.position }),
+        totals: await tx.sumBy(notes, notes.position, { position: notes.position }),
       };
     });
 
     expect(counted.count).toBe(3);
     expect(counted.sum).toBe(4);
+    expect(counted.totals.sort((a, b) => a.position - b.position)).toEqual([
+      { position: 1, total: 2 },
+      { position: 2, total: 2 },
+    ]);
     expect(counted.groups.sort((a, b) => a.position - b.position)).toEqual([
       { position: 1, count: 2 },
       { position: 2, count: 1 },

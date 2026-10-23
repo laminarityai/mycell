@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { switchWorkflowOffAction, switchWorkflowOnAction } from "../actions";
 import type { WorkflowSwitch } from "../types";
+import { PauseBadge, PausedNotice } from "./pause-display";
 import { Problems } from "./workflow-editor";
 
 /** A connection the workflow can be switched on for, as the form offers it. */
@@ -35,6 +36,7 @@ export function SwitchForm({
     const label =
       connections.find((connection) => connection.id === current.connectionId)?.label ??
       "a connection";
+    const shown = current.pauses.at(0);
     return (
       <form action={switchOff} className="flex flex-col gap-2 text-sm">
         <input type="hidden" name="workflowId" value={workflowId} />
@@ -48,6 +50,12 @@ export function SwitchForm({
             </>
           )}
         </p>
+        {shown === undefined ? null : (
+          <div>
+            <PauseBadge reason={shown} change={current.pausedChange} />
+          </div>
+        )}
+        {compact ? null : <PausedNotice current={current} />}
         <div>
           <Button type="submit" variant="outline" disabled={switchingOff}>
             Switch off

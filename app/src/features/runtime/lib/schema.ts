@@ -23,7 +23,7 @@ import { reviews } from "@/features/reviews/lib/schema";
 import { customActions } from "@/features/custom-actions/lib/schema";
 import { modelRoleSchema, stepTypes, type ModelRole, type StepType } from "@/features/spec/types";
 import { enablements, workflowVersions } from "@/features/workflows/lib/schema";
-import { runStatuses, runStepStatuses } from "../types";
+import { runErrorCodes, runStatuses, runStepStatuses } from "../types";
 
 const modelRoleEnum = modelRoleSchema.options as [ModelRole, ...ModelRole[]];
 
@@ -52,6 +52,9 @@ export const runs = pgTable(
     // one run of each. Null for a manual run, which may be repeated.
     triggerKey: text("trigger_key"),
     status: text("status", { enum: runStatuses }).notNull(),
+    // Why the run failed as a whole: its job crashed (`internal_error`). Null otherwise; a
+    // step's failure is on its step.
+    errorCode: text("error_code", { enum: runErrorCodes }),
     costUsd: doublePrecision("cost_usd").notNull().default(0),
     startedAt: timestamp("started_at", { withTimezone: true }).defaultNow().notNull(),
     finishedAt: timestamp("finished_at", { withTimezone: true }),

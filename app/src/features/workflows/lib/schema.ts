@@ -20,7 +20,7 @@ import { zodJsonb } from "@/db/columns";
 import { connections } from "@/features/connections/lib/schema";
 import { requirementsGainedSchema, type RiskLevel } from "@/features/policy/types";
 import { storedSpecSchema } from "@/features/spec/stored";
-import type { EnablementStatus, PausedReason } from "../types";
+import type { EnablementStatus, StoredPausedReason } from "../types";
 // A version's tags reference the tag itself, so renaming a tag keeps who sees the workflow.
 import { tags } from "@/features/tags/lib/schema";
 
@@ -81,11 +81,11 @@ export const enablements = pgTable(
       .notNull()
       .default("on"),
     // Set exactly while paused.
-    pausedReason: text("paused_reason", { enum: ["needs_reenable"] }).$type<PausedReason>(),
+    pausedReason: text("paused_reason", { enum: ["needs_reenable"] }).$type<StoredPausedReason>(),
     // What a `needs_reenable` pause is about: what the new version needs that the old didn't.
     pausedChange: zodJsonb("paused_change", requirementsGainedSchema),
-    // Written from JS, like the message times it's compared with (no default: the column has
-    // no time zone, and the database's now() would be read back hours off).
+    // Written from JS (no default), like the message times it's compared with, so both come
+    // from the same clock.
     enabledAt: timestamp("enabled_at", { withTimezone: true }).notNull(),
   },
   (table) => [

@@ -17,11 +17,29 @@ async function seedOrgBLedger({ orgB }: TwoOrgs) {
   return { before: await server.listLedger(orgB.admin.ctx) };
 }
 
+// A failed call in org B whose billed cost is still to be looked up.
+function failedCallInOrgB({ orgB }: TwoOrgs) {
+  return server.recordUsage(systemCtx(orgB.id), {
+    role: "fast",
+    modelId: "openai/x",
+    costUsd: 0,
+    outcome: "failed",
+    generationId: "gen_b",
+  });
+}
+
 export const isolationCases = defineIsolationCases(server, {
   getBalance: async (orgs) => {
     await seedOrgBLedger(orgs);
 
     expect(await server.getBalance(orgs.orgA.admin.ctx)).toBe(0);
+  },
+
+  isOutOfCredits: async (orgs) => {
+    await seedOrgBLedger(orgs);
+
+    expect(await server.isOutOfCredits(orgs.orgA.admin.ctx)).toBe(true);
+    expect(await server.isOutOfCredits(orgs.orgB.admin.ctx)).toBe(false);
   },
 
   checkCredits: async (orgs) => {
@@ -65,6 +83,27 @@ export const isolationCases = defineIsolationCases(server, {
 
     expect(await server.getSpending(orgs.orgB.admin.ctx, { purpose: "memory", since })).toBe(10);
     expect(await server.getSpending(orgs.orgA.admin.ctx, { purpose: "memory", since })).toBe(0);
+  },
+
+  findUncostedFailedCall: async (orgs) => {
+    await seedOrgBLedger(orgs);
+    const failed = await failedCallInOrgB(orgs);
+
+    expect(await server.findUncostedFailedCall(systemCtx(orgs.orgA.id), failed.id)).toBeUndefined();
+    expect(await server.findUncostedFailedCall(systemCtx(orgs.orgB.id), failed.id)).toBeDefined();
+  },
+
+  recordFailedCallCost: async (orgs) => {
+    await seedOrgBLedger(orgs);
+    const failed = await failedCallInOrgB(orgs);
+    const before = await server.listLedger(orgs.orgB.admin.ctx);
+
+    // Org B's failed call, from org A: nothing is recorded in either org.
+    expect(
+      await server.recordFailedCallCost(systemCtx(orgs.orgA.id), failed.id, 0.01),
+    ).toBeUndefined();
+    expect(await server.listLedger(orgs.orgA.admin.ctx)).toEqual([]);
+    expect(await server.listLedger(orgs.orgB.admin.ctx)).toEqual(before);
   },
 
   listLedger: async (orgs) => {

@@ -9,12 +9,12 @@ import { getConnection, recordIngestState, sourceClient } from "@/features/conne
 import { ingestedAppSchema, type IngestedApp } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
 import { runInline, type RunStep } from "@/lib/inngest";
+import { DAY_MS } from "@/lib/time";
 import type { BackfillOutcome } from "../types";
 import { CONNECTORS, storeWindow, whileConnected } from "./ingest-steps";
 
 /** How far back a backfill reaches. */
 export const BACKFILL_DAYS = 90;
-export const DAY_MS = 24 * 60 * 60 * 1000;
 
 export async function backfillConnection(
   ctx: Ctx,

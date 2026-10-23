@@ -81,6 +81,17 @@ export const isolationCases = defineIsolationCases(server, {
     expect(fakeAiGateway.requests()).toEqual([]);
   },
 
+  failCrashedRun: async (orgs) => {
+    const { runId } = await seedOrgBRun(orgs);
+
+    await server.failCrashedRun(systemCtx(orgs.orgA.id), runId);
+
+    expect(await server.getRun(orgs.orgB.admin.ctx, runId)).toMatchObject({
+      status: "running",
+      errorCode: null,
+    });
+  },
+
   searchMessages: async (orgs) => {
     const orgB = await seedOrgBRun(orgs);
 

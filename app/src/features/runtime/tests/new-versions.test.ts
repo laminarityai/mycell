@@ -4,7 +4,7 @@
 // runs the admin may read; a member's pauses the same way (workflows' new-versions tests).
 import { beforeEach, describe, expect, it } from "vitest";
 import { resetDatabase } from "@/db/testing/reset";
-import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
+import { FUNDED_CREDITS, seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { enable, publishWorkflow, saveWorkflow } from "@/features/workflows/server";
 import { systemCtx, type Ctx } from "@/lib/ctx";
 import { connectGoogle } from "@/testing/connect-helpers";
@@ -41,7 +41,7 @@ const reads = (steps: unknown[] = [readMessage, readThread]) =>
 // Org A: a read-only workflow is published, and the admin has it switched on for their own
 // Google connection.
 async function adminEnabled() {
-  const { orgA } = await seedTwoOrgs();
+  const { orgA } = await seedTwoOrgs({ credits: FUNDED_CREDITS });
   const admin = orgA.admin.ctx;
   const inbox = await connectGoogle(admin, orgA.admin.email);
   const { workflowId, version } = await publishTo(admin, "Reads", reads(), []);

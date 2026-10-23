@@ -1,7 +1,8 @@
 // The shared two-org fixture: org A and org B, each with an admin and a member, and a ctx
 // for each user. Every isolation test starts from it.
 import { randomUUID } from "node:crypto";
-import type { Ctx, Role } from "@/lib/ctx";
+import { grantCredits } from "@/features/credits/server";
+import { type Ctx, type Role, systemCtx } from "@/lib/ctx";
 import { member, organization, user } from "../auth-schema";
 import { getDb } from "../client";
 
@@ -16,8 +17,25 @@ export type FixtureOrg = {
 
 export type TwoOrgs = { orgA: FixtureOrg; orgB: FixtureOrg };
 
-export async function seedTwoOrgs(): Promise<TwoOrgs> {
-  return { orgA: await seedOrg("a"), orgB: await seedOrg("b") };
+/** What a test asks of the two orgs. */
+export type TwoOrgsOptions = {
+  /**
+   * Credits granted to each org. A zero balance pauses every workflow (no run starts), so a test
+   * whose workflows must run asks for some; one about the balance itself starts from none.
+   */
+  credits?: number;
+};
+
+/** The credits a test that needs its workflows to run grants each org: more than any run costs. */
+export const FUNDED_CREDITS = 1000;
+
+export async function seedTwoOrgs({ credits = 0 }: TwoOrgsOptions = {}): Promise<TwoOrgs> {
+  const orgs = { orgA: await seedOrg("a"), orgB: await seedOrg("b") };
+  if (credits > 0) {
+    await grantCredits(systemCtx(orgs.orgA.id), credits);
+    await grantCredits(systemCtx(orgs.orgB.id), credits);
+  }
+  return orgs;
 }
 
 async function seedOrg(letter: "a" | "b"): Promise<FixtureOrg> {

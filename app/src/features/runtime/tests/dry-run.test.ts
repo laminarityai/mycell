@@ -5,6 +5,7 @@ import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { listConnections } from "@/features/connections/server";
 import { getBalance, grantCredits, listLedger } from "@/features/credits/server";
+import { spendingKindOf } from "@/features/credits/types";
 import { saveWorkflow } from "@/features/workflows/server";
 import { systemCtx } from "@/lib/ctx";
 import { NotFoundError, OutOfCreditsError } from "@/lib/errors";
@@ -248,8 +249,10 @@ describe("dryRun", () => {
     expect(await listRuns(admin, workflowId)).toEqual([]);
     const usage = (await listLedger(admin)).filter((entry) => entry.kind === "usage");
     expect(usage).toHaveLength(2);
-    for (const entry of usage)
+    for (const entry of usage) {
       expect(entry).toMatchObject({ dryRun: true, workflowId, runId: null });
+      expect(spendingKindOf(entry)).toBe("try_it");
+    }
     expect(usage.reduce((sum, entry) => sum + entry.amount, 0)).toBeCloseTo(-21);
     expect(await getBalance(admin)).toBeCloseTo(79);
   });

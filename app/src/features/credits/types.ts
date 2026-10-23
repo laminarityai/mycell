@@ -2,11 +2,17 @@
 import type { ModelRole } from "@/features/spec/types";
 
 /**
- * What a usage was spent on, when that has a budget of its own: `memory`, learning from the
- * company's apps, which a monthly memory budget caps (ADR-0022). Other usage has none.
+ * What a usage was spent on, when no run or Try it made it: `memory`, learning from the
+ * company's apps (which a monthly memory budget caps, ADR-0022) and a person's summaries; or
+ * `builder`, the builder chat's turns and what they ask for. A run's usage names its workflow
+ * and run instead, and Try it's is marked `dryRun`.
  */
-export const CREDIT_PURPOSES = ["memory"] as const;
+export const CREDIT_PURPOSES = ["memory", "builder"] as const;
 export type CreditPurpose = (typeof CREDIT_PURPOSES)[number];
+
+/** The kinds of use the Credits page splits spending into. */
+export const SPENDING_KINDS = ["workflow", "memory", "builder", "try_it"] as const;
+export type SpendingKind = (typeof SPENDING_KINDS)[number];
 
 /** One model call's usage, as the gateway client (or the injection screen) records it. */
 export type Usage = {
@@ -46,3 +52,15 @@ export type LedgerEntry = {
 
 /** Which spending `getSpending` adds up: one purpose's usage from a time on. */
 export type SpendingQuery = { purpose: CreditPurpose; since: Date };
+
+/**
+ * Which kind of use a usage entry was, from its attribution: Try it (`dryRun`), a purpose, or
+ * a workflow's run. Null for a grant, or usage nothing attributed (a bug: every call says).
+ */
+export function spendingKindOf(
+  entry: Pick<LedgerEntry, "dryRun" | "purpose" | "runId">,
+): SpendingKind | null {
+  if (entry.dryRun) return "try_it";
+  if (entry.purpose !== null) return entry.purpose;
+  return entry.runId === null ? null : "workflow";
+}

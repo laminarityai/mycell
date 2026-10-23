@@ -5,6 +5,7 @@ import { resetDatabase } from "@/db/testing/reset";
 import { tablesHolding } from "@/db/testing/content-scan";
 import { seedTwoOrgs, seedUser } from "@/db/testing/two-org-fixture";
 import { listLedger } from "@/features/credits/server";
+import { spendingKindOf } from "@/features/credits/types";
 import { backfillConnection } from "@/features/discovery/server";
 import { systemCtx } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
@@ -87,7 +88,15 @@ describe("a summary of an object", () => {
     // One metered call on `fast`.
     const ledger = await listLedger(orgA.admin.ctx);
     expect(ledger).toHaveLength(before + 1);
-    expect(ledger[0]).toMatchObject({ kind: "usage", role: "fast", outcome: "succeeded" });
+    expect(ledger[0]).toMatchObject({
+      kind: "usage",
+      role: "fast",
+      outcome: "succeeded",
+      purpose: "memory",
+      workflowId: null,
+      runId: null,
+    });
+    expect(spendingKindOf(ledger[0])).toBe("memory");
     expect(await tablesHolding("summary-marker-7781")).toEqual([]);
 
     fakeAiGateway.text("Dana Ruiz asked Lee for a demo.");
@@ -122,5 +131,21 @@ describe("a summary of an object", () => {
       reader: { kind: "builder", userId: orgA.member.id },
       factCount: 1,
     });
+  });
+
+  it("is charged to whatever asked for it: the builder chat, or a workflow's run", async () => {
+    const { orgA } = await setup();
+    const run = { kind: "workflow_run" as const, runId: "run-1", workflowId: "workflow-1" };
+
+    fakeAiGateway.text(SUMMARY);
+    await summarizeObject(orgA.member.ctx, byDana, { kind: "builder" });
+    fakeAiGateway.text(SUMMARY);
+    await summarizeObject(orgA.member.ctx, byDana, run);
+
+    const [forRun, forBuilder] = await listLedger(orgA.admin.ctx);
+    expect(forBuilder).toMatchObject({ purpose: "builder", workflowId: null, runId: null });
+    expect(spendingKindOf(forBuilder)).toBe("builder");
+    expect(forRun).toMatchObject({ purpose: null, workflowId: "workflow-1", runId: "run-1" });
+    expect(spendingKindOf(forRun)).toBe("workflow");
   });
 });

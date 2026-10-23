@@ -47,9 +47,17 @@ function line(fact: MemoryFact): PromptText {
   });
 }
 
-/** A workflow run's summary is charged to its run, like its other model calls. */
+/**
+ * A summary is charged to whatever asked for it: a workflow's run, like the run's other model
+ * calls; the builder chat; or memory, for a person's own.
+ */
 function attributionOf(reader: MemoryReader): CallAttribution {
-  return reader.kind === "workflow_run"
-    ? { runId: reader.runId, workflowId: reader.workflowId }
-    : {};
+  switch (reader.kind) {
+    case "workflow_run":
+      return { runId: reader.runId, workflowId: reader.workflowId };
+    case "builder":
+      return { purpose: "builder" };
+    case "person":
+      return { purpose: "memory" };
+  }
 }

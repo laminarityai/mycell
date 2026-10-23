@@ -7,8 +7,8 @@ import type { ModelRole } from "@/features/spec/types";
 import type { PromptText } from "@/lib/prompts";
 
 /**
- * What a model call is for; recorded on its ledger entry. `purpose` tags usage a budget of its
- * own caps (memory's learning).
+ * What a model call is for; recorded on its ledger entry. Every call names one: a run's
+ * workflow and run, Try it's `dryRun`, or a `purpose` (memory, or the builder chat).
  */
 export type CallAttribution = {
   workflowId?: string;

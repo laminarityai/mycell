@@ -4,12 +4,13 @@
 // finishes once, which records exactly one usage entry with the steps' summed gateway cost,
 // however the stream ended (invariant 7).
 import { createGateway } from "ai";
-import { checkCredits, recordUsage } from "@/features/credits/server";
+import { checkCredits } from "@/features/credits/server";
 import type { ModelRole } from "@/features/spec/types";
 import type { Ctx } from "@/lib/ctx";
 import { env } from "@/env";
 import type { CallAttribution, MeteredStream } from "../types";
 import { CREDIT_ESTIMATES } from "./call-model";
+import { recordCallUsage } from "./failed-call-costs";
 import { meteringOf } from "./gateway";
 import { resolveModel } from "./model-roles";
 
@@ -44,7 +45,7 @@ export async function openMeteredStream(
     async finish(outcome) {
       if (finished) return;
       finished = true;
-      await recordUsage(ctx, { role, modelId, costUsd, generationId, outcome, ...attribution });
+      await recordCallUsage(ctx, { role, modelId, costUsd, generationId, outcome, ...attribution });
     },
   };
 }

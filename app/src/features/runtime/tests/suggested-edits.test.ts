@@ -10,13 +10,15 @@ import {
   STATUS_DOC,
   STATUS_LINE,
   SUBJECT,
+  statusSpec,
   suggestedEdits,
 } from "@/db/testing/suggested-edits";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { disconnect } from "@/features/connections/server";
 import { listReviews, openReview } from "@/features/reviews/server";
 import { fakeNango } from "@/testing/fake-nango";
-import { executeRun, getRun } from "../server";
+import { connectGoogle } from "@/testing/connect-helpers";
+import { dryRun, executeRun, getRun } from "../server";
 import { recordedBackoff, recordingStepRunner, recordsOf } from "./run-helpers";
 
 beforeEach(resetDatabase);
@@ -166,5 +168,46 @@ describe("a suggest-edits step", () => {
     await disconnect(admin, google.id);
 
     expect(await tablesHolding(documentId)).toEqual(spec);
+  });
+});
+
+describe("Try it on a suggest-edits step", () => {
+  it("shows the edits it would suggest in the doc, and suggests nothing", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const admin = orgA.admin.ctx;
+    const google = await connectGoogle(admin, orgA.admin.email);
+    const documentId = google.docs.add({ title: "Weekly status", text: STATUS_DOC });
+    const message = google.mailbox.add({
+      from: "ada@supplier.test",
+      subject: SUBJECT,
+      text: "We can deliver the kiln on Friday.",
+      at: new Date(),
+    });
+
+    const result = await dryRun(admin, statusSpec(documentId), {
+      connectionId: google.id,
+      sourceRef: message.id,
+    });
+
+    expect(result).toMatchObject({
+      ended: "succeeded",
+      steps: [
+        { stepId: "read" },
+        {
+          stepId: "suggest",
+          effect: {
+            kind: "suggestions",
+            documentId,
+            title: "Weekly status",
+            requests: [
+              `replaceAllText "{{status}}" with ${JSON.stringify(STATUS_LINE)}`,
+              `insertText ${JSON.stringify(SUBJECT)}`,
+            ],
+          },
+        },
+        { stepId: "suggest-approval", insertedByPolicy: true, effect: { kind: "review" } },
+      ],
+    });
+    expect(google.docs.writes).toEqual([]);
   });
 });

@@ -115,6 +115,33 @@ describe("saveWorkflow with Sheets actions", () => {
     ]);
   });
 
+  it("refuses suggest-edits on a connection not granted Docs, naming its scope", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const scopes = [GOOGLE_APP_SCOPES.gmail, GOOGLE_APP_SCOPES.drive];
+    await connectGoogle(orgA.admin.ctx, orgA.admin.email, { scopes });
+    const spec = {
+      ...sheetSpec(),
+      steps: [
+        {
+          id: "suggest",
+          type: "tool",
+          action: "google-docs.suggest-edits",
+          input: {
+            documentId: "doc-1",
+            requests: [{ insertText: { text: "Done.", endOfSegmentLocation: {} } }],
+          },
+        },
+      ],
+    };
+
+    expect(await issuesOf(saveWorkflow(orgA.admin.ctx, { name: "Status", spec }))).toEqual([
+      expect.objectContaining({
+        path: ["steps", 0, "action"],
+        message: expect.stringContaining("documents") as string,
+      }),
+    ]);
+  });
+
   it("saves read-range on Drive's read-only scope alone", async () => {
     const { orgA } = await seedTwoOrgs();
     const scopes = [GOOGLE_APP_SCOPES.gmail, GOOGLE_APP_SCOPES.drive];

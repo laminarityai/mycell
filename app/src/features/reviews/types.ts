@@ -141,7 +141,8 @@ export type RunReview = {
 export type ReviewCounts = Record<ReviewStatus, number>;
 
 /**
- * Some reviews, counted: approval reviews (drafts), escalations and held sends apart, and the
+ * Some reviews, counted: approval reviews (drafts), escalations, held sends and meetings apart,
+ * and the
  * ship bar's share (docs/intent.md): of the approval reviews that ended `approved`,
  * `edited_approved`, `declined` or `gone`, the part `approved`, from 0 to 1, or null while none
  * has. A draft sent from Gmail (`done_in_app`) is left out: Mycel can't tell whether it was
@@ -151,6 +152,7 @@ export type ReviewTally = {
   approvals: ReviewCounts;
   escalations: ReviewCounts;
   heldSends: ReviewCounts;
+  meetings: ReviewCounts;
   approvedWithoutEdits: number | null;
 };
 

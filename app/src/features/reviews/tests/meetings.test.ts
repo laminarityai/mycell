@@ -15,6 +15,7 @@ import {
   declineReview,
   listReviews,
   openReview,
+  reviewStats,
 } from "../server";
 
 beforeEach(resetDatabase);
@@ -102,6 +103,19 @@ describe("approving a meeting", () => {
     for (const content of [MEETING_TITLE, MEETING_AGENDA]) {
       expect(await tablesHolding(content)).toEqual([]);
     }
+  });
+});
+
+describe("counting meetings", () => {
+  it("counts them apart from drafts, so the share approved without edits is the drafts'", async () => {
+    const { owner, reviewId } = await booked();
+    await approveReview(owner, reviewId);
+
+    const stats = await reviewStats(owner, { since: new Date(0) });
+
+    expect(stats.meetings).toMatchObject({ approved: 1, waiting: 0 });
+    expect(stats.approvals.approved).toBe(0);
+    expect(stats.approvedWithoutEdits).toBeNull();
   });
 });
 

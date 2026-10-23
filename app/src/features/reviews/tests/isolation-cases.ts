@@ -168,6 +168,7 @@ export const isolationCases = defineIsolationCases(server, {
       approvals: none,
       escalations: none,
       heldSends: none,
+      meetings: none,
       approvedWithoutEdits: null,
       byUser: [],
     };

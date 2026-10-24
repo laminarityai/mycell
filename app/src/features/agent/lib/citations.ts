@@ -62,6 +62,7 @@ function citation(fact: FactCitation, own: Map<string, string>, account: string 
     factId: fact.id,
     disputed: fact.conflictsWith !== null,
     outsideOnly: fact.outsideOnly,
+    told: fact.told,
     sources: [...byItem.values()],
   };
 }

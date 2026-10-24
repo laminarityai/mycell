@@ -7,7 +7,9 @@
 // when the first item stating them happened. So an older email learned after a newer one (a
 // backfill reads newest first) goes into history, not over the newer fact. A fact with no
 // predicate is never superseded. Who sees which part of a timeline is the reader's own: see
-// `visible-facts.ts`.
+// `visible-facts.ts`. What a person told Mycel ("remember this", M9) is a timeline of its own
+// for each teller: their newer told fact replaces their older one, and never a learned fact or
+// a colleague's told fact, nor is replaced by one.
 //
 // Who stated a fact matters too: anyone can email the company. A fact stated only from outside
 // (no source of it came from inside the company: `source_records.from_inside`) never supersedes
@@ -16,7 +18,7 @@
 // conflict instead of a stranger's word replacing the company's. An outside fact can still
 // supersede another that only private, outside sources support (the same customer writing
 // again), and a fact from inside supersedes anything older.
-import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import type { OrgScopedDb } from "@/db/for-org";
 import { factSources, facts, sourceRecords } from "./schema";
 import { type CompanyWide, recordCompanyWide } from "./visibility";
@@ -48,15 +50,21 @@ export async function placeInTimelines(
 ): Promise<void> {
   if (factIds.length === 0) return;
   const placed = await tx.select(facts, {
-    columns: ["subjectId", "predicate"],
+    columns: ["subjectId", "predicate", "toldByUserId"],
     where: inArray(facts.id, factIds),
   });
   const timelines = new Map<string, SQL>();
   for (const fact of placed) {
     if (fact.predicate === null) continue;
+    // Learned facts form one timeline, and each teller's told facts their own.
+    const teller =
+      fact.toldByUserId === null
+        ? isNull(facts.toldByUserId)
+        : eq(facts.toldByUserId, fact.toldByUserId);
     timelines.set(
-      JSON.stringify([fact.subjectId, fact.predicate]),
-      and(eq(facts.subjectId, fact.subjectId), eq(facts.predicate, fact.predicate)) ?? sql`false`,
+      JSON.stringify([fact.subjectId, fact.predicate, fact.toldByUserId]),
+      and(eq(facts.subjectId, fact.subjectId), eq(facts.predicate, fact.predicate), teller) ??
+        sql`false`,
     );
   }
   for (const where of timelines.values()) {

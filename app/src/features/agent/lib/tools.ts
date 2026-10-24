@@ -9,6 +9,7 @@ import {
   type ChatTools,
 } from "@/features/models/server";
 import { readObjectTool, searchMemoryTool } from "./memory-tools";
+import { rememberTool } from "./remember-tool";
 
 /** What a tool knows about the turn calling it. */
 export type AgentTurn = { conversationId: string };
@@ -24,4 +25,5 @@ function agentTool<I, O>(definition: AgentToolDefinition<I, O>): ChatTool<AgentT
 export const agentTools: ChatTools<AgentTurn> = {
   search_memory: agentTool(searchMemoryTool),
   read_object: agentTool(readObjectTool),
+  remember: agentTool(rememberTool),
 };

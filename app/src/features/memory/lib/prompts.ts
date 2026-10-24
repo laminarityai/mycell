@@ -3,6 +3,7 @@ import { definePrompts } from "@/lib/prompts";
 import extractFile from "../prompts/extract.prompt.yml";
 import matchFile from "../prompts/match.prompt.yml";
 import summarizeFile from "../prompts/summarize.prompt.yml";
+import tellFile from "../prompts/tell.prompt.yml";
 
 export const extractPrompts = definePrompts(extractFile, {
   emailQuestion: [],
@@ -28,6 +29,14 @@ export const matchPrompts = definePrompts(matchFile, {
   recordFacts: [],
   recordFact: ["statement"],
   same: [],
+});
+
+export const tellPrompts = definePrompts(tellFile, {
+  system: ["domain"],
+  prompt: ["kind", "name", "keys", "statement"],
+  kind: [],
+  predicate: [],
+  value: [],
 });
 
 export const summarizePrompts = definePrompts(summarizeFile, {

@@ -234,8 +234,9 @@ type FactToStore = Omit<ExtractedFact, "about" | "object"> & {
   embedding: number[];
 };
 
-// The current fact with the same subject and statement, or a new fact (`added`), placed in its
-// timeline once linked to its source.
+// The current learned fact with the same subject and statement, or a new fact (`added`), placed
+// in its timeline once linked to its source. Never a fact a person told Mycel: linking a source
+// to it would show it to everyone who sees that source.
 async function storeFact(
   tx: OrgScopedDb,
   fact: FactToStore,
@@ -245,6 +246,7 @@ async function storeFact(
       where: and(
         eq(facts.subjectId, fact.subjectId),
         eq(facts.statement, fact.statement),
+        eq(facts.origin, "source"),
         isNull(facts.supersededAt),
       ),
       limit: 1,

@@ -10,12 +10,13 @@ import {
 } from "@/features/credits/server";
 import type { Usage } from "@/features/credits/types";
 import { type Ctx, requireSystem } from "@/lib/ctx";
+import { DAY_MS } from "@/lib/time";
 import type { FailedCallCostOutcome } from "../types";
 import { sendFailedCallRecorded } from "./events";
 import { lookUpGenerationCost } from "./generation-lookup";
 
 /** How long after a failed call its billed cost is looked for, before giving up. */
-const LOOKUP_WINDOW_MS = 24 * 60 * 60 * 1000;
+const LOOKUP_WINDOW_MS = DAY_MS;
 
 /**
  * Records a call's usage entry. A failed call recorded at 0 under a generation ID also queues

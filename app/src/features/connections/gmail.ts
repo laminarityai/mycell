@@ -1,5 +1,6 @@
 // Gmail's API as Mycel reads it through the Nango proxy: its path, the shapes of its answers
-// (parsed with Zod), and reading a message's headers and text. Pure: no IO. Discovery, memory
+// (parsed with Zod), reading a message's headers and text, and where a thread opens in Gmail's
+// web app. Pure: no IO. Discovery, memory
 // and runtime each fetch through their own calls, and read what they fetched with these, so
 // they all read a message the same way. A message's text is read in memory only: never stored
 // (invariant 8).
@@ -61,6 +62,15 @@ export type Label = z.infer<typeof labelSchema>;
 
 /** users.labels.list: every label in the mailbox. */
 export const labelsSchema = z.object({ labels: z.array(labelSchema).default([]) });
+
+/**
+ * A thread in Gmail's web app, opened in the account it's in: a review's message, or the one a
+ * run started from. `authuser` picks the account when the person is signed in to several.
+ */
+export function gmailLink(accountEmail: string, threadId: string): string {
+  const account = encodeURIComponent(accountEmail);
+  return `https://mail.google.com/mail/?authuser=${account}#all/${encodeURIComponent(threadId)}`;
+}
 
 /** The label named `name`. Gmail's label names are unique regardless of case. */
 export function labelNamed(labels: readonly Label[], name: string): Label | undefined {

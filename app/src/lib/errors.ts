@@ -13,10 +13,10 @@ export class WorkspaceAccountRequiredError extends Error {
   }
 }
 
-/** The caller's role doesn't allow this operation. */
+/** The caller's role doesn't allow this operation; `message` may say who may. */
 export class ForbiddenError extends Error {
-  constructor() {
-    super("You're not allowed to do that.");
+  constructor(message = "You're not allowed to do that.") {
+    super(message);
     this.name = "ForbiddenError";
   }
 }

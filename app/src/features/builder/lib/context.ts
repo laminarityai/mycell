@@ -23,6 +23,7 @@ import { declaredFieldLines } from "./condition-fields-context";
 import { contextPrompts } from "./prompts";
 import { listProposals } from "./proposals";
 import { memorySection } from "./search-memory";
+import { triggerLines } from "./triggers-context";
 import type { TurnInfo } from "./tools";
 
 export type ContextSection = { title: PromptText; content: PromptText };
@@ -61,6 +62,13 @@ const actionCatalog: ContextProvider = (_ctx, _turn, { actions }) => {
     content: joinPrompts(lines, "\n"),
   });
 };
+
+/** What can start a run, and what a run's steps may read from what started it. */
+const triggerSection: ContextProvider = () =>
+  Promise.resolve({
+    title: contextPrompts.triggersTitle(),
+    content: joinPrompts(triggerLines(), "\n"),
+  });
 
 /** The checks a value of the type allows, as a check names them. */
 const checksFor = (type: ValueType) => operatorsFor(type).join(", ");
@@ -246,6 +254,7 @@ const proposals: ContextProvider = async (ctx, turn) => {
 
 export const contextProviders: ContextProvider[] = [
   orgSettings,
+  triggerSection,
   actionCatalog,
   conditionFields,
   workflows,

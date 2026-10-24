@@ -5,10 +5,11 @@ import { randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { getConnection } from "@/features/connections/server";
+import { saveWithEvents } from "@/features/outbox/server";
 import { getWorkflow, getWorkflowVersion } from "@/features/workflows/server";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { ValidationError } from "@/lib/errors";
-import { sendRunRequested } from "./events";
+import { requestRun } from "./request-run";
 import { runs, runSteps } from "./schema";
 
 type Run = typeof runs.$inferSelect;
@@ -43,16 +44,20 @@ export async function startRun(
     );
   }
   const runId = randomUUID();
-  await forOrg(ctx).insert(runs, {
-    id: runId,
-    connectionId,
-    ownerScope: connection.kind,
-    workflowId,
-    workflowVersionId: version.id,
-    sourceRef: messageId,
-    status: "running",
+  // The run and its request are saved together (ADR-0027): a run never waits "running" for a
+  // request that was never sent.
+  await saveWithEvents(ctx, async (tx, emit) => {
+    await tx.insert(runs, {
+      id: runId,
+      connectionId,
+      ownerScope: connection.kind,
+      workflowId,
+      workflowVersionId: version.id,
+      sourceRef: messageId,
+      status: "running",
+    });
+    requestRun(ctx, emit, { id: runId, connectionId });
   });
-  await sendRunRequested({ orgId: ctx.orgId, runId, connectionId });
   return { runId };
 }
 

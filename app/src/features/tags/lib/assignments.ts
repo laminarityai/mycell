@@ -2,10 +2,11 @@ import { and, eq, inArray } from "drizzle-orm";
 import { isUniqueViolation } from "@/db/errors";
 import { forOrg } from "@/db/for-org";
 import { listUsers } from "@/features/orgs/server";
+import { saveWithEvents } from "@/features/outbox/server";
 import { type Ctx, requireAdmin, requireRole } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
+import { tagAssignmentRemoved } from "../events";
 import { requireTag } from "./access";
-import { sendAssignmentRemoved } from "./events";
 import { tagAssignments } from "./schema";
 
 /** Gives the user the tag; does nothing if they already have it. */
@@ -43,15 +44,24 @@ export async function listTagIdsByUser(
 }
 
 /**
- * Takes the tag from the user, and announces it when they had it (`tags/assignment.removed`), so
- * workflows they no longer see stop being switched on for them.
+ * Takes the tag from the user, and announces it when they had it (`tags/assignment.removed`,
+ * through the outbox), so workflows they no longer see stop being switched on for them. The
+ * event's ID names the assignment, by when it was made.
  */
 export async function unassignTag(ctx: Ctx, tagId: string, userId: string): Promise<void> {
   requireAdmin(ctx);
   await requireTag(ctx, tagId);
-  const removed = await forOrg(ctx).delete(
-    tagAssignments,
-    and(eq(tagAssignments.tagId, tagId), eq(tagAssignments.userId, userId)),
-  );
-  if (removed.length > 0) await sendAssignmentRemoved(ctx, tagId, userId);
+  await saveWithEvents(ctx, async (tx, emit) => {
+    const removed = await tx.delete(
+      tagAssignments,
+      and(eq(tagAssignments.tagId, tagId), eq(tagAssignments.userId, userId)),
+    );
+    for (const assignment of removed) {
+      emit(
+        tagAssignmentRemoved,
+        { orgId: ctx.orgId, tagId, userId },
+        `tag-unassigned-${tagId}-${userId}-${String(assignment.createdAt.getTime())}`,
+      );
+    }
+  });
 }

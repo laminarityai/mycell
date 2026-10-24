@@ -6,6 +6,7 @@ import { forOrg } from "@/db/for-org";
 import { listOrgIds } from "@/features/orgs/server";
 import { systemCtx } from "@/lib/ctx";
 import { NangoRequestError } from "@/lib/errors";
+import { DAY_MS } from "@/lib/time";
 import type { NangoConnectionRef, ReconciliationSummary } from "../types";
 import { ATTEMPT_TAGS } from "./connect";
 import {
@@ -16,8 +17,6 @@ import {
 } from "./nango";
 import { connectAttempts, connections } from "./schema";
 import { integrationOf } from "./apps";
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 // Deleting more Nango connections than this in one run, when they are also most of what Nango
 // lists, looks like Mycel misreading its own rows rather than real orphans: the run holds them.

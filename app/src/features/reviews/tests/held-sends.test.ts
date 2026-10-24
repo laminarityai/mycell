@@ -11,6 +11,7 @@ import { disconnect } from "@/features/connections/server";
 import { getRun } from "@/features/runtime/server";
 import { systemCtx, type Ctx } from "@/lib/ctx";
 import { AlreadyHandledError, ConflictError, ValidationError } from "@/lib/errors";
+import { DAY_MS } from "@/lib/time";
 import type { FakeAppRequest } from "@/testing/fake-microsoft";
 import { fakeNango } from "@/testing/fake-nango";
 import {
@@ -30,7 +31,6 @@ afterEach(() => {
 });
 
 const REPLY_PATH = `/v1.0/me/messages/${OUTLOOK_MESSAGE}/reply`;
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 const writes = (requests: FakeAppRequest[]) => requests.filter((r) => r.method !== "GET");
 const reply = (comment: string) => ({

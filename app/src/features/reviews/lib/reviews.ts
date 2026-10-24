@@ -95,7 +95,7 @@ export async function visibleReview(ctx: Ctx, reviewId: string): Promise<ReviewR
  * whoever sees its workflow now (every admin included), and either the colleague it was handed
  * to. The system ctx, which jobs act as, sees every review in its org (ADR-0009).
  */
-async function visibleOf(ctx: Ctx, rows: ReviewRow[]): Promise<ReviewRow[]> {
+export async function visibleOf(ctx: Ctx, rows: ReviewRow[]): Promise<ReviewRow[]> {
   if (isSystem(ctx)) return rows;
   // An admin sees every org review; anyone else those of workflows they see through a tag.
   const sharing = isAdmin(ctx) ? new Map<string, ReviewSharing>() : await sharingOf(ctx, rows);

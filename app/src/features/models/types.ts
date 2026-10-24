@@ -1,7 +1,7 @@
-// The models feature's public types: what a model call takes and returns, and the error it
-// throws.
-import type { LanguageModel } from "ai";
-import type { z } from "zod";
+// The models feature's public types: what a model call takes and returns, the error it throws,
+// and the parts a metered chat turn stores.
+import type { LanguageModel, UIMessage } from "ai";
+import { z } from "zod";
 import type { CreditPurpose } from "@/features/credits/types";
 import type { ModelRole } from "@/features/spec/types";
 import type { PromptText } from "@/lib/prompts";
@@ -23,6 +23,12 @@ export type MeteredStream = {
   model: LanguageModel;
   /** Adds one finished model step's cost, read from its `providerMetadata.gateway`. */
   meterStep(providerMetadata: unknown): void;
+  /**
+   * Notes the error a failed model step ended with. The failed step reports no cost, but the
+   * gateway may still bill it: when its error carries a generation ID, the call's entry records
+   * that one, so its billed cost is looked up later.
+   */
+  meterError(error: unknown): void;
   /**
    * Records the call's usage: the cost of every step metered so far. Only the first call
    * records; later ones do nothing, so every way a stream can end may call it.
@@ -110,6 +116,29 @@ export class ModelCallError extends Error {
   }
 }
 
+/**
+ * How looking up a failed call's billed cost ended (`correctFailedCallCost`): `corrected` when
+ * the gateway knew it and the ledger now records it; `not_billed_yet` when the gateway can't say
+ * yet, so the job looks again later; `given_up` a day after the call; `nothing_to_correct` when
+ * the entry is already corrected, or is no failed call recorded at 0 under a generation ID.
+ */
+export type FailedCallCostOutcome =
+  "corrected" | "not_billed_yet" | "given_up" | "nothing_to_correct";
+
+/**
+ * The AI Gateway refused a generation lookup for a reason looking again won't fix (a bad key, a
+ * malformed request). Built from the status only.
+ */
+export class GenerationLookupError extends Error {
+  readonly status: number;
+
+  constructor(status: number) {
+    super(`The AI Gateway refused the generation lookup (${String(status)}).`);
+    this.name = "GenerationLookupError";
+    this.status = status;
+  }
+}
+
 /** An injection screen request: text fetched for a model, held in memory only. */
 export type ScreenRequest = CallAttribution & { text: string };
 
@@ -162,3 +191,37 @@ export class InjectionScreenError extends Error {
     this.status = status;
   }
 }
+
+/** Why a chat turn shows a notice instead of (or after) a reply. */
+export const noticeKindSchema = z.enum(["out_of_credits", "failed"]);
+export type NoticeKind = z.infer<typeof noticeKindSchema>;
+
+export type Notice = { kind: NoticeKind; text: string };
+
+/**
+ * The parts every chat's stored messages share (`streamChatTurn`): text, one tool call with its
+ * result, or a notice. A tool's result is stored as the tool chooses (its `stored`), never as
+ * source content (invariant 8). A chat adds part kinds of its own, each with its own `type`, in
+ * a discriminated union over these and them.
+ */
+export const chatPartSchemas = [
+  z.object({ type: z.literal("text"), text: z.string() }),
+  z.object({
+    type: z.literal("tool"),
+    toolCallId: z.string(),
+    toolName: z.string(),
+    input: z.unknown(),
+    /** What the tool returned, or the error the model was told about. */
+    output: z.unknown(),
+    isError: z.boolean(),
+  }),
+  z.object({ type: z.literal("notice"), kind: noticeKindSchema, text: z.string() }),
+] as const;
+export type ChatPart = z.infer<(typeof chatPartSchemas)[number]>;
+
+/** A stored chat message as its history is read back: the shared parts and the chat's own. */
+export type ChatMessage<P> = { id: string; role: "user" | "assistant"; parts: P[] };
+
+/** A chat page's messages as the shared turn streams them: the AI SDK's, with notices. */
+export type ChatUIMessage = UIMessage<never, { notice: Notice }>;
+export type ChatUIPart = ChatUIMessage["parts"][number];

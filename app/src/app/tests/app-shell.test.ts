@@ -20,7 +20,7 @@ const labelsOf = (admin: boolean) =>
 describe("the sidebar's items", () => {
   it("groups an admin's items under Your work, Company, and Accounts and memory", () => {
     expect(labelsOf(true)).toEqual([
-      ["Your work", ["Reviews", "Workflows"]],
+      ["Your work", ["Reviews", "Workflows", "Runs"]],
       [
         "Company",
         ["Builder chat", "Credits", "Custom actions", "Capability requests", "Manage tags"],
@@ -31,7 +31,7 @@ describe("the sidebar's items", () => {
 
   it("never shows a member the Company group or memory's settings", () => {
     expect(labelsOf(false)).toEqual([
-      ["Your work", ["Reviews", "Workflows"]],
+      ["Your work", ["Reviews", "Workflows", "Runs"]],
       ["Accounts and memory", ["Connections", "Your org", "Memory log"]],
     ]);
   });

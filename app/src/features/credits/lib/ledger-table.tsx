@@ -1,5 +1,6 @@
 // The latest ledger entries, with what an admin checks a surprising charge by: what it was,
-// its workflow, role, model and credits. Grants show their note; failed calls are marked.
+// its workflow, role, model and credits. Grants show their note; failed calls, and the
+// corrections that later record their cost, are marked.
 import { DateTime } from "@/components/date-time";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -75,7 +76,12 @@ function EntryLabel({ entry }: { entry: LedgerLine }) {
       {kind === null ? null : (
         <span className="text-muted-foreground">{SPENDING_KIND_LABELS[kind]}</span>
       )}
-      {entry.outcome === "failed" ? <Badge variant="destructive">Failed call</Badge> : null}
+      {entry.outcome !== "failed" ? null : (
+        // A correction records a failed call's billed cost, found later in the gateway.
+        <Badge variant="destructive">
+          {entry.correctsId === null ? "Failed call" : "Failed call's cost"}
+        </Badge>
+      )}
     </span>
   );
 }

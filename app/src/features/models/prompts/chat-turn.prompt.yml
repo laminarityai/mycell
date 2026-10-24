@@ -1,0 +1,5 @@
+# What a chat turn tells the model beside its tool results (models/lib/chat-turn.ts).
+
+# Any tool call that failed with an error other than one of ours.
+toolFailed: |-
+  That tool call failed.

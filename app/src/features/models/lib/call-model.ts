@@ -9,7 +9,7 @@ import {
   Output,
 } from "ai";
 import { env } from "@/env";
-import { checkCredits, recordUsage } from "@/features/credits/server";
+import { checkCredits } from "@/features/credits/server";
 import type { ModelRole } from "@/features/spec/types";
 import type { Ctx } from "@/lib/ctx";
 import {
@@ -19,6 +19,7 @@ import {
   type ObjectRequest,
   type TextRequest,
 } from "../types";
+import { recordCallUsage } from "./failed-call-costs";
 import { meteredGateway, type MeteredGateway } from "./gateway";
 import { resolveModel } from "./model-roles";
 
@@ -97,11 +98,12 @@ export async function meteredCall<R>(
     output = await call(gateway, modelId);
   } catch (error) {
     const { costUsd, generationId } = gateway.metering();
-    await recordUsage(ctx, { ...usage, costUsd, generationId, outcome: "failed" });
+    // Queues the lookup of what the gateway billed, when it reported no cost.
+    await recordCallUsage(ctx, { ...usage, costUsd, generationId, outcome: "failed" });
     throw toModelCallError(error, role, modelId);
   }
   const { costUsd, generationId } = gateway.metering();
-  await recordUsage(ctx, { ...usage, costUsd, generationId, outcome: "succeeded" });
+  await recordCallUsage(ctx, { ...usage, costUsd, generationId, outcome: "succeeded" });
   return { output, modelId, costUsd };
 }
 

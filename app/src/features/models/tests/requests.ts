@@ -8,4 +8,6 @@ export const testPrompts = definePrompts(requestsFile, {
   extractTheOrder: [],
   isItAQuote: [],
   which: [],
+  answerFromTools: [],
+  lookUp: [],
 });

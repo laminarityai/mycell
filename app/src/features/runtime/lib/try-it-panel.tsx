@@ -1,6 +1,7 @@
 "use client";
 
-// The "Try it" panel: pick one of the newest messages on the admin's own or an org connection,
+// The "Try it" panel: pick one of the newest messages (or invites, for a workflow that starts on
+// a new invite) on the admin's own or an org connection,
 // run the working spec on it with every write stubbed, and see each step's result. The page
 // that holds it gives the Server Action (the workflow page's, or the builder chat's) and the
 // hidden fields it needs. On a page with a workflow graph, the result lights it up too.
@@ -19,8 +20,11 @@ export function TryItPanel({
   sources,
   action,
   fields,
+  item = "message",
 }: {
   sources: RecentMessages[];
+  /** What the spec's trigger starts a run on, and so what the picker offers. */
+  item?: "message" | "invite";
   action: (previous: TryItState, form: FormData) => Promise<TryItState>;
   /** Hidden form fields the action reads, such as the workflow's ID. */
   fields: Record<string, string>;
@@ -43,7 +47,9 @@ export function TryItPanel({
   if (sources.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        Connect your own Google account, or an org account, allowed Gmail to try it on a message.
+        {item === "invite"
+          ? "Connect your own Google account, or an org account, allowed Calendar to try it on an invite."
+          : "Connect your own Google account, or an org account, allowed Gmail to try it on a message."}
       </p>
     );
   }
@@ -56,7 +62,7 @@ export function TryItPanel({
         <input type="hidden" name="connectionId" value={connectionId} />
         <input type="hidden" name="sourceRef" value={sourceRef} />
         <label className="flex flex-col gap-1 text-sm font-medium">
-          Message
+          {item === "invite" ? "Invite" : "Message"}
           <NativeSelect
             value={picked}
             onChange={(event) => {
@@ -68,7 +74,7 @@ export function TryItPanel({
               <NativeSelectOptGroup key={source.connectionId} label={source.accountEmail}>
                 {source.unavailable ? (
                   <NativeSelectOption disabled value="">
-                    Couldn&apos;t read this inbox just now
+                    Couldn&apos;t read this {item === "invite" ? "calendar" : "inbox"} just now
                   </NativeSelectOption>
                 ) : null}
                 {source.messages.map((message) => (
@@ -76,7 +82,8 @@ export function TryItPanel({
                     key={message.sourceRef}
                     value={key(source.connectionId, message.sourceRef)}
                   >
-                    {message.subject || "(no subject)"} · {message.from}
+                    {message.subject || (item === "invite" ? "(no title)" : "(no subject)")} ·{" "}
+                    {message.from}
                   </NativeSelectOption>
                 ))}
               </NativeSelectOptGroup>

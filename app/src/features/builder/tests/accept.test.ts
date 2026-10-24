@@ -19,6 +19,7 @@ import {
 import { ConflictError, ForbiddenError } from "@/lib/errors";
 import { connectGmail } from "@/testing/connect-helpers";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
+import { fundOrg, readTurn } from "@/testing/streamed-turn";
 import {
   acceptProposal,
   getConversation,
@@ -29,7 +30,6 @@ import {
 } from "../server";
 import { proposeInTurn } from "./proposal-helpers";
 import { draftSpec, labelSpec, triageSpec } from "./specs";
-import { fundOrg, readTurn } from "./turn-helpers";
 
 beforeEach(resetDatabase);
 

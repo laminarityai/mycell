@@ -1,5 +1,5 @@
 import { expect } from "vitest";
-import { defineIsolationCases } from "@/db/testing/isolation";
+import { defineIsolationCases, notTenantScoped } from "@/db/testing/isolation";
 import type { TwoOrgs } from "@/db/testing/two-org-fixture";
 import { systemCtx } from "@/lib/ctx";
 import { OutOfCreditsError } from "@/lib/errors";
@@ -16,6 +16,17 @@ async function seedOrgBLedger({ orgB }: TwoOrgs) {
     outcome: "succeeded",
   });
   return { before: await server.listLedger(orgB.admin.ctx) };
+}
+
+// A failed call in org B whose billed cost is still to be looked up.
+function failedCallInOrgB({ orgB }: TwoOrgs) {
+  return server.recordUsage(systemCtx(orgB.id), {
+    role: "fast",
+    modelId: "openai/x",
+    costUsd: 0,
+    outcome: "failed",
+    generationId: "gen_b",
+  });
 }
 
 export const isolationCases = defineIsolationCases(server, {
@@ -75,6 +86,27 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await server.getSpending(orgs.orgA.admin.ctx, { purpose: "memory", since })).toBe(0);
   },
 
+  findUncostedFailedCall: async (orgs) => {
+    await seedOrgBLedger(orgs);
+    const failed = await failedCallInOrgB(orgs);
+
+    expect(await server.findUncostedFailedCall(systemCtx(orgs.orgA.id), failed.id)).toBeUndefined();
+    expect(await server.findUncostedFailedCall(systemCtx(orgs.orgB.id), failed.id)).toBeDefined();
+  },
+
+  recordFailedCallCost: async (orgs) => {
+    await seedOrgBLedger(orgs);
+    const failed = await failedCallInOrgB(orgs);
+    const before = await server.listLedger(orgs.orgB.admin.ctx);
+
+    // Org B's failed call, from org A: nothing is recorded in either org.
+    expect(
+      await server.recordFailedCallCost(systemCtx(orgs.orgA.id), failed.id, 0.01),
+    ).toBeUndefined();
+    expect(await server.listLedger(orgs.orgA.admin.ctx)).toEqual([]);
+    expect(await server.listLedger(orgs.orgB.admin.ctx)).toEqual(before);
+  },
+
   listLedger: async (orgs) => {
     await seedOrgBLedger(orgs);
 
@@ -109,4 +141,38 @@ export const isolationCases = defineIsolationCases(server, {
       zeroAt: null,
     });
   },
+
+  spentThisMonthByWorkflow: async (orgs) => {
+    await seedOrgBWorkflowRun(orgs);
+
+    expect(await server.spentThisMonthByWorkflow(orgs.orgA.admin.ctx, ["wf-b"])).toEqual(
+      new Map([["wf-b", 0]]),
+    );
+    expect(await server.spentThisMonthByWorkflow(orgs.orgB.admin.ctx, ["wf-b"])).toEqual(
+      new Map([["wf-b", 10]]),
+    );
+  },
+
+  budgetsReached: async (orgs) => {
+    await seedOrgBWorkflowRun(orgs);
+    const budgets = new Map([["wf-b", 5]]);
+
+    expect(await server.budgetsReached(orgs.orgA.member.ctx, budgets)).toEqual(new Set());
+    expect(await server.budgetsReached(orgs.orgB.member.ctx, budgets)).toEqual(new Set(["wf-b"]));
+  },
+
+  nextMonthStart: notTenantScoped("a date worked out from the clock alone"),
 });
+
+// Org B's workflow `wf-b` spends 10 credits in a live run.
+async function seedOrgBWorkflowRun(orgs: TwoOrgs) {
+  await seedOrgBLedger(orgs);
+  await server.recordUsage(systemCtx(orgs.orgB.id), {
+    role: "fast",
+    modelId: "openai/x",
+    costUsd: 0.01,
+    outcome: "succeeded",
+    workflowId: "wf-b",
+    runId: "run-b",
+  });
+}

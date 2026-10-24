@@ -6,12 +6,17 @@ export { getWorkflowVersion, publishWorkflow } from "./lib/versions";
 export { previewPublish } from "./lib/publish-preview";
 export { getVisibleWorkflow, listVisibleWorkflows } from "./lib/visibility";
 export { getWorkflow, listWorkflows, saveWorkflow } from "./lib/workflows";
+// For the workflow page's Health tab: the company's credits and the workflow's budget.
+export { getWorkflowHealth } from "./lib/health";
 // Saving inside the caller's transaction, as accepting a proposal does: everything a save reads
 // and checks first, then the writes through the caller's `tx`.
 export { checkWorkflowSave, saveWorkflowIn } from "./lib/workflows";
 export { switchWorkflowOff, switchWorkflowOn } from "./lib/switches";
 // Admins stop a workflow everywhere, and bring it back as it was.
 export { archiveWorkflow, restoreWorkflow } from "./lib/archiving";
+// Pausing after the runs' failures (M8): the run job, as the system ctx, reads when the count
+// starts and pauses with the three runs it counted; an admin resumes it.
+export { failureStreakStart, pauseForFailures, resumeWorkflow } from "./lib/failure-pauses";
 // Members switching a workflow they can see on and off for their own Google connection.
 export { disable, enable, listEnablements } from "./lib/enablements";
 // For the Workflows page: every workflow's enablements and runnable connections, read together.
@@ -31,9 +36,12 @@ export { checkWorkflowSpec } from "./lib/validation";
 // fan-out).
 export { listSwitchedOn } from "./lib/switches";
 export { listStartable } from "./lib/startable";
-// For any role: workflows' names, to show beside what another feature lets the caller see, and
-// their current versions' IDs, to count by.
-export { currentVersionIds, workflowNames } from "./lib/names";
+// For admins and members: the version a run they start by hand on a connection runs now (a
+// retry), refused while the workflow is archived, paused there or no longer theirs to see.
+export { startableVersion } from "./lib/startable-version";
+// For any role: workflows' names, to show beside what another feature lets the caller see,
+// their current versions' IDs, to count by, and versions by ID, to describe a run's steps by.
+export { currentVersionIds, versionsById, workflowNames } from "./lib/names";
 // For admins: every workflow's name and published monthly budget, which the Credits page shows
 // each workflow's spending against.
 export { listWorkflowBudgets } from "./lib/budgets";

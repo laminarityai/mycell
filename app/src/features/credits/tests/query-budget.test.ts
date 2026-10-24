@@ -5,7 +5,14 @@ import { countQueries } from "@/db/testing/count-queries";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { systemCtx } from "@/lib/ctx";
-import { checkCredits, getRunway, getSpendingSummary, grantCredits, recordUsage } from "../server";
+import {
+  checkCredits,
+  getLedgerStart,
+  getRunway,
+  getSpendingSummary,
+  grantCredits,
+  recordUsage,
+} from "../server";
 import { monthRange } from "../types";
 
 beforeEach(resetDatabase);
@@ -66,6 +73,29 @@ describe("the Credits page's reads' query budget", () => {
     // and each workflow's day.
     expect(few.rows).toBe(3);
     expect(many.rows).toBe(22);
+  });
+
+  it("sums 12 months in the same two queries, for 1 workflow or 20", async () => {
+    const now = new Date();
+    const range = {
+      from: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 11, 1)),
+      to: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)),
+    };
+    const one = await orgWithWorkflows(1);
+    const few = await countQueries(() => getSpendingSummary(one, range));
+    await resetDatabase();
+    const twenty = await orgWithWorkflows(20);
+    const many = await countQueries(() => getSpendingSummary(twenty, range));
+
+    expect(few.queries).toBe(2);
+    expect(many.queries).toBe(few.queries);
+    expect(many.rows).toBe(22);
+  });
+
+  it("finds the ledger's first entry in one query that returns a row", async () => {
+    const ctx = await orgWithWorkflows(20);
+
+    expect(await countQueries(() => getLedgerStart(ctx))).toEqual({ queries: 1, rows: 1 });
   });
 
   it("reads the runway in two queries that return a row each", async () => {

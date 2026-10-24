@@ -23,6 +23,7 @@ Every `app/src/features/<name>/` has the same shape. Root files are the public e
 | `custom-actions/api-index.ts`    | building a registered app's operation index (ADR-0018): pure, no IO        | `pnpm api-index` and tests                 |
 | `orgs/form-action.ts`            | `runFormAction` and `runValueAction`: how every Server Action runs         | every `actions.ts` (a lint rule)           |
 | `credits/format.ts`              | how credits are worded (`formatCredits`, kinds' labels): pure, no IO       | anyone, client code included               |
+| `credits/range.ts`               | the Credits page's date range and what's worked out over it: pure, no IO   | anyone, client code included               |
 
 - A pure feature (no tables, no IO, no `ctx`, like `spec` and `policy`) has no `server.ts`. Its functions live in root files named for what they hold (`spec/validate.ts`, `policy/catalog.ts`, `policy/engine.ts`), which anyone may import, client code included.
 - `server.ts` functions that exist before any `ctx` does (sign-in, resolving the session to `ctx`, the auth route) are the only ones that don't take it first; they live in `orgs`.

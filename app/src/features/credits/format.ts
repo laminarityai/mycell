@@ -1,6 +1,6 @@
 // How Mycel words credits, the same on the Credits page and in the sidebar's foot: pure, so
 // client code may import it.
-import type { SpendingKind } from "./types";
+import type { RangePreset, SpendingKind } from "./types";
 
 const WHOLE = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 const TENTHS = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
@@ -24,4 +24,22 @@ export const SPENDING_KIND_LABELS: Record<SpendingKind, string> = {
   memory: "Memory",
   builder: "Builder chat",
   try_it: "Try it",
+};
+
+/** Each range preset, as the range control names it. */
+export const RANGE_PRESET_LABELS: Record<RangePreset, string> = {
+  this_month: "This month",
+  last_month: "Last month",
+  "3m": "Last 3 months",
+  "12m": "Last 12 months",
+  custom: "Custom",
+};
+
+/** What was spent or granted over a preset's range: "Spent this month", "Granted in this range". */
+export const RANGE_PRESET_PHRASES: Record<RangePreset, string> = {
+  this_month: "this month",
+  last_month: "last month",
+  "3m": "in the last 3 months",
+  "12m": "in the last 12 months",
+  custom: "in this range",
 };

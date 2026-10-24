@@ -1,76 +1,20 @@
-// The Credits page: this month's spending by workflow next to each one's budget, the latest
-// entries with their workflows' names and grants' notes, read in the same queries for 1
-// workflow as for 20.
+// The Credits page: this month's spending by workflow next to each one's budget, the entries
+// with their workflows' names and grants' notes, read in the same queries for 1 workflow as for
+// 20. Other ranges are in credits-range.test.ts.
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it } from "vitest";
 import { countQueries } from "@/db/testing/count-queries";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
-import { grantCredits, recordUsage } from "@/features/credits/server";
+import { grantCredits } from "@/features/credits/server";
 import { CreditsOverview } from "@/features/credits/ui";
-import { archiveWorkflow, publishWorkflow, saveWorkflow } from "@/features/workflows/server";
-import { type Ctx, systemCtx } from "@/lib/ctx";
+import { systemCtx } from "@/lib/ctx";
 import { ForbiddenError } from "@/lib/errors";
-import { connectGmail } from "@/testing/connect-helpers";
 import { loadCreditsPage } from "../credits/credits-data";
+import { orgWithManyWorkflows, orgWithWorkflows, textOf } from "./credits-org";
 
 beforeEach(resetDatabase);
-
-const labelSpec = (id: string, monthlyCredits?: number) => ({
-  specVersion: 1,
-  id,
-  credentials: "member",
-  trigger: { type: "gmail.message_received" },
-  steps: [
-    {
-      id: "label",
-      type: "tool",
-      action: "google-mail.add-label",
-      input: { messageId: { from: "trigger.messageId" }, label: "Pricing" },
-    },
-  ],
-  autonomy: { rung: 3 },
-  ...(monthlyCredits === undefined ? {} : { budget: { monthlyCredits } }),
-});
-
-async function publish(admin: Ctx, name: string, id: string, monthlyCredits?: number) {
-  const saved = await saveWorkflow(admin, { name, spec: labelSpec(id, monthlyCredits) });
-  await publishWorkflow(admin, saved.id);
-  return saved.id;
-}
-
-/** A run's model call that cost `credits`, as the gateway client records it. */
-async function run(orgId: string, workflowId: string, credits: number, runId = "run_1") {
-  await recordUsage(systemCtx(orgId), {
-    role: "fast",
-    modelId: "openai/x",
-    costUsd: credits / 1000,
-    outcome: "succeeded",
-    workflowId,
-    runId,
-  });
-}
-
-/** Org A with four workflows, three of which ran this month, one past its budget. */
-async function orgWithWorkflows() {
-  const { orgA } = await seedTwoOrgs();
-  const admin = orgA.admin.ctx;
-  await connectGmail(admin, orgA.admin.email);
-  await grantCredits(systemCtx(orgA.id), 1000, "October allowance");
-  const quotes = await publish(admin, "Quote replies", "quotes", 20);
-  const invoices = await publish(admin, "Invoices", "invoices", 500);
-  const calls = await publish(admin, "Call notes", "calls");
-  const idle = await publish(admin, "Status updates", "status", 100);
-  const archived = await publish(admin, "Old", "old", 100);
-  await archiveWorkflow(admin, archived);
-  await run(orgA.id, quotes, 25);
-  await run(orgA.id, invoices, 5);
-  await run(orgA.id, calls, 10);
-  return { admin, idle };
-}
-
-const textOf = (html: string) => html.replace(/<[^>]+>/g, "");
 
 describe("the Credits page", () => {
   it("shows each workflow's spending next to its budget, and marks one that reached it", async () => {
@@ -78,6 +22,7 @@ describe("the Credits page", () => {
 
     const page = await loadCreditsPage(admin, new Date());
 
+    expect(page.chosen.preset).toBe("this_month");
     expect(
       page.workflows.map(({ name, spent, monthlyBudget, budgetReached }) => ({
         name,
@@ -104,9 +49,10 @@ describe("the Credits page", () => {
       { kind: "usage", workflowName: "Quote replies", note: null },
       { kind: "grant", workflowName: null, note: "October allowance" },
     ]);
+    expect(page.moreEntries).toBe(false);
   });
 
-  it("renders the balance and runway, each workflow against its budget, and the grant's note", async () => {
+  it("renders the balance and runway now, each workflow against its budget, and the grant's note", async () => {
     const { admin } = await orgWithWorkflows();
 
     const html = renderToStaticMarkup(
@@ -114,9 +60,11 @@ describe("the Credits page", () => {
     );
 
     const text = textOf(html);
-    expect(text).toContain("Balance 960");
+    expect(text).toContain("Balance now 960");
     // 40 credits in the last 7 days: about 5.7 a day.
-    expect(text).toMatch(/Lasts about 168 days \(to \w{3} \d{1,2}, \d{4}, at 5\.7 a day\)/);
+    expect(text).toMatch(
+      /From today, lasts about 168 days \(to \w{3} \d{1,2}, \d{4}, at 5\.7 a day\)/,
+    );
     expect(text).toContain("Spent this month 40");
     expect(text).toContain("Granted this month 1,000");
     expect(text).toContain("Quote repliesPaused: budget reached25 / 20");
@@ -150,7 +98,7 @@ describe("the Credits page", () => {
     );
 
     expect(text).toContain("No usage in the last 7 days");
-    expect(text).toContain("No workflow has spent any credits.");
+    expect(text).toContain("No workflow has spent any credits in this range.");
   });
 
   it("is out of a member's reach", async () => {
@@ -160,23 +108,15 @@ describe("the Credits page", () => {
   });
 
   it("reads 1 workflow's spending or 20's in the same queries", async () => {
-    const { orgA } = await seedTwoOrgs();
-    const admin = orgA.admin.ctx;
-    await connectGmail(admin, orgA.admin.email);
-    await grantCredits(systemCtx(orgA.id), 1000, "October allowance");
-    const add = async (n: number) => {
-      const id = await publish(admin, `Workflow ${String(n)}`, `wf-${String(n)}`, 100);
-      await run(orgA.id, id, 2, `run_${String(n)}_a`);
-      await run(orgA.id, id, 3, `run_${String(n)}_b`);
-    };
-    await add(0);
-    const one = await countQueries(() => loadCreditsPage(admin, new Date()));
-    for (let n = 1; n < 20; n += 1) await add(n);
-    const twenty = await countQueries(() => loadCreditsPage(admin, new Date()));
+    const few = await orgWithManyWorkflows(1);
+    const one = await countQueries(() => loadCreditsPage(few, new Date()));
+    await resetDatabase();
+    const many = await orgWithManyWorkflows(20);
+    const twenty = await countQueries(() => loadCreditsPage(many, new Date()));
 
-    // The summary's 2, the runway's 2, the latest entries, the workflows and their latest
-    // versions, and which reached their budget: the pause's own query.
-    expect(one.queries).toBe(8);
+    // The runway (2), the first entry, the range's sums (2), its entries, the workflows and
+    // their latest versions (2), and which reached their budget this month: the pause's own query.
+    expect(one.queries).toBe(9);
     expect(twenty.queries).toBe(one.queries);
   });
 });

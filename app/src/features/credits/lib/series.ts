@@ -1,5 +1,5 @@
-// The Credits page's series, worked out from a range's summary: the balance at each day's end,
-// and running totals. Pure: the totals themselves were summed in the database.
+// The Credits page's series, worked out from a range's summary: the balance through each day,
+// with grants as steps up. Pure: the totals themselves were summed in the database.
 import { DAY_MS, type SpendingSummary } from "../types";
 
 /** How many of the range's days have begun by `now`: all of them for a range in the past. */
@@ -8,27 +8,36 @@ export function daysBegun(summary: SpendingSummary, now: Date): number {
   return Math.min(begun, summary.days.length);
 }
 
-/** `now`, in days from the range's start. */
-export const nowDay = (summary: SpendingSummary, now: Date) =>
-  (now.getTime() - summary.range.from.getTime()) / DAY_MS;
+/** `at`, in days from the range's start (fractional). */
+export const dayOf = (summary: SpendingSummary, at: Date) =>
+  (at.getTime() - summary.range.from.getTime()) / DAY_MS;
 
-/**
- * The balance through the range as (day, balance) points: as it began, then at the end of each
- * day that has ended, then now, if the range runs on past it.
- */
-export function balancePoints(summary: SpendingSummary, now: Date): [number, number][] {
+/** `now`, in days from the range's start. */
+export const nowDay = (summary: SpendingSummary, now: Date) => dayOf(summary, now);
+
+/** One begun day's balance: as it began, what was granted, and as it ended (or now, today). */
+export type DayBalance = { start: number; granted: number; spent: number; end: number };
+
+/** The balance through each day of the range that has begun. */
+export function dayBalances(summary: SpendingSummary, now: Date): DayBalance[] {
   let balance = summary.openingBalance;
-  const at = nowDay(summary, now);
-  const pts: [number, number][] = [[0, balance]];
-  summary.days.slice(0, daysBegun(summary, now)).forEach((day, i) => {
+  return summary.days.slice(0, daysBegun(summary, now)).map((day) => {
+    const start = balance;
     balance += day.granted - day.spent;
-    pts.push([Math.min(i + 1, at), balance]);
+    return { start, granted: day.granted, spent: day.spent, end: balance };
   });
-  return pts;
 }
 
-/** A series' running total at the end of each day begun, from 0 as the range began. */
-export function runningTotals(daily: number[], begun: number): number[] {
-  let total = 0;
-  return daily.slice(0, begun).map((spent) => (total += spent));
+/**
+ * The balance through the range as (day, balance) points: as it began, then each day's grant
+ * as a step up at its start, and the balance at its end (or now, if the range runs on past it).
+ */
+export function balancePoints(summary: SpendingSummary, now: Date): [number, number][] {
+  const at = nowDay(summary, now);
+  const pts: [number, number][] = [[0, summary.openingBalance]];
+  dayBalances(summary, now).forEach((day, i) => {
+    if (day.granted > 0) pts.push([i, day.start + day.granted]);
+    pts.push([Math.min(i + 1, at), day.end]);
+  });
+  return pts;
 }

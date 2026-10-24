@@ -131,6 +131,13 @@ export const isolationCases = defineIsolationCases(server, {
     expect(summary.days.every((day) => day.spent === 0 && day.granted === 0)).toBe(true);
   },
 
+  getLedgerStart: async (orgs) => {
+    await seedOrgBLedger(orgs);
+
+    expect(await server.getLedgerStart(orgs.orgA.admin.ctx)).toBeNull();
+    expect(await server.getLedgerStart(orgs.orgB.admin.ctx)).toBeInstanceOf(Date);
+  },
+
   getRunway: async (orgs) => {
     await seedOrgBLedger(orgs);
 

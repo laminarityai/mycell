@@ -57,6 +57,7 @@ function checkingAdapter() {
     escalation: adapter,
     held_send: adapter,
     suggested_edits: adapter,
+    calendar_event: adapter,
   };
   return { adapters, checked };
 }

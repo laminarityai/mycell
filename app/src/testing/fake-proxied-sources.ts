@@ -7,6 +7,7 @@ import { HttpResponse } from "msw";
 import { REGISTERED_APPS } from "@/features/connections/registered-apps";
 import { GOOGLE_APP_SCOPES } from "@/features/connections/types";
 import { calendarError, calendarResponse } from "./fake-calendar";
+import { calendarWriteResponse } from "./fake-calendar-writes";
 import { docsError } from "./fake-docs";
 import { driveError, driveResponse } from "./fake-drive";
 import { gmailError, gmailResponse, gmailWrite } from "./fake-gmail";
@@ -50,6 +51,13 @@ const SPREADSHEETS_READONLY = "https://www.googleapis.com/auth/spreadsheets.read
 const CALENDAR_READS = ["calendar", "calendar.readonly", "calendar.events.readonly"].map(
   (name) => `https://www.googleapis.com/auth/${name}`,
 );
+// The scopes events.insert, patch, update and delete take, as Google lists them.
+const CALENDAR_WRITES = [
+  "calendar",
+  "calendar.events",
+  "calendar.events.owned",
+  "calendar.app.created",
+].map((name) => `https://www.googleapis.com/auth/${name}`);
 // Which Graph resources need which scope isn't modelled: any token that can sign in reads, and
 // any that can write something writes.
 const GRAPH_WRITE_SCOPES = REGISTERED_APPS.microsoft.scopes.filter((scope) =>
@@ -82,9 +90,14 @@ export const PROXIED_SOURCES: ProxiedSource[] = [
   {
     host: "https://www.googleapis.com",
     prefix: "/calendar/v3",
-    // Reading events takes any Calendar scope.
+    // Reading events takes any Calendar scope; writing them a read-write one.
     scopes: [GOOGLE_APP_SCOPES.calendar, ...CALENDAR_READS],
     respond: (connection, path, params) => calendarResponse(connection.calendar, path, params),
+    write: {
+      scopes: CALENDAR_WRITES,
+      respond: (connection, path, params, body, method) =>
+        calendarWriteResponse(connection.calendar, path, params, body, method),
+    },
     rateLimited: () => calendarError(429, "rateLimitExceeded", "Rate Limit Exceeded"),
   },
   {

@@ -37,8 +37,10 @@ export const reviews = pgTable(
     // An escalation's reason, from the escalate step in the spec (never the message); null for
     // an approval.
     reason: text("reason"),
-    // What approving the item needs that its app doesn't show Mycel: the IDs of the suggestions
-    // a step made in a Doc. IDs only, never the suggested text; null for every other kind.
+    // What approving the item needs that its app doesn't show or hold yet: the IDs of the
+    // suggestions a step made in a Doc, or a booked meeting's guests and how it shows once
+    // approved. IDs, addresses and settings only, never suggested text or a meeting's title or
+    // description; null for every other kind.
     details: zodJsonb("details", pendingDetailsSchema),
     // The colleague the review was last handed to, who may then see and act on it, and who
     // handed it to them; null until it's handed on. Plain user IDs, like ended_by_user_id: a

@@ -51,8 +51,9 @@ export function maxRisk(spec: Spec, actions: ActionSet): RiskLevel {
  * Checks the spec's actions against `actions` and makes sure every `external_send` action
  * waits for a person: a `draft` output needs a `gmail_drafts` approval on its own path, a `tool`
  * step's catalog send one of its action's channel (`suggested_edits` for edits suggested in a
- * Doc), and its custom write a `held_send` one (ADR-0020); one is inserted directly after the
- * step when there's none. Returns the spec with what it inserted, or every issue at once.
+ * Doc, `calendar_events` for a booking), and its custom write a `held_send` one (ADR-0020); one
+ * is inserted directly after the step when there's none. Returns the spec with what it
+ * inserted, or every issue at once.
  */
 export function applyPolicy(spec: Spec, actions: ActionSet): PolicyResult {
   const issues = [...actionIssues(spec, actions), ...conditionIssues(spec, actions)];
@@ -123,7 +124,8 @@ function shortScope(scope: string): string {
 /**
  * What a step sends that waits for a person, and the approval channel that reviews it: a draft
  * step's Gmail draft, a tool step's catalog send in its app's own pending form (edits suggested
- * in a Doc), or a tool step's custom write, which Mycel holds (ADR-0020).
+ * in a Doc, or a Calendar event with no guests), or a tool step's custom write, which Mycel
+ * holds (ADR-0020).
  */
 function sendOf(
   step: Step,

@@ -173,9 +173,16 @@ export const draftStep = specObject({
  * Where a person reviews what waits: `gmail_drafts`, the Gmail drafts the draft steps above it
  * made; `held_send`, the requests of the custom writes above it, which Mycel holds until a person
  * approves them (ADR-0020); `suggested_edits`, the suggested edits the tool steps above it made
- * in a Doc, which approving accepts and declining rejects (ADR-0017).
+ * in a Doc, which approving accepts and declining rejects (ADR-0017); `calendar_events`, the
+ * events the tool steps above it booked, waiting on the person's calendar with no guests until
+ * approved (ADR-0013).
  */
-export const approvalChannels = ["gmail_drafts", "held_send", "suggested_edits"] as const;
+export const approvalChannels = [
+  "gmail_drafts",
+  "held_send",
+  "suggested_edits",
+  "calendar_events",
+] as const;
 export type ApprovalChannel = (typeof approvalChannels)[number];
 
 export const approvalStep = specObject({

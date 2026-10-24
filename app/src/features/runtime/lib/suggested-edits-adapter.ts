@@ -111,7 +111,8 @@ async function handle(
 // The step's suggestions still in the document, in the order the step made them.
 function remaining(document: DocsDocument, item: PendingItem): string[] {
   const present = suggestionIdsIn(document);
-  return (item.details?.suggestionIds ?? []).filter((id) => present.has(id));
+  const ids = item.details?.kind === "suggested_edits" ? item.details.suggestionIds : [];
+  return ids.filter((id) => present.has(id));
 }
 
 // The doc the suggestions wait in: the review's thread.

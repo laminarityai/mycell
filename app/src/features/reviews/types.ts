@@ -9,22 +9,31 @@ import type { PendingDetails } from "@/features/runtime/types";
  * `approval` step left waiting; `escalation` is a message an `escalate` step (or a gate's
  * `else: "escalate"`) handed to a person; `held_send` is a custom write's request, which Mycel
  * holds until the review ends (ADR-0020); `suggested_edits` is the edits a step suggested in a
- * Doc, which approving accepts and declining rejects (ADR-0017). M11 adds Calendar.
+ * Doc, which approving accepts and declining rejects (ADR-0017); `calendar_event` is a meeting
+ * booked on the person's calendar with no guests until approved (ADR-0013).
  */
-export const reviewKinds = ["approval", "escalation", "held_send", "suggested_edits"] as const;
+export const reviewKinds = [
+  "approval",
+  "escalation",
+  "held_send",
+  "suggested_edits",
+  "calendar_event",
+] as const;
 export type ReviewKind = (typeof reviewKinds)[number];
 
 /**
  * What a person may do with a waiting review of each kind: a draft or a held send is approved
  * (as it is, or edited) or declined; suggested edits are approved (accepted) or declined
- * (rejected), all together, and picked among in Docs; an escalated message is only marked done,
- * as Mycel changes nothing in Gmail for it.
+ * (rejected), all together, and picked among in Docs; a meeting is approved or declined, and
+ * changed, if at all, in Calendar; an escalated message is only marked done, as Mycel changes
+ * nothing in Gmail for it.
  */
 export const reviewActions = {
   approval: ["approve", "edit", "decline"],
   escalation: ["done"],
   held_send: ["approve", "edit", "decline"],
   suggested_edits: ["approve", "decline"],
+  calendar_event: ["approve", "decline"],
 } as const satisfies Record<ReviewKind, readonly string[]>;
 export type ReviewAction = (typeof reviewActions)[ReviewKind][number];
 
@@ -79,7 +88,10 @@ export type NewReview = {
   sourceRef: string;
   /** Why an escalate step handed the message over: the spec's words, never the message's. */
   reason?: string;
-  /** What approving it needs that its app doesn't show Mycel: a step's suggestions' IDs. */
+  /**
+   * What approving it needs that its app doesn't show or hold: a step's suggestions' IDs, or a
+   * booked meeting's guests.
+   */
   details?: PendingDetails;
 };
 
@@ -142,11 +154,10 @@ export type RunReview = {
 export type ReviewCounts = Record<ReviewStatus, number>;
 
 /**
- * Some reviews, counted: approval reviews (drafts), escalations, held sends and suggested edits
- * apart, and the
- * ship bar's share (docs/intent.md): of the approval reviews that ended `approved`,
- * `edited_approved`, `declined` or `gone`, the part `approved`, from 0 to 1, or null while none
- * has. A draft sent from Gmail (`done_in_app`) is left out: Mycel can't tell whether it was
+ * Some reviews, counted: approval reviews (drafts), escalations, held sends, suggested edits and
+ * meetings apart, and the ship bar's share (docs/intent.md): of the approval reviews that ended
+ * `approved`, `edited_approved`, `declined` or `gone`, the part `approved`, from 0 to 1, or null
+ * while none has. A draft sent from Gmail (`done_in_app`) is left out: Mycel can't tell whether it was
  * edited first.
  */
 export type ReviewTally = {
@@ -154,6 +165,7 @@ export type ReviewTally = {
   escalations: ReviewCounts;
   heldSends: ReviewCounts;
   suggestedEdits: ReviewCounts;
+  meetings: ReviewCounts;
   approvedWithoutEdits: number | null;
 };
 

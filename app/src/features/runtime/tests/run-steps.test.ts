@@ -174,6 +174,8 @@ describe("executorCoverage", () => {
         "google-sheet.append-row": "ready",
         "google-docs.read-document": "ready",
         "google-docs.suggest-edits": "ready",
+        "google-calendar.read-event": "ready",
+        "google-calendar.create-event": "ready",
         "memory.lookup": "ready",
       },
       steps: {

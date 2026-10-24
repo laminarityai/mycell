@@ -3,7 +3,8 @@
 // What "+" on the graph offers: the model steps, each action in the company's action set grouped
 // by its app with its fixed risk level, and a branch. A draft's external send isn't offered as an
 // action: a draft step writes it, and the policy engine adds its review. A send a tool step makes
-// (edits suggested in a Doc) is offered, and the policy engine adds its review too.
+// (edits suggested in a Doc, or booking a meeting) is offered, and the policy engine adds its
+// review too.
 import { X } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 import { z } from "zod";

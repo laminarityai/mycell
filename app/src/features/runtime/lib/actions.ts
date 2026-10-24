@@ -1,6 +1,8 @@
 // Every catalog action's executor, typed so that a catalog action without one fails the
 // typecheck. The tool step checks each one's input and output against the catalog's schemas.
 // Actions not built yet are pending, with the ticket that builds them.
+import { calendarEventAdapter } from "./calendar-event-adapter";
+import { readEvent, type Booking } from "./calendar-events";
 import { readDocument } from "./docs";
 import { RunStepError } from "./failures";
 import { messageWithText, threadRef } from "./gmail";
@@ -11,6 +13,7 @@ import { appendRow, readRange } from "./sheets";
 import type { ActionExecutors } from "./step-context";
 import type { SuggestEditsInput } from "./suggested-edits";
 import { suggestedEditsAdapter } from "./suggested-edits-adapter";
+import { InvariantError } from "@/lib/errors";
 
 export const actionExecutors: ActionExecutors = {
   "google-mail.read-message": {
@@ -54,9 +57,30 @@ export const actionExecutors: ActionExecutors = {
     status: "ready",
     run: async (ctx, connectionId, input: SuggestEditsInput, marker) => {
       const prepared = await suggestedEditsAdapter.prepare(ctx, { connectionId, marker, input });
+      const { details } = prepared;
       return {
         documentId: prepared.threadRef,
-        suggestionIds: prepared.details?.suggestionIds ?? [],
+        suggestionIds: details?.kind === "suggested_edits" ? details.suggestionIds : [],
+      };
+    },
+  },
+  // The event's details pass to later steps, never into run records (ADR-0021).
+  "google-calendar.read-event": { status: "ready", run: readEvent },
+  // The event waits on the calendar with no guests: Calendar's pending form, which its adapter
+  // prepares. It hands on the guests and how the event shows once approved, for the approval.
+  "google-calendar.create-event": {
+    status: "ready",
+    run: async (ctx, connectionId, booking: Booking, marker) => {
+      const prepared = await calendarEventAdapter.prepare(ctx, { connectionId, marker, booking });
+      const { details } = prepared;
+      if (details?.kind !== "calendar_event") {
+        throw new InvariantError("A booking kept no guests.");
+      }
+      return {
+        eventId: prepared.itemRef,
+        guests: details.guests,
+        visibility: details.visibility,
+        transparency: details.transparency,
       };
     },
   },

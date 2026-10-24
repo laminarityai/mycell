@@ -74,6 +74,8 @@ describe("the catalog", () => {
       "google-sheet.append-row": "internal_reversible",
       "google-docs.read-document": "read",
       "google-docs.suggest-edits": "external_send",
+      "google-calendar.read-event": "read",
+      "google-calendar.create-event": "external_send",
       "memory.lookup": "read",
     });
   });

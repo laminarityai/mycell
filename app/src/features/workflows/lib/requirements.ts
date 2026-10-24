@@ -22,6 +22,7 @@ const CATALOG_APPS: Record<ConnectionApp, GoogleApp> = {
   Gmail: "gmail",
   Sheets: "sheets",
   Docs: "docs",
+  Calendar: "calendar",
 };
 
 /** What a connection is short of: Google apps as the UI names them, scopes by short name. */

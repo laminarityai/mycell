@@ -6,13 +6,14 @@ import { resetDatabase } from "@/db/testing/reset";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import { fakeNango } from "@/testing/fake-nango";
 import type { FakeSheets } from "@/testing/fake-sheets";
-import { executeRun, getRun, listRuns } from "../server";
+import { executeRun, getRun } from "../server";
 import {
   classifyWith,
   extractWith,
   OFF_SCHEMA,
   pricingQuestion,
   recordedBackoff,
+  recordsOf,
   runOn,
   stepStateRecorder,
 } from "./run-helpers";
@@ -218,10 +219,7 @@ const cases: Case[] = [
 
 describe("a failed step", () => {
   it.each(cases)("hands on and records no content: $name", async (failure) => {
-    const { admin, system, runId, workflowId, sheets } = await runOn(
-      failure.steps,
-      failure.credits,
-    );
+    const { admin, system, runId, sheets } = await runOn(failure.steps, failure.credits);
     failure.script?.(sheets);
     const recorder = stepStateRecorder();
 
@@ -230,7 +228,7 @@ describe("a failed step", () => {
     expect(outcome).toEqual({ status: "failed" });
     const run = await getRun(admin, runId);
     expect(run.steps.at(-1)?.errorCode).toBe(failure.code);
-    const records = JSON.stringify([run, await listRuns(admin, workflowId)]);
+    const records = recordsOf(run);
     const state = recorder.state.join("\n");
     expect(state).not.toBe("");
     for (const content of SEEDED) {

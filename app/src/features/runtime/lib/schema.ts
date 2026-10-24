@@ -23,7 +23,7 @@ import { reviews } from "@/features/reviews/lib/schema";
 import { customActions } from "@/features/custom-actions/lib/schema";
 import { modelRoleSchema, stepTypes, type ModelRole, type StepType } from "@/features/spec/types";
 import { enablements, workflowVersions } from "@/features/workflows/lib/schema";
-import { runErrorCodes, runStatuses, runStepStatuses } from "../types";
+import { runErrorCodes, runStartedBy, runStatuses, runStepStatuses } from "../types";
 
 const modelRoleEnum = modelRoleSchema.options as [ModelRole, ...ModelRole[]];
 
@@ -38,15 +38,18 @@ export const runs = pgTable(
     ownerScope: text("owner_scope", { enum: ["member", "org"] }).notNull(),
     workflowId: text("workflow_id").notNull(),
     workflowVersionId: text("workflow_version_id").notNull(),
-    // What started it: an admin by hand, a member workflow's enablement, or an org workflow's
-    // switch. A triggered run goes on only while what started it is still on.
-    startedBy: text("started_by", { enum: ["manual", "enablement", "org_switch"] })
-      .notNull()
-      .default("manual"),
+    // What started it: an admin by hand, a member workflow's enablement, an org workflow's
+    // switch, or a retry of a failed run. A triggered run goes on only while what started it is
+    // still on.
+    startedBy: text("started_by", { enum: runStartedBy }).notNull().default("manual"),
+    // The failed run a retry retries, on the same connection and message. A run is retried at
+    // most once; a retry that fails is retried in turn. Null for any other run, and once the run
+    // it retried is gone.
+    retryOfRunId: text("retry_of_run_id"),
     // The enablement that started it. Null for an org workflow or a manual run, and once the
     // enablement is switched off.
     enablementId: text("enablement_id"),
-    // The triggering Gmail message's ID.
+    // The triggering item's ID: a Gmail message's, or a calendar event's.
     sourceRef: text("source_ref").notNull(),
     // A triggered run's (enablement or org workflow, source_ref), so one message starts at most
     // one run of each. Null for a manual run, which may be repeated.
@@ -63,7 +66,16 @@ export const runs = pgTable(
     unique("runs_org_id_id_unique").on(table.orgId, table.id),
     unique("runs_org_id_trigger_key_unique").on(table.orgId, table.triggerKey),
     index("runs_org_id_workflow_id_idx").on(table.orgId, table.workflowId),
+    // The Runs page's keyset paging: newest first, by start time and then ID.
+    index("runs_org_id_started_at_id_idx").on(table.orgId, table.startedAt.desc(), table.id.desc()),
     index("runs_enablement_id_idx").on(table.enablementId),
+    // One retry a run: a second click or a resent request finds the first.
+    unique("runs_retry_of_run_id_unique").on(table.retryOfRunId),
+    foreignKey({
+      name: "runs_retry_of_fk",
+      columns: [table.retryOfRunId],
+      foreignColumns: [table.id],
+    }).onDelete("set null"),
     // On the enablement's ID alone, so switching off nulls it and the run's row stays: the run
     // then ends `cancelled` before its next step.
     foreignKey({
@@ -133,6 +145,33 @@ export const runSteps = pgTable(
 );
 
 /**
+ * Where a trigger that polls its app resumes on one connection: for the Calendar trigger, the
+ * sync token of the connection's primary calendar, which memory's reading of the calendar shares
+ * (ADR-0029: one poll serves both). Only the token is kept, never the events it listed
+ * (invariant 8), and it cascades from its connection (invariant 3).
+ */
+export const triggerCursors = pgTable(
+  "trigger_cursors",
+  {
+    id: text("id").primaryKey(),
+    orgId: text("org_id").notNull(),
+    connectionId: text("connection_id").notNull(),
+    trigger: text("trigger", { enum: ["calendar.invite_received"] }).notNull(),
+    cursor: text("cursor").notNull(),
+    // When the poll that stored the cursor finished.
+    polledAt: timestamp("polled_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    unique("trigger_cursors_connection_id_trigger_unique").on(table.connectionId, table.trigger),
+    foreignKey({
+      name: "trigger_cursors_connection_fk",
+      columns: [table.orgId, table.connectionId],
+      foreignColumns: [connections.orgId, connections.id],
+    }).onDelete("cascade"),
+  ],
+);
+
+/**
  * A held send (ADR-0020): the request a custom write would make, which Mycel holds until a
  * person approves it, since its app has no way to hold it. `request` is the rendered request
  * and its inputs, encrypted with the company's own key (ADR-0024): nothing else from it is
@@ -189,6 +228,51 @@ export const heldSends = pgTable(
       name: "held_sends_custom_action_fk",
       columns: [table.orgId, table.customAction],
       foreignColumns: [customActions.orgId, customActions.name],
+    }).onDelete("cascade"),
+  ],
+);
+
+/**
+ * What a suggest-edits step found before it wrote (ADR-0017): the suggestion IDs in the document
+ * then, and the IDs its write created, once known. Docs can't tell Mycel's
+ * suggestions from the person's, and a batchUpdate isn't idempotent, so a step retried after its
+ * answer was lost finds what it created here, rather than suggesting the edits twice. IDs only,
+ * never the document's text or the suggested text (invariant 8).
+ */
+export const suggestedEditWrites = pgTable(
+  "suggested_edit_writes",
+  {
+    id: text("id").primaryKey(),
+    orgId: text("org_id").notNull(),
+    connectionId: text("connection_id").notNull(),
+    runId: text("run_id").notNull(),
+    // The tool step that wrote: one per run step, however often the step is retried.
+    stepId: text("step_id").notNull(),
+    // The run's provenance (invariant 2).
+    sourceRef: text("source_ref").notNull(),
+    ownerScope: text("owner_scope", { enum: ["member", "org"] }).notNull(),
+    documentId: text("document_id").notNull(),
+    suggestionIdsBefore: text("suggestion_ids_before").array().notNull(),
+    // Null until the write's answer arrived, or a retry found what it created.
+    createdSuggestionIds: text("created_suggestion_ids").array(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    unique("suggested_edit_writes_org_id_run_id_step_id_unique").on(
+      table.orgId,
+      table.runId,
+      table.stepId,
+    ),
+    index("suggested_edit_writes_org_id_connection_id_idx").on(table.orgId, table.connectionId),
+    foreignKey({
+      name: "suggested_edit_writes_connection_fk",
+      columns: [table.orgId, table.connectionId],
+      foreignColumns: [connections.orgId, connections.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "suggested_edit_writes_run_fk",
+      columns: [table.orgId, table.runId],
+      foreignColumns: [runs.orgId, runs.id],
     }).onDelete("cascade"),
   ],
 );

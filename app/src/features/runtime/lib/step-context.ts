@@ -4,7 +4,7 @@ import type { ActionSet } from "@/features/policy/types";
 import type { ModelRole, Spec, Step } from "@/features/spec/types";
 import type { Ctx } from "@/lib/ctx";
 import type { CallAttribution } from "@/features/models/types";
-import type { BranchPath } from "../types";
+import type { BranchPath, CalendarEventDetails, SuggestedEditsDetails } from "../types";
 import type { Json } from "@/lib/inngest";
 import type { HoldSend } from "./custom-action";
 
@@ -40,7 +40,16 @@ export type AwaitedItem =
   | { kind: "approval"; itemRef: string; threadRef: string }
   | { kind: "escalation"; itemRef: string; threadRef: string; reason: string }
   /** A held send waits on the connection it would be sent through, not the run's. */
-  | { kind: "held_send"; itemRef: string; threadRef: string; connectionId: string };
+  | { kind: "held_send"; itemRef: string; threadRef: string; connectionId: string }
+  /** Edits suggested in a Doc, with the suggestions' IDs, which tell them from the person's own. */
+  | {
+      kind: "suggested_edits";
+      itemRef: string;
+      threadRef: string;
+      details: SuggestedEditsDetails;
+    }
+  /** A booked meeting, with the guests approving it invites. */
+  | { kind: "calendar_event"; itemRef: string; threadRef: string; details: CalendarEventDetails };
 
 /** What a step did. */
 export type StepExecution = {

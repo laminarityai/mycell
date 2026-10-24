@@ -18,12 +18,25 @@ import { enablements } from "./schema";
  * it's the first version, or it runs on an org connection.
  */
 export function gainedForEnablements(
-  previous: Requirements | undefined,
-  next: Requirements & { credentials: Spec["credentials"] },
+  previous: (Requirements & { spec: Pick<Spec, "trigger"> }) | undefined,
+  next: Requirements & { applied: Pick<Spec, "credentials" | "trigger"> },
   actions: ActionSet,
 ): RequirementsGained | null {
-  if (previous === undefined || next.credentials !== "member") return null;
-  return requirementsGained(previous, next, actions);
+  if (previous === undefined || next.applied.credentials !== "member") return null;
+  return gainedSince(previous, next, actions);
+}
+
+/** What `next` needs that `previous` didn't, each read with its own trigger. */
+export function gainedSince(
+  previous: Requirements & { spec: Pick<Spec, "trigger"> },
+  next: Requirements & { applied: Pick<Spec, "trigger"> },
+  actions: ActionSet,
+): RequirementsGained | null {
+  return requirementsGained(
+    { ...previous, trigger: previous.spec.trigger.type },
+    { ...next, trigger: next.applied.trigger.type },
+    actions,
+  );
 }
 
 /** Each enablement of the workflow that's on: what a pause would pause. */

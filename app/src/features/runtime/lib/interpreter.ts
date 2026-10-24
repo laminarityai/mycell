@@ -15,12 +15,14 @@ import type { Spec, Step } from "@/features/spec/types";
 import { getWorkflowVersion, listSwitchedOn } from "@/features/workflows/server";
 import { type Ctx, requireSystem } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
+import { now } from "@/lib/time";
 import type { RetryPolicy, RunErrorCode, RunOutcome } from "../types";
 import { runInline, type RunStep } from "@/lib/inngest";
 import { actionExecutors } from "./actions";
 import { holdCustomWrite } from "./custom-action";
 import { linkHeldSendReview } from "./held-sends";
 import { attemptStep } from "./executors";
+import { mayPause, pauseIfFailing } from "./failure-streak";
 import { isConnectionGone, logInternalError, type Failure } from "./failures";
 import { defaultRetryPolicy, withRetries } from "./run-step";
 import { findRun, stepsOf } from "./runs";
@@ -54,7 +56,12 @@ export async function executeRun(
   requireSystem(ctx);
   const run = await findRun(ctx, runId);
   if (run === undefined) return { status: "cancelled" };
-  if (run.status !== "running") return { status: run.status };
+  if (run.status !== "running") {
+    // A retry after the run was ended: whether it pauses its workflow is worked out again, in
+    // case the invocation that ended it stopped before.
+    if (mayPause(run.status)) await pauseIfFailing(ctx, run.workflowId);
+    return { status: run.status };
+  }
   const { spec } = await getWorkflowVersion(ctx, run.workflowVersionId);
   const actionSet = await getActionSet(ctx);
 
@@ -64,13 +71,14 @@ export async function executeRun(
   // The one place a run's status is written, once the walk has ended. It's outside any step,
   // so it writes only a run still running: a retry that replays the walk changes nothing.
   await finishRun(ctx, run.id, status);
+  if (mayPause(status)) await pauseIfFailing(ctx, run.workflowId);
   return { status };
 }
 
 type RunPlace = StepPlace & { spec: Spec; actionSet: ActionSet; retry: RetryPolicy };
 
 async function executeStep(ctx: Ctx, run: Run, step: Step, place: RunPlace): Promise<StepResult> {
-  const startedAt = new Date();
+  const startedAt = now();
   if (!(await mayGoOn(ctx, run))) return CANCELLED;
   const context: StepContext = {
     ctx,
@@ -87,6 +95,7 @@ async function executeStep(ctx: Ctx, run: Run, step: Step, place: RunPlace): Pro
         itemRef,
         threadRef,
         ...("reason" in item ? { reason: item.reason } : {}),
+        ...("details" in item ? { details: item.details } : {}),
         runId: run.id,
         connectionId: "connectionId" in item ? item.connectionId : run.connectionId,
         runConnectionId: run.connectionId,
@@ -127,10 +136,11 @@ async function executeStep(ctx: Ctx, run: Run, step: Step, place: RunPlace): Pro
 /**
  * Whether the run may start its next step: its connection is still there, and a triggered
  * run's enablement or org switch is still on for it. Switching off takes effect here, so a step
- * already under way finishes first.
+ * already under way finishes first. A run someone started by hand (a retry too) needs only its
+ * connection.
  */
 async function mayGoOn(ctx: Ctx, run: Run): Promise<boolean> {
-  if (run.startedBy !== "manual") {
+  if (run.startedBy === "enablement" || run.startedBy === "org_switch") {
     // Lists nothing for a connection that's gone.
     const on = await listSwitchedOn(ctx, run.connectionId);
     return on.some(({ switch: by }) =>
@@ -169,7 +179,7 @@ async function recordStep(
     attempts: tries.attempts,
     lastAttemptAt: tries.lastAttemptAt,
     startedAt,
-    finishedAt: new Date(),
+    finishedAt: now(),
   };
   const values =
     "execution" in end
@@ -193,12 +203,15 @@ async function recordStep(
 
 /**
  * The run job crashed past Inngest's retries (its onFailure handler): a run it left running
- * ends `failed` with `internal_error`, and the log records it. A run that finished, or that a
- * call before this one ended, is left as it was, and logged once.
+ * ends `failed` with `internal_error`, and the log records it, and it counts toward pausing its
+ * workflow. A run that finished, or that a call before this one ended, is left as it was, and
+ * logged once.
  */
 export async function failCrashedRun(ctx: Ctx, runId: string): Promise<void> {
   requireSystem(ctx);
   if (await finishRun(ctx, runId, "failed", "internal_error")) logInternalError({ runId });
+  const run = await findRun(ctx, runId);
+  if (run !== undefined && mayPause(run.status)) await pauseIfFailing(ctx, run.workflowId);
 }
 
 /**
@@ -215,7 +228,7 @@ async function finishRun(
   const costUsd = steps.reduce((sum, step) => sum + step.costUsd, 0);
   const ended = await forOrg(ctx).update(
     runs,
-    { status, errorCode, costUsd, finishedAt: new Date() },
+    { status, errorCode, costUsd, finishedAt: now() },
     and(eq(runs.id, runId), eq(runs.status, "running")),
   );
   return ended.length > 0;

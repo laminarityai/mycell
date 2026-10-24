@@ -6,6 +6,7 @@ import { forOrg } from "@/db/for-org";
 import { getWorkflow } from "@/features/workflows/server";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { InvariantError, NotFoundError } from "@/lib/errors";
+import { now } from "@/lib/time";
 import type {
   BuilderConversation,
   BuilderMessage,
@@ -120,7 +121,7 @@ export async function appendMessage(
       : {};
   await db.update(
     builderConversations,
-    { ...title, updatedAt: new Date() },
+    { ...title, updatedAt: now() },
     eq(builderConversations.id, conversation.id),
   );
 }

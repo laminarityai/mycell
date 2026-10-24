@@ -1,11 +1,12 @@
 // A "Try it" result: each step with what it did, read or would have written, and the total
 // cost. The draft's text and the rows read are shown here and nowhere else (invariant 8).
 import { Badge } from "@/components/ui/badge";
+import { documentLink } from "@/features/connections/docs";
 import type { BranchPath, DryRunEffect, DryRunResult, DryRunStep } from "../types";
 
 const ENDINGS: Record<DryRunResult["ended"], string> = {
   succeeded: "Ran to the end.",
-  skipped: "Stopped at a branch: the workflow would do nothing more with this message.",
+  skipped: "Stopped at a branch: the workflow would do nothing more with it.",
   escalated: "Escalated: the workflow would hand this message to a person.",
   failed: "Failed at the step marked below.",
   partly_failed:
@@ -148,6 +149,40 @@ function Effect({ effect }: { effect: DryRunEffect }) {
           </pre>
         </div>
       );
+    case "suggestions":
+      return (
+        <div className="flex flex-col gap-1">
+          <p className="text-muted-foreground">
+            Would suggest these edits in{" "}
+            <a
+              href={documentLink(effect.documentId)}
+              target="_blank"
+              rel="noreferrer"
+              className="underline underline-offset-4"
+            >
+              {effect.title === "" ? "the doc" : effect.title}
+            </a>
+            , waiting as suggestions until a person reviews them:
+          </p>
+          <ul aria-label="Suggested edits" className="list-disc pl-5 font-mono text-xs">
+            {effect.requests.map((request, index) => (
+              <li key={index} className="break-all">
+                {request}
+              </li>
+            ))}
+          </ul>
+        </div>
+      );
+    case "event":
+      return (
+        <div className="flex flex-col gap-1">
+          <p className="text-muted-foreground">
+            Would book &ldquo;{effect.title}&rdquo; from {effect.start} to {effect.end}
+            {effect.meet ? ", with a Meet link," : ""} on the calendar with no guests, and invite{" "}
+            {effect.guests.join(", ")} once approved.
+          </p>
+        </div>
+      );
     case "label":
       return (
         <p>
@@ -161,6 +196,23 @@ function Effect({ effect }: { effect: DryRunEffect }) {
           {effect.values.map((value) => String(value)).join(", ")}
         </p>
       );
+    case "task":
+      return (
+        <div className="flex flex-col gap-1">
+          <p className="text-muted-foreground">
+            Would add the task <strong>{effect.title}</strong> to the default Tasks list
+            {effect.due === null ? "" : `, due ${effect.due}`}:
+          </p>
+          <pre
+            aria-label="Task notes"
+            className="rounded bg-muted p-2 font-sans text-sm whitespace-pre-wrap"
+          >
+            {effect.notes}
+          </pre>
+        </div>
+      );
+    case "task_update":
+      return <TaskUpdate effect={effect} />;
     case "draft":
       return (
         <div className="flex flex-col gap-1">
@@ -199,4 +251,29 @@ function Effect({ effect }: { effect: DryRunEffect }) {
         </div>
       );
   }
+}
+
+function TaskUpdate({ effect }: { effect: Extract<DryRunEffect, { kind: "task_update" }> }) {
+  const changes = [
+    effect.title === null ? null : `title “${effect.title}”`,
+    effect.due === null ? null : `due ${effect.due}`,
+    effect.done === null ? null : effect.done ? "marked done" : "marked not done",
+    effect.notes === null ? null : "these notes",
+  ].filter((change) => change !== null);
+  return (
+    <div className="flex flex-col gap-1">
+      <p className="text-muted-foreground">
+        Would change the task on the default Tasks list: {changes.join(", ")}
+        {effect.notes === null ? "." : ":"}
+      </p>
+      {effect.notes === null ? null : (
+        <pre
+          aria-label="Task notes"
+          className="rounded bg-muted p-2 font-sans text-sm whitespace-pre-wrap"
+        >
+          {effect.notes}
+        </pre>
+      )}
+    </div>
+  );
 }

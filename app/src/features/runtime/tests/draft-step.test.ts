@@ -5,13 +5,14 @@ import { grantCredits, listLedger } from "@/features/credits/server";
 import { spendingKindOf } from "@/features/credits/types";
 import { systemCtx } from "@/lib/ctx";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
-import { executeRun, getRun, listRuns, startRun } from "../server";
+import { executeRun, getRun, startRun } from "../server";
 import {
   connectInbox,
   pricingQuestion,
   publish,
   recordedBackoff,
   recordingStepRunner,
+  recordsOf,
 } from "./run-helpers";
 
 beforeEach(resetDatabase);
@@ -214,17 +215,13 @@ describe("the draft step", () => {
   });
 
   it("keeps the draft's text, the subject and the body out of the run's records and step state", async () => {
-    const { admin, system, workflowId, runId } = await replyRun();
+    const { admin, system, runId } = await replyRun();
     fakeAiGateway.text(REPLY);
     const runner = recordingStepRunner();
 
     await executeRun(system, runId, runner.runStep);
 
-    const kept = JSON.stringify([
-      await getRun(admin, runId),
-      await listRuns(admin, workflowId),
-      runner.results(),
-    ]);
+    const kept = [recordsOf(await getRun(admin, runId)), JSON.stringify(runner.results())].join();
     for (const content of [REPLY, "2,400", SUBJECT, BODY, "ada@customer.test"]) {
       expect(kept).not.toContain(content);
     }

@@ -8,7 +8,6 @@ import { backfilledItems, ingestStatesOf, lastPolledAt, overallStatus } from "./
 import { connectAttempts, connections, type ingestStates } from "./schema";
 
 // A pending attempt older than this was abandoned (the popup closed without connecting).
-// Compared in the database: created_at has no time zone, so a JS Date would be off by one.
 const attemptShownSince = sql`now() - interval '1 hour'`;
 
 type Connection = typeof connections.$inferSelect;
@@ -110,7 +109,7 @@ function summary(row: Connection, states: IngestState[]): ConnectionSummary {
 
 // Resolves an owner's user ID against the org's current users. An owner who isn't one any
 // more was removed: their org connections live on, flagged.
-async function ownerLookup(ctx: Ctx): Promise<(userId: string) => ConnectionOwner> {
+export async function ownerLookup(ctx: Ctx): Promise<(userId: string) => ConnectionOwner> {
   const users = new Map((await listUsers(ctx)).map((user) => [user.id, user.name]));
   return (userId) => {
     const name = users.get(userId);

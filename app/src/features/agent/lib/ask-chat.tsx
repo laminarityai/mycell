@@ -20,6 +20,9 @@ import { numberSources, segments } from "./footnotes";
 const DISCLOSURE =
   "You're talking to Mycel, an AI. It answers only from what you can see in memory, and it can be wrong, so check its sources. Being an admin doesn't let it see more. Only you can see this conversation.";
 
+/** A reply removed with the data it drew on (invariant 3), in its place in the conversation. */
+const REMOVED_TEXT = "Removed: something this reply used was deleted.";
+
 const TOOL_LABELS: Record<string, string> = {
   search_memory: "Searched memory",
   read_object: "Read memory",
@@ -229,6 +232,9 @@ function ReplyPart({
         {part.data.text}
       </p>
     );
+  }
+  if (part.type === "data-removed") {
+    return <p className="text-sm text-muted-foreground italic">{REMOVED_TEXT}</p>;
   }
   if (part.type !== "dynamic-tool" && !part.type.startsWith("tool-")) return null;
   if (!("state" in part)) return null;

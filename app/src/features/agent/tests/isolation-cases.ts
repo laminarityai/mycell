@@ -1,7 +1,9 @@
 import { expect } from "vitest";
 import { defineIsolationCases } from "@/db/testing/isolation";
 import type { TwoOrgs } from "@/db/testing/two-org-fixture";
+import { systemCtx } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
+import { DAY_MS } from "@/lib/time";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import { fundOrg, readTurn } from "@/testing/streamed-turn";
 import * as server from "../server";
@@ -82,5 +84,22 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await server.getConversation(orgs.orgB.member.ctx, orgB.conversationId)).toEqual(
       orgB.before,
     );
+  },
+
+  deleteIdleConversations: async (orgs) => {
+    const orgB = await seedOrgB(orgs);
+    // Long after org B's conversations were last used, org A's job still doesn't reach them.
+    const farFuture = new Date(Date.now() + 400 * DAY_MS);
+
+    expect(await server.deleteIdleConversations(systemCtx(orgs.orgA.id), farFuture)).toEqual({
+      conversations: 0,
+    });
+
+    expect(await server.getConversation(orgs.orgB.member.ctx, orgB.conversationId)).toEqual(
+      orgB.before,
+    );
+    expect(await server.listConversations(orgs.orgB.admin.ctx)).toEqual([
+      expect.objectContaining({ id: orgB.emptyId }),
+    ]);
   },
 });

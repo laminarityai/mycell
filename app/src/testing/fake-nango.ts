@@ -44,8 +44,13 @@ export type FakeConnection = {
   refreshFails?: boolean;
 };
 
-/** Runs before the fake proxies a request to a source, given the source API path. */
-export type ProxyHook = (path: string) => void | Promise<void>;
+/**
+ * Runs before the fake proxies a request to a source, given the source API path, and the
+ * request's query and Nango connection ID.
+ */
+export type ProxyHook = (path: string, request: ProxiedRequest) => void | Promise<void>;
+
+export type ProxiedRequest = { query: URLSearchParams; connectionId: string };
 
 /** A webhook as Nango delivers it: the raw body and the headers that sign it. */
 export type FakeWebhook = { rawBody: string; headers: Headers };
@@ -328,7 +333,7 @@ class FakeNango {
 
     ...proxyHandlers({
       connection: (connectionId) => this.connections.get(connectionId),
-      beforeProxy: (path) => this.proxyHook?.(path),
+      beforeProxy: (path, request) => this.proxyHook?.(path, request),
       takeRateLimit: () => {
         if (this.rateLimitsLeft === 0) return false;
         this.rateLimitsLeft -= 1;

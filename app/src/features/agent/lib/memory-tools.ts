@@ -9,7 +9,7 @@ import type { MemoryFact, MemoryObject } from "@/features/memory/types";
 import { injectionScreenConfigured } from "@/features/models/server";
 import { ValidationError } from "@/lib/errors";
 import { toolPrompts } from "./prompts";
-import { screenItems } from "./screen";
+import { noteFor, screenItems } from "./screen";
 import type { AgentToolDefinition } from "./tools";
 
 const AGENT = { kind: "agent" } as const;
@@ -218,10 +218,6 @@ function modelFact(fact: MemoryFact, about: string): ModelFact {
 
 function linksTo(fact: MemoryFact, ids: Set<string>): boolean {
   return fact.linkedObject !== null && ids.has(fact.linkedObject.id);
-}
-
-function noteFor(screenedOut: number): { note?: string } {
-  return screenedOut === 0 ? {} : { note: toolPrompts.screenedOut({ count: String(screenedOut) }) };
 }
 
 function stored(objectIds: string[], factIds: string[], screenedOut: number): StoredRead {

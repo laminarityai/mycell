@@ -2,6 +2,7 @@
 // the citations their replies show, and the UI messages the chat page streams.
 import { z } from "zod";
 import { chatPartSchemas, type ChatUIMessage } from "@/features/models/types";
+import type { ReviewKind } from "@/features/reviews/types";
 
 /**
  * One part of a stored message: the parts every chat stores (text, one tool call with its
@@ -80,12 +81,47 @@ export type Citation = {
   sources: CitedSource[];
 };
 
+/** A message find_messages found, its headers fetched again from Gmail to show, never stored. */
+export type FoundMessage = {
+  connectionId: string;
+  sourceRef: string;
+  from: string;
+  subject: string;
+  receivedAt: Date;
+  /** The message in the person's own Gmail. */
+  href: string;
+};
+
+/** A review list_reviews listed, as it stands now. */
+export type FoundReview = {
+  id: string;
+  workflowName: string;
+  kind: ReviewKind;
+  createdAt: Date;
+  href: string;
+};
+
+/** A workflow list_workflows listed, as it stands now: why it's paused, or null while on. */
+export type FoundWorkflow = { id: string; name: string; paused: string | null };
+
+/**
+ * What the conversation's tools found in the person's mail and work, read again in their view
+ * now: only what's still there (a message still in their mail, a review still waiting for
+ * them, a workflow still switched on).
+ */
+export type FoundItems = {
+  messages: FoundMessage[];
+  reviews: FoundReview[];
+  workflows: FoundWorkflow[];
+};
+
 export type AgentConversation = AgentConversationSummary & {
   createdAt: Date;
   /** Oldest first. */
   messages: AgentMessage[];
   /** The facts its replies read that the person can still see. */
   citations: Citation[];
+  found: FoundItems;
 };
 
 /** The chat page's messages: the AI SDK's UI messages, with notices. */

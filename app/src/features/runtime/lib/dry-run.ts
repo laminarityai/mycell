@@ -1,8 +1,8 @@
-// A dry run ("Try it"): the interpreter's steps on one real message, in memory, without Inngest
-// and without a run record. It goes through the steps with the interpreter's step walker, so
-// it goes the way a run would. Model and read steps run for real; every action that would change
-// an app is a stub (dry-run-actions.ts); a review the spec or the policy engine asks for is
-// reported as one it would wait for, and the run goes on. The result, content and all, goes
+// A dry run ("Try it"): the interpreter's steps on one real message or invite, in memory,
+// without Inngest and without a run record. It goes through the steps with the interpreter's
+// step walker, so it goes the way a run would. Model and read steps run for real; every action
+// that would change an app is a stub (dry-run-actions.ts); a review the spec or the policy
+// engine asks for is reported as one it would wait for, and the run goes on. The result, content and all, goes
 // back to the admin who asked and is never stored (invariant 8). Model calls pass the credit
 // check and are recorded, marked as a dry run's (invariant 7).
 import { randomUUID } from "node:crypto";
@@ -10,6 +10,7 @@ import { requireBuildableConnection } from "@/features/connections/server";
 import { getActionSet } from "@/features/custom-actions/server";
 import { CREDIT_ESTIMATES } from "@/features/models/server";
 import { eachStep } from "@/features/spec/tree";
+import { triggers } from "@/features/spec/triggers";
 import type { Spec } from "@/features/spec/types";
 import { checkWorkflowSpec } from "@/features/workflows/server";
 import { checkCredits } from "@/features/credits/server";
@@ -24,7 +25,7 @@ import { walkSteps } from "./walk";
 
 export type DryRunOptions = {
   connectionId: string;
-  /** The Gmail message to try it on. */
+  /** The Gmail message, or the calendar event, to try it on, as its trigger starts runs on. */
   sourceRef: string;
   /** The workflow it's the working spec of, for the ledger; none for a new workflow. */
   workflowId?: string;
@@ -40,8 +41,14 @@ export async function dryRun(ctx: Ctx, spec: unknown, options: DryRunOptions) {
   const validated = await checkWorkflowSpec(ctx, spec);
   if (!validated.ok) throw new SpecInvalidError(validated.issues);
   // One a run of the spec could use: the admin's own for member credentials, an org
-  // connection for org credentials, granted Gmail.
-  await requireBuildableConnection(ctx, options.connectionId, validated.working.credentials);
+  // connection for org credentials, granted the app the trigger watches.
+  const { credentials, trigger } = validated.working;
+  await requireBuildableConnection(
+    ctx,
+    options.connectionId,
+    credentials,
+    triggers[trigger.type].googleApp,
+  );
   await preflight(ctx, validated.applied);
 
   const inserted = new Set(validated.inserted.map((approval) => approval.stepId));

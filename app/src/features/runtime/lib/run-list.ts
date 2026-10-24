@@ -10,6 +10,7 @@ import { connectionOwners } from "@/features/connections/server";
 import type { ConnectionOwnership } from "@/features/connections/types";
 import { describePathTo } from "@/features/spec/describe";
 import { versionsById, workflowNames } from "@/features/workflows/server";
+import type { WorkflowVersion } from "@/features/workflows/types";
 import { isAdmin, requireRole, type Ctx } from "@/lib/ctx";
 import type {
   RunFailure,
@@ -148,13 +149,25 @@ async function items(
 ): Promise<RunListItem[]> {
   if (rows.length === 0) return [];
   const full = rows.filter((row) => owners.get(row.connectionId)?.readable === true);
-  const [failures, names, messages] = await Promise.all([
-    failuresOf(ctx, rows),
+  const [versions, names] = await Promise.all([
+    versionsById(
+      ctx,
+      rows.map((row) => row.workflowVersionId),
+    ),
     workflowNames(
       ctx,
       rows.map((row) => row.workflowId),
     ),
-    messagesOf(ctx, full),
+  ]);
+  // What started each run, from the version it ran: a Gmail message or a calendar invite.
+  const trigger = (row: Row) =>
+    versions.get(row.workflowVersionId)?.spec.trigger.type ?? "gmail.message_received";
+  const [failures, messages] = await Promise.all([
+    failuresOf(ctx, rows, versions),
+    messagesOf(
+      ctx,
+      full.map((row) => ({ ...row, trigger: trigger(row) })),
+    ),
   ]);
   return rows.map((row) => ({
     id: row.id,
@@ -188,7 +201,11 @@ export function inboxOf(owner: ConnectionOwnership | undefined): RunInbox {
 }
 
 // Each run's failed steps, in spec order, each with the path it's on.
-async function failuresOf(ctx: Ctx, rows: Row[]): Promise<Map<string, RunFailure[]>> {
+async function failuresOf(
+  ctx: Ctx,
+  rows: Row[],
+  versions: Map<string, WorkflowVersion>,
+): Promise<Map<string, RunFailure[]>> {
   const failed = await forOrg(ctx).select(runSteps, {
     columns: ["runId", "stepId", "status", "errorCode", "errorMessage"],
     where: and(
@@ -202,9 +219,6 @@ async function failuresOf(ctx: Ctx, rows: Row[]): Promise<Map<string, RunFailure
   });
   if (failed.length === 0) return new Map();
   const versionOf = new Map(rows.map((row) => [row.id, row.workflowVersionId]));
-  const versions = await versionsById(ctx, [
-    ...new Set(failed.map((step) => versionOf.get(step.runId) ?? "")),
-  ]);
   const byRun = new Map<string, RunFailure[]>();
   for (const step of failed) {
     if (step.status !== "failed" && step.status !== "check_failed") continue;

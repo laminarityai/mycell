@@ -4,7 +4,7 @@
 import { z } from "zod";
 import { GMAIL, headerValue, messageListSchema, messageSchema } from "@/features/connections/gmail";
 import { buildableConnections, sourceClient } from "@/features/connections/server";
-import { SourceRequestError } from "@/features/connections/types";
+import { type ConnectionSummary, SourceRequestError } from "@/features/connections/types";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { NangoRequestError, NotFoundError } from "@/lib/errors";
 import type { RecentMessages } from "../types";
@@ -19,7 +19,8 @@ const metadataSchema = messageSchema
 
 const HEADERS = ["Subject", "From", "Date"];
 
-type Recent = RecentMessages["messages"][number] & { receivedAt: number };
+/** One item a picker may offer, with when it arrived, newest first. */
+export type Recent = RecentMessages["messages"][number] & { receivedAt: number };
 
 /**
  * The picker's messages, grouped by connection: the newest RECENT_LIMIT of all of them. With
@@ -45,6 +46,16 @@ export async function recentMessages(
       }
     }),
   );
+  return newestAcross(fetched);
+}
+
+/**
+ * The newest RECENT_LIMIT items across every connection's newest first, grouped by connection:
+ * the messages (or invites) a picker offers.
+ */
+export function newestAcross(
+  fetched: { connection: ConnectionSummary; messages: Recent[]; unavailable: boolean }[],
+): RecentMessages[] {
   const cutoff = fetched
     .flatMap(({ messages }) => messages.map((message) => message.receivedAt))
     .sort((a, b) => b - a)

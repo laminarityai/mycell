@@ -43,11 +43,7 @@ export async function publishWorkflow(
   const tags = await findTagsByName(ctx, validated.applied.visibility?.tags ?? []);
   const db = forOrg(ctx);
   const latest = (await latestVersions(ctx, [workflowId], db)).get(workflowId);
-  const gained = gainedForEnablements(
-    latest,
-    { ...validated, credentials: validated.applied.credentials },
-    actions,
-  );
+  const gained = gainedForEnablements(latest, validated, actions);
   // Who is in the org and each one's tags, read now: the transaction queries only through `tx`.
   const viewers = await readViewers(ctx);
   try {

@@ -4,6 +4,7 @@
 // budget and whether its reviews may be handed on.
 import { Switch } from "@/components/ui/switch";
 import type { SpecDraft } from "@/features/spec/draft";
+import { defaultTrigger, triggers, triggerTypes } from "@/features/spec/triggers";
 import type { SpecIssue } from "@/features/spec/types";
 import { issuesAt, ListField, NumberField, record, SelectField, TextField } from "./spec-fields";
 
@@ -11,6 +12,8 @@ const CREDENTIALS = [
   { value: "member", label: "Each admin's own Google connection" },
   { value: "org", label: "An org Google connection" },
 ];
+
+const TRIGGERS = triggerTypes.map((type) => ({ value: type, label: triggers[type].words }));
 
 const RUNGS = [
   { value: "0", label: "0: rule or template, no AI" },
@@ -53,14 +56,28 @@ export function SpecSettings({
           onChange({ credentials });
         }}
       />
-      <ListField
-        label="Trigger: new Gmail messages with any of these labels (comma-separated)"
-        value={trigger.labelIds ?? ["INBOX"]}
-        invalid={invalid("trigger")}
-        onChange={(labelIds) => {
-          onChange({ trigger: { ...trigger, type: "gmail.message_received", labelIds } });
+      <SelectField
+        label="Trigger"
+        value={trigger.type ?? "gmail.message_received"}
+        options={TRIGGERS}
+        invalid={invalid("trigger", "type")}
+        onChange={(type) => {
+          const picked = triggerTypes.find((one) => one === type);
+          if (picked !== undefined && picked !== trigger.type) {
+            onChange({ trigger: defaultTrigger(picked) });
+          }
         }}
       />
+      {trigger.type === "calendar.invite_received" ? null : (
+        <ListField
+          label="New Gmail messages with any of these labels (comma-separated)"
+          value={trigger.labelIds ?? ["INBOX"]}
+          invalid={invalid("trigger")}
+          onChange={(labelIds) => {
+            onChange({ trigger: { ...trigger, type: "gmail.message_received", labelIds } });
+          }}
+        />
+      )}
       <SelectField
         label="Rung"
         value={autonomy.rung}

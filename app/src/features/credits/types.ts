@@ -51,8 +51,16 @@ export type LedgerEntry = {
   purpose: CreditPurpose | null;
   /** A grant's note from our team ("October allowance"); null for usage. */
   note: string | null;
+  /**
+   * A failed call's correction: the usage entry whose billed cost it records, with the same
+   * attribution and time. Null for every other entry.
+   */
+  correctsId: string | null;
   createdAt: Date;
 };
+
+/** A failed call whose billed cost is still to be looked up: recorded at 0, under a generation. */
+export type UncostedFailedCall = { id: string; generationId: string; createdAt: Date };
 
 /** Which spending `getSpending` adds up: one purpose's usage from a time on. */
 export type SpendingQuery = { purpose: CreditPurpose; since: Date };

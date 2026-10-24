@@ -2,8 +2,8 @@
 // (one model step), then the agent's closing text.
 import type { Ctx } from "@/lib/ctx";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
+import { readTurn, type StreamedTurn } from "@/testing/streamed-turn";
 import { streamTurn } from "../server";
-import { readTurn, type StreamedTurn } from "./turn-helpers";
 
 export const SUMMARY = "Draft replies to pricing questions.";
 

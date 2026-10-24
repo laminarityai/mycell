@@ -50,8 +50,7 @@ export async function recordUsage(ctx: Ctx, usage: Usage): Promise<LedgerEntry> 
   const inserted = await forOrg(ctx).insert(creditLedger, {
     id: randomUUID(),
     kind: "usage",
-    // `|| 0` turns a free call's -0 into 0.
-    amount: -(usage.costUsd * env.CREDITS_PER_USD) || 0,
+    amount: usageAmount(usage.costUsd),
     role: usage.role,
     modelId: usage.modelId,
     outcome: usage.outcome,
@@ -66,6 +65,12 @@ export async function recordUsage(ctx: Ctx, usage: Usage): Promise<LedgerEntry> 
   // An insert returns its row, so this is a bug, not something a user can act on.
   if (row === undefined) throw new InvariantError("The usage entry wasn't recorded.");
   return toEntry(row);
+}
+
+/** A usage's ledger amount: its gateway cost in credits, at the config ratio, as a debit. */
+export function usageAmount(costUsd: number): number {
+  // `|| 0` turns a free call's -0 into 0.
+  return -(costUsd * env.CREDITS_PER_USD) || 0;
 }
 
 /** The longest note a grant keeps. */
@@ -117,7 +122,7 @@ export function inRange(range: SpendingRange): SQL | undefined {
   return and(gte(creditLedger.createdAt, range.from), lt(creditLedger.createdAt, range.to));
 }
 
-function toEntry(row: typeof creditLedger.$inferSelect): LedgerEntry {
+export function toEntry(row: typeof creditLedger.$inferSelect): LedgerEntry {
   return {
     id: row.id,
     kind: row.kind,
@@ -132,6 +137,7 @@ function toEntry(row: typeof creditLedger.$inferSelect): LedgerEntry {
     dryRun: row.dryRun,
     purpose: row.purpose,
     note: row.note,
+    correctsId: row.correctsId,
     createdAt: row.createdAt,
   };
 }

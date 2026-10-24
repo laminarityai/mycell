@@ -6,9 +6,9 @@ import { saveWorkflow } from "@/features/workflows/server";
 import { ValidationError } from "@/lib/errors";
 import { connectGoogle } from "@/testing/connect-helpers";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
+import { fundOrg, readTurn } from "@/testing/streamed-turn";
 import { getConversation, startConversation, streamTurn, tryInConversation } from "../server";
 import { draftSpec, labelSpec, triageSpec } from "./specs";
-import { fundOrg, readTurn } from "./turn-helpers";
 
 beforeEach(resetDatabase);
 
@@ -67,7 +67,7 @@ describe("tryInConversation", () => {
     for (const said of ['"yes"', "went on", 'the label "Pricing"', "drafted a reply", "review"]) {
       expect(lines).toContain(said);
     }
-    expect(await listRuns(admin, workflowId)).toEqual([]);
+    expect((await listRuns(admin, { workflowId })).runs).toEqual([]);
     expect(google.mailbox.writes.log).toEqual([]);
 
     fakeAiGateway.reply({ text: "I'll make the draft less formal." });

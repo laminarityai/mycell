@@ -2,6 +2,7 @@
 // them, unless it's archived; an admin sees every one. What the Workflows page shows is read here.
 import { eq, inArray } from "drizzle-orm";
 import { forOrg, type OrgScopedDb } from "@/db/for-org";
+import { sharedInboxes } from "@/features/connections/server";
 import { getActionSet } from "@/features/custom-actions/server";
 import type { ActionSet, RiskLevel } from "@/features/policy/types";
 import { describeSpec, type ActionInfo } from "@/features/spec/describe";
@@ -128,17 +129,25 @@ async function visible(ctx: Ctx, rows: Workflow[]): Promise<VisibleWorkflow[]> {
   // Members don't learn who else a workflow reaches.
   const audiences = admin ? await audiencesOf(ctx, versionIds) : new Map<string, Audience>();
   const actions = await getActionSet(ctx);
-  return seen.map(({ row, version }) => ({
-    id: row.id,
-    name: row.name,
-    description: describe(version, actions),
-    requiredApps: requiredApps(version, actions),
-    maxRisk: version.maxRisk,
-    credentials: version.spec.credentials,
-    versionNumber: version.number,
-    switch: switches.get(row.id) ?? null,
-    audience: audiences.get(version.id) ?? null,
-  }));
+  const inboxes = await sharedInboxes(
+    ctx,
+    [...switches.values()].flatMap((one) => (one?.kind === "org" ? [one.connectionId] : [])),
+  );
+  return seen.map(({ row, version }) => {
+    const current = switches.get(row.id) ?? null;
+    return {
+      id: row.id,
+      name: row.name,
+      description: describe(version, actions),
+      requiredApps: requiredApps(version, actions),
+      maxRisk: version.maxRisk,
+      credentials: version.spec.credentials,
+      sharedInbox: current?.kind === "org" ? (inboxes.get(current.connectionId) ?? null) : null,
+      versionNumber: version.number,
+      switch: current,
+      audience: audiences.get(version.id) ?? null,
+    };
+  });
 }
 
 /** The workflows whose latest version has one of the caller's tags. */

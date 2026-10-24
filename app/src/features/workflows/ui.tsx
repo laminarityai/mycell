@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AppMarks } from "@/components/app-mark";
 import { DateTime } from "@/components/date-time";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -18,7 +19,7 @@ import { SpecEditor } from "./lib/spec-editor";
 import { SwitchForm, type SwitchConnectionOption } from "./lib/switch-form";
 import type { Tag } from "@/features/tags/types";
 import { PublishDialog } from "./lib/workflow-editor";
-import { WorkflowGraph, type WorkflowGraphProps } from "./lib/workflow-graph";
+import { WorkflowGraph, type GraphSelection, type WorkflowGraphProps } from "./lib/workflow-graph";
 import { WorkingSpecEditor, type EditableWorkflow } from "./lib/working-spec-editor";
 import { PauseBadge, PausedNotice, StateBadge } from "./lib/pause-display";
 import { pausedText } from "./lib/paused-text";
@@ -34,6 +35,10 @@ import type {
 export { VisibleWorkflowsList } from "./lib/visible-workflows";
 // How a switch's state shows: its badge and the notice explaining its pauses.
 export { PausedNotice, StateBadge };
+// The workflow page's Editor, Runs and Health tabs, and what Health checks: credits, its runs'
+// failures with Resume (M8), and its budget.
+export { WorkflowTabs } from "./lib/workflow-tabs";
+export { WorkflowHealthChecks } from "./lib/health-checks";
 export type { SwitchConnectionOption };
 
 export {
@@ -45,6 +50,7 @@ export {
   WorkflowGraph,
   WorkingSpecEditor,
   type EditableWorkflow,
+  type GraphSelection,
   type WorkflowGraphProps,
 };
 
@@ -88,7 +94,7 @@ export function WorkflowArchiveSection({ workflow }: { workflow: WorkflowDetails
 }
 
 /**
- * The admin's workflows: name, latest version, its max risk level, the tags it's published to
+ * The admin's workflows: name, latest version, the apps it uses and its max risk level, the tags it's published to
  * and how many users they reach, whether it's on for them or the org, who has it on or paused
  * (`enablements`, by workflow ID), and Archive or Restore. A published org workflow has its org
  * switch right in the row, over the connections it may run on (`orgConnections`, by workflow
@@ -112,6 +118,7 @@ export function WorkflowsList({
         <TableRow>
           <TableHead>Workflow</TableHead>
           <TableHead>Latest version</TableHead>
+          <TableHead>Apps</TableHead>
           <TableHead>Max risk</TableHead>
           <TableHead>Published to</TableHead>
           <TableHead>Reach</TableHead>
@@ -140,6 +147,9 @@ export function WorkflowsList({
               {workflow.latestVersion === null
                 ? "Not published"
                 : `Version ${String(workflow.latestVersion.number)}`}
+            </TableCell>
+            <TableCell>
+              {workflow.latestVersion === null ? "—" : <AppMarks apps={workflow.requiredApps} />}
             </TableCell>
             <TableCell>
               {workflow.latestVersion === null ? (

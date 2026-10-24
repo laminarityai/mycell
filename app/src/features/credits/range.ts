@@ -172,13 +172,15 @@ export function budgetReachedOn(
 
 /**
  * A workflow's line on the page from its spending over the summary's range and its budget:
- * its month's running total, the days that reached the budget, and whether it's paused now
- * (budget reached this month), which the page says only while the range includes today.
+ * its month's running total and the days that reached the budget. `reachedNow` is whether it's
+ * paused now, budget reached (`budgetsReached`, the pause's own rule), which the page says only
+ * while the range includes today; a past month only has its days.
  */
 export function workflowLine(
   summary: SpendingSummary,
   spending: WorkflowSpending,
   workflow: { name: string; monthlyBudget: number | null },
+  reachedNow: boolean,
   now: Date,
 ): WorkflowSpendingLine {
   const days = summary.days.map((day) => day.day);
@@ -189,9 +191,6 @@ export function workflowLine(
     ...workflow,
     monthToDate: totals,
     reachedOn: budget === null ? [] : budgetReachedOn(days, totals, spending.monthBefore, budget),
-    budgetReached:
-      budget !== null &&
-      includesNow(summary.range, now) &&
-      (totals.at(-1) ?? spending.monthBefore) >= budget,
+    budgetReached: reachedNow && includesNow(summary.range, now),
   };
 }

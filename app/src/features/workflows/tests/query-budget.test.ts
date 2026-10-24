@@ -11,9 +11,11 @@ import {
   currentVersionIds,
   listStartable,
   listSwitchedOn,
+  pauseForFailures,
   publishWorkflow,
   saveWorkflow,
   switchWorkflowOn,
+  versionsById,
 } from "../server";
 import { draftSpec, labelSpec } from "./specs";
 
@@ -35,6 +37,31 @@ describe("the latest-version read's query budget", () => {
     expect(one).toEqual({ queries: 1, rows: 1 });
     expect(ten).toEqual(one);
     expect(await currentVersionIds(admin, [id])).toEqual(new Map([[id, latest.id]]));
+  });
+});
+
+// The Runs page reads the versions its runs ran, to say which path each failed step was on.
+describe("reading versions by ID: its query budget", () => {
+  it("makes one query for 1 version as for 3, for any role", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const admin = orgA.admin.ctx;
+    await connectGmail(admin, orgA.admin.email);
+    const { id } = await saveWorkflow(admin, { name: "Pricing", spec: draftSpec() });
+    const versions = [
+      await publishWorkflow(admin, id),
+      await publishWorkflow(admin, id),
+      await publishWorkflow(admin, id),
+    ];
+    const ids = versions.map((version) => version.id);
+
+    const one = await countQueries(() => versionsById(orgA.member.ctx, ids.slice(0, 1)));
+    const three = await countQueries(() => versionsById(orgA.member.ctx, ids));
+
+    expect(one).toEqual({ queries: 1, rows: 1 });
+    expect(three).toEqual({ queries: 1, rows: 3 });
+    const read = await versionsById(orgA.member.ctx, [...ids, "no-such-version"]);
+    expect([...read.values()].map((version) => version.number)).toEqual([1, 2, 3]);
+    expect(read.get(ids[0])?.spec).toMatchObject({ id: draftSpec().id });
   });
 });
 
@@ -64,8 +91,9 @@ describe("what's switched on for a connection: its query budget", () => {
 });
 
 // The trigger's fan-out reads what a new message starts for every message that arrives, the
-// balance included (out of credits pauses every workflow), so it must cost the same however many
-// workflows are switched on, out of credits or not.
+// balance included (out of credits pauses every workflow), which workflows are paused for
+// failing, and each budgeted workflow's spending this month, so it must cost the same however
+// many workflows are switched on, out of credits, paused or not, and however many have budgets.
 describe("what a new message starts: its query budget", () => {
   it("makes the same queries for 1 workflow switched on as for 20, the balance read once", async () => {
     const { orgA } = await seedTwoOrgs({ credits: 100 });
@@ -88,9 +116,68 @@ describe("what a new message starts: its query budget", () => {
     await recordUsage(system, { role: "fast", modelId: "x", costUsd: 0.1, outcome: "succeeded" });
     const outOfCredits = await countQueries(() => listStartable(system, own.id));
 
-    expect(one.queries).toBe(9);
+    // Without a budget anywhere, no spending is read.
+    expect(one.queries).toBe(11);
     expect(twenty.queries).toBe(one.queries);
     expect(outOfCredits.queries).toBe(one.queries);
     expect(await listStartable(system, own.id)).toEqual([]);
+  });
+
+  it("makes the same queries while some of them are paused for failing", async () => {
+    const { orgA } = await seedTwoOrgs({ credits: 100 });
+    const admin = orgA.admin.ctx;
+    const own = await connectMailbox(admin, orgA.admin.email);
+    const system = systemCtx(orgA.id);
+    const ids: string[] = [];
+    for (let n = 1; n <= 5; n += 1) {
+      const spec = labelSpec({ id: `labels-${String(n)}` });
+      const { id } = await saveWorkflow(admin, { name: `Labels ${String(n)}`, spec });
+      await publishWorkflow(admin, id);
+      await switchWorkflowOn(admin, id, own.id);
+      ids.push(id);
+    }
+    const running = await countQueries(() => listStartable(system, own.id));
+
+    for (const id of ids.slice(0, 3)) await pauseForFailures(system, id, ["r1", "r2", "r3"]);
+    const paused = await countQueries(() => listStartable(system, own.id));
+
+    expect(paused.queries).toBe(running.queries);
+    expect((await listStartable(system, own.id)).map((on) => on.workflowId).sort()).toEqual(
+      ids.slice(3).sort(),
+    );
+  });
+
+  it("reads every budgeted workflow's spending in one query, for 1 workflow or 20", async () => {
+    const { orgA } = await seedTwoOrgs({ credits: 1000 });
+    const admin = orgA.admin.ctx;
+    const own = await connectMailbox(admin, orgA.admin.email);
+    const system = systemCtx(orgA.id);
+    const ids: string[] = [];
+    const switchOn = async (n: number) => {
+      const spec = labelSpec({ id: `labels-${String(n)}`, budget: { monthlyCredits: 10 } });
+      const { id } = await saveWorkflow(admin, { name: `Labels ${String(n)}`, spec });
+      await publishWorkflow(admin, id);
+      await switchWorkflowOn(admin, id, own.id);
+      ids.push(id);
+      // Each spends in a live run: under its budget, except the first, which reaches it.
+      await recordUsage(system, {
+        role: "fast",
+        modelId: "x",
+        costUsd: n === 1 ? 0.01 : 0.001,
+        outcome: "succeeded",
+        workflowId: id,
+        runId: `run-${String(n)}`,
+      });
+    };
+    await switchOn(1);
+
+    const one = await countQueries(() => listStartable(system, own.id));
+    for (let n = 2; n <= 20; n += 1) await switchOn(n);
+    const twenty = await countQueries(() => listStartable(system, own.id));
+
+    expect(one.queries).toBe(12);
+    expect(twenty.queries).toBe(one.queries);
+    const started = (await listStartable(system, own.id)).map((on) => on.workflowId);
+    expect(started.sort()).toEqual(ids.slice(1).sort());
   });
 });

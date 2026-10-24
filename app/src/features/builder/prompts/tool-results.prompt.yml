@@ -18,7 +18,3 @@ customActionNotAdded: |-
   Not added to the proposal. Fix every issue and describe it again.
 customActionNameTaken: |-
   This org already has a custom action named "{{name}}" that does something else, and a stored custom action never changes. Give the changed one a new name, such as "{{name}}-v2".
-
-# Any tool call that failed with an error other than one of ours (builder/lib/turn.ts).
-toolFailed: |-
-  That tool call failed.

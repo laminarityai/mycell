@@ -1,5 +1,6 @@
-// Reading a streamed turn the way the chat page does: the UI message stream's server-sent
-// events, gathered into the reply's text, its tool calls, its notices and its errors.
+// Reading a chat's streamed turn (`models`' `streamChatTurn`, the builder's or any other chat's)
+// the way the chat page does: the UI message stream's server-sent events, gathered into the
+// reply's text, its tool calls, its notices and its errors. And funding an org for turns.
 import { grantCredits } from "@/features/credits/server";
 import { systemCtx } from "@/lib/ctx";
 

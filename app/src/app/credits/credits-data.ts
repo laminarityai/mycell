@@ -1,9 +1,12 @@
 // What the Credits page reads, apart from rendering it, so a test can pin its query budget: the
 // same queries for 1 workflow as for 20, and for 12 months as for one
 // (src/app/tests/credits-page.test.ts). Workflow names and budgets are joined here, since
-// credits can't import workflows.
+// credits can't import workflows. Whether a workflow is paused, budget reached, is the pause's
+// own rule (`budgetsReached`), so the page and the fan-out agree; a past month's days that
+// reached it come from the range's daily sums.
 import { resolveRange, workflowLine } from "@/features/credits/range";
 import {
+  budgetsReached,
   getLedgerStart,
   getRunway,
   getSpendingSummary,
@@ -17,6 +20,7 @@ import type {
   SpendingSummary,
   WorkflowSpendingLine,
 } from "@/features/credits/types";
+import type { WorkflowBudget } from "@/features/workflows/types";
 import { listWorkflowBudgets } from "@/features/workflows/server";
 import type { Ctx } from "@/lib/ctx";
 
@@ -47,7 +51,8 @@ export async function loadCreditsPage(
   now: Date,
   choice: RangeChoice = { preset: "this_month" },
 ): Promise<CreditsPage> {
-  // The range needs the org's first entry; the runway and budgets don't wait for it.
+  // The range needs the org's first entry; the runway and budgets don't wait for it. Which
+  // budgets are reached is this month's, asked whatever the range so the queries don't vary.
   const inRange = getLedgerStart(ctx).then(async (start) => {
     const chosen = resolveRange(choice, now, start);
     const [summary, entries] = await Promise.all([
@@ -56,9 +61,9 @@ export async function loadCreditsPage(
     ]);
     return { chosen, summary, entries };
   });
-  const [runway, budgets, { chosen, summary, entries }] = await Promise.all([
+  const [runway, { budgets, reached }, { chosen, summary, entries }] = await Promise.all([
     getRunway(ctx),
-    listWorkflowBudgets(ctx),
+    listWorkflowBudgets(ctx).then(withReached(ctx)),
     inRange,
   ]);
   const byId = new Map(budgets.map((budget) => [budget.id, budget]));
@@ -69,6 +74,7 @@ export async function loadCreditsPage(
       line,
       // Usage outlives what it was for; a workflow the org no longer has is still spending.
       { name: budget?.name ?? "Unknown workflow", monthlyBudget: budget?.monthlyCredits ?? null },
+      reached.has(line.workflowId),
       now,
     );
   });
@@ -80,6 +86,7 @@ export async function loadCreditsPage(
         summary,
         { workflowId: budget.id, spent: 0, daily: summary.days.map(() => 0), monthBefore: 0 },
         { name: budget.name, monthlyBudget: budget.monthlyCredits },
+        reached.has(budget.id),
         now,
       ),
     );
@@ -94,5 +101,17 @@ export async function loadCreditsPage(
       workflowName: entry.workflowId === null ? null : (byId.get(entry.workflowId)?.name ?? null),
     })),
     moreEntries: entries.length > ENTRIES_SHOWN,
+  };
+}
+
+/** The budgets, and which of their workflows have reached theirs this month. */
+function withReached(ctx: Ctx) {
+  return async (budgets: WorkflowBudget[]) => {
+    const monthly = new Map(
+      budgets.flatMap((budget) =>
+        budget.monthlyCredits === null ? [] : [[budget.id, budget.monthlyCredits] as const],
+      ),
+    );
+    return { budgets, reached: await budgetsReached(ctx, monthly) };
   };
 }

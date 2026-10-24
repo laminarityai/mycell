@@ -3,8 +3,8 @@
 // action in a registered app other than Google, a connection to that app (ADR-0018). All come
 // from the org's action set, never from a model.
 import { googleAppOf, REGISTERED_APPS } from "@/features/connections/registered-apps";
+import { GOOGLE_APP_NAMES } from "@/lib/google";
 import {
-  GOOGLE_APP_NAMES,
   GOOGLE_APP_SCOPES,
   registeredAppIdSchema,
   type ConnectionSummary,
@@ -12,6 +12,8 @@ import {
 } from "@/features/connections/types";
 import { appsUsed, scopesOf } from "@/features/policy/action-set";
 import type { Action, ActionSet, ConnectionApp } from "@/features/policy/types";
+import { triggers } from "@/features/spec/triggers";
+import type { Spec } from "@/features/spec/types";
 import type { WorkflowVersion } from "../types";
 import { scopeName } from "./scope-check";
 
@@ -21,32 +23,33 @@ const CATALOG_APPS: Record<ConnectionApp, GoogleApp> = { Gmail: "gmail", Sheets:
 /** What a connection is short of: Google apps as the UI names them, scopes by short name. */
 export type MissingAccess = { apps: string[]; scopes: string[] };
 
+/** What a version's requirements are read from: the actions it calls, and its trigger. */
+type Needs = Pick<WorkflowVersion, "requiredActions"> & { spec: Pick<Spec, "trigger"> };
+
 /**
- * The apps the version uses, as admins name them: Gmail for the trigger, then each app an
- * action it calls belongs to, each once, from the org's action set.
+ * The apps the version uses, as admins name them: its trigger's (Gmail, or Calendar), then each
+ * app an action it calls belongs to, each once, from the org's action set.
  */
-export function requiredApps(
-  version: Pick<WorkflowVersion, "requiredActions">,
-  actions: ActionSet,
-) {
-  return appsUsed(version.requiredActions, actions);
+export function requiredApps(version: Needs, actions: ActionSet) {
+  return appsUsed(version.requiredActions, actions, version.spec.trigger.type);
 }
 
 /**
  * What `granted` lacks for the version: each Google app it uses that wasn't granted (by app, as
- * the consent screen offers them: Gmail for the trigger, each catalog action's, and each custom
+ * the consent screen offers them: the trigger's, each catalog action's, and each custom
  * Google action's, by its path), and the scopes those apps and the version's actions need. A
  * connection that lacks nothing gives empty lists; no connection lacks everything.
  */
 export function missingAccess(
-  version: Pick<WorkflowVersion, "requiredActions">,
+  version: Needs,
   granted: { apps: readonly GoogleApp[]; grantedScopes: readonly string[] } | null,
   actions: ActionSet,
 ): MissingAccess {
   const apps = granted?.apps ?? [];
   const scopes = granted?.grantedScopes ?? [];
   const used = version.requiredActions.flatMap((name) => googleAppsOf(actions.find(name)));
-  const missingApps = [...new Set<GoogleApp>(["gmail", ...used])].filter(
+  const trigger = triggers[version.spec.trigger.type].googleApp;
+  const missingApps = [...new Set<GoogleApp>([trigger, ...used])].filter(
     (app) => !apps.includes(app),
   );
   const actionScopes = version.requiredActions.flatMap((name) => {

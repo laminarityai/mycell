@@ -114,8 +114,9 @@ describe("the Credits page", () => {
     const many = await orgWithManyWorkflows(20);
     const twenty = await countQueries(() => loadCreditsPage(many, new Date()));
 
-    // The runway (2), the first entry, the range's sums (2), its entries, and the budgets (2).
-    expect(one.queries).toBe(8);
+    // The runway (2), the first entry, the range's sums (2), its entries, the workflows and
+    // their latest versions (2), and which reached their budget this month: the pause's own query.
+    expect(one.queries).toBe(9);
     expect(twenty.queries).toBe(one.queries);
   });
 });

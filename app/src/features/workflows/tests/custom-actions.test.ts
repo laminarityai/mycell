@@ -177,7 +177,7 @@ describe("a custom Google read in a workflow", () => {
       issues: [
         {
           path: ["steps", 0, "action"],
-          message: `google.read-event needs the calendar.events scope, which ${admin.email} wasn't granted. Reconnect it to grant it.`,
+          message: `google.read-event needs Calendar, which ${admin.email} wasn't granted. Reconnect it to allow Calendar.`,
         },
       ],
     });

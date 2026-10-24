@@ -14,6 +14,7 @@ import { FakeMicrosoft } from "./fake-microsoft";
 import { type FakeReconnectSession, type FakeSession, FakeSessions } from "./fake-nango-sessions";
 import { DEFAULT_SCOPES } from "./fake-proxied-sources";
 import { FakeSheets } from "./fake-sheets";
+import { FakeTasks } from "./fake-tasks";
 
 /** What the connected account looks like from inside its source. */
 export type FakeAccount = { emailAddress: string };
@@ -28,12 +29,14 @@ export type FakeConnection = {
   account: FakeAccount;
   // The OAuth scopes the app granted, as Nango reports them in the token response.
   scopes: readonly string[];
-  // The account's Gmail mailbox, Drive, spreadsheets and primary calendar, and its Microsoft 365.
+  // The account's Gmail mailbox, Drive, spreadsheets, primary calendar and task lists, and its
+  // Microsoft 365.
   // The proxy reaches each through its API's host, if the connection's scopes allow that API.
   mailbox: FakeMailbox;
   drive: FakeDrive;
   sheets: FakeSheets;
   calendar: FakeCalendar;
+  tasks: FakeTasks;
   microsoft: FakeMicrosoft;
   // The app refused the refresh token (access revoked): the proxy can't call the source.
   refreshFails?: boolean;
@@ -87,6 +90,9 @@ class FakeNango {
 
   /** The connected account's primary calendar, for seeding invites. */
   calendar = (connectionId: string): FakeCalendar => this.connection(connectionId).calendar;
+
+  /** The connected account's task lists, for seeding tasks. */
+  tasks = (connectionId: string): FakeTasks => this.connection(connectionId).tasks;
 
   /** The connected account's Microsoft 365, for reading what was sent to it. */
   microsoft = (connectionId: string): FakeMicrosoft => this.connection(connectionId).microsoft;
@@ -201,6 +207,7 @@ class FakeNango {
       drive: new FakeDrive(account.emailAddress),
       sheets: new FakeSheets(),
       calendar: new FakeCalendar(account.emailAddress),
+      tasks: new FakeTasks(),
       microsoft: new FakeMicrosoft(account.emailAddress),
     });
     return connectionId;
@@ -215,8 +222,8 @@ class FakeNango {
    * A user finishes OAuth in Connect UI opened with a reconnect session: Nango replaces the
    * connection's credentials and returns the `override` webhook it then sends. Choosing a
    * different account than before swaps in that account's (empty) mailbox, Drive, spreadsheets,
-   * calendar and Microsoft 365. The new token refreshes again, so a revoked connection reaches
-   * its source.
+   * calendar, task lists and Microsoft 365. The new token refreshes again, so a revoked
+   * connection reaches its source.
    * `scopes`, when given, are what the new token was granted; otherwise they stay as they were.
    */
   completeReconnect(token: string, account?: FakeAccount, scopes?: readonly string[]): FakeWebhook {
@@ -231,6 +238,7 @@ class FakeNango {
       connection.drive = new FakeDrive(account.emailAddress);
       connection.sheets = new FakeSheets();
       connection.calendar = new FakeCalendar(account.emailAddress);
+      connection.tasks = new FakeTasks();
       connection.microsoft = new FakeMicrosoft(account.emailAddress);
     }
     return this.authWebhook(session.connectionId, "override", true);

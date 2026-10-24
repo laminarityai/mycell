@@ -8,7 +8,7 @@ test("a visitor who isn't signed in lands on the sign-in page", async ({ page })
   await expect(page.getByRole("button", { name: /google/i })).toBeVisible();
 });
 
-test("an admin sees the org's users and can promote and remove them", async ({
+test("an admin sees the org's users and can promote, remove and re-add them", async ({
   page,
   orgs: { orgA, orgB },
   signInAs,
@@ -27,10 +27,24 @@ test("an admin sees the org's users and can promote and remove them", async ({
 
   await member.getByRole("button", { name: "Remove" }).click();
   await member.getByRole("button", { name: "Confirm remove" }).click();
-  await expect(member).toBeHidden();
+  // The member's one row now is under Removed people, where they can be re-added.
+  const removed = page.getByRole("table", { name: "Removed people" });
+  await expect(removed.getByRole("row").filter({ hasText: orgA.member.email })).toBeVisible();
+  await expect(member).toHaveCount(1);
   await page.reload();
+  await expect(member).toHaveCount(1);
+  await expect(member.getByRole("button", { name: "Make admin" })).toBeHidden();
+  // The admin is now also named under Removed people, as who removed the member.
+  await expect(
+    page
+      .getByRole("table", { name: "People", exact: true })
+      .getByRole("row")
+      .filter({ hasText: orgA.admin.email }),
+  ).toBeVisible();
+
+  await member.getByRole("button", { name: "Re-add" }).click();
   await expect(page.getByText(orgA.member.email)).toBeHidden();
-  await expect(userRow(page, orgA.admin)).toBeVisible();
+  await expect(removed).toBeHidden();
 });
 
 test("a member sees no admin controls and is sent away from the tags screen", async ({

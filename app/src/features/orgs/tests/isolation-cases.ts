@@ -113,5 +113,25 @@ export const isolationCases = defineIsolationCases(server, {
 
     await expect(server.removeUser(orgA.admin.ctx, orgB.member.id)).rejects.toThrow(NotFoundError);
     expect(await server.listUsers(orgB.admin.ctx)).toEqual(orgBUsers);
+    expect(await server.listRemovedUsers(orgB.admin.ctx)).toEqual([]);
+  },
+
+  listRemovedUsers: async ({ orgA, orgB }) => {
+    await server.removeUser(orgB.admin.ctx, orgB.member.id);
+
+    expect(await server.listRemovedUsers(orgA.admin.ctx)).toEqual([]);
+    expect((await server.listRemovedUsers(orgB.admin.ctx)).map((r) => r.userId)).toEqual([
+      orgB.member.id,
+    ]);
+  },
+
+  reAddUser: async ({ orgA, orgB }) => {
+    await server.removeUser(orgB.admin.ctx, orgB.member.id);
+    const orgBRemoved = await server.listRemovedUsers(orgB.admin.ctx);
+
+    await expect(server.reAddUser(orgA.admin.ctx, orgBRemoved[0]?.id ?? "")).rejects.toThrow(
+      NotFoundError,
+    );
+    expect(await server.listRemovedUsers(orgB.admin.ctx)).toEqual(orgBRemoved);
   },
 });

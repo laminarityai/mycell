@@ -49,7 +49,7 @@ export const runs = pgTable(
     // The enablement that started it. Null for an org workflow or a manual run, and once the
     // enablement is switched off.
     enablementId: text("enablement_id"),
-    // The triggering Gmail message's ID.
+    // The triggering item's ID: a Gmail message's, or a calendar event's.
     sourceRef: text("source_ref").notNull(),
     // A triggered run's (enablement or org workflow, source_ref), so one message starts at most
     // one run of each. Null for a manual run, which may be repeated.
@@ -138,6 +138,32 @@ export const runSteps = pgTable(
     index("run_steps_org_id_connection_id_idx").on(table.orgId, table.connectionId),
     foreignKey({
       name: "run_steps_connection_fk",
+      columns: [table.orgId, table.connectionId],
+      foreignColumns: [connections.orgId, connections.id],
+    }).onDelete("cascade"),
+  ],
+);
+
+/**
+ * Where a trigger that polls its app resumes on one connection: for the Calendar trigger, the
+ * sync token of the connection's primary calendar. Only the token is kept, never the events it
+ * listed (invariant 8), and it cascades from its connection (invariant 3).
+ */
+export const triggerCursors = pgTable(
+  "trigger_cursors",
+  {
+    id: text("id").primaryKey(),
+    orgId: text("org_id").notNull(),
+    connectionId: text("connection_id").notNull(),
+    trigger: text("trigger", { enum: ["calendar.invite_received"] }).notNull(),
+    cursor: text("cursor").notNull(),
+    // When the poll that stored the cursor finished.
+    polledAt: timestamp("polled_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    unique("trigger_cursors_connection_id_trigger_unique").on(table.connectionId, table.trigger),
+    foreignKey({
+      name: "trigger_cursors_connection_fk",
       columns: [table.orgId, table.connectionId],
       foreignColumns: [connections.orgId, connections.id],
     }).onDelete("cascade"),

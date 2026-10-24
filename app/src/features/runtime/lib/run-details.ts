@@ -92,13 +92,15 @@ export async function getRun(ctx: Ctx, runId: string): Promise<RunRecord> {
 }
 
 /**
- * The message the run started from, fetched from Gmail for display only, with where it opens
- * there; null unless the caller reads the run's connection (its owner, or an admin for an org
+ * The message or invite the run started from, fetched from its app for display only, with where
+ * it opens there; null unless the caller reads the run's connection (its owner, or an admin for an org
  * connection). NotFoundError for a run not in the org.
  */
 export async function getRunMessage(ctx: Ctx, runId: string): Promise<RunMessage | null> {
   requireRole(ctx, "admin", "member");
   const run = await findRun(ctx, runId);
   if (run === undefined) throw new NotFoundError("run");
-  return (await messagesOf(ctx, [run])).get(run.id) ?? null;
+  const version = (await versionsById(ctx, [run.workflowVersionId])).get(run.workflowVersionId);
+  const trigger = version?.spec.trigger.type ?? "gmail.message_received";
+  return (await messagesOf(ctx, [{ ...run, trigger }])).get(run.id) ?? null;
 }

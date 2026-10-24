@@ -1,13 +1,13 @@
-# The classify and extract steps (runtime/lib/steps.ts). The spec's question, and the message,
-# come in as they are.
+# The classify and extract steps (runtime/lib/steps.ts). The spec's question, and the message or
+# invite, come in as they are.
 
 # A classify step's question, as the spec asks it.
 classifyQuestion: |-
   {{question}}
 
 extractSystem: |-
-  Extract the fields from the message. Use null for a field the message doesn't give.
+  Extract the fields from the text. Use null for a field the text doesn't give.
 
-# The triggering message: its sender, subject and text.
+# The triggering item: a message's sender, subject and text, or an invite's details.
 extractPrompt: |-
   {{message}}

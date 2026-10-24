@@ -163,7 +163,8 @@ export class FakeDocs {
     return HttpResponse.json({
       documentId: doc.id,
       title: doc.title,
-      revisionId: revisionId(doc),
+      // Docs gives the revision only to an account that may edit the document.
+      ...(doc.access === "edit" ? { revisionId: revisionId(doc) } : {}),
       suggestionsViewMode: mode,
       ...(tabs
         ? {

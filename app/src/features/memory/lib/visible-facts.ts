@@ -20,8 +20,12 @@ export type FactRow = typeof facts.$inferSelect;
  */
 export type SeenFact<F = FactRow> = { fact: F; sources: FactSource[]; outsideOnly: boolean };
 
-/** The facts among `rows` the viewer can see, in the order given. */
-export async function seenFacts<F extends { id: string }>(
+/**
+ * The facts among `rows` the viewer can see, in the order given: those with a source they can
+ * see, and those they told Mycel themselves and haven't deleted, which have no sources and count
+ * as from inside.
+ */
+export async function seenFacts<F extends Pick<FactRow, "id" | "toldByUserId" | "deletedAt">>(
   ctx: Ctx,
   reading: Reading,
   rows: F[],
@@ -55,6 +59,13 @@ export async function seenFacts<F extends { id: string }>(
         });
 
   return rows.flatMap((fact) => {
+    if (fact.toldByUserId !== null) {
+      const own =
+        reading.viewer.userId !== null &&
+        fact.toldByUserId === reading.viewer.userId &&
+        fact.deletedAt === null;
+      return own ? [{ fact, sources: [], outsideOnly: false }] : [];
+    }
     const linked = new Set(
       links.filter((link) => link.factId === fact.id).map((link) => link.sourceRecordId),
     );
@@ -207,6 +218,7 @@ export async function describeFacts(
           ? fact.conflictsWithId
           : null,
       outsideOnly,
+      told: fact.toldByUserId !== null,
     };
   });
 }

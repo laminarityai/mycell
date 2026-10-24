@@ -29,6 +29,8 @@ type ModelFact = {
   recorded: string;
   disputed?: true;
   outsideOnly?: true;
+  // The person told Mycel this themselves ("remember this").
+  toldByYou?: true;
   replaced?: true;
 };
 
@@ -213,6 +215,7 @@ function modelFact(fact: MemoryFact, about: string): ModelFact {
     recorded: day(fact.recordedAt),
     ...(fact.conflictsWith === null ? {} : { disputed: true as const }),
     ...(fact.outsideOnly ? { outsideOnly: true as const } : {}),
+    ...(fact.told ? { toldByYou: true as const } : {}),
   };
 }
 

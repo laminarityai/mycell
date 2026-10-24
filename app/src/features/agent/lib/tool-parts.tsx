@@ -14,6 +14,7 @@ const TOOL_LABELS: Record<string, string> = {
   find_messages: "Searched your mail",
   list_reviews: "Looked at your reviews",
   list_workflows: "Looked at your workflows",
+  remember: "Remembering",
 };
 
 const UNAVAILABLE: Record<string, string> = {

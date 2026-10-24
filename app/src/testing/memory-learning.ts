@@ -206,3 +206,29 @@ export function unrelated(): number[] {
 export function meaning(axis: number, towards = axis, lean = 0): number[] {
   return Array.from({ length: 1536 }, (_, i) => (i === axis ? 1 - lean : i === towards ? lean : 0));
 }
+
+/** What telling Mycel a fact asks `fast`, in the shape `tellFact`'s structured output asks for. */
+export type ScriptedTelling = {
+  kind?: "work" | "personal" | "opinion" | "other";
+  predicate?: string;
+  value?: string;
+};
+
+/**
+ * Scripts one told fact: the extraction's answer and, when it's kept (a work fact, by default),
+ * the embedding of its statement: `vector`, or one unrelated to every other.
+ */
+export function scriptTelling(
+  telling: ScriptedTelling = {},
+  {
+    kept = (telling.kind ?? "work") === "work",
+    vector,
+  }: { kept?: boolean; vector?: number[] } = {},
+): void {
+  fakeAiGateway.object({
+    kind: telling.kind ?? "work",
+    predicate: telling.predicate ?? null,
+    value: telling.value ?? null,
+  });
+  if (kept) fakeAiGateway.embeddings([vector ?? unrelated()]);
+}

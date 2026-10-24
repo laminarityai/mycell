@@ -4,6 +4,18 @@ import { z } from "zod";
 import { chatPartSchemas, type ChatUIMessage } from "@/features/models/types";
 import type { ReviewKind } from "@/features/reviews/types";
 
+/** Where "What I've told Mycel" is: linked from the chat's header and each saved note. */
+export const TOLD_FACTS_PATH = "/ask/told";
+
+/** The told-facts page's filter, as its address holds it (`?q=…&older=1`). */
+export const toldFactsSearchSchema = z.object({
+  q: z.string().max(200).catch(""),
+  older: z
+    .unknown()
+    .transform((value) => value === "1")
+    .catch(false),
+});
+
 /**
  * One part of a stored message: the parts every chat stores (text, one tool call with its
  * result as that tool stores it, or a notice; `models`' `chatPartSchemas`). A tool keeps only
@@ -78,6 +90,8 @@ export type Citation = {
   disputed: boolean;
   /** Only someone outside the company states it, as far as the person's sources show. */
   outsideOnly: boolean;
+  /** The person told Mycel this ("remember this"): it has no sources, and only they see it. */
+  told: boolean;
   sources: CitedSource[];
 };
 

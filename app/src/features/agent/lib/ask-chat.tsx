@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { AgentUIMessage, Citation, CitedSource, FoundItems } from "../types";
 import { numberSources, segments } from "./footnotes";
+import { RememberedFact } from "./remembered-fact";
 import { ToolPart } from "./tool-parts";
 
 /** Ask Mycel's AI disclosure (EU AI Act Art. 50), above every conversation. */
@@ -240,6 +241,9 @@ function ReplyPart({
   if (part.type !== "dynamic-tool" && !part.type.startsWith("tool-")) return null;
   if (!("state" in part)) return null;
   const name = part.type === "dynamic-tool" ? part.toolName : part.type.slice("tool-".length);
+  if (name === "remember" && part.state === "output-available") {
+    return <RememberedFact output={part.output} />;
+  }
   const call =
     part.state === "output-error"
       ? { name, state: "failed" as const }
@@ -279,6 +283,14 @@ function Footnote({
           title="Someone outside the company says this, and it conflicts with what the company said."
         >
           Disputed
+        </Badge>
+      ) : citation.told ? (
+        <Badge
+          variant="outline"
+          className="ml-1 align-middle"
+          title="You told Mycel this. Only you can see it."
+        >
+          Told by you
         </Badge>
       ) : citation.outsideOnly ? (
         <Badge

@@ -24,6 +24,7 @@ import {
 const OPERATIONS: Record<MemoryReadOperation, string> = {
   search: "Searched",
   read_object: "Read",
+  list_told: "Listed what they told Mycel about",
 };
 
 /**

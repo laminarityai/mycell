@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { listRail } from "@/features/agent/server";
 import { askQuerySchema } from "@/features/agent/types";
-import { AskMycel } from "@/features/agent/ui";
+import { AskMycel, ToldFactsLink } from "@/features/agent/ui";
 import { getCtx } from "@/features/orgs/server";
 import { AppShell } from "@/app/_shell/app-shell";
 
@@ -9,7 +9,7 @@ import { AppShell } from "@/app/_shell/app-shell";
 // found, and New conversation.
 export default function AskPage({ searchParams }: PageProps<"/ask">) {
   return (
-    <AppShell current="ask" title="Ask Mycel" width="full">
+    <AppShell current="ask" title="Ask Mycel" width="full" actions={<ToldFactsLink />}>
       <Suspense fallback={<p className="p-4 text-sm text-muted-foreground">Loading…</p>}>
         <Conversations searchParams={searchParams} />
       </Suspense>

@@ -10,6 +10,7 @@ import {
 } from "@/features/models/server";
 import { findMessagesTool } from "./mail-tools";
 import { readObjectTool, searchMemoryTool } from "./memory-tools";
+import { rememberTool } from "./remember-tool";
 import { listReviewsTool, listWorkflowsTool } from "./work-tools";
 
 /** What a tool knows about the turn calling it. */
@@ -26,6 +27,7 @@ function agentTool<I, O>(definition: AgentToolDefinition<I, O>): ChatTool<AgentT
 export const agentTools: ChatTools<AgentTurn> = {
   search_memory: agentTool(searchMemoryTool),
   read_object: agentTool(readObjectTool),
+  remember: agentTool(rememberTool),
   find_messages: agentTool(findMessagesTool),
   list_reviews: agentTool(listReviewsTool),
   list_workflows: agentTool(listWorkflowsTool),

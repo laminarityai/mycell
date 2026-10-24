@@ -16,6 +16,11 @@ const DEFAULT_MODELS: Record<ModelRole, string> = {
   embed: env.MODEL_EMBED,
 };
 
+/** Whether a model is a decision model, asked through experimental_decide (config lists them). */
+export function isDecisionModel(modelId: string): boolean {
+  return env.MODEL_DECISION_PREFIXES.some((prefix) => modelId.startsWith(prefix));
+}
+
 /** The gateway model ID the role names in the caller's org. */
 export async function resolveModel(ctx: Ctx, role: ModelRole): Promise<string> {
   const rows = await forOrg(ctx).select(modelRoles, { where: eq(modelRoles.role, role) });

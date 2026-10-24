@@ -1,6 +1,6 @@
 {
-  "id": "e4be73d2-6c74-4fb0-8e47-1ac70ee2853b",
-  "prevId": "486f29d5-dc11-4d19-bd74-594d9a68089e",
+  "id": "c42bdf9d-9f24-45da-bbbf-9dde10faadb1",
+  "prevId": "ef26f8b5-ee6b-4efc-aa43-a73372a25527",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1310,7 +1310,7 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -1424,7 +1424,7 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -2151,7 +2151,7 @@
         },
         "occurred_at": {
           "name": "occurred_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
         },
@@ -2199,7 +2199,7 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -3085,27 +3085,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "facts_org_id_told_by_user_id_idx": {
-          "name": "facts_org_id_told_by_user_id_idx",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "told_by_user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -3138,21 +3117,6 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
-        },
-        "facts_told_by_member_fk": {
-          "name": "facts_told_by_member_fk",
-          "tableFrom": "facts",
-          "tableTo": "member",
-          "columnsFrom": [
-            "org_id",
-            "told_by_user_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "user_id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -3167,12 +3131,7 @@
         }
       },
       "policies": {},
-      "checkConstraints": {
-        "facts_told_by_user_when_told": {
-          "name": "facts_told_by_user_when_told",
-          "value": "(\"facts\".\"origin\" = 'told_by') = (\"facts\".\"told_by_user_id\" is not null)"
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.memory_objects": {
@@ -4984,7 +4943,7 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -5083,7 +5042,7 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"

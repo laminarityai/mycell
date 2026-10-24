@@ -7,6 +7,7 @@ import { forOrg } from "@/db/for-org";
 import type { StoredSpec } from "@/features/spec/stored";
 import { tagNamesById } from "@/features/tags/server";
 import { type Ctx, requireRole } from "@/lib/ctx";
+import { now } from "@/lib/time";
 import { workflows } from "./schema";
 
 // A save racing the rewrite moves the revision on; the rewrite reads the spec again and retries.
@@ -38,7 +39,7 @@ export async function followTagRename(
         {
           workingSpec: renamed(row.workingSpec, rename.from, to),
           revision: row.revision + 1,
-          updatedAt: new Date(),
+          updatedAt: now(),
         },
         and(eq(workflows.id, id), eq(workflows.revision, row.revision)),
       );

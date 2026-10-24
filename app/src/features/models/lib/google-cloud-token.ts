@@ -5,6 +5,7 @@
 // few minutes before it expires. Locally, `vercel env pull` provides the OIDC token.
 import { getVercelOidcToken } from "@vercel/oidc";
 import { z } from "zod";
+import { now } from "@/lib/time";
 
 const STS_URL = "https://sts.googleapis.com/v1/token";
 const CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
@@ -35,7 +36,7 @@ let cached: { key: string; token: string; refreshAt: number } | undefined;
 /** An access token of the identity's service account, for the cloud-platform scope. */
 export async function googleCloudAccessToken(identity: GoogleCloudIdentity): Promise<string> {
   const key = `${identity.workloadIdentityProvider} ${identity.serviceAccountEmail}`;
-  if (cached?.key === key && Date.now() < cached.refreshAt) return cached.token;
+  if (cached?.key === key && now().getTime() < cached.refreshAt) return cached.token;
 
   const federated = await exchangeOidcToken(identity.workloadIdentityProvider);
   const response = await post(

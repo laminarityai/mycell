@@ -14,7 +14,11 @@ let toolCallCount = 0;
  * The gateway streams LanguageModelV4 stream parts, one JSON object per event: the text in a
  * few deltas, then each tool call, then the finish with the cost in US dollars.
  */
-export function streamedReplyEvents(reply: FakeStreamedReply, costUsd?: number): string {
+export function streamedReplyEvents(
+  reply: FakeStreamedReply,
+  costUsd?: number,
+  generationId?: string,
+): string {
   const toolCalls = reply.toolCalls ?? [];
   const parts: unknown[] = [{ type: "stream-start", warnings: [] }];
   if (reply.text !== undefined) {
@@ -40,12 +44,18 @@ export function streamedReplyEvents(reply: FakeStreamedReply, costUsd?: number):
       inputTokens: { total: 10, noCache: 10, cacheRead: 0, cacheWrite: 0 },
       outputTokens: { total: 5, text: 5, reasoning: 0 },
     },
-    providerMetadata: costMetadata(costUsd),
+    providerMetadata: costMetadata(costUsd, generationId),
   });
   return parts.map((part) => `data: ${JSON.stringify(part)}\n\n`).join("");
 }
 
-/** The gateway reports cost as a string of US dollars. */
-export function costMetadata(costUsd: number | undefined) {
-  return costUsd === undefined ? undefined : { gateway: { cost: String(costUsd) } };
+/** The gateway reports cost as a string of US dollars, beside the answer's generation ID. */
+export function costMetadata(costUsd: number | undefined, generationId?: string) {
+  if (costUsd === undefined && generationId === undefined) return undefined;
+  return {
+    gateway: {
+      ...(costUsd === undefined ? {} : { cost: String(costUsd) }),
+      ...(generationId === undefined ? {} : { generationId }),
+    },
+  };
 }

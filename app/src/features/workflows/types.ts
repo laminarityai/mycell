@@ -271,6 +271,19 @@ export type WorkflowPausedReason = Extract<PausedReason, "failures">;
 export type FailurePause = { pausedAt: Date; runIds: string[] };
 
 /**
+ * An unarchived workflow paused for its runs' failures, or whose live runs have reached its
+ * latest version's monthly budget this month, or both: what admins' alerts name (M8).
+ */
+export type PausedWorkflow = {
+  id: string;
+  name: string;
+  /** Its failure pause; null while its runs' failures don't pause it. */
+  failurePause: FailurePause | null;
+  /** Its budget and the UTC day its live runs reached it this month; null while under it. */
+  budgetReached: { monthlyCredits: number; reachedOn: Date } | null;
+};
+
+/**
  * One of the runs that paused a workflow, as its Health check lists it: when it ended, whose
  * inbox it ran on, the step that failed and the error, in words with no content. Runtime reads
  * it (`pausingRuns`), since workflows can't read runs.

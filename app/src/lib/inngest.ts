@@ -52,6 +52,28 @@ export function stepRunner(step: {
 }
 
 /**
+ * Waits `ms` as one named step, between steps rather than inside one: Inngest's `step.sleep` in
+ * a job, which holds no request open while it waits, and a timer elsewhere. Like a step, a
+ * finished wait is replayed, never waited again.
+ */
+export type RunSleep = (id: string, ms: number) => Promise<void>;
+
+/** Waits on a timer: how a job's waits run outside Inngest (tests, scripts). */
+export const sleepInline: RunSleep = (_id, ms) =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
+/** A job's `step.sleep` as a RunSleep. */
+export function stepSleeper(step: {
+  sleep: (id: string, duration: number) => Promise<unknown>;
+}): RunSleep {
+  return async (id, ms) => {
+    await step.sleep(id, ms);
+  };
+}
+
+/**
  * Runs `work`, returning `gone` instead of throwing when the connection it works for is gone:
  * a missing connection (or app on it) is NotFoundError, and a write for a deleted one breaks
  * one of `foreignKeys`, the caller's foreign keys to it. The job then ends quietly.

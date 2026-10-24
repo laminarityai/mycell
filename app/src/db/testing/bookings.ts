@@ -5,9 +5,8 @@
 import { grantCredits } from "@/features/credits/server";
 import { listReviews } from "@/features/reviews/server";
 import { executeRun, startRun } from "@/features/runtime/server";
-import type { RetryPolicy } from "@/features/runtime/types";
 import { getWorkflow, publishWorkflow, saveWorkflow } from "@/features/workflows/server";
-import type { RunStep } from "@/lib/inngest";
+import type { RunSleep, RunStep } from "@/lib/inngest";
 import { systemCtx } from "@/lib/ctx";
 import { connectGoogle } from "@/testing/connect-helpers";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
@@ -66,7 +65,8 @@ export type BookingOptions = {
   /** The booking step's input overrides. */
   book?: Record<string, unknown>;
   runStep?: RunStep;
-  retry?: RetryPolicy;
+  /** How a retry waits: the recorded backoff, in tests that make a step retry. */
+  sleep?: RunSleep;
   /** Runs on the calendar just before the run, to set it up (losing an answer, say). */
   beforeRun?: (calendar: FakeCalendar) => void;
 };
@@ -102,7 +102,7 @@ export async function bookingRun(orgs: TwoOrgs, options: BookingOptions = {}) {
     guest: GUEST,
   });
   options.beforeRun?.(google.calendar);
-  const outcome = await executeRun(system, runId, options.runStep, options.retry);
+  const outcome = await executeRun(system, runId, options.runStep, options.sleep);
   const reviewId = (await listReviews(owner)).at(0)?.id;
   return {
     owner,

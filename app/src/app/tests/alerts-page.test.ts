@@ -11,6 +11,7 @@ import { grantCredits } from "@/features/credits/server";
 import { type Ctx, systemCtx } from "@/lib/ctx";
 import { connectGoogle, deliver } from "@/testing/connect-helpers";
 import { fakeNango } from "@/testing/fake-nango";
+import { pauseFailing, publishLabels, spendOn } from "@/testing/paused-workflow-helpers";
 
 beforeEach(resetDatabase);
 
@@ -43,6 +44,31 @@ describe("the Alerts page", () => {
     expect(text).toContain("Once it's reconnected.");
     expect(html).toContain('href="/connections"');
     expect(html).toContain('href="/credits"');
+  });
+
+  it("names a paused workflow, links to it, and says since when", async () => {
+    const { orgA } = await seedTwoOrgs();
+    await grantCredits(systemCtx(orgA.id), 1000, "October allowance");
+    await connectGoogle(orgA.admin.ctx, orgA.admin.email);
+    const failing = await publishLabels(orgA.admin.ctx, "Pricing labels");
+    await pauseFailing(orgA.id, failing);
+    const spent = await publishLabels(orgA.admin.ctx, "Quote replies", 5);
+    await spendOn(orgA.id, spent, 5);
+
+    const html = await page(orgA.admin.ctx);
+    const text = textOf(html);
+
+    expect(text).toContain("Stops a workflow or an inbox (2)");
+    expect(text).toContain("Paused: failingPricing labelsWorkflow");
+    expect(text).toContain("Budget reachedQuote repliesWorkflow");
+    expect(html).toContain(`href="/workflows/${failing}"`);
+    expect(html).toContain(`href="/workflows/${spent}"`);
+    expect(text).toContain("Resume");
+    expect(text).toContain("Raise the budget");
+    // The pause has its time; the budget only the UTC day it was reached.
+    expect(text).toMatch(/[A-Z][a-z]{2} \d{1,2}, \d{4}, \d{1,2}:\d{2} [AP]M UTC/);
+    expect(text).toMatch(/[A-Z][a-z]{2} \d{1,2}, \d{4}Once the budget is raised/);
+    expect(text).not.toContain("Not recorded");
   });
 
   it("says nothing needs the admin when nothing does", async () => {

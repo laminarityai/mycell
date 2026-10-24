@@ -2,12 +2,11 @@
 // current state and never stored, so it goes away by itself once its cause is fixed.
 import type { ConnectionKind, Source } from "@/features/connections/types";
 
-/**
- * Every kind of alert, most urgent first: the order the Alerts page lists them in. #176 adds
- * `workflow_failing` and `budget_reached`, each in its place.
- */
+/** Every kind of alert, most urgent first: the order the Alerts page lists them in. */
 export const ALERT_KINDS = [
   "credits_out",
+  "workflow_failing",
+  "budget_reached",
   "connection_reconnect",
   "backfill_failed",
   "credits_low",
@@ -23,17 +22,20 @@ export type AlertUrgency = (typeof ALERT_URGENCIES)[number];
 
 export const ALERT_URGENCY: Record<AlertKind, AlertUrgency> = {
   credits_out: "everything",
+  workflow_failing: "one",
+  budget_reached: "one",
   connection_reconnect: "one",
   backfill_failed: "later",
   credits_low: "later",
 };
 
 /**
- * What an alert is about: the company's credits, or one connection (the admin's own, or an org
- * connection). #176 adds a workflow.
+ * What an alert is about: the company's credits, one connection (the admin's own, or an org
+ * connection), or one workflow.
  */
 export type AlertSubject =
   | { type: "credits" }
+  | { type: "workflow"; id: string; name: string }
   | {
       type: "connection";
       id: string;
@@ -47,7 +49,10 @@ export type Alert = {
   id: string;
   kind: AlertKind;
   subject: AlertSubject;
-  /** When its cause began, where Mycel knows; null where it doesn't record it. */
+  /**
+   * When its cause began, where Mycel knows; null where it doesn't record it. A budget reached
+   * knows only the UTC day, so it's that day's start.
+   */
   startedAt: Date | null;
   /** What happened, in a sentence or two. */
   sentence: string;

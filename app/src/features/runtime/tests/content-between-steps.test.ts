@@ -13,14 +13,8 @@ import { connectGoogle } from "@/testing/connect-helpers";
 import { decryptStepState } from "@/testing/inngest-step-state";
 import { fakeNango } from "@/testing/fake-nango";
 import { executeRun, getRun, startRun } from "../server";
-import {
-  pricingQuestion,
-  publish,
-  recordingStepRunner,
-  recordsOf,
-  stepStateRecorder,
-  threadSpec,
-} from "./run-helpers";
+import { pricingQuestion, publish, recordsOf, stepStateRecorder, threadSpec } from "./run-helpers";
+import { recordingStepRunner } from "@/testing/recording-step-runner";
 
 beforeEach(resetDatabase);
 

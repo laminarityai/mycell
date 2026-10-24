@@ -5,14 +5,15 @@
 // company's, or that only outsiders state, keep their markers.
 import { beforeEach, describe, expect, it } from "vitest";
 import { resetDatabase } from "@/db/testing/reset";
-import { seedUser } from "@/db/testing/two-org-fixture";
+import { seedTwoOrgs, seedUser } from "@/db/testing/two-org-fixture";
 import { backfillConnection } from "@/features/discovery/server";
-import { markCompanyWideList, searchMemory } from "@/features/memory/server";
-import { connectMailbox, daysAgo } from "@/testing/connect-helpers";
+import { markCompanyWideList, searchMemory, startMemory } from "@/features/memory/server";
+import { pollCalendar } from "@/features/runtime/server";
+import { connectGoogle, connectMailbox, daysAgo } from "@/testing/connect-helpers";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
-import { learnStoredItems, scriptLearning } from "@/testing/memory-learning";
-import { readTurn } from "@/testing/streamed-turn";
-import type { Ctx } from "@/lib/ctx";
+import { learnStoredItems, scriptInviteLearning, scriptLearning } from "@/testing/memory-learning";
+import { fundOrg, readTurn } from "@/testing/streamed-turn";
+import { systemCtx, type Ctx } from "@/lib/ctx";
 import { getConversation, startConversation, streamTurn } from "../server";
 import {
   dana,
@@ -111,6 +112,49 @@ describe("a reply's citations", () => {
     ]);
     // No colleague's mailbox-specific ID reaches the page.
     expect(JSON.stringify(conversation.citations)).not.toContain("authuser=lee");
+  });
+
+  it("link a Calendar invite in the person's own calendar, and a colleague's copy nowhere", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const { admin, member } = orgA;
+    await fundOrg(orgA.id);
+    await startMemory(systemCtx(orgA.id), { monthlyBudget: 1000 });
+    const adminCalendar = await connectGoogle(admin.ctx, admin.email);
+    const memberCalendar = await connectGoogle(member.ctx, member.email);
+    const system = systemCtx(orgA.id);
+    // Each calendar's first poll is a full sync, which teaches nothing.
+    for (const calendar of [adminCalendar, memberCalendar]) {
+      await pollCalendar(system, calendar.id);
+    }
+    // The admin invites Dana and the member, whose own calendar isn't polled again: the member
+    // sees the fact through the admin's copy only.
+    const event = adminCalendar.calendar.organize({
+      title: "Oak range demo",
+      guests: [member.email, DANA],
+      description: "Dana sees the oak range.",
+    });
+    await pollCalendar(system, adminCalendar.id);
+    const MEETING = "Dana Ruiz meets the team for an oak range demo.";
+    scriptInviteLearning({
+      objects: [dana],
+      facts: [{ about: "dana", statement: MEETING, evidence: "Title: Oak range demo" }],
+    });
+    await learnStoredItems(orgA.id);
+
+    const own = await askCiting(admin.ctx, "Dana demo", [await factId(admin.ctx, MEETING)]);
+    const theirs = await askCiting(member.ctx, "Dana demo", [await factId(member.ctx, MEETING)]);
+
+    const eid = Buffer.from(`${event.id} ${admin.email}`).toString("base64").replace(/=+$/, "");
+    expect(own.citations[0]?.sources).toEqual([
+      expect.objectContaining({
+        kind: "invite",
+        yours: true,
+        href: `https://calendar.google.com/calendar/event?eid=${encodeURIComponent(eid)}&authuser=${encodeURIComponent(admin.email)}`,
+      }),
+    ]);
+    expect(theirs.citations[0]?.sources).toEqual([
+      expect.objectContaining({ kind: "invite", yours: false, href: null }),
+    ]);
   });
 
   it("cite only facts the conversation's tools found, as the person sees them now", async () => {

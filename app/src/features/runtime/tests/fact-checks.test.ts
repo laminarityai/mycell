@@ -6,7 +6,13 @@ import { systemCtx } from "@/lib/ctx";
 import type { FakeMessageInput } from "@/testing/fake-gmail";
 import { fakeNango } from "@/testing/fake-nango";
 import { executeRun, getRun, startRun } from "../server";
-import { connectInbox, pricingQuestion, publish, recordingStepRunner } from "./run-helpers";
+import {
+  connectInbox,
+  pricingQuestion,
+  publish,
+  recordingStepRunner,
+  recordsOf,
+} from "./run-helpers";
 
 beforeEach(resetDatabase);
 
@@ -121,7 +127,7 @@ describe("a branch testing the trigger's facts and a tool step's result", () => 
   it("keeps no subject or sender in the run's records or step state", async () => {
     const { run, runner } = await routed({ from: SENDER, subject: SUBJECT });
 
-    const kept = [JSON.stringify(run), JSON.stringify(runner.results())];
+    const kept = [recordsOf(run), JSON.stringify(runner.results())];
     for (const record of kept) {
       for (const content of ["Ada", "ada@", "customer.test", "oak", "Quote for"]) {
         expect(record).not.toContain(content);

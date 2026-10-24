@@ -8,6 +8,7 @@ import tellFile from "../prompts/tell.prompt.yml";
 export const extractPrompts = definePrompts(extractFile, {
   emailQuestion: [],
   documentQuestion: [],
+  inviteQuestion: [],
   system: ["kind", "domain"],
   prompt: ["kind", "text"],
   objectRef: [],

@@ -1,7 +1,7 @@
 // A working spec as the workflow editor holds it: any JSON object with a list of step objects,
 // which needn't be a valid spec yet (validation says what's wrong, at the step and field it's
 // about). Pure, so client code may import it.
-import type { Spec, SpecIssue } from "./types";
+import { specSettings, type Spec, type SpecIssue } from "./types";
 import { validateSpec } from "./validate";
 import { isRecord } from "@/lib/utils";
 
@@ -38,13 +38,17 @@ export function readSpecJson(text: string): SpecJsonRead {
 /**
  * The draft's steps as a spec the graph can draw and edit, whatever its settings say (a new
  * workflow has no spec ID yet): its steps validated as they stand, upgraded if they're v1's,
- * under stand-in settings. Only its steps are the draft's. Null when the steps don't validate.
+ * under stand-in settings. Only its steps and its trigger (when it's a valid one, since what a
+ * step may read comes from it) are the draft's. Null when the steps don't validate.
  */
 export function readDraftTree(draft: SpecDraft): Spec | null {
+  const trigger = specSettings.trigger.safeParse(draft.trigger);
   const settings = {
     id: "draft",
     credentials: "member",
-    trigger: { type: "gmail.message_received", labelIds: ["INBOX"] },
+    trigger: trigger.success
+      ? trigger.data
+      : { type: "gmail.message_received", labelIds: ["INBOX"] },
     autonomy: { rung: 3 },
   } satisfies Omit<Spec, "specVersion" | "steps">;
   if (draft.steps.length === 0) return { ...settings, specVersion: 2, steps: [] };

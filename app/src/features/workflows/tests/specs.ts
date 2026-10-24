@@ -82,6 +82,30 @@ export function sheetSpec(overrides: Record<string, unknown> = {}): Record<strin
   };
 }
 
+/** Lists the open tasks, adds a follow-up task and marks an older one done. */
+export function taskSpec(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    ...draftSpec(),
+    id: "follow-ups",
+    steps: [
+      { id: "open", type: "tool", action: "google-tasks.list-tasks", input: {} },
+      {
+        id: "follow-up",
+        type: "tool",
+        action: "google-tasks.create-task",
+        input: { title: "Reply to the customer", due: "2026-11-02" },
+      },
+      {
+        id: "done",
+        type: "tool",
+        action: "google-tasks.update-task",
+        input: { taskId: "task-1", done: true },
+      },
+    ],
+    ...overrides,
+  };
+}
+
 /**
  * Sorts each message: complaints go to a person, pricing questions get a drafted reply (whose
  * approval the policy engine inserts on that path), and anything else stops.

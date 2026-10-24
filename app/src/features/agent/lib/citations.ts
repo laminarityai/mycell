@@ -3,7 +3,8 @@
 // Only facts the conversation's own tools returned are cited, so a model that guessed or was
 // told another fact's ID cites nothing. A copy in the person's own mailbox opens there by its
 // Gmail ID; any other copy (a colleague's, an org inbox's) is reached by the email's Message-ID
-// (`rfc822msgid:`), never another mailbox's own ID, in the person's own Google account.
+// (`rfc822msgid:`), never another mailbox's own ID, in the person's own Google account. An
+// invite opens in the person's own calendar when it's their copy; another calendar's has no link.
 import { z } from "zod";
 import { connectionOwners } from "@/features/connections/server";
 import { citeFacts } from "@/features/memory/server";
@@ -79,7 +80,20 @@ function citedSource(
     const href = `https://docs.google.com/document/d/${encodeURIComponent(source.itemKey)}/edit`;
     return { key, kind: "doc", occurredAt: source.occurredAt, href, yours };
   }
+  if (source.app === "calendar") {
+    return { key, kind: "invite", occurredAt: source.occurredAt, href: calendarLink(), yours };
+  }
   return { key, kind: "email", occurredAt: source.occurredAt, href: gmailLink(), yours };
+
+  // Calendar's own event link: `eid` is the event's ID and its calendar's, base64 with no
+  // padding. The source ref is `<event ID>@<sequence>`, and a connection's calendar is its
+  // account's primary one.
+  function calendarLink(): string | null {
+    if (ownAccount === undefined) return null;
+    const eventId = source.sourceRef.slice(0, source.sourceRef.lastIndexOf("@"));
+    const eid = Buffer.from(`${eventId} ${ownAccount}`).toString("base64").replace(/=+$/, "");
+    return `https://calendar.google.com/calendar/event?eid=${encodeURIComponent(eid)}&authuser=${encodeURIComponent(ownAccount)}`;
+  }
 
   function gmailLink(): string | null {
     if (ownAccount !== undefined) {

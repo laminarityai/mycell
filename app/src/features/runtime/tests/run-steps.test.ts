@@ -8,7 +8,7 @@ import { systemCtx } from "@/lib/ctx";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import { executorCoverage } from "../coverage";
 import { executeRun, getRun, startRun } from "../server";
-import { connectInbox, pricingQuestion, publish, threadSpec } from "./run-helpers";
+import { connectInbox, pricingQuestion, publish, recordsOf, threadSpec } from "./run-helpers";
 
 beforeEach(resetDatabase);
 
@@ -153,7 +153,7 @@ describe("the steps", () => {
 
     expect(await executeRun(system, runId)).toEqual({ status: "succeeded" });
 
-    const records = JSON.stringify(await getRun(admin, runId));
+    const records = recordsOf(await getRun(admin, runId));
     for (const content of [SUBJECT, BODY, "oak chairs", "Leeds", "ada@customer.test"]) {
       expect(records).not.toContain(content);
     }
@@ -172,6 +172,13 @@ describe("executorCoverage", () => {
         "google-mail.create-draft": "ready",
         "google-sheet.read-range": "ready",
         "google-sheet.append-row": "ready",
+        "google-docs.read-document": "ready",
+        "google-docs.suggest-edits": "ready",
+        "google-calendar.read-event": "ready",
+        "google-calendar.create-event": "ready",
+        "google-tasks.list-tasks": "ready",
+        "google-tasks.create-task": "ready",
+        "google-tasks.update-task": "ready",
         "memory.lookup": "ready",
       },
       steps: {

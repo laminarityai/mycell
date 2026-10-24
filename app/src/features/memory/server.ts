@@ -1,13 +1,14 @@
 // The memory feature (ADR-0022, ADR-0023): objects and short facts learned from the company's
 // apps, each fact visible to whoever can see one of its sources. Discovery tells memory what it
-// stored through Inngest events and never imports it.
+// stored, and runtime's Calendar poll what changed on each calendar, through Inngest events.
 import "server-only";
 
 // Called only by memory's job (and tests), as the org's system ctx.
 export { learnFromItem } from "./lib/learn";
-// Following the apps, as the org's system ctx: an item deleted there, a Drive file's sharing
-// changed, and the nightly re-read of every Drive file's sharing.
-export { deleteRemovedItem, rereadAccess, rereadDriveAccess } from "./lib/source-changes";
+// Following the apps, as the org's system ctx: an item deleted there, a Drive file's sharing or a
+// Calendar event's guests changed, and the nightly re-read of every Drive file's and Calendar
+// event's access.
+export { deleteRemovedItem, rereadAccess, rereadAllAccess } from "./lib/source-changes";
 // Every read is logged (ADR-0024), as the reader its caller names: the person by default, the
 // builder chat, or a workflow run.
 export { readObject } from "./lib/logged-reads";
@@ -52,6 +53,9 @@ export { addExclusion, removeExclusion } from "./lib/exclusions";
 // stored once memory starts, the items postponed for the budget when they're due again, and
 // forgetting what a new exclusion covers.
 export { queueStoredItems, resumePostponed } from "./lib/budget";
+// Whether memory has started, as the org's system ctx: the Calendar poll reads every calendar
+// for memory once it has (ADR-0029).
+export { hasMemoryStarted } from "./lib/budget";
 export { forgetExcluded } from "./lib/exclusions";
 // How long memory keeps things (ADR-0024): admins set the retention window, and a nightly job
 // applies it as the org's system ctx.

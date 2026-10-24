@@ -68,7 +68,8 @@ const envSchema = z.object({
     )
     .pipe(z.array(modelIdSchema)),
   // Credits (ADR-0010): how many credits one US dollar of gateway cost uses up, and the per-role
-  // estimate a call must find in the balance before it is made. Placeholders until M7's pricing.
+  // estimate a call must find in the balance before it is made. The defaults are the placeholders
+  // the tests are written against; the real values are in docs/credit-pricing.md and .env.example.
   CREDITS_PER_USD: positiveNumber("1000"),
   CREDIT_ESTIMATE_CLASSIFY: positiveNumber("1"),
   CREDIT_ESTIMATE_FAST: positiveNumber("5"),

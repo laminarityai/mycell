@@ -6,7 +6,13 @@ import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { systemCtx } from "@/lib/ctx";
 import { ForbiddenError } from "@/lib/errors";
-import { budgetsReached, grantCredits, recordUsage, spentThisMonthByWorkflow } from "../server";
+import {
+  budgetsReached,
+  budgetsReachedOn,
+  grantCredits,
+  recordUsage,
+  spentThisMonthByWorkflow,
+} from "../server";
 
 beforeEach(resetDatabase);
 afterEach(() => {
@@ -114,5 +120,68 @@ describe("budgetsReached", () => {
     const read = await countQueries(() => budgetsReached(orgA.member.ctx, new Map()));
 
     expect(read.queries).toBe(0);
+  });
+});
+
+describe("budgetsReachedOn", () => {
+  /** The start of today, UTC: the day every entry a test records falls on. */
+  const today = () => {
+    const now = new Date();
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  };
+
+  it("gives each workflow at or over its budget this month the UTC day it reached it", async () => {
+    const { orgA, spend } = await funded();
+    await spend(4, { workflowId: "over", runId: "run-1" });
+    await spend(8, { workflowId: "over", runId: "run-2" });
+    await spend(10, { workflowId: "at", runId: "run-3" });
+    await spend(9, { workflowId: "under", runId: "run-4" });
+    // Try it doesn't count.
+    await spend(50, { workflowId: "tried", dryRun: true });
+    const budgets = new Map([
+      ["over", 10],
+      ["at", 10],
+      ["under", 10],
+      ["tried", 10],
+    ]);
+
+    const reached = await budgetsReachedOn(orgA.admin.ctx, budgets);
+
+    expect(Object.fromEntries(reached)).toEqual({ over: today(), at: today() });
+  });
+
+  it("forgets last month's spending once the next month starts, in UTC", async () => {
+    const { orgA, spend } = await funded();
+    await spend(12, { workflowId: "wf-1", runId: "run-1" });
+    const now = new Date();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+
+    expect(await budgetsReachedOn(orgA.admin.ctx, new Map([["wf-1", 10]]))).toEqual(new Map());
+  });
+
+  it("is for admins and jobs, and reads nothing when no workflow has a budget", async () => {
+    const { orgA, system } = await funded();
+
+    await expect(budgetsReachedOn(orgA.member.ctx, new Map([["wf-1", 10]]))).rejects.toThrow(
+      ForbiddenError,
+    );
+    const read = await countQueries(() => budgetsReachedOn(system, new Map()));
+    expect(read.queries).toBe(0);
+  });
+
+  it("makes one query however many workflows have budgets", async () => {
+    const { orgA, spend } = await funded();
+    const ids = Array.from({ length: 20 }, (_, n) => `wf-${String(n)}`);
+    for (const id of ids) await spend(2, { workflowId: id, runId: `run-${id}` });
+    const budgets = (some: string[]) => new Map(some.map((id) => [id, 1]));
+
+    const one = await countQueries(() =>
+      budgetsReachedOn(orgA.admin.ctx, budgets(ids.slice(0, 1))),
+    );
+    const twenty = await countQueries(() => budgetsReachedOn(orgA.admin.ctx, budgets(ids)));
+
+    expect(one.queries).toBe(1);
+    expect(twenty.queries).toBe(one.queries);
   });
 });

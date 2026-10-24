@@ -17,6 +17,8 @@ export { archiveWorkflow, restoreWorkflow } from "./lib/archiving";
 // Pausing after the runs' failures (M8): the run job, as the system ctx, reads when the count
 // starts and pauses with the three runs it counted; an admin resumes it.
 export { failureStreakStart, pauseForFailures, resumeWorkflow } from "./lib/failure-pauses";
+// For admins' alerts: every workflow paused for failing or at its budget, in three queries.
+export { listPausedWorkflows } from "./lib/paused-workflows";
 // Members switching a workflow they can see on and off for their own Google connection.
 export { disable, enable, listEnablements } from "./lib/enablements";
 // For the Workflows page: every workflow's enablements and runnable connections, read together.

@@ -94,6 +94,9 @@ export function RunsTable({ runs, showInbox }: { runs: RunListItem[]; showInbox:
             </TableCell>
             <TableCell>
               <RunStatusLabel status={run.status} />
+              {run.startedBy === "retry" ? (
+                <span className="block text-xs text-muted-foreground">A retry</span>
+              ) : null}
             </TableCell>
             <TableCell className="max-w-64 whitespace-normal">
               <Failures run={run} />

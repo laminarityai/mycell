@@ -6,7 +6,7 @@ import { listCustomActions } from "@/features/custom-actions/server";
 import { getCtx } from "@/features/orgs/server";
 import { reviewsOfRun } from "@/features/reviews/server";
 import { RunReviews } from "@/features/reviews/ui";
-import { getRun, getRunMessage } from "@/features/runtime/server";
+import { checkRetry, getRun, getRunMessage } from "@/features/runtime/server";
 import { RunGraph, RunSummary } from "@/features/runtime/ui";
 import { ActionSetProvider } from "@/features/workflows/ui";
 import { isAdmin } from "@/lib/ctx";
@@ -29,7 +29,7 @@ async function Run({ params }: Pick<PageProps<"/runs/[runId]">, "params">) {
   const ctx = await getCtx();
   const { runId } = await params;
   // Read together: the message and the reviews are only ever the caller's to see.
-  const [run, message, reviews, customActions] = await Promise.all([
+  const [run, message, reviews, customActions, retry] = await Promise.all([
     getRun(ctx, runId).catch((error: unknown) => {
       if (error instanceof ForbiddenError) return null;
       throw error;
@@ -37,6 +37,7 @@ async function Run({ params }: Pick<PageProps<"/runs/[runId]">, "params">) {
     getRunMessage(ctx, runId),
     reviewsOfRun(ctx, runId),
     listCustomActions(ctx),
+    checkRetry(ctx, runId),
   ]).catch((error: unknown) => {
     if (error instanceof NotFoundError) notFound();
     throw error;
@@ -60,6 +61,7 @@ async function Run({ params }: Pick<PageProps<"/runs/[runId]">, "params">) {
           run={run}
           message={message}
           versionHref={admin ? `/workflows/${run.workflowId}` : null}
+          retry={retry}
         />
         <section aria-label="Steps" className="flex flex-col gap-2">
           <h2 className="text-lg font-semibold">Steps</h2>

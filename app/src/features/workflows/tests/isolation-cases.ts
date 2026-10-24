@@ -8,10 +8,12 @@ import { renameTag, unassignTag } from "@/features/tags/server";
 import { publishTo, tagUsers } from "@/testing/visibility-helpers";
 import * as server from "../server";
 import {
+  currentVersionsOfOrgBUnread,
   orgBTags,
   publishedToSalesInOrgB,
   seedOrgBWorkflow,
   switchedOnInOrgB,
+  orgBVersionUnstartable,
   versionsOfOrgBUnread,
 } from "./isolation-seeds";
 import { draftSpec, labelSpec } from "./specs";
@@ -190,17 +192,9 @@ export const isolationCases = defineIsolationCases(server, {
 
   // In isolation-seeds.ts, for this file's length.
   versionsById: versionsOfOrgBUnread,
+  startableVersion: orgBVersionUnstartable,
 
-  currentVersionIds: async (orgs) => {
-    const b = await publishedToSalesInOrgB(orgs);
-
-    for (const ctx of [orgs.orgA.admin.ctx, orgs.orgA.member.ctx, systemCtx(orgs.orgA.id)]) {
-      expect(await server.currentVersionIds(ctx, [b.workflowId])).toEqual(new Map());
-    }
-    expect(await server.currentVersionIds(orgs.orgB.member.ctx, [b.workflowId])).toEqual(
-      new Map([[b.workflowId, b.version.id]]),
-    );
-  },
+  currentVersionIds: currentVersionsOfOrgBUnread,
 
   workflowsUsingActions: async (orgs) => {
     const b = await seedOrgBWorkflow(orgs);

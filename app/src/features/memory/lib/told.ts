@@ -15,6 +15,7 @@ import { and, desc, eq, inArray, isNotNull, isNull, lt } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { type Ctx, requireRole, requireSystem } from "@/lib/ctx";
 import { ConflictError, NotFoundError, ValidationError } from "@/lib/errors";
+import { now } from "@/lib/time";
 import { unique } from "@/lib/utils";
 import {
   TOLD_UNDO_MINUTES,
@@ -138,7 +139,7 @@ async function subjectsOf(ctx: Ctx, ids: string[]): Promise<Map<string, ToldNote
  */
 export async function deleteToldFact(ctx: Ctx, id: string): Promise<DeletedToldFact> {
   requireRole(ctx, "admin", "member");
-  const deletedAt = new Date();
+  const deletedAt = now();
   const row = (
     await forOrg(ctx).update(
       facts,
@@ -163,7 +164,7 @@ export async function restoreToldFact(ctx: Ctx, id: string): Promise<void> {
   );
   const row = (await db.select(facts, { columns: ["deletedAt"], where: mine })).at(0);
   if (row?.deletedAt == null) throw new NotFoundError("note");
-  if (row.deletedAt.getTime() + UNDO_MS < Date.now()) {
+  if (row.deletedAt.getTime() + UNDO_MS < now().getTime()) {
     throw new ConflictError("It's too late to undo: that note is gone.");
   }
   await db.update(facts, { deletedAt: null }, mine);
@@ -176,7 +177,7 @@ export async function restoreToldFact(ctx: Ctx, id: string): Promise<void> {
  */
 export async function purgeDeletedToldFacts(ctx: Ctx): Promise<{ facts: number }> {
   requireSystem(ctx);
-  const cutoff = new Date(Date.now() - UNDO_MS);
+  const cutoff = new Date(now().getTime() - UNDO_MS);
   const count = await forOrg(ctx).deleteCount(
     facts,
     and(isNotNull(facts.deletedAt), lt(facts.deletedAt, cutoff)),

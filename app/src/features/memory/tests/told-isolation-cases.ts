@@ -1,9 +1,10 @@
 // Isolation cases for told facts ("remember this"), spread into memory's isolationCases.
-import { expect, vi } from "vitest";
+import { expect } from "vitest";
 import { tablesHolding } from "@/db/testing/content-scan";
 import type { TwoOrgs } from "@/db/testing/two-org-fixture";
 import { systemCtx } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
+import { resetNow, setNow } from "@/lib/time";
 import * as server from "../server";
 import { TOLD_UNDO_MINUTES } from "../types";
 import { DANA, seedOrgB } from "./isolation-seed";
@@ -103,15 +104,14 @@ export const toldIsolationCases = {
   purgeDeletedToldFacts: async (orgs: TwoOrgs) => {
     const { noteId } = await toldInBoth(orgs);
     await server.deleteToldFact(orgs.orgB.member.ctx, noteId);
-    vi.useFakeTimers({ toFake: ["Date"] });
     try {
-      vi.setSystemTime(new Date(Date.now() + (TOLD_UNDO_MINUTES + 1) * 60_000));
+      setNow(new Date(Date.now() + (TOLD_UNDO_MINUTES + 1) * 60_000));
 
       expect(await server.purgeDeletedToldFacts(systemCtx(orgs.orgA.id))).toEqual({ facts: 0 });
 
       expect(await tablesHolding(ORG_B_NOTE)).toEqual(["facts"]);
     } finally {
-      vi.useRealTimers();
+      resetNow();
     }
   },
 };

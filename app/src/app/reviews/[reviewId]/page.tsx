@@ -5,6 +5,7 @@ import { openReview } from "@/features/reviews/server";
 import { ReviewDetail } from "@/features/reviews/ui";
 import { NotFoundError } from "@/lib/errors";
 import { AppShell } from "@/app/_shell/app-shell";
+import { now } from "@/lib/time";
 
 export default function ReviewPage({ params }: PageProps<"/reviews/[reviewId]">) {
   return (
@@ -24,5 +25,5 @@ async function Review({ params }: Pick<PageProps<"/reviews/[reviewId]">, "params
     if (error instanceof NotFoundError) notFound();
     throw error;
   });
-  return <ReviewDetail opened={opened} viewerId={ctx.userId} now={new Date()} />;
+  return <ReviewDetail opened={opened} viewerId={ctx.userId} now={now()} />;
 }

@@ -15,6 +15,7 @@ import { sameValue } from "@/features/spec/diff";
 import { readStoredSpec } from "@/features/spec/stored";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { ConflictError, ValidationError } from "@/lib/errors";
+import { now } from "@/lib/time";
 import type {
   CheckedSave,
   SavedWorkflow,
@@ -98,7 +99,7 @@ export async function saveWorkflowIn(
     // One conditional update: it saves only while the working spec is still at `base`.
     const updated = await tx.update(
       workflows,
-      { ...values, revision: base + 1, updatedAt: new Date() },
+      { ...values, revision: base + 1, updatedAt: now() },
       and(eq(workflows.id, workflowId), eq(workflows.revision, base)),
     );
     if (updated.length === 0) {

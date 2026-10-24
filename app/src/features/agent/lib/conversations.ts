@@ -6,6 +6,7 @@ import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { requireRole, type Ctx } from "@/lib/ctx";
 import { InvariantError, NotFoundError } from "@/lib/errors";
+import { now } from "@/lib/time";
 import type { AgentConversationSummary, AgentMessage, StoredPart } from "../types";
 import { agentConversations, agentMessages } from "./schema";
 
@@ -106,7 +107,7 @@ export async function appendMessage(
       : {};
   await db.update(
     agentConversations,
-    { ...title, updatedAt: new Date() },
+    { ...title, updatedAt: now() },
     eq(agentConversations.id, conversation.id),
   );
 }

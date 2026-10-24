@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { isUniqueViolation } from "@/db/errors";
 import { forOrg } from "@/db/for-org";
 import type { Ctx } from "@/lib/ctx";
+import { now } from "@/lib/time";
 import { enablements } from "./schema";
 
 /**
@@ -28,7 +29,7 @@ export async function switchOnEnablement(
         status: "on",
         pausedReason: null,
         pausedChange: null,
-        enabledAt: new Date(),
+        enabledAt: now(),
       },
       mine,
     );
@@ -42,7 +43,7 @@ export async function switchOnEnablement(
       connectionId,
       // Set here rather than by the column's default: it's compared with messages' times,
       // which are written from JS too.
-      enabledAt: new Date(),
+      enabledAt: now(),
     });
   } catch (error) {
     // Switched on twice at once: the other switch-on won, and it's on.

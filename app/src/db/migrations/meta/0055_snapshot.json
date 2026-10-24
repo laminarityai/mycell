@@ -1,6 +1,6 @@
 {
-  "id": "79f6b29b-c605-46e2-a68e-c0ce7df07bb2",
-  "prevId": "e4be73d2-6c74-4fb0-8e47-1ac70ee2853b",
+  "id": "ac0a895e-4912-448f-95ff-8a9588d826e5",
+  "prevId": "c42bdf9d-9f24-45da-bbbf-9dde10faadb1",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1310,7 +1310,7 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -1424,7 +1424,7 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -2151,7 +2151,7 @@
         },
         "occurred_at": {
           "name": "occurred_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
         },
@@ -2199,7 +2199,7 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -2949,12 +2949,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
         "valid_from": {
           "name": "valid_from",
           "type": "timestamp with time zone",
@@ -3109,28 +3103,6 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "facts_deleted_at_idx": {
-          "name": "facts_deleted_at_idx",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "deleted_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"facts\".\"deleted_at\" is not null",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -5012,7 +4984,7 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -5111,7 +5083,7 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"

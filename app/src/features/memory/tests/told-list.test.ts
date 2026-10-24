@@ -2,13 +2,14 @@
 // replaced, filters them by words, and deletes one. A deleted note leaves their memory view at
 // once (the note it replaced is current again), can be brought back for a short undo window,
 // and is then gone for good. Nobody else, admins included, lists, deletes or restores it.
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { tablesHolding } from "@/db/testing/content-scan";
 import { countQueries } from "@/db/testing/count-queries";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedUser } from "@/db/testing/two-org-fixture";
 import { systemCtx, type Ctx } from "@/lib/ctx";
 import { ConflictError, ForbiddenError, NotFoundError } from "@/lib/errors";
+import { setNow } from "@/lib/time";
 import { fakeInngest } from "@/testing/fake-inngest";
 import {
   citeFacts,
@@ -26,9 +27,6 @@ import { scriptTelling } from "./memory-helpers";
 import { PRIYA, PRIYA_NOTE, SALES_FACT, setupTold, TOM_NOTE } from "./told-setup";
 
 beforeEach(resetDatabase);
-afterEach(() => {
-  vi.useRealTimers();
-});
 
 const GLOBEX_NOTE = "Priya Shah runs Globex.";
 
@@ -222,8 +220,7 @@ describe("deleting a note", () => {
     expect(await purgeDeletedToldFacts(system)).toEqual({ facts: 0 });
     expect(await tablesHolding(TOM_NOTE)).toEqual(["facts"]);
 
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(minutesFromNow(TOLD_UNDO_MINUTES + 1));
+    setNow(minutesFromNow(TOLD_UNDO_MINUTES + 1));
     await expect(restoreToldFact(member, tom)).rejects.toThrow(ConflictError);
     expect(await purgeDeletedToldFacts(system)).toEqual({ facts: 2 });
 

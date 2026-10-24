@@ -1,10 +1,12 @@
-// The balance through the range: solid where it happened, then dashed at the last 7 days' rate
-// down to zero, over the band where fewer than 7 days would be left. The projection shows only
-// while the range runs through today.
+// The balance through the range: solid where it happened, each grant a step up labelled with
+// what it added, then dashed at the last 7 days' rate down to zero, over the band where fewer
+// than 7 days would be left. The projection shows only while the range includes today.
 import { formatCredits } from "../format";
+import { includesNow } from "../range";
 import type { Runway, SpendingSummary } from "../types";
 import {
   Axes,
+  axisDays,
   dayW,
   FRAME,
   type Frame,
@@ -15,7 +17,7 @@ import {
   xOf,
   yOf,
 } from "./chart-kit";
-import { balancePoints, nowDay } from "./series";
+import { balancePoints, dayBalances, nowDay } from "./series";
 
 export function BalanceChart({
   summary,
@@ -27,18 +29,18 @@ export function BalanceChart({
   now: Date;
 }) {
   const pts = balancePoints(summary, now);
+  const balances = dayBalances(summary, now);
   const at = nowDay(summary, now);
   const current = pts.at(-1)?.[1] ?? summary.openingBalance;
-  const today = at >= 0 && at <= summary.days.length;
-  const rate = today ? runway.dailyRate : null;
+  const rate = includesNow(summary.range, now) ? runway.dailyRate : null;
   const lowTop = rate === null ? 0 : 7 * rate;
   const f: Frame = {
     ...FRAME,
     from: summary.range.from,
-    days: summary.days.length,
+    days: axisDays(summary, now),
     yMax: niceMax(Math.max(...pts.map(([, balance]) => balance), lowTop)),
   };
-  // Where the dashed projection ends: zero, or the range's end if that comes first.
+  // Where the dashed projection ends: zero, or the axis's end if that comes first.
   const zeroDay = rate === null || current <= 0 ? null : at + current / rate;
   const endDay = zeroDay === null ? null : Math.min(zeroDay, f.days);
   return (
@@ -46,7 +48,7 @@ export function BalanceChart({
       viewBox={`0 0 ${String(f.w)} ${String(f.h)}`}
       className="w-full overflow-visible text-foreground"
       role="img"
-      aria-label={`The balance, from ${formatCredits(summary.openingBalance)} to ${formatCredits(current)}${zeroDay === null || runway.zeroAt === null ? "" : `, reaching zero around ${tick(runway.zeroAt)} at this week's rate`}`}
+      aria-label={`The balance, from ${formatCredits(summary.openingBalance)} to ${formatCredits(current)}, each grant a step up${zeroDay === null || runway.zeroAt === null ? "" : `, reaching zero around ${tick(runway.zeroAt)} at this week's rate`}`}
     >
       {rate === null ? null : (
         <g>
@@ -76,6 +78,18 @@ export function BalanceChart({
         strokeWidth={2}
         strokeLinejoin="round"
       />
+      {balances.map((day, i) =>
+        day.granted > 0 ? (
+          <text
+            key={i}
+            x={xOf(f, i) + 4}
+            y={yOf(f, day.start + day.granted) - 6}
+            className="fill-emerald-700 text-[11px] font-medium tabular-nums dark:fill-emerald-400"
+          >
+            +{formatCredits(day.granted)}
+          </text>
+        ) : null,
+      )}
       {endDay === null || rate === null ? null : (
         <line
           x1={xOf(f, at)}
@@ -106,9 +120,9 @@ export function BalanceChart({
           </text>
         </g>
       ) : null}
-      {pts.slice(1).map(([day, balance], i) => (
+      {balances.map((day, i) => (
         <rect
-          key={day}
+          key={i}
           x={xOf(f, i)}
           y={f.pad.top}
           width={dayW(f)}
@@ -116,7 +130,7 @@ export function BalanceChart({
           className="fill-transparent"
         >
           <title>
-            {`${tick(summary.days[i]?.day ?? summary.range.from)}: ${formatCredits(balance)} left, ${formatCredits(summary.days[i]?.spent ?? 0)} spent`}
+            {`${tick(summary.days[i]?.day ?? summary.range.from)}: ${formatCredits(day.end)} left, ${formatCredits(day.spent)} spent${day.granted > 0 ? `, ${formatCredits(day.granted)} granted` : ""}`}
           </title>
         </rect>
       ))}

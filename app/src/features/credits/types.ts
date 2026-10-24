@@ -1,4 +1,5 @@
 // The credit ledger's public types.
+import { z } from "zod";
 import type { ModelRole } from "@/features/spec/types";
 
 /**
@@ -108,6 +109,11 @@ export type WorkflowSpending = {
   spent: number;
   /** By day, in the order of the summary's `days`. */
   daily: number[];
+  /**
+   * What its live runs spent in the range's first month before the range began: where that
+   * month's running total starts, since budgets are monthly. 0 for a range from the 1st.
+   */
+  monthBefore: number;
 };
 
 /**
@@ -121,7 +127,10 @@ export type SpendingSummary = {
   spent: number;
   granted: number;
   byKind: SpendingByKind;
-  /** Most spent first. Try it and builder turns about a workflow aren't its spending. */
+  /**
+   * Most spent first. Try it and builder turns about a workflow aren't its spending. One that
+   * spent only before the range, in its first month, is here at 0, for its month's total.
+   */
   byWorkflow: WorkflowSpending[];
   /** Every UTC day of the range, the days still to come included. */
   days: DailySpending[];
@@ -149,9 +158,74 @@ export type WorkflowSpendingLine = WorkflowSpending & {
   name: string;
   /** Its monthly budget; null for none. */
   monthlyBudget: number | null;
-  /** This month's live runs have spent its budget: it's paused, budget reached. */
+  /** Its month's spending through each day of the range, starting again on each 1st. */
+  monthToDate: number[];
+  /** Each day of the range on which its month's spending reached its budget. */
+  reachedOn: Date[];
+  /**
+   * This month's live runs have spent its budget: it's paused, budget reached. Shown only while
+   * the range includes today.
+   */
   budgetReached: boolean;
 };
+
+/**
+ * The Credits page's ranges: four presets and Custom (a first and a last day). The presets
+ * longer than a month start on the 1st, since budgets and grants are monthly.
+ */
+export const RANGE_PRESETS = ["this_month", "last_month", "3m", "12m", "custom"] as const;
+export type RangePreset = (typeof RANGE_PRESETS)[number];
+
+/** The range the address asks for: a preset, or Custom's first and last days ("2026-10-01"). */
+export type RangeChoice = {
+  preset: RangePreset;
+  from?: string | undefined;
+  to?: string | undefined;
+};
+
+/**
+ * A range the page shows, in whole UTC days: `range` runs from `first`'s start to the end of
+ * `last`. It stays inside the org's history, from the day of its first entry (`earliest`) to
+ * `today`, the bounds a custom pick chooses between.
+ */
+export type ChosenRange = {
+  preset: RangePreset;
+  range: SpendingRange;
+  first: Date;
+  last: Date;
+  earliest: Date;
+  today: Date;
+};
+
+// A query parameter's one value: the first of several, and none for an empty one.
+const queryValue = (value: unknown) => {
+  const first: unknown = Array.isArray(value) ? value[0] : value;
+  return typeof first === "string" && first.trim() !== "" ? first.trim() : undefined;
+};
+const queryDay = z
+  .preprocess(
+    queryValue,
+    z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+  )
+  .catch(undefined);
+
+/**
+ * The Credits page's address query: `range`, a preset (this month by default), and Custom's
+ * `from` and `to` days. A value that isn't one is left out, so a stale or edited address shows
+ * a range rather than failing.
+ */
+export const creditsQuerySchema = z
+  .object({
+    range: z.preprocess(queryValue, z.enum(RANGE_PRESETS).optional()).catch(undefined),
+    from: queryDay,
+    to: queryDay,
+  })
+  .transform(({ range = "this_month", from, to }): RangeChoice =>
+    range === "custom" ? { preset: range, from, to } : { preset: range },
+  );
 
 /** What the Credits page's chart plots: the balance, spending by kind, or by workflow. */
 export type ChartLens = "balance" | "kinds" | "workflows";

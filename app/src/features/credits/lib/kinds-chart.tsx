@@ -1,17 +1,19 @@
-// What each day of the range cost, stacked by kind of use in the breakdown's order and colours,
-// so a kind that grew shows as a thicker band. `highlight` fades every other kind.
+// What each day, week or month of the range cost (by the range's length), stacked by kind of
+// use in the breakdown's order and colours, so a kind that grew shows as a thicker band.
+// `highlight` fades every other kind.
 import { cn } from "@/lib/utils";
 import { formatCredits, SPENDING_KIND_LABELS } from "../format";
+import { bucketUnit, spendingBuckets } from "../range";
 import { SPENDING_KINDS, type SpendingKind, type SpendingSummary } from "../types";
 import {
   Axes,
-  dayW,
+  axisDays,
   FRAME,
   type Frame,
   KIND_COLORS,
   niceMax,
   NowLine,
-  tick,
+  stretch,
   xOf,
   yOf,
 } from "./chart-kit";
@@ -26,49 +28,52 @@ export function KindsChart({
   now: Date;
   highlight: SpendingKind | null;
 }) {
-  const days = summary.days.slice(0, daysBegun(summary, now));
+  const begun = daysBegun(summary, now);
+  const buckets = spendingBuckets(summary.days).filter((bucket) => bucket.first < begun);
   const f: Frame = {
     ...FRAME,
     from: summary.range.from,
-    days: summary.days.length,
-    yMax: niceMax(Math.max(0, ...days.map((day) => day.spent))),
+    days: axisDays(summary, now),
+    yMax: niceMax(Math.max(0, ...buckets.map((bucket) => bucket.spent))),
   };
-  const bar = dayW(f) * 0.72;
   return (
     <svg
       viewBox={`0 0 ${String(f.w)} ${String(f.h)}`}
       className="w-full overflow-visible"
       role="img"
-      aria-label="Credits spent each day, stacked by kind of use"
+      aria-label={`Credits spent each ${bucketUnit(summary.days.length)}, stacked by kind of use`}
     >
       <Axes f={f} />
-      {days.map((day, i) => {
+      {buckets.map((bucket) => {
+        const x = xOf(f, bucket.first);
+        const width = xOf(f, bucket.first + bucket.days) - x;
+        const bar = width * 0.72;
         let base = 0;
         return (
-          <g key={day.day.getTime()}>
+          <g key={bucket.first}>
             <title>
               {[
-                tick(day.day),
+                stretch(bucket.from, bucket.days),
                 ...SPENDING_KINDS.map(
-                  (kind) => `${SPENDING_KIND_LABELS[kind]} ${formatCredits(day.byKind[kind])}`,
+                  (kind) => `${SPENDING_KIND_LABELS[kind]} ${formatCredits(bucket.byKind[kind])}`,
                 ),
-                `Total ${formatCredits(day.spent)}`,
+                `Total ${formatCredits(bucket.spent)}`,
               ].join("\n")}
             </title>
             <rect
-              x={xOf(f, i)}
+              x={x}
               y={f.pad.top}
-              width={dayW(f)}
+              width={width}
               height={f.h - f.pad.top - f.pad.bottom}
               className="fill-transparent"
             />
             {SPENDING_KINDS.map((kind) => {
               const y0 = yOf(f, base);
-              base += day.byKind[kind];
+              base += bucket.byKind[kind];
               return (
                 <rect
                   key={kind}
-                  x={xOf(f, i) + (dayW(f) - bar) / 2}
+                  x={x + (width - bar) / 2}
                   y={yOf(f, base)}
                   width={bar}
                   height={Math.max(0, y0 - yOf(f, base))}

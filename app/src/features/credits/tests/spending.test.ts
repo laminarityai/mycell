@@ -5,7 +5,14 @@ import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { systemCtx } from "@/lib/ctx";
 import { ForbiddenError } from "@/lib/errors";
-import { getBalance, getRunway, getSpendingSummary, grantCredits, listLedger } from "../server";
+import {
+  getBalance,
+  getLedgerStart,
+  getRunway,
+  getSpendingSummary,
+  grantCredits,
+  listLedger,
+} from "../server";
 import { DAY_MS, monthRange, spendingKindOf, SPENDING_KINDS } from "../types";
 import { spend } from "./spend";
 
@@ -89,8 +96,65 @@ describe("getSpendingSummary", () => {
       to: new Date(tomorrow.getTime() + 7 * DAY_MS),
     });
 
-    expect(later).toMatchObject({ openingBalance: 955, spent: 0, granted: 0, byWorkflow: [] });
+    expect(later).toMatchObject({ openingBalance: 955, spent: 0, granted: 0 });
     expect(later.days).toHaveLength(7);
+    // Its workflows' month started before it, unless it starts on the 1st.
+    const sameMonth = tomorrow.getUTCDate() !== 1;
+    expect(
+      later.byWorkflow.map(({ workflowId, spent, monthBefore }) => ({
+        workflowId,
+        spent,
+        monthBefore,
+      })),
+    ).toEqual(
+      sameMonth
+        ? [
+            { workflowId: "wf_2", spent: 0, monthBefore: 20 },
+            { workflowId: "wf_1", spent: 0, monthBefore: 15 },
+          ]
+        : [],
+    );
+  });
+
+  it("starts each workflow's month from what its live runs spent before a mid-month range", async () => {
+    const { orgA } = await orgWithSpending();
+    const today = startOfDay(new Date());
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(today.getTime() + 3 * DAY_MS);
+    const from = new Date(today.getTime() + DAY_MS);
+
+    const summary = await getSpendingSummary(orgA.admin.ctx, {
+      from,
+      to: new Date(today.getTime() + 4 * DAY_MS),
+    });
+
+    // Today is before the range: Try it, the builder and memory don't count toward a budget.
+    const sameMonth = from.getUTCMonth() === today.getUTCMonth();
+    expect(summary.byWorkflow.map((line) => [line.workflowId, line.monthBefore])).toEqual(
+      sameMonth
+        ? [
+            ["wf_2", 20],
+            ["wf_1", 15],
+          ]
+        : [],
+    );
+    expect(summary).toMatchObject({ spent: 0, granted: 0, openingBalance: 955 });
+  });
+
+  it("adds up 12 months by UTC day", async () => {
+    const { orgA } = await orgWithSpending();
+    const today = startOfDay(new Date());
+    const from = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - 11, 1));
+
+    const year = await getSpendingSummary(orgA.admin.ctx, {
+      from,
+      to: new Date(today.getTime() + DAY_MS),
+    });
+
+    expect(year).toMatchObject({ openingBalance: 0, spent: 45, granted: 1000 });
+    expect(year.days[0]?.day).toEqual(from);
+    expect(year.days.at(-1)).toMatchObject({ day: today, spent: 45, granted: 1000 });
+    expect(year.byWorkflow.map((line) => line.daily.at(-1))).toEqual([20, 15]);
   });
 
   it("is out of a member's reach", async () => {
@@ -156,6 +220,27 @@ describe("getRunway", () => {
     const { orgA } = await seedTwoOrgs();
 
     await expect(getRunway(orgA.member.ctx)).rejects.toThrow(ForbiddenError);
+  });
+});
+
+describe("getLedgerStart", () => {
+  it("is when the org's first entry was made, or none before any", async () => {
+    const { orgA } = await seedTwoOrgs();
+    expect(await getLedgerStart(orgA.admin.ctx)).toBeNull();
+
+    const before = Date.now();
+    await grantCredits(systemCtx(orgA.id), 1000, "October allowance");
+    const first = await getLedgerStart(orgA.admin.ctx);
+    await spend(systemCtx(orgA.id), 5, { purpose: "builder" });
+
+    expect(first?.getTime()).toBeGreaterThanOrEqual(before - 1000);
+    expect(await getLedgerStart(orgA.admin.ctx)).toEqual(first);
+  });
+
+  it("is out of a member's reach", async () => {
+    const { orgA } = await seedTwoOrgs();
+
+    await expect(getLedgerStart(orgA.member.ctx)).rejects.toThrow(ForbiddenError);
   });
 });
 

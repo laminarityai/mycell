@@ -1,10 +1,12 @@
 // The breakdown under the chart, in two columns: the range's spending by kind of use, and each
 // workflow's next to its budget. Pointing at a row shows its series in the chart; clicking it
 // keeps that lens.
+import { DateTime } from "@/components/date-time";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatCredits, SPENDING_KIND_LABELS } from "../format";
+import { withinOneMonth } from "../range";
 import {
   type ChartLens as Lens,
   SPENDING_KINDS,
@@ -52,6 +54,9 @@ export function Breakdown({
   ...events
 }: { summary: SpendingSummary; workflows: WorkflowSpendingLine[] } & RowEvents) {
   const top = Math.max(1, ...SPENDING_KINDS.map((kind) => summary.byKind[kind]));
+  // Within one month a workflow is its month so far against its budget; across months, what it
+  // spent in the range.
+  const single = withinOneMonth(summary.range);
   return (
     <div className="grid gap-8 lg:grid-cols-2">
       <section aria-labelledby="by-kind" className="flex flex-col gap-1">
@@ -93,10 +98,14 @@ export function Breakdown({
           className="flex items-baseline justify-between px-2 pb-1 font-semibold"
         >
           Workflows against their budgets
-          <span className="text-sm font-normal text-muted-foreground">live runs only</span>
+          <span className="text-sm font-normal text-muted-foreground">
+            {single ? "live runs, the month so far" : "live runs, spent in this range"}
+          </span>
         </h2>
         {workflows.length === 0 ? (
-          <p className="px-2 text-sm text-muted-foreground">No workflow has spent any credits.</p>
+          <p className="px-2 text-sm text-muted-foreground">
+            No workflow has spent any credits in this range.
+          </p>
         ) : null}
         {workflows.map((line, n) => (
           <Button
@@ -105,20 +114,29 @@ export function Breakdown({
             className={cn(ROW, "grid-cols-[0.625rem_minmax(0,1fr)_5rem_7rem]")}
           >
             <span className={cn("size-2.5 rounded-full", workflowTone(n).bg)} />
-            <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-              <span className="truncate">{line.name}</span>
-              {line.budgetReached ? (
-                <Badge variant="destructive">Paused: budget reached</Badge>
-              ) : null}
+            <span className="flex min-w-0 flex-col gap-1">
+              <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="truncate">{line.name}</span>
+                {line.budgetReached ? (
+                  <Badge variant="destructive">Paused: budget reached</Badge>
+                ) : null}
+              </span>
+              <BudgetNote line={line} single={single} />
             </span>
-            <BudgetBar line={line} />
+            {single ? <BudgetBar line={line} /> : <span />}
             <span className="text-right tabular-nums">
-              {formatCredits(line.spent)}
-              {line.monthlyBudget === null ? null : (
-                <span className="text-muted-foreground">
-                  {" "}
-                  / {formatCredits(line.monthlyBudget)}
-                </span>
+              {single ? (
+                <>
+                  {formatCredits(line.monthToDate.at(-1) ?? line.monthBefore)}
+                  {line.monthlyBudget === null ? null : (
+                    <span className="text-muted-foreground">
+                      {" "}
+                      / {formatCredits(line.monthlyBudget)}
+                    </span>
+                  )}
+                </>
+              ) : (
+                formatCredits(line.spent)
               )}
             </span>
           </Button>
@@ -128,16 +146,45 @@ export function Breakdown({
   );
 }
 
+/**
+ * When a workflow reached its budget in the range, unless its pause says so already; across
+ * months, also that it had none or stayed under it.
+ */
+function BudgetNote({ line, single }: { line: WorkflowSpendingLine; single: boolean }) {
+  const reached = line.reachedOn.length > 0 && !(single && line.budgetReached);
+  if (!reached && single) return null;
+  return (
+    <span className="text-xs text-muted-foreground">
+      {reached ? (
+        <>
+          Reached its budget on{" "}
+          {line.reachedOn.map((day, i) => (
+            <span key={day.getTime()}>
+              {i === 0 ? "" : ", "}
+              <DateTime value={day} day />
+            </span>
+          ))}
+        </>
+      ) : line.monthlyBudget === null ? (
+        "No budget"
+      ) : (
+        "Stayed under its budget"
+      )}
+    </span>
+  );
+}
+
+/** The month so far against its budget. */
 function BudgetBar({ line }: { line: WorkflowSpendingLine }) {
   const budget = line.monthlyBudget;
   if (budget === null) return <span className="text-xs text-muted-foreground">no budget</span>;
-  const share = line.spent / budget;
+  const share = (line.monthToDate.at(-1) ?? line.monthBefore) / budget;
   return (
     <span className="h-1.5 rounded-full bg-muted">
       <span
         className={cn(
           "block h-full rounded-full",
-          line.budgetReached ? "bg-destructive" : share >= 0.7 ? "bg-amber-500" : "bg-foreground",
+          share >= 1 ? "bg-destructive" : share >= 0.7 ? "bg-amber-500" : "bg-foreground",
         )}
         style={{ width: `${String(Math.min(100, share * 100))}%` }}
       />

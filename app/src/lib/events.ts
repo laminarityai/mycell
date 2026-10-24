@@ -5,7 +5,9 @@
 // and memory deletes what it learned from the item or re-reads who may see it; runtime's Calendar
 // poll sends calendar/event.changed and calendar/event.removed, and memory learns from the event,
 // re-reads who may see it or deletes what it learned from it; granting credits sends
-// credits.granted, and memory learns what it postponed for want of credits.
+// credits.granted, and memory learns what it postponed for want of credits. Discovery's and the
+// Calendar poll's sends run inside their jobs' own steps, which Inngest retries; credits.granted
+// goes through the outbox with the grant (ADR-0027).
 import { eventType } from "inngest";
 import { z } from "zod";
 import { inngest } from "./inngest";
@@ -213,12 +215,8 @@ export async function sendCalendarEventsChanged(
 
 /**
  * Credits were granted to an org (`pnpm credits:grant`, our team's way to grant them): work that
- * stopped for want of credits can go on.
+ * stopped for want of credits can go on. Written to the outbox with the grant (ADR-0027).
  */
 export const creditsGranted = eventType("credits/granted", {
   schema: z.object({ orgId: z.string().min(1) }),
 });
-
-export async function sendCreditsGranted(orgId: string): Promise<void> {
-  await inngest.send(creditsGranted.create({ orgId }));
-}

@@ -11,13 +11,15 @@
 // store the person again. So forgetting also sends `memory/person.forgotten`, the address
 // encrypted for the org, whose job shares learning's one-at-a-time-per-org key: it runs once the
 // item in progress is stored, and deletes the objects keyed by the address again.
+import { randomUUID } from "node:crypto";
 import { and, eq, inArray, or } from "drizzle-orm";
-import { forOrg } from "@/db/for-org";
+import { forOrg, type OrgScopedDb } from "@/db/for-org";
 import { decryptForOrg, encryptForOrg, hashForOrg } from "@/features/key-store/server";
+import { saveWithEvents } from "@/features/outbox/server";
 import { type Ctx, requireAdmin, requireSystem } from "@/lib/ctx";
 import { NotFoundError, ValidationError } from "@/lib/errors";
+import { personForgotten } from "../events";
 import { forgetPersonSchema, type ForgetPersonInput, type Forgotten } from "../types";
-import { sendPersonForgotten } from "./events";
 import type { Extracted } from "./extract";
 import { doNotLearn, facts, memoryObjects, objectKeys } from "./schema";
 
@@ -31,15 +33,22 @@ export async function forgetPerson(ctx: Ctx, input: ForgetPersonInput): Promise<
   const parsed = forgetPersonSchema.safeParse(input);
   if (!parsed.success) throw new ValidationError("Give the person's email address.");
   const address = parsed.data.email;
-  // On the list first, so an item whose learning starts from now on skips them.
-  await forOrg(ctx).insert(
-    doNotLearn,
-    { addressHash: await hashForOrg(ctx, address) },
-    { onConflictDoNothing: true },
-  );
-  const forgotten = await deleteKeyedBy(ctx, address);
-  await sendPersonForgotten(ctx.orgId, await encryptForOrg(ctx, address));
-  return forgotten;
+  const [addressHash, encrypted] = await Promise.all([
+    hashForOrg(ctx, address),
+    encryptForOrg(ctx, address),
+  ]);
+  // On the list, the objects deleted, and the sweep again saved together (ADR-0027). The
+  // event's ID is this forgetting's own: the address in it is encrypted afresh each time.
+  return saveWithEvents(ctx, async (tx, emit) => {
+    await tx.insert(doNotLearn, { addressHash }, { onConflictDoNothing: true });
+    const forgotten = await deleteKeyedBy(tx, address);
+    emit(
+      personForgotten,
+      { orgId: ctx.orgId, address: encrypted },
+      `person-forgotten-${randomUUID()}`,
+    );
+    return forgotten;
+  });
 }
 
 /**
@@ -56,25 +65,23 @@ export async function forgetPersonAgain(ctx: Ctx, encryptedAddress: string): Pro
     if (error instanceof NotFoundError) return { facts: 0 };
     throw error;
   }
-  return deleteKeyedBy(ctx, address);
+  return forOrg(ctx).transaction((tx) => deleteKeyedBy(tx, address));
 }
 
 // Deletes the objects with the address as their email key, counting the facts about them or
-// linking to them, which go with them.
-async function deleteKeyedBy(ctx: Ctx, address: string): Promise<Forgotten> {
-  return forOrg(ctx).transaction(async (tx) => {
-    const keys = await tx.select(objectKeys, {
-      where: and(eq(objectKeys.kind, "email"), eq(objectKeys.value, address)),
-    });
-    const ids = keys.map((key) => key.objectId);
-    if (ids.length === 0) return { facts: 0 };
-    const count = await tx.count(
-      facts,
-      or(inArray(facts.subjectId, ids), inArray(facts.objectId, ids)),
-    );
-    await tx.delete(memoryObjects, inArray(memoryObjects.id, ids));
-    return { facts: count };
+// linking to them, which go with them, in the caller's transaction.
+async function deleteKeyedBy(tx: OrgScopedDb, address: string): Promise<Forgotten> {
+  const keys = await tx.select(objectKeys, {
+    where: and(eq(objectKeys.kind, "email"), eq(objectKeys.value, address)),
   });
+  const ids = keys.map((key) => key.objectId);
+  if (ids.length === 0) return { facts: 0 };
+  const count = await tx.count(
+    facts,
+    or(inArray(facts.subjectId, ids), inArray(facts.objectId, ids)),
+  );
+  await tx.delete(memoryObjects, inArray(memoryObjects.id, ids));
+  return { facts: count };
 }
 
 /** How many people the org's do-not-learn list holds. */

@@ -8,11 +8,12 @@ import { and, asc, eq, inArray, like, or, sql, type SQL } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { listConnectionsForJobs } from "@/features/connections/server";
 import type { SourceClient } from "@/features/connections/types";
+import { saveWithEvents } from "@/features/outbox/server";
 import { type Ctx, requireRole, requireSystem } from "@/lib/ctx";
 import { ConflictError, NotFoundError, ValidationError } from "@/lib/errors";
 import type { RunStep } from "@/lib/inngest";
+import { exclusionAdded } from "../events";
 import { exclusionInputSchema, type Exclusion, type ExclusionInput } from "../types";
-import { sendExclusionAdded } from "./events";
 import { folderedRecords, inFolders, labelledRecords, labelNames } from "./excluded-items";
 import { accessListEntries, exclusions, sourceRecords } from "./schema";
 import type { SourceItem } from "./source-item";
@@ -40,14 +41,21 @@ export async function addExclusion(ctx: Ctx, input: ExclusionInput): Promise<Exc
     and(eq(exclusions.kind, kind), sql`lower(${exclusions.value}) = ${value.toLowerCase()}`),
   );
   if (existing > 0) throw new ConflictError("That's excluded already.");
-  const inserted = await forOrg(ctx).insert(
-    exclusions,
-    { id: randomUUID(), kind, value },
-    { onConflictDoNothing: true },
-  );
-  const row = inserted.at(0);
-  if (row === undefined) throw new ConflictError("That's excluded already.");
-  await sendExclusionAdded(ctx.orgId, row.id);
+  const row = await saveWithEvents(ctx, async (tx, emit) => {
+    const inserted = await tx.insert(
+      exclusions,
+      { id: randomUUID(), kind, value },
+      { onConflictDoNothing: true },
+    );
+    const added = inserted.at(0);
+    if (added === undefined) throw new ConflictError("That's excluded already.");
+    emit(
+      exclusionAdded,
+      { orgId: ctx.orgId, exclusionId: added.id },
+      `exclusion-added-${added.id}`,
+    );
+    return added;
+  });
   return { id: row.id, kind: row.kind, value: row.value, createdAt: row.createdAt };
 }
 

@@ -13,6 +13,7 @@ export {
   isOutOfCredits,
   listLedger,
   recordUsage,
+  recordUsageIn,
 } from "./lib/ledger";
 // For the Credits page (admins): a range's spending by kind, workflow and day, where the
 // ledger starts, and the runway.

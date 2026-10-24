@@ -9,7 +9,7 @@ import { forOrg } from "@/db/for-org";
 import { userCtx, userNames } from "@/features/orgs/server";
 import { type Ctx, requireAdmin, requireSystem } from "@/lib/ctx";
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
-import { DAY_MS } from "@/lib/time";
+import { DAY_MS, now as clockNow } from "@/lib/time";
 import {
   MAX_STAFF_CONSENT_DAYS,
   staffConsentInputSchema,
@@ -36,7 +36,7 @@ export async function grantStaffConsent(ctx: Ctx, input: StaffConsentInput): Pro
     );
   }
   const { staffEmail, reason, days } = parsed.data;
-  const now = new Date();
+  const now = clockNow();
   const [row] = await forOrg(ctx).insert(staffConsents, {
     id: randomUUID(),
     grantedByUserId: ctx.userId,
@@ -56,7 +56,7 @@ export async function revokeStaffConsent(ctx: Ctx, consentId: string): Promise<v
   if (found.length === 0) throw new NotFoundError("consent");
   await db.update(
     staffConsents,
-    { revokedAt: new Date() },
+    { revokedAt: clockNow() },
     and(eq(staffConsents.id, consentId), isNull(staffConsents.revokedAt)),
   );
 }
@@ -100,7 +100,7 @@ async function consented(ctx: Ctx, access: StaffAccess) {
   const consent = (
     await forOrg(ctx).select(staffConsents, { where: eq(staffConsents.id, access.consentId) })
   ).at(0);
-  const now = new Date();
+  const now = clockNow();
   if (
     consent === undefined ||
     consent.revokedAt !== null ||

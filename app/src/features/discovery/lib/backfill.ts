@@ -10,7 +10,7 @@ import { getConnection, recordIngestState, sourceClient } from "@/features/conne
 import { ingestedAppSchema, type IngestedApp } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
 import { runInline, type RunStep } from "@/lib/inngest";
-import { DAY_MS } from "@/lib/time";
+import { DAY_MS, now } from "@/lib/time";
 import type { BackfillOutcome } from "../types";
 import { CONNECTORS, storeWindow, whileConnected } from "./ingest-steps";
 import { startWatch, watches } from "./watch";
@@ -78,7 +78,7 @@ async function startBackfill(ctx: Ctx, connectionId: string) {
     const cursor = await CONNECTORS[app].readStartCursor(client);
     await recordIngestState(ctx, connectionId, app, { backfilledItems: 0, cursor });
   }
-  return { apps, since: new Date(Date.now() - BACKFILL_DAYS * DAY_MS).toISOString() };
+  return { apps, since: new Date(now().getTime() - BACKFILL_DAYS * DAY_MS).toISOString() };
 }
 
 async function backfillingApps(ctx: Ctx, connectionId: string): Promise<IngestedApp[]> {

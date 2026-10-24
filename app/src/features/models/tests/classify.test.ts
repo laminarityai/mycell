@@ -96,6 +96,23 @@ describe("classify", () => {
     ]);
   });
 
+  it("asks through decide when the org's classify model is another decision model", async () => {
+    const { orgA, ctx } = await orgWithCredits();
+    await setModelRole(orgA.admin.ctx, "classify", "convaiinnovations/laya-1.0");
+    fakeAiGateway.decision(
+      { choice: "quote", probabilities: { quote: 0.8, other: 0.2 } },
+      { costUsd: 0.0001 },
+    );
+
+    expect(await classify(ctx, request)).toMatchObject({
+      label: "quote",
+      p: 0.8,
+      modelId: "convaiinnovations/laya-1.0",
+      fallback: false,
+    });
+    expect(fakeAiGateway.requests("decision").at(0)?.modelId).toBe("convaiinnovations/laya-1.0");
+  });
+
   it("goes straight to fast when the org's classify model isn't a decision model", async () => {
     const { orgA, ctx } = await orgWithCredits();
     await setModelRole(orgA.admin.ctx, "classify", "openai/some-chat-model");

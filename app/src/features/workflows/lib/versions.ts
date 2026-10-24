@@ -10,6 +10,7 @@ import type { Spec } from "@/features/spec/types";
 import { findTagsByName } from "@/features/tags/server";
 import { type Ctx, requireAdmin, requireRole } from "@/lib/ctx";
 import { ConflictError, InvariantError, NotFoundError } from "@/lib/errors";
+import { now } from "@/lib/time";
 import type { PublishSettings, WorkflowVersion } from "../types";
 import { workflows, workflowVersions, workflowVersionTags } from "./schema";
 import { validateWorkflowSpec } from "./validation";
@@ -57,7 +58,7 @@ export async function publishWorkflow(
           {
             workingSpec: validated.working,
             revision: workflow.revision + 1,
-            updatedAt: new Date(),
+            updatedAt: now(),
           },
           and(eq(workflows.id, workflowId), eq(workflows.revision, workflow.revision)),
         );

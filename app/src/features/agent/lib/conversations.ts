@@ -6,7 +6,7 @@ import { and, asc, desc, eq, isNull, lt } from "drizzle-orm";
 import { forOrg, type OrgScopedDb } from "@/db/for-org";
 import { requireRole, requireSystem, type Ctx } from "@/lib/ctx";
 import { InvariantError, NotFoundError } from "@/lib/errors";
-import { DAY_MS } from "@/lib/time";
+import { DAY_MS, now as clockNow } from "@/lib/time";
 import {
   IDLE_CONVERSATION_DAYS,
   type AgentConversationSummary,
@@ -99,7 +99,7 @@ export async function messagesOf(ctx: Ctx, conversationId: string): Promise<Agen
  */
 export async function deleteIdleConversations(
   ctx: Ctx,
-  now: Date = new Date(),
+  now: Date = clockNow(),
 ): Promise<{ conversations: number }> {
   requireSystem(ctx);
   const cutoff = new Date(now.getTime() - IDLE_CONVERSATION_DAYS * DAY_MS);
@@ -130,7 +130,7 @@ export async function appendMessage(
       : {};
   await db.update(
     agentConversations,
-    { ...title, updatedAt: new Date() },
+    { ...title, updatedAt: clockNow() },
     eq(agentConversations.id, conversation.id),
   );
 }

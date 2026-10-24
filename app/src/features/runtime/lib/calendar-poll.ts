@@ -22,6 +22,7 @@ import { type Ctx, requireSystem } from "@/lib/ctx";
 import { InvariantError, NotFoundError } from "@/lib/errors";
 import { sendCalendarEventsChanged } from "@/lib/events";
 import { type Json, type RunStep, runInline } from "@/lib/inngest";
+import { now } from "@/lib/time";
 import { listCalendarPage, type CalendarPage } from "./calendar";
 import { sendInvitesReceived } from "./events";
 import { triggerCursors } from "./schema";
@@ -183,7 +184,7 @@ async function listAll(
 // Keeps the connection's sync token, replacing the one before.
 async function storeSyncToken(ctx: Ctx, connectionId: string, cursor: string): Promise<void> {
   const db = forOrg(ctx);
-  const polledAt = new Date();
+  const polledAt = now();
   const where = and(
     eq(triggerCursors.connectionId, connectionId),
     eq(triggerCursors.trigger, TRIGGER),

@@ -1,6 +1,6 @@
 {
-  "id": "08a0575a-b5a3-48ff-8bcb-b03e15d7fd66",
-  "prevId": "486f29d5-dc11-4d19-bd74-594d9a68089e",
+  "id": "c42bdf9d-9f24-45da-bbbf-9dde10faadb1",
+  "prevId": "ef26f8b5-ee6b-4efc-aa43-a73372a25527",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -778,178 +778,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.agent_message_connections": {
-      "name": "agent_message_connections",
-      "schema": "",
-      "columns": {
-        "org_id": {
-          "name": "org_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "message_id": {
-          "name": "message_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "connection_id": {
-          "name": "connection_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "agent_message_connections_connection_id_idx": {
-          "name": "agent_message_connections_connection_id_idx",
-          "columns": [
-            {
-              "expression": "connection_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "agent_message_connections_message_fk": {
-          "name": "agent_message_connections_message_fk",
-          "tableFrom": "agent_message_connections",
-          "tableTo": "agent_messages",
-          "columnsFrom": [
-            "org_id",
-            "message_id"
-          ],
-          "columnsTo": [
-            "org_id",
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "agent_message_connections_connection_fk": {
-          "name": "agent_message_connections_connection_fk",
-          "tableFrom": "agent_message_connections",
-          "tableTo": "connections",
-          "columnsFrom": [
-            "org_id",
-            "connection_id"
-          ],
-          "columnsTo": [
-            "org_id",
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "agent_message_connections_message_id_connection_id_pk": {
-          "name": "agent_message_connections_message_id_connection_id_pk",
-          "columns": [
-            "message_id",
-            "connection_id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.agent_message_facts": {
-      "name": "agent_message_facts",
-      "schema": "",
-      "columns": {
-        "org_id": {
-          "name": "org_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "message_id": {
-          "name": "message_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "fact_id": {
-          "name": "fact_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "agent_message_facts_fact_id_idx": {
-          "name": "agent_message_facts_fact_id_idx",
-          "columns": [
-            {
-              "expression": "fact_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "agent_message_facts_message_fk": {
-          "name": "agent_message_facts_message_fk",
-          "tableFrom": "agent_message_facts",
-          "tableTo": "agent_messages",
-          "columnsFrom": [
-            "org_id",
-            "message_id"
-          ],
-          "columnsTo": [
-            "org_id",
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "agent_message_facts_fact_fk": {
-          "name": "agent_message_facts_fact_fk",
-          "tableFrom": "agent_message_facts",
-          "tableTo": "facts",
-          "columnsFrom": [
-            "org_id",
-            "fact_id"
-          ],
-          "columnsTo": [
-            "org_id",
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "agent_message_facts_message_id_fact_id_pk": {
-          "name": "agent_message_facts_message_id_fact_id_pk",
-          "columns": [
-            "message_id",
-            "fact_id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.agent_messages": {
       "name": "agent_messages",
       "schema": "",
@@ -1039,16 +867,7 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "agent_messages_org_id_id_unique": {
-          "name": "agent_messages_org_id_id_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "org_id",
-            "id"
-          ]
-        }
-      },
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -1491,7 +1310,7 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -1605,7 +1424,7 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -2332,7 +2151,7 @@
         },
         "occurred_at": {
           "name": "occurred_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
         },
@@ -2380,7 +2199,7 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -5124,7 +4943,7 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -5223,7 +5042,7 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"

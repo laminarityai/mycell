@@ -5,6 +5,7 @@
 import { chatModelMessages, streamChatTurn } from "@/features/models/server";
 import type { Ctx } from "@/lib/ctx";
 import { ValidationError } from "@/lib/errors";
+import { now } from "@/lib/time";
 import { appendMessage, findConversation, messagesOf } from "./conversations";
 import { instructionPrompts } from "./prompts";
 import { storeReply } from "./reply-sources";
@@ -44,7 +45,7 @@ export async function streamTurn(
       await appendMessage(ctx, conversation, { role: "user", parts: [{ type: "text", text }] });
       return {
         instructions: instructionPrompts.instructions({
-          today: new Date().toISOString().slice(0, 10),
+          today: now().toISOString().slice(0, 10),
         }),
         // A removed reply reaches the model as nothing at all: its words went with its data.
         messages: [...chatModelMessages(history, () => undefined), { role: "user", content: text }],

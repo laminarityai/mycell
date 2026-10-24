@@ -9,8 +9,8 @@ import type { FakeMessageInput } from "@/testing/fake-gmail";
 import { fakeNango } from "@/testing/fake-nango";
 import { storedStepOutput } from "@/testing/inngest-step-state";
 import { startRun } from "../server";
-import type { RetryPolicy, RunRecord } from "../types";
-import type { RunStep } from "@/lib/inngest";
+import type { RunRecord } from "../types";
+import type { RunSleep, RunStep } from "@/lib/inngest";
 
 /**
  * What a run's records hold, as JSON, for a scan for content: its record from `getRun` without
@@ -40,11 +40,15 @@ export async function publish(admin: Ctx, spec: Record<string, unknown>): Promis
 /**
  * A step runner like Inngest's: it records each step ID it's asked for and memoizes results by
  * ID, so running again replays finished steps instead of re-running them. `crashAt` makes it
- * throw before running that step, as an invocation that dies part-way would.
+ * throw before running that step, as an invocation that dies part-way would. Its `sleep` is
+ * Inngest's `step.sleep` the same way: it records each wait in `ids` and `waits` rather than
+ * waiting, and a replayed wait, finished already, is neither waited nor recorded in `waits` again.
  */
 export function recordingStepRunner() {
   const ids: string[] = [];
   const results = new Map<string, unknown>();
+  const slept = new Set<string>();
+  const waits: { id: string; ms: number }[] = [];
   let crashAt: string | undefined;
   const runStep: RunStep = async (id, run) => {
     ids.push(id);
@@ -57,9 +61,19 @@ export function recordingStepRunner() {
     results.set(id, JSON.parse(JSON.stringify(result)) as unknown);
     return result;
   };
+  const sleep: RunSleep = (id, ms) => {
+    ids.push(id);
+    if (!slept.has(id)) {
+      slept.add(id);
+      waits.push({ id, ms });
+    }
+    return Promise.resolve();
+  };
   return {
     runStep,
+    sleep,
     ids,
+    waits,
     /** What the step state holds: each finished step's result, by step ID. */
     results: () => Object.fromEntries(results),
     crashAt: (id: string) => {
@@ -119,17 +133,21 @@ function serializedError(error: unknown): unknown {
   };
 }
 
-/** The default attempts, with the waits recorded instead of slept. */
-export function recordedBackoff(): RetryPolicy & { waits: number[] } {
+/**
+ * A RunSleep for `executeRun` that records each retry's wait instead of waiting: its length in
+ * `waits`, its step ID in `ids`.
+ */
+export function recordedBackoff(): { sleep: RunSleep; waits: number[]; ids: string[] } {
   const waits: number[] = [];
+  const ids: string[] = [];
   return {
-    attempts: 3,
-    delayMs: (attempt) => 1000 * 2 ** (attempt - 1),
-    sleep: (ms) => {
+    sleep: (id, ms) => {
+      ids.push(id);
       waits.push(ms);
       return Promise.resolve();
     },
     waits,
+    ids,
   };
 }
 

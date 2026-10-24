@@ -163,7 +163,7 @@ describe("the append-row action", () => {
     google.sheets.add("sheet-1", "Log", [["Message", "Kind", "Note"]]);
     google.sheets.loseNextAnswer();
 
-    expect(await executeRun(system, runId, undefined, recordedBackoff())).toEqual({
+    expect(await executeRun(system, runId, undefined, recordedBackoff().sleep)).toEqual({
       status: "succeeded",
     });
 
@@ -199,7 +199,7 @@ describe("the append-row action", () => {
     const { admin, system, google, runId } = await logRun();
     google.sheets.loseNextAnswer();
 
-    expect(await executeRun(system, runId, undefined, recordedBackoff())).toEqual({
+    expect(await executeRun(system, runId, undefined, recordedBackoff().sleep)).toEqual({
       status: "succeeded",
     });
 
@@ -270,7 +270,7 @@ describe("a sheet step on a disconnected Google connection", () => {
     const { admin, system, google, runId } = await sheetRun(threadSpec({ steps: [pricesStep] }));
     fakeNango.deleteWithoutWebhook(google.nangoConnectionId);
 
-    expect(await executeRun(system, runId, undefined, recordedBackoff())).toEqual({
+    expect(await executeRun(system, runId, undefined, recordedBackoff().sleep)).toEqual({
       status: "cancelled",
     });
     expect(await getRun(admin, runId)).toMatchObject({ status: "cancelled", steps: [] });

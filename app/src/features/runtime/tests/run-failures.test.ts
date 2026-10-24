@@ -6,7 +6,14 @@ import { systemCtx } from "@/lib/ctx";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import { fakeNango } from "@/testing/fake-nango";
 import { executeRun, getRun, startRun } from "../server";
-import { connectInbox, pricingQuestion, publish, recordedBackoff, threadSpec } from "./run-helpers";
+import {
+  connectInbox,
+  pricingQuestion,
+  publish,
+  recordedBackoff,
+  recordingStepRunner,
+  threadSpec,
+} from "./run-helpers";
 
 beforeEach(resetDatabase);
 
@@ -41,9 +48,11 @@ describe("a failing step", () => {
       }
     });
 
-    expect(await executeRun(system, runId, undefined, backoff)).toEqual({ status: "succeeded" });
+    expect(await executeRun(system, runId, undefined, backoff.sleep)).toEqual({
+      status: "succeeded",
+    });
 
-    expect(backoff.waits).toEqual([1000]);
+    expect(backoff.waits).toEqual([2000]);
     const thread = (await getRun(admin, runId)).steps.at(-1);
     expect(thread).toMatchObject({ stepId: "thread", status: "succeeded", attempts: 2 });
   });
@@ -58,9 +67,9 @@ describe("a failing step", () => {
       }
     });
 
-    expect(await executeRun(system, runId, undefined, backoff)).toEqual({ status: "failed" });
+    expect(await executeRun(system, runId, undefined, backoff.sleep)).toEqual({ status: "failed" });
 
-    expect(backoff.waits).toEqual([1000, 2000]);
+    expect(backoff.waits).toEqual([2000, 8000]);
     const run = await getRun(admin, runId);
     expect(run.status).toBe("failed");
     expect(run.steps.at(-1)).toMatchObject({
@@ -76,7 +85,7 @@ describe("a failing step", () => {
     const { admin, system, runId } = await adminRun(threadSpec(), 0);
     const backoff = recordedBackoff();
 
-    expect(await executeRun(system, runId, undefined, backoff)).toEqual({ status: "failed" });
+    expect(await executeRun(system, runId, undefined, backoff.sleep)).toEqual({ status: "failed" });
 
     expect(fakeAiGateway.requests()).toEqual([]);
     expect(backoff.waits).toEqual([]);
@@ -93,7 +102,7 @@ describe("a failing step", () => {
     const workflowId = await publish(orgA.admin.ctx, threadSpec());
     const { runId } = await startRun(orgA.admin.ctx, workflowId, inbox.connectionId, "no-such-id");
 
-    expect(await executeRun(system, runId, undefined, recordedBackoff())).toEqual({
+    expect(await executeRun(system, runId, undefined, recordedBackoff().sleep)).toEqual({
       status: "failed",
     });
     expect((await getRun(orgA.admin.ctx, runId)).steps).toMatchObject([
@@ -114,11 +123,73 @@ describe("a failing step", () => {
     });
     const { admin, system, runId } = await adminRun(spec);
 
-    expect(await executeRun(system, runId, undefined, recordedBackoff())).toEqual({
+    expect(await executeRun(system, runId, undefined, recordedBackoff().sleep)).toEqual({
       status: "failed",
     });
     expect((await getRun(admin, runId)).steps).toMatchObject([
       { stepId: "prices", status: "failed", attempts: 1, errorCode: "source_item_missing" },
     ]);
+  });
+});
+
+describe("a step's retries", () => {
+  // Counts the thread reads the proxy serves, rate-limiting the first `failures` attempts.
+  function threadReads(failures: number) {
+    let reads = 0;
+    fakeNango.beforeProxy((path) => {
+      if (!path.includes("/threads/")) return;
+      reads += 1;
+      if (fakeNango.rateLimitsAnswered() === 0) fakeNango.rateLimitSource(failures * NANGO_TRIES);
+    });
+    return () => reads;
+  }
+
+  it("are steps of their own, with the wait before each a wait between steps, recorded", async () => {
+    const { admin, system, runId } = await adminRun();
+    confident();
+    threadReads(1);
+    const runner = recordingStepRunner();
+
+    expect(await executeRun(system, runId, runner.runStep, runner.sleep)).toEqual({
+      status: "succeeded",
+    });
+
+    expect(runner.ids.slice(-3)).toEqual(["thread", "thread:wait-1", "thread:attempt-2"]);
+    expect(runner.waits).toEqual([{ id: "thread:wait-1", ms: 2000 }]);
+    // The failed attempt hands on when the step began, and nothing of what it read.
+    expect(runner.results().thread).toEqual({
+      retry: { startedAt: expect.any(String) as unknown },
+    });
+    const thread = (await getRun(admin, runId)).steps.at(-1);
+    expect(thread).toMatchObject({ stepId: "thread", status: "succeeded", attempts: 2 });
+    expect(thread?.startedAt.toISOString()).toBe(
+      (runner.results().thread as { retry: { startedAt: string } }).retry.startedAt,
+    );
+  });
+
+  it("resume after a crash from the last finished attempt, neither trying nor waiting again", async () => {
+    const { admin, system, runId } = await adminRun();
+    confident();
+    const reads = threadReads(2);
+    const runner = recordingStepRunner();
+    runner.crashAt("thread:attempt-3");
+
+    await expect(executeRun(system, runId, runner.runStep, runner.sleep)).rejects.toThrow();
+    const readsBeforeCrash = reads();
+    expect(await executeRun(system, runId, runner.runStep, runner.sleep)).toEqual({
+      status: "succeeded",
+    });
+
+    // Only the third attempt read the thread again.
+    expect(reads()).toBe(readsBeforeCrash + 1);
+    expect(runner.waits).toEqual([
+      { id: "thread:wait-1", ms: 2000 },
+      { id: "thread:wait-2", ms: 8000 },
+    ]);
+    expect((await getRun(admin, runId)).steps.at(-1)).toMatchObject({
+      stepId: "thread",
+      status: "succeeded",
+      attempts: 3,
+    });
   });
 });

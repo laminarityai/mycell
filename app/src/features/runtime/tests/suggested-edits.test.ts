@@ -93,7 +93,7 @@ describe("a suggest-edits step", () => {
     const retry = recordedBackoff();
     const { admin, outcome, docs, documentId, ownSuggestion } = await suggestedEdits(orgs, {
       docs: "lose_answer",
-      retry,
+      sleep: retry.sleep,
     });
 
     expect(outcome).toEqual({ status: "succeeded" });
@@ -112,7 +112,7 @@ describe("a suggest-edits step", () => {
     const orgs = await seedTwoOrgs();
     const retry = recordedBackoff();
     fakeNango.failWrites(1);
-    const { outcome, docs, documentId } = await suggestedEdits(orgs, { retry });
+    const { outcome, docs, documentId } = await suggestedEdits(orgs, { sleep: retry.sleep });
 
     expect(outcome).toEqual({ status: "succeeded" });
     expect(retry.waits).toHaveLength(1);
@@ -138,7 +138,7 @@ describe("a suggest-edits step", () => {
     const retry = recordedBackoff();
     const { admin, outcome, runId, docs } = await suggestedEdits(orgs, {
       docs: "fail_save",
-      retry,
+      sleep: retry.sleep,
     });
 
     expect(outcome).toEqual({ status: "failed" });

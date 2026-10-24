@@ -67,7 +67,7 @@ describe("the add-label action", () => {
     mailbox.writes.loseNextAnswer();
     mailbox.writes.loseNextAnswer();
 
-    expect(await executeRun(system, runId, undefined, recordedBackoff())).toEqual({
+    expect(await executeRun(system, runId, undefined, recordedBackoff().sleep)).toEqual({
       status: "succeeded",
     });
 

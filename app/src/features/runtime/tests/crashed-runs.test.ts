@@ -109,7 +109,7 @@ describe("a step that fails unexpectedly", () => {
       return run();
     };
 
-    expect(await executeRun(system, runId, runStep, recordedBackoff())).toEqual({
+    expect(await executeRun(system, runId, runStep, recordedBackoff().sleep)).toEqual({
       status: "failed",
     });
 

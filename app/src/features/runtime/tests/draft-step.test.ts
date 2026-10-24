@@ -180,7 +180,7 @@ describe("the draft step", () => {
     fakeAiGateway.text(REPLY);
     mailbox.writes.loseNextAnswer();
 
-    expect(await executeRun(system, runId, undefined, recordedBackoff())).toEqual({
+    expect(await executeRun(system, runId, undefined, recordedBackoff().sleep)).toEqual({
       status: "succeeded",
     });
 

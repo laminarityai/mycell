@@ -21,6 +21,7 @@ import {
   retentionDue,
   sendPostponedDue,
   sendRetentionDue,
+  toldFactDeleted,
 } from "./lib/events";
 import {
   applyRetention,
@@ -29,6 +30,7 @@ import {
   forgetPersonAgain,
   learnFromItem,
   pruneAccessLog,
+  purgeDeletedToldFacts,
   queueStoredItems,
   rereadAccess,
   rereadAllAccess,
@@ -230,5 +232,19 @@ export const retentionCron = inngest.createFunction(
  */
 export const applyRetentionJob = inngest.createFunction(
   { id: "memory-apply-retention", triggers: [retentionDue], concurrency: [...PER_ORG] },
-  async ({ event, step }) => step.run("apply", () => applyRetention(systemCtx(event.data.orgId))),
+  async ({ event, step }) => {
+    const applied = await step.run("apply", () => applyRetention(systemCtx(event.data.orgId)));
+    // The backstop for a deleted told fact whose own job didn't run.
+    await step.run("purge-deleted-notes", () => purgeDeletedToldFacts(systemCtx(event.data.orgId)));
+    return applied;
+  },
+);
+
+/** Once a deleted told fact's undo window ends, deletes the org's past theirs for good. */
+export const purgeDeletedToldFactsJob = inngest.createFunction(
+  { id: "memory-purge-deleted-told-facts", triggers: [toldFactDeleted], concurrency: [...PER_ORG] },
+  async ({ event, step }) => {
+    await step.sleepUntil("undo-window", event.data.purgeAt);
+    return step.run("purge", () => purgeDeletedToldFacts(systemCtx(event.data.orgId)));
+  },
 );

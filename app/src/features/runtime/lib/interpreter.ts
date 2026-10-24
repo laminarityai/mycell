@@ -146,19 +146,24 @@ async function executeStep(
 }
 
 /**
- * Whether the run may start its next step: its connection is still there, and a triggered
- * run's enablement or org switch is still on for it. Switching off takes effect here, so a step
- * already under way finishes first. A run someone started by hand (a retry too) needs only its
- * connection.
+ * Whether the run may start its next step: its connection is still there, and the enablement or
+ * org switch it runs under is still on for it: a triggered run's, or for a run started from Ask
+ * Mycel, the person's own enablement, never an org switch. Switching off takes effect here, so
+ * a step already under way finishes first. A run someone started by hand (a retry too) needs
+ * only its connection.
  */
 async function mayGoOn(ctx: Ctx, run: Run): Promise<boolean> {
-  if (run.startedBy === "enablement" || run.startedBy === "org_switch") {
+  if (
+    run.startedBy === "enablement" ||
+    run.startedBy === "agent" ||
+    run.startedBy === "org_switch"
+  ) {
     // Lists nothing for a connection that's gone.
     const on = await listSwitchedOn(ctx, run.connectionId);
     return on.some(({ switch: by }) =>
-      run.startedBy === "enablement"
-        ? by.kind === "member" && by.enablementId === run.enablementId
-        : by.kind === "org" && by.workflowId === run.workflowId,
+      run.startedBy === "org_switch"
+        ? by.kind === "org" && by.workflowId === run.workflowId
+        : by.kind === "member" && by.enablementId === run.enablementId,
     );
   }
   try {

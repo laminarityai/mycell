@@ -28,7 +28,13 @@ export const utcDay = sql<string>`to_char(${creditLedger.createdAt} at time zone
 // is still a group a day.
 const madeByRun = sql<boolean>`${creditLedger.runId} is not null`;
 
-const noSpending = (): SpendingByKind => ({ workflow: 0, memory: 0, builder: 0, try_it: 0 });
+const noSpending = (): SpendingByKind => ({
+  workflow: 0,
+  memory: 0,
+  builder: 0,
+  agent: 0,
+  try_it: 0,
+});
 
 const dayKey = (day: Date) => day.toISOString().slice(0, 10);
 

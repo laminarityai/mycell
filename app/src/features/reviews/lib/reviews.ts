@@ -12,7 +12,7 @@ import type { UserNames } from "@/features/orgs/types";
 import type { PendingItem } from "@/features/runtime/adapters";
 import type { ReviewSharing } from "@/features/workflows/types";
 import { reviewSharing, workflowNames } from "@/features/workflows/server";
-import { type Ctx, isAdmin, isSystem, requireSystem } from "@/lib/ctx";
+import { type Ctx, isAdmin, isSystem, requireRole, requireSystem } from "@/lib/ctx";
 import { InvariantError, NotFoundError } from "@/lib/errors";
 import { now } from "@/lib/time";
 import type { HandOff, NewReview, Review, ReviewSummary } from "../types";
@@ -52,7 +52,30 @@ export async function createReview(ctx: Ctx, review: NewReview): Promise<string>
  * review the tags it's shared with.
  */
 export async function listReviews(ctx: Ctx): Promise<ReviewSummary[]> {
-  const rows = await waitingFor(ctx);
+  return summariesOf(ctx, await waitingFor(ctx));
+}
+
+/**
+ * The reviews waiting for the caller as a person, for Ask Mycel (#181): their own, those handed
+ * to them, and the org reviews of workflows they see through their own tags, listed as
+ * `listReviews` lists them. Admin rights add none, so an admin's list is a member's with the
+ * same reviews and tags, never every org review. People only: the system ctx is no one.
+ */
+export async function listOwnReviews(ctx: Ctx): Promise<ReviewSummary[]> {
+  requireRole(ctx, "admin", "member");
+  return summariesOf(ctx, await waitingFor(ctx, AS_PERSON), AS_PERSON);
+}
+
+/** Whether admin rights count: not when the caller asks as the person they are. */
+type Viewing = { asPerson?: boolean };
+
+const AS_PERSON: Viewing = { asPerson: true };
+
+async function summariesOf(
+  ctx: Ctx,
+  rows: ReviewRow[],
+  viewing: Viewing = {},
+): Promise<ReviewSummary[]> {
   const names = await workflowNames(
     ctx,
     rows.map((row) => row.workflowId),
@@ -60,7 +83,7 @@ export async function listReviews(ctx: Ctx): Promise<ReviewSummary[]> {
   const nameOf: UserNames = rows.some((row) => row.handedToUserId !== null)
     ? await userNames(ctx)
     : () => "";
-  const sharing = await sharingOf(ctx, rows);
+  const sharing = await sharingOf(ctx, rows, viewing);
   return rows.map((row) => summaryOf(row, nameOf, sharing, names.get(row.workflowId)));
 }
 
@@ -73,13 +96,14 @@ export async function countWaitingReviews(ctx: Ctx): Promise<number> {
 }
 
 /** The waiting reviews the caller may see, oldest first. */
-async function waitingFor(ctx: Ctx): Promise<ReviewRow[]> {
+async function waitingFor(ctx: Ctx, viewing: Viewing = {}): Promise<ReviewRow[]> {
   return visibleOf(
     ctx,
     await forOrg(ctx).select(reviews, {
       where: eq(reviews.status, "waiting"),
       orderBy: [asc(reviews.createdAt), asc(reviews.id)],
     }),
+    viewing,
   );
 }
 
@@ -96,24 +120,37 @@ export async function visibleReview(ctx: Ctx, reviewId: string): Promise<ReviewR
  * whoever sees its workflow now (every admin included), and either the colleague it was handed
  * to. The system ctx, which jobs act as, sees every review in its org (ADR-0009).
  */
-export async function visibleOf(ctx: Ctx, rows: ReviewRow[]): Promise<ReviewRow[]> {
+export async function visibleOf(
+  ctx: Ctx,
+  rows: ReviewRow[],
+  viewing: Viewing = {},
+): Promise<ReviewRow[]> {
   if (isSystem(ctx)) return rows;
-  // An admin sees every org review; anyone else those of workflows they see through a tag.
-  const sharing = isAdmin(ctx) ? new Map<string, ReviewSharing>() : await sharingOf(ctx, rows);
+  // An admin sees every org review, unless asking as a person; anyone else those of workflows
+  // they see through a tag.
+  const everyOrgReview = isAdmin(ctx) && viewing.asPerson !== true;
+  const sharing = everyOrgReview
+    ? new Map<string, ReviewSharing>()
+    : await sharingOf(ctx, rows, viewing);
   return rows.filter((row) => {
     if (row.handedToUserId === ctx.userId) return true;
     if (row.ownerScope === "member") return row.ownerUserId === ctx.userId;
-    return isAdmin(ctx) || sharing.get(row.workflowId)?.seen === true;
+    return everyOrgReview || sharing.get(row.workflowId)?.seen === true;
   });
 }
 
 // How the org reviews among `rows` are shared, by workflow ID: who sees them, and with which tags.
-async function sharingOf(ctx: Ctx, rows: ReviewRow[]): Promise<Map<string, ReviewSharing>> {
+async function sharingOf(
+  ctx: Ctx,
+  rows: ReviewRow[],
+  viewing: Viewing = {},
+): Promise<Map<string, ReviewSharing>> {
   const org = rows.filter((row) => row.ownerScope === "org");
   if (org.length === 0) return new Map();
   return reviewSharing(
     ctx,
     org.map((row) => row.workflowId),
+    viewing,
   );
 }
 

@@ -10,7 +10,7 @@ import { backfillConnection, pollConnection } from "@/features/discovery/server"
 import { systemCtx } from "@/lib/ctx";
 import { connectMailbox, daysAgo } from "@/testing/connect-helpers";
 import type { FakeMessageInput } from "@/testing/fake-gmail";
-import { addExclusion, markCompanyWideList, readObject, searchMemory } from "../server";
+import { addExclusion, citeFacts, markCompanyWideList, readObject, searchMemory } from "../server";
 import { classifiedAs, learnStoredItems, scriptLearning, withCredits } from "./memory-helpers";
 
 beforeEach(resetDatabase);
@@ -75,6 +75,31 @@ describe("memory reads' query budget", () => {
     const many = await readQueries(orgA);
 
     expect(many).toEqual(few);
+  });
+});
+
+describe("citing facts' query budget", () => {
+  it("makes the same queries for 1 fact as for 4", async () => {
+    const { orgA, arrives } = await setup();
+    await arrives({ text: "Acme pays net 45, ships from Reno, and buys oak." });
+    const statements = ["Acme pays net 45.", "Acme ships from Reno.", "Acme buys oak."];
+    scriptLearning({
+      objects: [{ ref: "acme", kind: "company", name: "Acme", domain: "acme.example" }],
+      facts: statements.map((statement) => ({ about: "acme", statement, evidence: "Acme" })),
+    });
+    await learnStoredItems(orgA.id);
+    const byDomain = { key: { kind: "domain" as const, value: "acme.example" } };
+    const ids = (await readObject(orgA.member.ctx, byDomain)).facts.map((fact) => fact.id);
+    expect(ids).toHaveLength(4);
+    const cite = (factIds: string[]) =>
+      countQueries(async () => {
+        expect(await citeFacts(orgA.member.ctx, factIds)).toHaveLength(factIds.length);
+      });
+
+    const one = await cite(ids.slice(0, 1));
+    const four = await cite(ids);
+
+    expect(four.queries).toBe(one.queries);
   });
 });
 

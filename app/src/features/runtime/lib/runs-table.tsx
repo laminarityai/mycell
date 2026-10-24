@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import { failureMessage } from "../failure-texts";
 import type { RunInbox, RunListItem, RunStatus } from "../types";
+import { FromAskMycel } from "./from-ask-mycel";
 
 export const RUN_STATUS_LABELS: Record<RunStatus, string> = {
   succeeded: "Succeeded",
@@ -83,7 +84,10 @@ export function RunsTable({ runs, showInbox }: { runs: RunListItem[]; showInbox:
             <TableCell className="max-w-72 whitespace-normal">
               <MessageCell run={run} />
             </TableCell>
-            <TableCell className="whitespace-normal">{run.workflowName}</TableCell>
+            <TableCell className="whitespace-normal">
+              {run.workflowName}
+              {run.startedBy === "agent" ? <FromAskMycel /> : null}
+            </TableCell>
             {showInbox ? (
               <TableCell className="whitespace-normal text-muted-foreground">
                 {inboxLabel(run.inbox)}

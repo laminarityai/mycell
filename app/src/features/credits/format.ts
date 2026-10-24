@@ -23,6 +23,7 @@ export const SPENDING_KIND_LABELS: Record<SpendingKind, string> = {
   workflow: "Workflows",
   memory: "Memory",
   builder: "Builder chat",
+  agent: "Ask Mycel",
   try_it: "Try it",
 };
 

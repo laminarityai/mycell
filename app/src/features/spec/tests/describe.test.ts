@@ -111,6 +111,17 @@ describe("describeSpec", () => {
       requiredByPolicy: false,
     });
   });
+
+  it("says an approval of suggested edits waits for them to be accepted or rejected", () => {
+    const spec = exampleSpec();
+    spec.steps[4] = { id: "approve", type: "approval", channel: "suggested_edits" };
+
+    const steps = describeSpec(parsed(spec), {});
+
+    expect(steps.find((step) => step.id === "approve")?.text).toBe(
+      "Waits for a person to accept or reject the suggested edits before the doc changes.",
+    );
+  });
 });
 
 describe("describePathTo", () => {

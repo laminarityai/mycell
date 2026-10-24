@@ -146,8 +146,9 @@ export const runSteps = pgTable(
 
 /**
  * Where a trigger that polls its app resumes on one connection: for the Calendar trigger, the
- * sync token of the connection's primary calendar. Only the token is kept, never the events it
- * listed (invariant 8), and it cascades from its connection (invariant 3).
+ * sync token of the connection's primary calendar, which memory's reading of the calendar shares
+ * (ADR-0029: one poll serves both). Only the token is kept, never the events it listed
+ * (invariant 8), and it cascades from its connection (invariant 3).
  */
 export const triggerCursors = pgTable(
   "trigger_cursors",
@@ -227,6 +228,51 @@ export const heldSends = pgTable(
       name: "held_sends_custom_action_fk",
       columns: [table.orgId, table.customAction],
       foreignColumns: [customActions.orgId, customActions.name],
+    }).onDelete("cascade"),
+  ],
+);
+
+/**
+ * What a suggest-edits step found before it wrote (ADR-0017): the suggestion IDs in the document
+ * then, and the IDs its write created, once known. Docs can't tell Mycel's
+ * suggestions from the person's, and a batchUpdate isn't idempotent, so a step retried after its
+ * answer was lost finds what it created here, rather than suggesting the edits twice. IDs only,
+ * never the document's text or the suggested text (invariant 8).
+ */
+export const suggestedEditWrites = pgTable(
+  "suggested_edit_writes",
+  {
+    id: text("id").primaryKey(),
+    orgId: text("org_id").notNull(),
+    connectionId: text("connection_id").notNull(),
+    runId: text("run_id").notNull(),
+    // The tool step that wrote: one per run step, however often the step is retried.
+    stepId: text("step_id").notNull(),
+    // The run's provenance (invariant 2).
+    sourceRef: text("source_ref").notNull(),
+    ownerScope: text("owner_scope", { enum: ["member", "org"] }).notNull(),
+    documentId: text("document_id").notNull(),
+    suggestionIdsBefore: text("suggestion_ids_before").array().notNull(),
+    // Null until the write's answer arrived, or a retry found what it created.
+    createdSuggestionIds: text("created_suggestion_ids").array(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    unique("suggested_edit_writes_org_id_run_id_step_id_unique").on(
+      table.orgId,
+      table.runId,
+      table.stepId,
+    ),
+    index("suggested_edit_writes_org_id_connection_id_idx").on(table.orgId, table.connectionId),
+    foreignKey({
+      name: "suggested_edit_writes_connection_fk",
+      columns: [table.orgId, table.connectionId],
+      foreignColumns: [connections.orgId, connections.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "suggested_edit_writes_run_fk",
+      columns: [table.orgId, table.runId],
+      foreignColumns: [runs.orgId, runs.id],
     }).onDelete("cascade"),
   ],
 );

@@ -177,6 +177,33 @@ export function HeldSendActions({
   );
 }
 
+/** What a person does with open suggested edits: accept them all, or reject them all. */
+export function SuggestedEditsActions({ reviewId }: { reviewId: string }) {
+  const [approveResult, approve, approving] = useActionState(approveReviewAction, {});
+  const [declineResult, decline, declining] = useActionState(declineReviewAction, {});
+  const busy = approving || declining;
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex gap-2">
+        <form action={approve}>
+          <input type="hidden" name="reviewId" value={reviewId} />
+          <Button type="submit" disabled={busy}>
+            Accept the suggestions
+          </Button>
+        </form>
+        <form action={decline}>
+          <input type="hidden" name="reviewId" value={reviewId} />
+          <Button type="submit" variant="outline" disabled={busy}>
+            Reject them
+          </Button>
+        </form>
+      </div>
+      <FormError message={approveResult.error} />
+      <FormError message={declineResult.error} />
+    </div>
+  );
+}
+
 /** What a person does with an open escalation: mark it done once they've handled the message. */
 export function EscalationActions({ reviewId }: { reviewId: string }) {
   const [result, done, marking] = useActionState(markDoneAction, {});
@@ -230,5 +257,35 @@ export function HandOffForm({
       </div>
       <FormError message={result.error} />
     </form>
+  );
+}
+
+/**
+ * What a person does with an open meeting: approve it, which invites its guests, or decline it,
+ * which deletes the event. The meeting itself is changed, if at all, in Calendar.
+ */
+export function MeetingActions({ reviewId }: { reviewId: string }) {
+  const [approveResult, approve, approving] = useActionState(approveReviewAction, {});
+  const [declineResult, decline, declining] = useActionState(declineReviewAction, {});
+  const busy = approving || declining;
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex gap-2">
+        <form action={approve}>
+          <input type="hidden" name="reviewId" value={reviewId} />
+          <Button type="submit" disabled={busy}>
+            Approve and invite
+          </Button>
+        </form>
+        <form action={decline}>
+          <input type="hidden" name="reviewId" value={reviewId} />
+          <Button type="submit" variant="outline" disabled={busy}>
+            Decline and delete
+          </Button>
+        </form>
+      </div>
+      <FormError message={approveResult.error} />
+      <FormError message={declineResult.error} />
+    </div>
   );
 }

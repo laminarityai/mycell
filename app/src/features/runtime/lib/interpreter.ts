@@ -94,6 +94,7 @@ async function executeStep(ctx: Ctx, run: Run, step: Step, place: RunPlace): Pro
         itemRef,
         threadRef,
         ...("reason" in item ? { reason: item.reason } : {}),
+        ...("details" in item ? { details: item.details } : {}),
         runId: run.id,
         connectionId: "connectionId" in item ? item.connectionId : run.connectionId,
         runConnectionId: run.connectionId,

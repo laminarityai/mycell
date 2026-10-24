@@ -262,15 +262,70 @@ export type RunFilterOptions = {
 export type RunPage = { runs: RunListItem[]; newer: string | null; older: string | null };
 
 /**
+ * What edits suggested in a Doc need for their approval that Docs doesn't show Mycel: the IDs of
+ * the suggestions the step made, which tell them from the person's own (ADR-0017). IDs only,
+ * never the suggested text (invariant 8).
+ */
+export const suggestedEditsDetailsSchema = z.object({
+  kind: z.literal("suggested_edits"),
+  suggestionIds: z.array(z.string().min(1)).min(1),
+});
+export type SuggestedEditsDetails = z.infer<typeof suggestedEditsDetailsSchema>;
+
+/**
+ * What a booked Calendar event needs for its approval that Calendar doesn't hold yet: the guests
+ * to invite and how the event shows once approved. Addresses and settings only, never the
+ * event's title or description (invariant 8).
+ */
+export const calendarEventDetailsSchema = z.object({
+  kind: z.literal("calendar_event"),
+  guests: z.array(z.string().min(1)).min(1),
+  visibility: z.enum(["default", "public", "private", "confidential"]),
+  transparency: z.enum(["opaque", "transparent"]),
+});
+export type CalendarEventDetails = z.infer<typeof calendarEventDetailsSchema>;
+
+/**
+ * What a waiting item's approval needs that its app doesn't show or hold yet, kept on its review,
+ * told apart by its kind: a Doc's suggestions or a meeting's guests and settings.
+ */
+export const pendingDetailsSchema = z.discriminatedUnion("kind", [
+  suggestedEditsDetailsSchema,
+  calendarEventDetailsSchema,
+]);
+export type PendingDetails = z.infer<typeof pendingDetailsSchema>;
+
+/**
  * What one step of a dry run read or would have written, shown to the admin who tried it and
  * never stored (invariant 8): the rows a read-range read, the draft it would have made, the
  * label or row it would have added, the review it would have waited for.
  */
 export type DryRunEffect =
   | { kind: "rows_read"; range: string; rows: string[][] }
+  /** A booking, as it would wait on the calendar until approved (nothing is made). */
+  | {
+      kind: "event";
+      title: string;
+      start: string;
+      end: string;
+      guests: string[];
+      meet: boolean;
+    }
   | { kind: "draft"; to: string; subject: string; text: string }
   | { kind: "label"; label: string }
   | { kind: "row"; range: string; values: (string | number | boolean | null)[] }
+  /** Edits a step would suggest in a Doc: its title, and each request's kind and text. */
+  | { kind: "suggestions"; documentId: string; title: string; requests: string[] }
+  /** A task it would add to the default list: its title, notes as written, and due date. */
+  | { kind: "task"; title: string; notes: string; due: string | null }
+  /** What it would change on a task; null for what it leaves as it is. */
+  | {
+      kind: "task_update";
+      title: string | null;
+      notes: string | null;
+      due: string | null;
+      done: boolean | null;
+    }
   | { kind: "review"; channel: string }
   /** A custom write's request, exactly as it would be sent once approved (nothing is sent). */
   | {

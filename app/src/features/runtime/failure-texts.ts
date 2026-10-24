@@ -54,6 +54,12 @@ const TEXTS: Partial<Record<string, Omit<FailureText, "detail">>> = {
     todo: "Connect the app on the Connections page.",
     ours: false,
   },
+  suggestions_not_saved: {
+    summary:
+      "Docs made the edits but saved none of them as suggestions, so they may have changed the doc directly.",
+    todo: "Open the doc and undo any edit you don't want. Nothing waits for a review.",
+    ours: false,
+  },
   bad_reference: {
     summary: "A step refers to a value no earlier step handed on.",
     todo: `Fix the reference in the workflow's editor, ${PUBLISH}.`,

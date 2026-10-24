@@ -8,6 +8,7 @@ import { addLabel } from "./gmail-labels";
 import { lookUp, type LookupInput } from "./memory-lookup";
 import { appendRow, readRange } from "./sheets";
 import type { ActionExecutors } from "./step-context";
+import { createTask, listTasks, updateTask, type NewTask, type TaskChanges } from "./tasks";
 
 export const actionExecutors: ActionExecutors = {
   "google-mail.read-message": {
@@ -43,6 +44,21 @@ export const actionExecutors: ActionExecutors = {
   // Hands on the range's counts; a draft step that names it re-reads the values.
   "google-sheet.read-range": { status: "ready", run: readRange },
   "google-sheet.append-row": { status: "ready", run: appendRow },
+  // On the person's default list; a task's title and notes leave the step only as its ID.
+  "google-tasks.list-tasks": {
+    status: "ready",
+    run: (ctx, connectionId) => listTasks(ctx, connectionId),
+  },
+  "google-tasks.create-task": {
+    status: "ready",
+    run: (ctx, connectionId, input: NewTask, marker, _compose, run) =>
+      createTask(ctx, connectionId, input, marker, run),
+  },
+  "google-tasks.update-task": {
+    status: "ready",
+    run: (ctx, connectionId, input: TaskChanges, _marker, _compose, run) =>
+      updateTask(ctx, connectionId, input, run),
+  },
   // Reads as the run: in its member's view, or company-wide only (memory-lookup.ts).
   "memory.lookup": {
     status: "ready",

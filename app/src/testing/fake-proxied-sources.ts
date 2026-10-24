@@ -1,6 +1,6 @@
 // The APIs the fake Nango's proxy serves, each by its host and path prefix, answering from the
-// connection's own fake: Google's (its Gmail mailbox, its Drive, its spreadsheets or its
-// calendar), and the registered app Microsoft 365, through Microsoft Graph. Like Google, an API
+// connection's own fake: Google's (its Gmail mailbox, its Drive, its spreadsheets, its calendar
+// or its task lists), and the registered app Microsoft 365, through Microsoft Graph. Like Google, an API
 // answers 403 to a connection whose token holds none of the scopes it accepts (for a write, none
 // of the scopes its writes accept), and a host answers 404 for a path it doesn't serve.
 import { HttpResponse } from "msw";
@@ -12,6 +12,7 @@ import { gmailError, gmailResponse, gmailWrite } from "./fake-gmail";
 import type { FakeConnection } from "./fake-nango";
 import { graphError } from "./fake-microsoft";
 import { sheetsError } from "./fake-sheets";
+import { tasksError } from "./fake-tasks";
 
 type Respond = (connection: FakeConnection, path: string, params: URLSearchParams) => Response;
 
@@ -52,6 +53,7 @@ const SPREADSHEETS_READONLY = "https://www.googleapis.com/auth/spreadsheets.read
 const CALENDAR_READS = ["calendar", "calendar.readonly", "calendar.events.readonly"].map(
   (name) => `https://www.googleapis.com/auth/${name}`,
 );
+const TASKS_READONLY = "https://www.googleapis.com/auth/tasks.readonly";
 // Which Graph resources need which scope isn't modelled: any token that can sign in reads, and
 // any that can write something writes.
 const GRAPH_WRITE_SCOPES = REGISTERED_APPS.microsoft.scopes.filter((scope) =>
@@ -109,6 +111,19 @@ export const PROXIED_SOURCES: ProxiedSource[] = [
       },
     },
     rateLimited: () => sheetsError(429, "RESOURCE_EXHAUSTED"),
+  },
+  {
+    host: "https://tasks.googleapis.com",
+    prefix: "/tasks/v1",
+    // Listing and reading take either Tasks scope; insert and patch the read-write one.
+    scopes: [GOOGLE_APP_SCOPES.tasks, TASKS_READONLY],
+    respond: (connection, path, params) => connection.tasks.respond(path, params),
+    write: {
+      scopes: [GOOGLE_APP_SCOPES.tasks],
+      respond: (connection, path, params, body, method) =>
+        connection.tasks.write(path, params, body, method),
+    },
+    rateLimited: () => tasksError(429, "rateLimitExceeded", "Rate Limit Exceeded"),
   },
   {
     host: "https://graph.microsoft.com",

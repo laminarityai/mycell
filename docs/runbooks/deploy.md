@@ -400,7 +400,7 @@ The answer says `"filterMatchState": "MATCH_FOUND"`. The federation itself can o
    Leave these unset:
    - `INNGEST_DEV`: unset means Inngest Cloud.
    - `NANGO_API_URL` and `AI_GATEWAY_BASE_URL`: only the e2e tests set them.
-   - `CREDITS_PER_USD`, the `CREDIT_ESTIMATE_*` variables, `MODEL_EMBED` and `KMS_ALIAS_PREFIX` (`mycel`): they have defaults. Change `MODEL_EMBED` only together with the stored vectors, which must keep one size.
+   - `CREDITS_PER_USD`, the `CREDIT_ESTIMATE_*` variables, `MODEL_EMBED`, `MODEL_DECISION_PREFIXES` (Jev and Laya) and `KMS_ALIAS_PREFIX` (`mycel`): they have defaults. Change `MODEL_EMBED` only together with the stored vectors, which must keep one size.
    - `KMS_ENDPOINT`: only LocalStack needs it.
 
    Vercel sets `NODE_ENV` itself.

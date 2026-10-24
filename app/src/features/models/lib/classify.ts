@@ -7,17 +7,14 @@ import { z } from "zod";
 import type { Ctx } from "@/lib/ctx";
 import { ModelCallError, type Classification, type ClassifyRequest } from "../types";
 import { callModel, meteredCall } from "./call-model";
-import { resolveModel } from "./model-roles";
+import { isDecisionModel, resolveModel } from "./model-roles";
 import { classifyPrompts } from "./prompts";
-
-// Gateway decision models: Jev, and Laya, which an org may try through its role table.
-const DECISION_MODEL_PREFIXES = ["typesafe-ai/jev", "convaiinnovations/laya"];
 
 const QUESTION_ID = "label";
 
 export async function classify(ctx: Ctx, request: ClassifyRequest): Promise<Classification> {
   const modelId = await resolveModel(ctx, "classify");
-  if (DECISION_MODEL_PREFIXES.some((prefix) => modelId.startsWith(prefix))) {
+  if (isDecisionModel(modelId)) {
     try {
       return await decide(ctx, request, modelId);
     } catch (error) {

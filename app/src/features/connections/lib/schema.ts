@@ -37,7 +37,7 @@ export const connections = pgTable(
     // Set when Nango reports the app refused to refresh the token, cleared by a reconnect or a
     // later successful refresh. Polling skips the connection meanwhile.
     needsReauth: boolean("needs_reauth").notNull().default(false),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     unique("connections_org_id_source_account_unique").on(
@@ -104,7 +104,7 @@ export const connectAttempts = pgTable(
     source: text("source", { enum: ["google", "microsoft", "gmail", "drive"] }).notNull(),
     status: text("status", { enum: ["pending", "connected", "refused"] }).notNull(),
     refusal: text("refusal"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     index("connect_attempts_org_id_user_id_idx").on(table.orgId, table.userId),

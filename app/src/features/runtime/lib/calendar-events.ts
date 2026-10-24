@@ -9,7 +9,7 @@ import { SourceRequestError } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
 import { emailAddressesIn } from "@/lib/email-addresses";
 import type { PendingDetails } from "../types";
-import { CALENDAR_EVENTS } from "./calendar";
+import { CALENDAR_EVENTS } from "@/features/connections/calendar";
 import { RunStepError } from "./failures";
 
 const time = z.object({ dateTime: z.string().optional(), date: z.string().optional() });

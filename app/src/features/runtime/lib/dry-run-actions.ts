@@ -13,6 +13,7 @@ import { replyTarget } from "./gmail-drafts";
 import { lookUp, type LookupInput } from "./memory-lookup";
 import { rangeRows, readRange } from "./sheets";
 import type { ActionExecutors } from "./step-context";
+import { editableTask, signature, taskNotes, type NewTask, type TaskChanges } from "./tasks";
 
 /** What stands in for a write's ID: nothing was made. */
 export const DRY_RUN_ID = "dry-run";
@@ -80,6 +81,35 @@ export function dryRunActions(report: (effect: DryRunEffect) => void): ActionExe
       run: (_ctx, _connectionId, input: { range: string; values: Cell[] }) => {
         report({ kind: "row", range: input.range, values: input.values });
         return Promise.resolve({ updatedRange: input.range });
+      },
+    },
+    // A read, so it runs for real.
+    "google-tasks.list-tasks": actionExecutors["google-tasks.list-tasks"],
+    "google-tasks.create-task": {
+      status: "ready",
+      run: async (ctx, _connectionId, input: NewTask, _marker, _compose, run) => {
+        const notes = taskNotes(input.notes, [await signature(ctx, run, "Added")]);
+        report({ kind: "task", title: input.title, notes, due: input.due ?? null });
+        return { taskId: DRY_RUN_ID };
+      },
+    },
+    // Reads the task, so an assigned one is refused here too, and changes nothing.
+    "google-tasks.update-task": {
+      status: "ready",
+      run: async (ctx, connectionId, input: TaskChanges, _marker, _compose, run) => {
+        await editableTask(ctx, connectionId, input.taskId);
+        const notes =
+          input.notes === undefined
+            ? null
+            : taskNotes(input.notes, [await signature(ctx, run, "Updated")]);
+        report({
+          kind: "task_update",
+          title: input.title ?? null,
+          notes,
+          due: input.due ?? null,
+          done: input.done ?? null,
+        });
+        return { taskId: input.taskId };
       },
     },
   };

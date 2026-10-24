@@ -52,6 +52,10 @@ function lineOf(dryRunStep: DryRunStep, spec: Spec): PromptText {
       return tryItPrompts.wouldLabel({ step, label: input("label") });
     case "row":
       return tryItPrompts.wouldAppendRow({ step, range: input("range") });
+    case "task":
+      return tryItPrompts.wouldAddTask({ step });
+    case "task_update":
+      return tryItPrompts.wouldUpdateTask({ step, task: input("taskId") });
     case "rows_read":
       return tryItPrompts.readRows({
         step,

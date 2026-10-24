@@ -15,11 +15,9 @@ import {
   calendarError,
   eventId as newEventId,
   PRIMARY_EVENTS,
-  type Attendee,
-  type CalendarEventResource,
-  type CalendarWrite,
   type FakeCalendar,
 } from "./fake-calendar";
+import type { Attendee, CalendarEventResource, CalendarWrite } from "./fake-calendar-events";
 import type { WriteMethod } from "./fake-proxied-sources";
 
 const ID = /^[a-v0-9]{5,1024}$/;
@@ -141,6 +139,7 @@ function insert(calendar: FakeCalendar, params: URLSearchParams, body: unknown):
     status: "confirmed",
     created: now,
     updated: now,
+    sequence: 0,
     summary: input.summary ?? "",
     ...(input.description === undefined ? {} : { description: input.description }),
     ...(input.location === undefined ? {} : { location: input.location }),
@@ -182,9 +181,23 @@ function patched(event: CalendarEventResource, body: EventBody): CalendarEventRe
 
 // An update: the event as the body gives it, keeping only what Google sets itself.
 function replaced(event: CalendarEventResource, body: EventBody): CalendarEventResource {
-  const { id, kind, status, created, updated, organizer, creator, eventType, htmlLink, iCalUID } =
+  const { id, kind, status, created, updated, sequence, organizer, creator, eventType, htmlLink } =
     event;
-  const kept = { id, kind, status, created, updated, organizer, creator, eventType, htmlLink };
+  const { iCalUID } = event;
+  // The guests and how it shows don't change what the event says, so its sequence stays (as the
+  // fake's own guest changes keep it).
+  const kept = {
+    id,
+    kind,
+    status,
+    created,
+    updated,
+    sequence,
+    organizer,
+    creator,
+    eventType,
+    htmlLink,
+  };
   return patched({ ...kept, iCalUID, summary: "", start: event.start, end: event.end }, body);
 }
 

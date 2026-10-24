@@ -1,12 +1,12 @@
 // The action catalog, as code (invariant 4): every catalog action's risk level is fixed here
-// by our team, and nothing a spec or a model says changes it. v1 has Gmail, Sheets and Calendar
-// actions and one that reads memory; no action is `financial` or `destructive`. Code that looks
-// up the action a workflow names takes the company's action set (`action-set.ts`), which starts
-// from this catalog.
+// by our team, and nothing a spec or a model says changes it. v1 has six Gmail and Sheets
+// actions, three Tasks actions, two Calendar actions (`calendar-actions.ts`) and one that reads
+// memory; no action is `financial` or `destructive`. Code that looks up the action a workflow
+// names takes the company's action set (`action-set.ts`), which starts from this catalog.
 import { z } from "zod";
-import { emailAddressesIn } from "@/lib/email-addresses";
 import { GOOGLE_HOSTS, googleScope as scope } from "@/lib/google";
 import { actionSetOf, scopesOf } from "./action-set";
+import { calendarActions } from "./calendar-actions";
 import type { ActionSet, CatalogAction } from "./types";
 
 const GMAIL_HOST = GOOGLE_HOSTS.gmail;
@@ -21,28 +21,19 @@ const SHEETS_READ = [
   scope("spreadsheets"),
 ];
 const SHEETS_WRITE = [scope("spreadsheets")];
-const CALENDAR_HOST = GOOGLE_HOSTS.www;
-const CALENDAR_READ = [
-  scope("calendar.events"),
-  scope("calendar"),
-  scope("calendar.events.readonly"),
-  scope("calendar.readonly"),
-];
-const CALENDAR_WRITE = [scope("calendar.events"), scope("calendar")];
+const TASKS_HOST = GOOGLE_HOSTS.tasks;
+const TASKS_READ = [scope("tasks"), scope("tasks.readonly")];
+const TASKS_WRITE = [scope("tasks")];
 
 const id = z.string().min(1);
 const cell = z.union([z.string(), z.number(), z.boolean(), z.null()]);
 // An A1 range naming its sheet, so a write's marker search covers the whole sheet it writes to.
 const sheetRange = z.string().regex(/^.+![^!]+$/, "Name the sheet in the range, as in Sheet1!A:C.");
-// A time with its UTC offset, as Calendar takes it: 2026-11-02T15:00:00+01:00.
-const dateTime = z.iso.datetime({ offset: true });
-// A guest: an address, alone or with a name ("Ada <ada@customer.test>").
-const guest = z
-  .string()
-  .refine((text) => emailAddressesIn(text).length === 1, "Give one email address per guest.");
-// How a booked event shows once approved; until then it's private and doesn't block time.
-const visibility = z.enum(["default", "public", "private", "confidential"]);
-const transparency = z.enum(["opaque", "transparent"]);
+// Tasks keeps a due date's date and drops its time of day, so a due date is a date only.
+const dueDate = z.iso.date("Give the due date as a date, YYYY-MM-DD: Tasks keeps no time of day.");
+const taskTitle = z.string().trim().min(1).max(1000);
+// Google allows 8,192 characters of notes, and Mycel adds a line naming the workflow.
+const taskNotes = z.string().max(7000);
 
 const actions = [
   {
@@ -138,74 +129,71 @@ const actions = [
     input: z.object({ spreadsheetId: id, range: sheetRange, values: z.array(cell).min(1) }),
     output: z.object({ updatedRange: z.string() }),
   },
+  ...calendarActions,
   {
     kind: "catalog",
-    name: "google-calendar.read-event",
-    app: "Calendar",
+    name: "google-tasks.list-tasks",
+    app: "Tasks",
     description:
-      "Read one event on the person's calendar: its title, description, times, place, " +
-      "organizer and guests.",
+      "List the open tasks on the person's default Tasks list: each one's ID, title, notes and " +
+      "due date. Tasks assigned to them from Docs or Chat are left out.",
     risk: "read",
     integration: "google",
-    host: CALENDAR_HOST,
-    scopes: CALENDAR_READ,
-    input: z.object({ eventId: id }),
-    // Its title and description pass to later steps, never into run records (ADR-0021).
+    host: TASKS_HOST,
+    scopes: TASKS_READ,
+    input: z.object({}),
+    // Titles and notes pass to later steps, never into run records (ADR-0021).
     output: z.object({
-      eventId: id,
-      title: z.string(),
-      description: z.string(),
-      start: z.string(),
-      end: z.string(),
-      location: z.string(),
-      organizer: z.string(),
-      guests: z.array(z.string()),
-      guestCount: z.number().int().nonnegative(),
+      taskCount: z.number().int().nonnegative(),
+      tasks: z.array(
+        z.object({
+          id,
+          title: z.string(),
+          notes: z.string().optional(),
+          due: z.string().optional(),
+        }),
+      ),
     }),
-    conditionFields: [
-      { name: "guestCount", type: "number", label: "The number of guests besides the person" },
-    ],
+    conditionFields: [{ name: "taskCount", type: "number", label: "The number of open tasks" }],
   },
   {
     kind: "catalog",
-    name: "google-calendar.create-event",
-    app: "Calendar",
+    name: "google-tasks.create-task",
+    app: "Tasks",
     description:
-      "Book a meeting on the person's calendar and invite guests once a person approves it. " +
-      "Until then the event has no guests, is private and doesn't block time. Adds a Google " +
-      "Meet link only when `meet` is true.",
-    pendingForm: "an event on the person's calendar with no guests until approved",
-    channel: "calendar_events",
-    risk: "external_send",
+      "Add a task to the person's default Tasks list, its notes ending with the workflow that " +
+      "added it. A due date is a date only.",
+    risk: "internal_reversible",
     integration: "google",
-    host: CALENDAR_HOST,
-    scopes: CALENDAR_WRITE,
+    host: TASKS_HOST,
+    scopes: TASKS_WRITE,
+    input: z.object({ title: taskTitle, notes: taskNotes.optional(), due: dueDate.optional() }),
+    output: z.object({ taskId: id }),
+  },
+  {
+    kind: "catalog",
+    name: "google-tasks.update-task",
+    app: "Tasks",
+    description:
+      "Change a task on the person's default Tasks list: its title, notes, due date (a date " +
+      "only) or whether it's done. A task assigned to them from Docs or Chat is refused.",
+    risk: "internal_reversible",
+    integration: "google",
+    host: TASKS_HOST,
+    scopes: TASKS_WRITE,
     input: z
       .object({
-        title: z.string().trim().min(1).max(1024),
-        description: z.string().max(8000).optional(),
-        start: dateTime,
-        end: dateTime,
-        // The IANA time zone the event is shown in, such as Europe/London.
-        timeZone: z.string().min(1).optional(),
-        location: z.string().max(1024).optional(),
-        guests: z.array(guest).min(1).max(50),
-        meet: z.boolean().default(false),
-        // How the event shows once approved: Calendar's default visibility, and busy.
-        visibility: visibility.default("default"),
-        transparency: transparency.default("opaque"),
+        taskId: id,
+        title: taskTitle.optional(),
+        notes: taskNotes.optional(),
+        due: dueDate.optional(),
+        done: z.boolean().optional(),
       })
-      .refine((event) => Date.parse(event.end) > Date.parse(event.start), {
-        message: "End the meeting after it starts.",
-        path: ["end"],
-      }),
-    // Pointers and addresses only: the title and description stay on the calendar.
-    output: z.object({
-      eventId: id,
-      guests: z.array(z.string()),
-      visibility,
-      transparency,
-    }),
+      .refine(
+        (input) => [input.title, input.notes, input.due, input.done].some((v) => v !== undefined),
+        { message: "Change at least one of title, notes, due or done." },
+      ),
+    output: z.object({ taskId: id }),
   },
   {
     kind: "catalog",

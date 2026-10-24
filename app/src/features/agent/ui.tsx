@@ -32,6 +32,7 @@ export function AskMycel({
           conversationId={conversation.id}
           initialMessages={toUIMessages(conversation)}
           citations={conversation.citations}
+          found={conversation.found}
         />
       )}
     </div>

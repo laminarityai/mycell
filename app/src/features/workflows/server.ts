@@ -14,6 +14,10 @@ export { switchWorkflowOff, switchWorkflowOn } from "./lib/switches";
 export { archiveWorkflow, restoreWorkflow } from "./lib/archiving";
 // Members switching a workflow they can see on and off for their own Google connection.
 export { disable, enable, listEnablements } from "./lib/enablements";
+// For Ask Mycel: what the caller has switched on for their own inbox, and why each one that's
+// paused is, in the Workflows page's words.
+export { listOwnEnablements } from "./lib/own-enablements";
+export { pausedText } from "./lib/paused-text";
 // For the Workflows page: every workflow's enablements and runnable connections, read together.
 export { listEnablementsFor } from "./lib/enablements";
 export { runnableConnectionsFor } from "./lib/runnable-connections";

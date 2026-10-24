@@ -5,6 +5,8 @@
 import "server-only";
 export { createReview } from "./lib/reviews";
 export { listReviews } from "./lib/reviews";
+// For Ask Mycel: the reviews waiting for the caller as a person, admin rights adding none.
+export { listOwnReviews } from "./lib/reviews";
 // Ending the reviews in a thread their people finished in Gmail: a job calls it, as the system
 // ctx, for each message discovery saw sent.
 export { endReviewsInThread } from "./lib/ended-in-app";

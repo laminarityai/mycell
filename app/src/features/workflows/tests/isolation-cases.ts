@@ -7,6 +7,7 @@ import { connectGmail, connectMailbox } from "@/testing/connect-helpers";
 import { renameTag, unassignTag } from "@/features/tags/server";
 import { publishTo, tagUsers } from "@/testing/visibility-helpers";
 import * as server from "../server";
+import { enablementCases } from "./isolation-enablement-cases";
 import {
   orgBTags,
   publishedToSalesInOrgB,
@@ -166,17 +167,7 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await server.listEnablements(orgB.admin.ctx, b.workflowId)).toEqual(before);
   },
 
-  listEnablements: async (orgs) => {
-    const { orgA, orgB } = orgs;
-    const b = await publishedToSalesInOrgB(orgs);
-    await connectMailbox(orgB.member.ctx, orgB.member.email);
-    await server.enable(orgB.member.ctx, b.workflowId);
-
-    await expect(server.listEnablements(orgA.admin.ctx, b.workflowId)).rejects.toThrow(
-      NotFoundError,
-    );
-    expect(await server.listEnablements(orgB.admin.ctx, b.workflowId)).toHaveLength(1);
-  },
+  ...enablementCases,
 
   workflowNames: async (orgs) => {
     const b = await seedOrgBWorkflow(orgs);

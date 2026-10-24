@@ -14,6 +14,7 @@ import {
   publish,
   recordedBackoff,
   recordingStepRunner,
+  recordsOf,
   threadSpec,
 } from "./run-helpers";
 
@@ -121,7 +122,7 @@ describe("the read-range action", () => {
       },
       { stepId: "approve", status: "succeeded", output: { awaiting: "human" } },
     ]);
-    expect(JSON.stringify(run)).not.toContain("Oak chair");
+    expect(recordsOf(run)).not.toContain("Oak chair");
   });
 
   it("counts an empty range as no rows", async () => {

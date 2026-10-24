@@ -1,12 +1,14 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
 import { listConversations } from "@/features/builder/server";
 import { ConversationList, NewConversationButton } from "@/features/builder/ui";
 import { listCustomActions } from "@/features/custom-actions/server";
 import { getCtx } from "@/features/orgs/server";
-import { listRuns } from "@/features/runtime/server";
+import { listRuns, pausingRuns } from "@/features/runtime/server";
+import { triggers } from "@/features/spec/triggers";
 import { listTags } from "@/features/tags/server";
-import { RecentRuns, RunOnMessageForm } from "@/features/runtime/ui";
+import { RunOnMessageForm, RunsTable, runsHref } from "@/features/runtime/ui";
 import {
   getWorkflow,
   getWorkflowHealth,
@@ -26,6 +28,9 @@ import { isAdmin } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
 import { TryIt } from "./try-it";
 import { AppShell } from "@/app/_shell/app-shell";
+
+/** How many of its latest runs the workflow's page shows; the Runs page has the rest. */
+const RECENT_RUNS = 10;
 
 // A Server Action here may try the working spec on a message, model steps and all.
 export const maxDuration = 300;
@@ -66,19 +71,22 @@ async function Workflow({
     if (error instanceof NotFoundError) notFound();
     throw error;
   });
-  const [runs, runnable, conversations, tags, customActions, preview, health] = await Promise.all([
-    listRuns(ctx, workflowId),
-    runnableConnections(ctx, workflowId),
-    listConversations(ctx, { workflowId }),
-    listTags(ctx),
-    listCustomActions(ctx),
-    // What publishing would pause; nothing to say when there's nothing new to publish, or the
-    // policy refuses the working spec (publishing says why).
-    workflow.unpublishedChanges && workflow.maxRisk !== null
-      ? previewPublish(ctx, workflowId, workflow.workingSpec)
-      : null,
-    getWorkflowHealth(ctx, workflowId),
-  ]);
+  const [runs, runnable, conversations, tags, customActions, preview, health, paused] =
+    await Promise.all([
+      listRuns(ctx, { workflowId }, { size: RECENT_RUNS }),
+      runnableConnections(ctx, workflowId),
+      listConversations(ctx, { workflowId }),
+      listTags(ctx),
+      listCustomActions(ctx),
+      // What publishing would pause; nothing to say when there's nothing new to publish, or the
+      // policy refuses the working spec (publishing says why).
+      workflow.unpublishedChanges && workflow.maxRisk !== null
+        ? previewPublish(ctx, workflowId, workflow.workingSpec)
+        : null,
+      getWorkflowHealth(ctx, workflowId),
+      // The runs that paused it for failing, if they did.
+      pausingRuns(ctx, workflow.failurePause?.runIds ?? []),
+    ]);
   // Only the connections a run could use, the one it's switched on for first.
   const connections = runnable.map((connection) => ({
     id: connection.id,
@@ -87,6 +95,8 @@ async function Workflow({
   return (
     // The graph, the step menu and the side panel look actions up in the company's action set.
     <ActionSetProvider customActions={customActions}>
+      {/* It opens on Health while anything stops it, failing included: what paused it and
+          Resume lead the page then. */}
       <WorkflowTabs
         paused={health.status === "paused"}
         editor={
@@ -110,13 +120,28 @@ async function Workflow({
           </>
         }
         runs={
-          // Its recent runs, until M8's Runs page links in.
           <section className="flex flex-col gap-3" aria-label="Runs">
-            <RunOnMessageForm workflowId={workflow.id} connections={connections} />
-            <RecentRuns runs={runs} />
+            <RunOnMessageForm
+              workflowId={workflow.id}
+              connections={connections}
+              item={triggers[workflow.workingSpec.trigger.type].item}
+            />
+            {runs.runs.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No runs yet.</p>
+            ) : (
+              <>
+                <RunsTable runs={runs.runs} showInbox />
+                <Link
+                  href={runsHref({ workflowId: workflow.id })}
+                  className="text-sm font-medium underline-offset-4 hover:underline"
+                >
+                  See every run of this workflow
+                </Link>
+              </>
+            )}
           </section>
         }
-        health={<WorkflowHealthChecks health={health} />}
+        health={<WorkflowHealthChecks health={health} pausingRuns={paused} />}
       />
     </ActionSetProvider>
   );

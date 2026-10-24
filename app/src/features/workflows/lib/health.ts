@@ -1,10 +1,12 @@
-// What the workflow page's Health tab checks (M7): whether the company has credits, and what the
-// workflow's live runs spent this calendar month (UTC) against its latest version's budget. The
-// pauses are the ones `readHolds` works out for the fan-out, so the tab and what starts agree.
+// What the workflow page's Health tab checks (M7): whether the company has credits, whether the
+// workflow's runs' failures paused it (M8), and what its live runs spent this calendar month
+// (UTC) against its latest version's budget. The pauses are the ones `readHolds` works out for
+// the fan-out, so the tab and what starts agree.
 import { getBalance, nextMonthStart, spentThisMonthByWorkflow } from "@/features/credits/server";
 import { type Ctx, requireAdmin } from "@/lib/ctx";
 import type { WorkflowHealth } from "../types";
 import { findWorkflow } from "./access";
+import { failurePauseOf } from "./failure-pauses";
 import { latestVersions } from "./latest-versions";
 import { pausesOf, readHolds } from "./pauses";
 
@@ -21,6 +23,7 @@ export async function getWorkflowHealth(ctx: Ctx, workflowId: string): Promise<W
   const version = latest.get(workflowId);
   const pauses = pausesOf(null, holds(workflowId));
   return {
+    workflowId,
     // Only a published workflow that isn't archived would run, so only it is paused.
     status:
       version === undefined
@@ -32,6 +35,7 @@ export async function getWorkflowHealth(ctx: Ctx, workflowId: string): Promise<W
             : "running",
     pauses: version === undefined || workflow.archivedAt !== null ? [] : pauses,
     balance,
+    failurePause: failurePauseOf(workflow),
     spentThisMonth: spent.get(workflowId) ?? 0,
     monthlyBudget: version?.spec.budget?.monthlyCredits ?? null,
     nextMonth: nextMonthStart(),

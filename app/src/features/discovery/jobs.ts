@@ -3,7 +3,7 @@
 import "server-only";
 import { connectionAppsGranted, connectionRecorded } from "@/features/connections/server";
 import { systemCtx, type Ctx } from "@/lib/ctx";
-import { inngest, stepRunner } from "@/lib/inngest";
+import { inngest, PER_ORG_LIMIT, stepRunner } from "@/lib/inngest";
 import { connectionPollDue } from "./lib/events";
 import {
   backfillConnection,
@@ -11,10 +11,6 @@ import {
   pollAllConnections,
   pollConnection,
 } from "./server";
-
-// At most this many backfills and polls run at once for one org, so one org's large
-// mailboxes leave other orgs' ingest unblocked.
-const PER_ORG_LIMIT = 3;
 
 // Shared by the backfill and the poll (scope "env" keys them across functions): one ingest run
 // per connection at a time, so cursors don't race, and a few per org. Both events carry
@@ -65,9 +61,18 @@ export const pollCron = inngest.createFunction(
   },
 );
 
-/** Polls one connection: what's new since its cursor, or a recovery if the cursor expired. */
+/**
+ * Polls one connection: what's new since its cursor, or a recovery if the cursor expired. A
+ * burst of poll-due events for one connection (Gmail notifies up to once a second, ADR-0026)
+ * becomes one poll, 5 seconds after the last; a steady stream still polls every 30 seconds.
+ */
 export const pollJob = inngest.createFunction(
-  { id: "poll-connection", triggers: [connectionPollDue], concurrency: [...INGEST_CONCURRENCY] },
+  {
+    id: "poll-connection",
+    triggers: [connectionPollDue],
+    concurrency: [...INGEST_CONCURRENCY],
+    debounce: { key: "event.data.connectionId", period: "5s", timeout: "30s" },
+  },
   async ({ event, step }) =>
     pollConnection(systemCtx(event.data.orgId), event.data.connectionId, stepRunner(step)),
 );

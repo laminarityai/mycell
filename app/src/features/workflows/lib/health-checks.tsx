@@ -1,12 +1,13 @@
 // The workflow page's Health tab (M7): each thing that can stop the workflow, as a check that
-// passes or says what stopped it and what lifts it. The company's credits, then its budget; M8
-// adds its runs' failures.
+// passes or says what stopped it and what lifts it, in `PAUSED_REASONS`' order: the company's
+// credits, its runs' failures (M8), then its budget.
 import { CircleCheck, CirclePause, CircleX } from "lucide-react";
 import type { ReactNode } from "react";
 import { DateTime } from "@/components/date-time";
 import { cn } from "@/lib/utils";
-import type { WorkflowHealth } from "../types";
+import type { PausedReason, PausingRun, WorkflowHealth } from "../types";
 import { BUDGET_HELP } from "./budget-help";
+import { FailuresCheck } from "./failures-check";
 import { pausedText } from "./paused-text";
 import { ChangeBudgetButton } from "./workflow-tabs";
 
@@ -21,10 +22,24 @@ const ICON: Record<Verdict, ReactNode> = {
 
 const credits = new Intl.NumberFormat("en", { maximumFractionDigits: 1 });
 
-export function WorkflowHealthChecks({ health }: { health: WorkflowHealth }) {
+// A pause that holds stops it when it's the first that holds; a later one waits behind it.
+function verdictOf(health: WorkflowHealth, reason: PausedReason, holds: boolean): Verdict {
+  if (!holds) return "ok";
+  const first = health.pauses.at(0);
+  return first === undefined || first === reason ? "stopped" : "waiting";
+}
+
+export function WorkflowHealthChecks({
+  health,
+  pausingRuns,
+}: {
+  health: WorkflowHealth;
+  /** The runs that paused it for failing (runtime's `pausingRuns`), newest first. */
+  pausingRuns: PausingRun[];
+}) {
   const outOfCredits = health.balance <= 0;
   const reached = health.pauses.includes("budget_reached");
-  const { spentThisMonth: spent, monthlyBudget: budget } = health;
+  const { spentThisMonth: spent, monthlyBudget: budget, failurePause } = health;
   return (
     <section aria-label="Health" className="flex max-w-3xl flex-col gap-4">
       <Summary health={health} />
@@ -43,7 +58,21 @@ export function WorkflowHealthChecks({ health }: { health: WorkflowHealth }) {
           )}
         </Check>
         <Check
-          verdict={reached ? (outOfCredits ? "waiting" : "stopped") : "ok"}
+          verdict={verdictOf(health, "failures", failurePause !== null)}
+          title={
+            failurePause === null ? (
+              "Its runs aren't failing"
+            ) : (
+              <>
+                Paused: failing, since <DateTime value={failurePause.pausedAt} />
+              </>
+            )
+          }
+        >
+          <FailuresCheck workflowId={health.workflowId} pause={failurePause} runs={pausingRuns} />
+        </Check>
+        <Check
+          verdict={verdictOf(health, "budget_reached", reached)}
           title={
             budget === null
               ? `Spent ${credits.format(spent)} credits this month, with no budget`
@@ -72,9 +101,13 @@ function Summary({ health }: { health: WorkflowHealth }) {
   if (first !== undefined) {
     return (
       <p className="text-base">
-        <span className="font-semibold">Paused: {pausedText(first, null)}.</span>{" "}
+        <span className="font-semibold">
+          Paused: {first === "failures" ? "failing" : pausedText(first, null)}.
+        </span>{" "}
         <span className="text-muted-foreground">
-          It starts again by itself once what stops it below is cleared.
+          {health.pauses.includes("failures")
+            ? "It starts again once you resume it below and nothing else stops it."
+            : "It starts again by itself once what stops it below is cleared."}
         </span>
       </p>
     );
@@ -94,7 +127,7 @@ function Check({
   children,
 }: {
   verdict: Verdict;
-  title: string;
+  title: ReactNode;
   children: ReactNode;
 }) {
   return (

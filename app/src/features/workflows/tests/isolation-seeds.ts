@@ -51,3 +51,43 @@ export async function publishedToSalesInOrgB({ orgB }: TwoOrgs) {
 export async function orgBTags({ orgB }: TwoOrgs): Promise<string[]> {
   return (await listTags(orgB.admin.ctx)).map((tag) => tag.id);
 }
+
+// versionsById's isolation case: org A reads none of org B's versions, whoever asks, and org B
+// reads its own.
+export async function versionsOfOrgBUnread(orgs: TwoOrgs) {
+  const b = await publishedToSalesInOrgB(orgs);
+
+  for (const ctx of [orgs.orgA.admin.ctx, orgs.orgA.member.ctx, systemCtx(orgs.orgA.id)]) {
+    expect(await server.versionsById(ctx, [b.version.id])).toEqual(new Map());
+  }
+  const own = await server.versionsById(orgs.orgB.member.ctx, [b.version.id]);
+  expect([...own.keys()]).toEqual([b.version.id]);
+}
+
+// startableVersion's isolation case: org A can't start org B's workflow, admin or member, and
+// org B's admin can.
+export async function orgBVersionUnstartable(orgs: TwoOrgs) {
+  const b = await switchedOnInOrgB(orgs);
+
+  for (const ctx of [orgs.orgA.admin.ctx, orgs.orgA.member.ctx]) {
+    await expect(server.startableVersion(ctx, b.workflowId, b.connectionId)).rejects.toThrow(
+      NotFoundError,
+    );
+  }
+  expect(
+    await server.startableVersion(orgs.orgB.admin.ctx, b.workflowId, b.connectionId),
+  ).toMatchObject({ workflowId: b.workflowId, number: 1 });
+}
+
+// currentVersionIds' isolation case: org A reads none of org B's current versions, whoever asks,
+// and org B reads its own.
+export async function currentVersionsOfOrgBUnread(orgs: TwoOrgs) {
+  const b = await publishedToSalesInOrgB(orgs);
+
+  for (const ctx of [orgs.orgA.admin.ctx, orgs.orgA.member.ctx, systemCtx(orgs.orgA.id)]) {
+    expect(await server.currentVersionIds(ctx, [b.workflowId])).toEqual(new Map());
+  }
+  expect(await server.currentVersionIds(orgs.orgB.member.ctx, [b.workflowId])).toEqual(
+    new Map([[b.workflowId, b.version.id]]),
+  );
+}

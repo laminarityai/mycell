@@ -8,9 +8,9 @@ import { createTag } from "@/features/tags/server";
 import { publishWorkflow, saveWorkflow } from "@/features/workflows/server";
 import { connectApp, connectGmail, connectOrgInbox } from "@/testing/connect-helpers";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
+import { fundOrg, readTurn } from "@/testing/streamed-turn";
 import { getConversation, startConversation, streamTurn } from "../server";
 import { draftSpec, labelSpec, triageSpec } from "./specs";
-import { fundOrg, readTurn } from "./turn-helpers";
 
 beforeEach(resetDatabase);
 

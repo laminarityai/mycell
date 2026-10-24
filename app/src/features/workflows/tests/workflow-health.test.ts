@@ -15,6 +15,7 @@ import {
   enable,
   getVisibleWorkflow,
   getWorkflowHealth,
+  pauseForFailures,
   publishWorkflow,
   saveWorkflow,
   switchWorkflowOn,
@@ -146,7 +147,7 @@ describe("the workflow's Health tab", () => {
     await spend(orgA.id, workflowId, BUDGET);
 
     const health = await getWorkflowHealth(admin.ctx, workflowId);
-    const checks = text(createElement(WorkflowHealthChecks, { health }));
+    const checks = text(createElement(WorkflowHealthChecks, { health, pausingRuns: [] }));
     const tabs = renderToStaticMarkup(
       createElement(WorkflowTabs, {
         paused: health.pauses.length > 0,
@@ -174,7 +175,7 @@ describe("the workflow's Health tab", () => {
     await spend(orgA.id, workflowId, 4);
 
     const health = await getWorkflowHealth(admin.ctx, workflowId);
-    const checks = text(createElement(WorkflowHealthChecks, { health }));
+    const checks = text(createElement(WorkflowHealthChecks, { health, pausingRuns: [] }));
     const tabs = renderToStaticMarkup(
       createElement(WorkflowTabs, { paused: false, editor: "e", runs: "r", health: "h" }),
     );
@@ -186,6 +187,49 @@ describe("the workflow's Health tab", () => {
     expect(tabs).not.toContain('aria-label="Paused"');
   });
 
+  it("checks its runs' failures before its budget, with the runs that paused it and Resume", async () => {
+    const { orgA, admin, workflowId } = await budgeted();
+    await spend(orgA.id, workflowId, BUDGET);
+    await pauseForFailures(systemCtx(orgA.id), workflowId, ["run-3", "run-2", "run-1"]);
+
+    const health = await getWorkflowHealth(admin.ctx, workflowId);
+    const pausingRuns = ["run-3", "run-2", "run-1"].map((runId) => ({
+      runId,
+      href: `/runs/${runId}`,
+      finishedAt: new Date(),
+      inbox: "Ada's inbox",
+      failedStep: "label",
+      error: "Gmail refused the request.",
+    }));
+    const markup = renderToStaticMarkup(
+      createElement(WorkflowHealthChecks, { health, pausingRuns }),
+    );
+    const checks = text(createElement(WorkflowHealthChecks, { health, pausingRuns }));
+
+    expect(health.pauses).toEqual(["failures", "budget_reached"]);
+    expect(health.failurePause?.runIds).toEqual(["run-3", "run-2", "run-1"]);
+    expect(checks).toContain("Paused: failing. It starts again once you resume it below");
+    expect(checks).toContain("Paused: failing, since");
+    expect(checks).toContain("Ada's inbox");
+    expect(checks).toContain("Resume");
+    expect(markup).toContain('href="/runs/run-3"');
+    // Failing stops it first; the budget, reached too, waits behind it.
+    expect(checks.indexOf("Paused: failing, since")).toBeLessThan(checks.indexOf("Spent 10 of 10"));
+    expect(markup).toContain('aria-label="Stopped"');
+    expect(markup).toContain('aria-label="Also"');
+  });
+
+  it("says its runs aren't failing while they don't pause it", async () => {
+    const { admin, workflowId } = await budgeted();
+
+    const health = await getWorkflowHealth(admin.ctx, workflowId);
+    const checks = text(createElement(WorkflowHealthChecks, { health, pausingRuns: [] }));
+
+    expect(health.failurePause).toBeNull();
+    expect(checks).toContain("Its runs aren't failing");
+    expect(checks).not.toContain("Resume");
+  });
+
   it("says when the company is out of credits, and when there's no budget", async () => {
     const { orgA } = await seedTwoOrgs();
     const admin = orgA.admin.ctx;
@@ -193,7 +237,7 @@ describe("the workflow's Health tab", () => {
     const { workflowId } = await publishTo(admin, "Labels", labelSpec(), []);
 
     const health = await getWorkflowHealth(admin, workflowId);
-    const checks = text(createElement(WorkflowHealthChecks, { health }));
+    const checks = text(createElement(WorkflowHealthChecks, { health, pausingRuns: [] }));
 
     expect(health).toMatchObject({ pauses: ["out_of_credits"], monthlyBudget: null });
     expect(checks).toContain("The company is out of credits");

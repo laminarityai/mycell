@@ -3,12 +3,12 @@ import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { connectGmail } from "@/testing/connect-helpers";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
+import { fundOrg } from "@/testing/streamed-turn";
 import { getConversation, listProposals, startConversation } from "../server";
 import { proposeInTurn, SUMMARY } from "./proposal-helpers";
 import { getWorkflow, saveWorkflow } from "@/features/workflows/server";
 import type { Proposal } from "../types";
 import { draftSpec, labelSpec, triageSpec } from "./specs";
-import { fundOrg } from "./turn-helpers";
 
 beforeEach(resetDatabase);
 

@@ -4,7 +4,12 @@
 import type { Edge, Node } from "@xyflow/react";
 import type { RiskLevel } from "@/features/policy/types";
 import type { InsertAt } from "@/features/spec/edit";
-import type { GraphLayout, LayoutEdge, LayoutNode } from "@/features/spec/layout";
+import {
+  boxLabel,
+  type GraphLayout,
+  type LayoutEdge,
+  type LayoutNode,
+} from "@/features/spec/layout";
 import type { SpecIssue } from "@/features/spec/types";
 import { addLabel, edgeStyle } from "./graph-edges";
 
@@ -40,16 +45,36 @@ const PLACEHOLDER_GAP = 40;
 const END_WIDTH = 72;
 const END_HEIGHT = 28;
 
+/**
+ * A read-only graph whose boxes can still be selected, as a run's page selects a step to show its
+ * details: the selected box's node ID, and what a click selects.
+ */
+export type GraphSelecting = {
+  selected: string | null;
+  onSelect: (selection: GraphSelection) => void;
+};
+
 export function toDrawing(
   layout: GraphLayout<RiskLevel>,
   placeholder: boolean,
   editing: GraphEditing | undefined,
+  selecting?: GraphSelecting,
 ): Drawing {
+  const selected = (editing ?? selecting)?.selected;
+  // The layout lists its boxes in reading order, which is the order a keyboard reaches them in.
   const nodes: Node[] = layout.nodes.map((node) => {
-    const marks: BoxMarks = { selected: editing?.selected === node.id, issues: issuesOf(node) };
+    const marks: BoxMarks = { selected: selected === node.id, issues: issuesOf(node) };
     const drawn = box(node.id, node.kind, node, node.width, node.height, { ...node, ...marks });
-    const opens = editing !== undefined && node.kind !== "end";
-    return opens ? { ...drawn, className: "cursor-pointer" } : drawn;
+    const opens = (editing ?? selecting) !== undefined && selectionOf(drawn) !== null;
+    if (!opens) return drawn;
+    // A box that opens is a button: Tab reaches it, and Enter or Space opens it like a click.
+    return {
+      ...drawn,
+      className: "cursor-pointer",
+      focusable: true,
+      ariaRole: "button",
+      ariaLabel: boxLabel(node),
+    };
   });
   const edges = layout.edges.map((edge) => toEdge(edge, editing !== undefined));
   const trigger = layout.nodes.find((node) => node.kind === "trigger");
@@ -115,7 +140,10 @@ function toEdge(edge: LayoutEdge, editing: boolean): Edge {
   };
 }
 
-/** What clicking a box selects: the trigger, a step, or a path; nothing for an end. */
+/**
+ * What clicking a box, or Enter or Space on it, selects: the trigger, a step, or a path;
+ * nothing for an end, or a box a proposal removes.
+ */
 export function selectionOf(node: Node): GraphSelection | null {
   if (node.type === "placeholder") return null;
   const data = node.data as LayoutNode<RiskLevel>;

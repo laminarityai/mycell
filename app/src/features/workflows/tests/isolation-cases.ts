@@ -7,12 +7,16 @@ import { connectGmail, connectMailbox } from "@/testing/connect-helpers";
 import { renameTag, unassignTag } from "@/features/tags/server";
 import { publishTo, tagUsers } from "@/testing/visibility-helpers";
 import * as server from "../server";
+import { failurePauseIsolationCases } from "./failure-pause-isolation-cases";
 import {
+  currentVersionsOfOrgBUnread,
   orgBTags,
   orgBWorkflowNotFound,
   publishedToSalesInOrgB,
   seedOrgBWorkflow,
   switchedOnInOrgB,
+  orgBVersionUnstartable,
+  versionsOfOrgBUnread,
 } from "./isolation-seeds";
 import { draftSpec, labelSpec } from "./specs";
 
@@ -186,16 +190,11 @@ export const isolationCases = defineIsolationCases(server, {
     }
   },
 
-  currentVersionIds: async (orgs) => {
-    const b = await publishedToSalesInOrgB(orgs);
+  // In isolation-seeds.ts, for this file's length.
+  versionsById: versionsOfOrgBUnread,
+  startableVersion: orgBVersionUnstartable,
 
-    for (const ctx of [orgs.orgA.admin.ctx, orgs.orgA.member.ctx, systemCtx(orgs.orgA.id)]) {
-      expect(await server.currentVersionIds(ctx, [b.workflowId])).toEqual(new Map());
-    }
-    expect(await server.currentVersionIds(orgs.orgB.member.ctx, [b.workflowId])).toEqual(
-      new Map([[b.workflowId, b.version.id]]),
-    );
-  },
+  currentVersionIds: currentVersionsOfOrgBUnread,
 
   workflowsUsingActions: async (orgs) => {
     const b = await seedOrgBWorkflow(orgs);
@@ -282,6 +281,8 @@ export const isolationCases = defineIsolationCases(server, {
     );
     expect(await server.listVisibleWorkflows(orgB.member.ctx)).toEqual([]);
   },
+
+  ...failurePauseIsolationCases,
 
   removeInvisibleEnablements: async (orgs) => {
     const { orgA, orgB } = orgs;

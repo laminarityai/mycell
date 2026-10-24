@@ -15,3 +15,5 @@ export {
 // What workflow budgets count: each workflow's live run usage this calendar month (UTC), for
 // admins and jobs, and which workflows have reached their budget, for anyone (M7).
 export { budgetsReached, nextMonthStart, spentThisMonthByWorkflow } from "./lib/workflow-spending";
+// A failed call's real cost, which `models` looks up in the gateway and records as a correction.
+export { findUncostedFailedCall, recordFailedCallCost } from "./lib/corrections";

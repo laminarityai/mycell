@@ -75,6 +75,23 @@ export async function listConnections(ctx: Ctx): Promise<ConnectionsListing> {
   };
 }
 
+/**
+ * The address of each org connection among `connectionIds`, by ID: the shared inbox an org
+ * switch runs on, which anyone in the org may see beside the workflow. A member connection, or
+ * one in another org, is left out. One query however many are asked; none for none.
+ */
+export async function sharedInboxes(
+  ctx: Ctx,
+  connectionIds: readonly string[],
+): Promise<Map<string, string>> {
+  if (connectionIds.length === 0) return new Map();
+  const rows = await forOrg(ctx).select(connections, {
+    columns: ["id", "accountEmail"],
+    where: and(inArray(connections.id, [...connectionIds]), eq(connections.kind, "org")),
+  });
+  return new Map(rows.map((row) => [row.id, row.accountEmail]));
+}
+
 function summary(row: Connection, states: IngestState[]): ConnectionSummary {
   return {
     id: row.id,
@@ -93,7 +110,7 @@ function summary(row: Connection, states: IngestState[]): ConnectionSummary {
 
 // Resolves an owner's user ID against the org's current users. An owner who isn't one any
 // more was removed: their org connections live on, flagged.
-async function ownerLookup(ctx: Ctx): Promise<(userId: string) => ConnectionOwner> {
+export async function ownerLookup(ctx: Ctx): Promise<(userId: string) => ConnectionOwner> {
   const users = new Map((await listUsers(ctx)).map((user) => [user.id, user.name]));
   return (userId) => {
     const name = users.get(userId);

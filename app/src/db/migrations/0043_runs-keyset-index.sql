@@ -1,0 +1,1 @@
+CREATE INDEX "runs_org_id_started_at_id_idx" ON "runs" USING btree ("org_id","started_at" DESC NULLS LAST,"id" DESC NULLS LAST);

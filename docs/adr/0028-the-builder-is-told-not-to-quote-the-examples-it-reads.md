@@ -1,0 +1,10 @@
+# The builder is told not to quote the examples it reads
+
+The builder's `read_examples` tool shows the model up to five real emails, the first 2000 characters of each, so it can write a spec that fits the admin's actual mail. Only the emails' pointers are stored, but the model can quote them in its reply, in a proposal's summary or in a spec's text, and builder conversations and proposals are stored whole, kept until the org is deleted, and shown to every admin (ADR-0023). So the builder's instructions tell it to describe the examples in its own words and never to quote them, and a quote that gets through anyway is a known gap rather than a third exception to invariant 8. We chose this over checking what's stored for copied text (a run of some number of words in a row as an example has them), because any cut-off is arbitrary: a shorter quote carries the same content and a longer paraphrase passes. We chose it over not storing the replies of such turns, because the conversation's history and the agent's next turn are rebuilt from what's stored, and over a third exception, because unlike run state and held sends, conversations are kept indefinitely, aren't encrypted by Mycel, and every admin can see them.
+
+## Consequences
+
+- **The gap:** a reply, proposal summary or spec text may occasionally hold a phrase or sentence from an example email. It stays inside the company, among its admins, who could already read the email (it comes from their own connection or an org connection), so we accept it, as ADR-0023 accepts other sharing between colleagues.
+- **The prompt:** the builder's instructions, and the instructions for summarizing a long conversation (#132), say not to quote examples. A test checks the instruction is in every builder request.
+- **Email addresses are identifiers, not content,** so a stored search query such as `from:alice@acme.com`, and a connect attempt's refusal naming the account that was refused, are outside invariant 8.
+- **Docs:** `docs/architecture.md` says conversations hold no source content except this gap.

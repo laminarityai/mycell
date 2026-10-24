@@ -3,11 +3,10 @@
 import { handleNangoWebhook, listConnections, startConnect } from "@/features/connections/server";
 import type { ConnectionKind, RegisteredAppId } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
+import { DAY_MS } from "@/lib/time";
 import type { FakeFileInput } from "./fake-drive";
 import type { FakeMessageInput } from "./fake-gmail";
 import { fakeNango } from "./fake-nango";
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** A moment `days` days ago. */
 export function daysAgo(days: number): Date {
@@ -26,7 +25,8 @@ export type ConnectGoogleOptions = {
 
 /**
  * Connects `emailAddress`'s Google account, seeds its mailbox and Drive, and returns Mycel's
- * connection ID, Nango's, the fake mailbox, Drive and spreadsheets, and the seeded files.
+ * connection ID, Nango's, the fake mailbox, Drive, spreadsheets and calendar, and the seeded
+ * files.
  * Throws if the connection wasn't recorded (the account was refused).
  */
 export async function connectGoogle(
@@ -44,6 +44,7 @@ export async function connectGoogle(
   const drive = fakeNango.drive(webhook.connectionId);
   const files = (options.files ?? []).map((file) => drive.add(file));
   const sheets = fakeNango.sheets(webhook.connectionId);
+  const calendar = fakeNango.calendar(webhook.connectionId);
   return {
     id: connection.id,
     nangoConnectionId: webhook.connectionId,
@@ -51,6 +52,7 @@ export async function connectGoogle(
     drive,
     files,
     sheets,
+    calendar,
   };
 }
 

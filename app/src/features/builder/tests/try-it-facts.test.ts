@@ -3,8 +3,8 @@ import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { saveWorkflow } from "@/features/workflows/server";
 import { connectGoogle } from "@/testing/connect-helpers";
+import { fundOrg } from "@/testing/streamed-turn";
 import { getConversation, startConversation, tryInConversation } from "../server";
-import { fundOrg } from "./turn-helpers";
 
 beforeEach(resetDatabase);
 

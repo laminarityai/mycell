@@ -62,7 +62,7 @@ export async function readChanges(
     if (page.result === "expired") {
       const before = merged(pages);
       if (before !== null) {
-        await sendAnnounced(ctx, connectionId, app, before.announced, runStep, ANNOUNCE(app));
+        await sendAnnounced(ctx, connectionId, app, before.announced, runStep, announceStepId(app));
       }
       return { outcome: "expired" };
     }
@@ -95,12 +95,12 @@ export async function readChanges(
     }),
   );
   if (end.gone) return { outcome: "gone" };
-  await sendAnnounced(ctx, connectionId, app, announced, runStep, ANNOUNCE(app));
+  await sendAnnounced(ctx, connectionId, app, announced, runStep, announceStepId(app));
   return { outcome: "polled", items };
 }
 
 // The step announcing what the pages stored, found changed or found removed.
-const ANNOUNCE = (app: IngestedApp) => `${app}-poll-announce`;
+const announceStepId = (app: IngestedApp) => `${app}-poll-announce`;
 
 // A page as its step hands it on: the cursor the poll reads from, what the page stored as
 // pointers, the IDs it listed as added or removed, the refs it found stored already, and where

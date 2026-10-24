@@ -31,6 +31,7 @@ describe("listRuns", () => {
           sourceRef: orgMessage.id,
           subject: "Shared question",
           from: expect.stringContaining("ada@customer.test") as string,
+          link: expect.stringContaining(orgMessage.threadId) as string,
         },
         status: "succeeded",
         failures: [],

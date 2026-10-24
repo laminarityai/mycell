@@ -1,16 +1,18 @@
-// The trigger's facts a branch's checks test (`spec/triggers.ts`), read through the Nango proxy
-// inside the branch step and held in memory only (invariant 8): never in the step's output or
-// record, which keep the path taken and each check's pass or fail.
+// The triggering item, read inside the step that needs it and held in memory only (invariant
+// 8): its facts a branch's checks test (`spec/triggers.ts`), never in the step's output or
+// record, which keep the path taken and each check's pass or fail; and its text, for a model
+// step. The item is a Gmail message or a calendar invite, as the spec's trigger says.
 import { subjectParts } from "@/features/spec/conditions";
 import type { BranchStep } from "@/features/spec/types";
 import type { Json } from "@/lib/inngest";
-import { messageFacts } from "./gmail";
+import { inviteFacts, inviteText } from "./calendar";
+import { messageFacts, messageText } from "./gmail";
 import type { StepContext } from "./step-context";
 
 /**
- * The outputs above `branch`, plus the triggering message's facts under `trigger` when one of
- * its checks tests one (`trigger` is reserved, so no step's output is there). The message is
- * read only then.
+ * The outputs above `branch`, plus the triggering item's facts under `trigger` when one of
+ * its checks tests one (`trigger` is reserved, so no step's output is there). The item is read
+ * only then.
  */
 export async function withTriggerFacts(
   branch: BranchStep,
@@ -22,7 +24,18 @@ export async function withTriggerFacts(
     ),
   );
   if (!tested) return context.outputs;
-  const { ctx, run } = context;
-  const facts = await messageFacts(ctx, run.connectionId, run.sourceRef);
+  const { ctx, run, spec } = context;
+  const facts =
+    spec.trigger.type === "calendar.invite_received"
+      ? await inviteFacts(ctx, run.connectionId, run.sourceRef)
+      : await messageFacts(ctx, run.connectionId, run.sourceRef);
   return { ...context.outputs, trigger: facts };
+}
+
+/** The triggering item as a model reads it: the message, or the invite. */
+export async function triggerText(context: StepContext): Promise<string> {
+  const { ctx, run, spec } = context;
+  return spec.trigger.type === "calendar.invite_received"
+    ? inviteText(ctx, run.connectionId, run.sourceRef)
+    : messageText(ctx, run.connectionId, run.sourceRef);
 }

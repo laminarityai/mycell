@@ -13,6 +13,7 @@ import {
   OFF_SCHEMA,
   pricingQuestion,
   recordedBackoff,
+  recordsOf,
   runOn,
   stepStateRecorder,
 } from "./run-helpers";
@@ -227,7 +228,7 @@ describe("a failed step", () => {
     expect(outcome).toEqual({ status: "failed" });
     const run = await getRun(admin, runId);
     expect(run.steps.at(-1)?.errorCode).toBe(failure.code);
-    const records = JSON.stringify(run);
+    const records = recordsOf(run);
     const state = recorder.state.join("\n");
     expect(state).not.toBe("");
     for (const content of SEEDED) {

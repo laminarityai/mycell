@@ -5,7 +5,13 @@ import { grantCredits } from "@/features/credits/server";
 import { systemCtx } from "@/lib/ctx";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import { executeRun, getRun, startRun } from "../server";
-import { connectInbox, pricingQuestion, publish, recordingStepRunner } from "./run-helpers";
+import {
+  connectInbox,
+  pricingQuestion,
+  publish,
+  recordingStepRunner,
+  recordsOf,
+} from "./run-helpers";
 
 beforeEach(resetDatabase);
 
@@ -176,7 +182,7 @@ describe("a branch with several paths, first match", () => {
     await executeRun(system, runId, runner.runStep);
 
     const route = JSON.stringify(runner.results().route);
-    const records = JSON.stringify(await getRun(admin, runId));
+    const records = recordsOf(await getRun(admin, runId));
     for (const kept of [route, records]) {
       for (const content of [SENDER, SUBJECT, "oak", "Oak", String(TOTAL)]) {
         expect(kept).not.toContain(content);

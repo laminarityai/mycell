@@ -57,7 +57,13 @@ function recordingAdapter(state: ItemState = "waiting") {
       return Promise.resolve();
     },
   };
-  const adapters: PendingForms = { approval: adapter, escalation: adapter, held_send: adapter };
+  const adapters: PendingForms = {
+    approval: adapter,
+    escalation: adapter,
+    held_send: adapter,
+    suggested_edits: adapter,
+    calendar_event: adapter,
+  };
   return { adapters, calls };
 }
 

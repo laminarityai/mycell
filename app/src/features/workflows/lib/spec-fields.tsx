@@ -2,7 +2,7 @@
 
 // The workflow editor's form fields. Each edits one value of a draft, which needn't be valid
 // yet, and is marked invalid when live validation has an issue at its path.
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -57,7 +57,7 @@ export function TextField({
   );
 }
 
-/** A number, or undefined once cleared. */
+/** A number, or undefined once cleared, with what it does under it when `help` is given. */
 export function NumberField({
   label,
   value,
@@ -66,6 +66,8 @@ export function NumberField({
   min,
   max,
   step,
+  id,
+  help = [],
 }: {
   label: string;
   value: unknown;
@@ -74,23 +76,38 @@ export function NumberField({
   min?: number;
   max?: number;
   step?: number;
+  id?: string;
+  /** Help text under the field, a paragraph each. */
+  help?: readonly string[];
 }) {
+  const helpId = useId();
   return (
-    <label className={LABEL}>
-      {label}
-      <Input
-        type="number"
-        min={min}
-        max={max}
-        step={step}
-        value={typeof value === "number" ? value : ""}
-        aria-invalid={invalid}
-        onChange={(event) => {
-          const raw = event.target.value;
-          onChange(raw === "" ? undefined : Number(raw));
-        }}
-      />
-    </label>
+    <div className="flex flex-col gap-1">
+      <label className={LABEL}>
+        {label}
+        <Input
+          id={id}
+          type="number"
+          min={min}
+          max={max}
+          step={step}
+          value={typeof value === "number" ? value : ""}
+          aria-invalid={invalid}
+          aria-describedby={help.length > 0 ? helpId : undefined}
+          onChange={(event) => {
+            const raw = event.target.value;
+            onChange(raw === "" ? undefined : Number(raw));
+          }}
+        />
+      </label>
+      {help.length > 0 ? (
+        <div id={helpId} className="flex flex-col gap-1 text-xs text-muted-foreground">
+          {help.map((paragraph) => (
+            <p key={paragraph}>{paragraph}</p>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 

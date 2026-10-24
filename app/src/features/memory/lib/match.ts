@@ -26,6 +26,9 @@ const MAX_CANDIDATES = 3;
 export const MIN_CANDIDATE_SIMILARITY = 0.75;
 // The facts about each side the confirmation sees.
 const MAX_FACTS_SHOWN = 10;
+// Matching reads only learned facts: a fact a person told Mycel is seen by them alone, so it
+// neither makes a candidate nor reaches the confirming model while someone else's mail is read.
+const LEARNED = eq(facts.origin, "source");
 
 /** The existing object each extracted object (by ref) is, if any; the rest are new. */
 export type Matches = Map<string, string>;
@@ -100,7 +103,8 @@ async function candidatesFor(
     if (embedding === undefined) continue;
     const distance = cosineDistance(facts.embedding, embedding);
     const rows = await db.select(facts, {
-      where: and(isNull(facts.supersededAt), lte(distance, 1 - MIN_CANDIDATE_SIMILARITY)),
+      // Learned facts only: what a person told Mycel is theirs alone (`LEARNED`).
+      where: and(LEARNED, isNull(facts.supersededAt), lte(distance, 1 - MIN_CANDIDATE_SIMILARITY)),
       orderBy: [distance, facts.id],
       limit: MAX_CANDIDATES * 2,
     });
@@ -131,7 +135,7 @@ async function isSameObject(
 ): Promise<boolean> {
   const keys = await db.select(objectKeys, { where: eq(objectKeys.objectId, candidate.id) });
   const known = await db.select(facts, {
-    where: and(eq(facts.subjectId, candidate.id), isNull(facts.supersededAt)),
+    where: and(eq(facts.subjectId, candidate.id), LEARNED, isNull(facts.supersededAt)),
     orderBy: [desc(facts.recordedAt), facts.id],
     limit: MAX_FACTS_SHOWN,
   });

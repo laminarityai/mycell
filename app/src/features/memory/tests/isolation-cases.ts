@@ -8,6 +8,7 @@ import { byEmail, DANA, learnInOrgInbox, seedOrgB } from "./isolation-seed";
 import { withCredits } from "./memory-helpers";
 import { retentionIsolationCases } from "./retention-isolation-cases";
 import { settingsIsolationCases } from "./settings-isolation-cases";
+import { toldIsolationCases } from "./told-isolation-cases";
 
 const STAFF = "sam@mycel.example";
 const CONSENT = { staffEmail: STAFF, reason: "Ticket 4411", days: 7 };
@@ -130,6 +131,7 @@ export const isolationCases = defineIsolationCases(server, {
 
   ...settingsIsolationCases,
   ...retentionIsolationCases,
+  ...toldIsolationCases,
 
   summarizeObject: async (orgs) => {
     const { object, snapshot } = await seedOrgB(orgs);

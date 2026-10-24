@@ -14,4 +14,10 @@ export const toolPrompts = definePrompts(toolsFile, {
   memoryUnavailable: [],
   screenedOut: ["count"],
   nameAnObject: [],
+  remember: [],
+  rememberStatement: [],
+  rememberName: [],
+  remembered: [],
+  notRemembered: [],
+  nameWhatToRemember: [],
 });

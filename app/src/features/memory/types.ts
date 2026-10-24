@@ -138,13 +138,86 @@ export type MemoryFact = {
   // Stated only from outside the company, as far as the reader's sources show: none of the
   // sources they can see came from inside (a mailbox's own sent mail, a colleague's doc).
   outsideOnly: boolean;
+  // The reader told Mycel this ("remember this"): it has no sources, and only they see it.
+  told: boolean;
 };
 
 /**
  * Where a fact a reader already read came from, to cite it again (Ask Mycel's footnotes): its
  * sources the reader can see and its markers, never what it says.
  */
-export type FactCitation = Pick<MemoryFact, "id" | "sources" | "conflictsWith" | "outsideOnly">;
+export type FactCitation = Pick<
+  MemoryFact,
+  "id" | "sources" | "conflictsWith" | "outsideOnly" | "told"
+>;
+
+const DOMAIN = /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/;
+
+/** The longest statement a person can tell Mycel: a short fact, as learning keeps. */
+export const MAX_TOLD_CHARS = 280;
+
+/**
+ * A fact a person tells Mycel ("remember this", M9): a short statement about an object they can
+ * see (by its ID), or about a person by email address or a company by domain, new to memory or
+ * not (`name` names one that's new).
+ */
+export const tellFactSchema = z.object({
+  about: z.union([
+    z.object({ objectId: z.string().trim().min(1) }),
+    z.object({
+      email: z.string().trim().toLowerCase().max(320).pipe(z.email()),
+      name: z.string().trim().min(1).max(200).optional(),
+    }),
+    z.object({
+      domain: z
+        .string()
+        .trim()
+        .toLowerCase()
+        .transform((value) => value.replace(/^@/, "").replace(/^www\./, ""))
+        .pipe(z.string().regex(DOMAIN, "Expected a domain, such as example.com.")),
+      name: z.string().trim().min(1).max(200).optional(),
+    }),
+  ]),
+  statement: z.string().trim().min(1).max(MAX_TOLD_CHARS),
+});
+export type TellFactInput = z.input<typeof tellFactSchema>;
+
+/**
+ * Why a told fact wasn't saved: the person it's about, or an address it names, is on the
+ * do-not-learn list; it isn't a fact about work (an opinion or judgement, such as one about a
+ * colleague, or nothing to do with people, companies, deals, projects or documents); it's about
+ * the private life of someone outside the company; or the injection screen flagged it, or isn't
+ * configured, so no model read it.
+ */
+export const TELL_REFUSALS = [
+  "forgotten",
+  "not_a_fact",
+  "personal",
+  "flagged",
+  "unscreened",
+] as const;
+export type TellRefusal = (typeof TELL_REFUSALS)[number];
+
+/** What a person is told when Mycel won't remember something, in plain words. */
+export const TELL_REFUSAL_MESSAGES: Record<TellRefusal, string> = {
+  forgotten: "Mycel was asked to forget this person, so it won't remember anything about them.",
+  not_a_fact:
+    "Mycel remembers only facts about people, companies, deals, projects and documents, not opinions or judgements.",
+  personal: "Mycel remembers only work facts about people outside the company.",
+  flagged: "That looked like instructions aimed at an AI, so Mycel didn't save it.",
+  unscreened:
+    "Mycel can't check what it saves for hidden instructions right now, so it saved nothing. Try again later.",
+};
+
+/** A fact a person told Mycel, and the object it's about. */
+export type ToldFact = {
+  id: string;
+  statement: string;
+  about: { id: string; kind: ObjectKind; name: string };
+};
+
+/** What telling Mycel a fact did: saved it (or found it saved already), or refused. */
+export type TellOutcome = { saved: true; fact: ToldFact } | { saved: false; reason: TellRefusal };
 
 /**
  * A fact a newer one replaced, as one reader sees it: `supersededBy` is the newer fact they can
@@ -214,8 +287,6 @@ export const EXCLUSION_KIND_NAMES: Record<ExclusionKind, string> = {
 
 /** An exclusion as an admin sees it. */
 export type Exclusion = { id: string; kind: ExclusionKind; value: string; createdAt: Date };
-
-const DOMAIN = /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/;
 
 /**
  * A new exclusion, as an admin types it: a label's name; a Drive folder's ID or link; an address;

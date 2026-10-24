@@ -10,6 +10,7 @@ import "server-only";
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   customType,
   foreignKey,
   index,
@@ -25,6 +26,8 @@ import {
 // Derived data cascades from its connection (docs/conventions.md, "Derived data cascades from
 // its connection").
 import { connections } from "@/features/connections/lib/schema";
+// A told fact references its teller as a member, so it goes when they're removed.
+import { member } from "@/db/auth-schema";
 import {
   ACCESS_LOG_READER_KINDS,
   EXCLUSION_KINDS,
@@ -192,7 +195,8 @@ export const facts = pgTable(
     value: text("value"),
     // The other object it links the subject to, if any.
     objectId: text("object_id"),
-    // `source`: learned from source records. `told_by`: a person told Mycel (M9, unused yet).
+    // `source`: learned from source records. `told_by`: a person told Mycel ("remember this",
+    // M9), seen only by its teller (`told_by_user_id`), with no source records.
     origin: text("origin", { enum: ["source", "told_by"] }).notNull(),
     toldByUserId: text("told_by_user_id"),
     validFrom: timestamp("valid_from", { withTimezone: true }),
@@ -230,6 +234,19 @@ export const facts = pgTable(
     // `superseded_by_id` has no foreign key: when the fact it points to is deleted, a trigger
     // (migration 0032) points it at that fact's own replacement, or makes it current again.
     index("facts_superseded_by_id_idx").on(table.supersededById),
+    // A told fact has its teller, and only a told fact has one.
+    check(
+      "facts_told_by_user_when_told",
+      sql`(${table.origin} = 'told_by') = (${table.toldByUserId} is not null)`,
+    ),
+    // Removing a member deletes their member row, and with it what they told Mycel.
+    foreignKey({
+      name: "facts_told_by_member_fk",
+      columns: [table.orgId, table.toldByUserId],
+      foreignColumns: [member.organizationId, member.userId],
+    }).onDelete("cascade"),
+    // A teller's own facts: their timelines, and the list of what they told Mycel.
+    index("facts_org_id_told_by_user_id_idx").on(table.orgId, table.toldByUserId),
   ],
 );
 

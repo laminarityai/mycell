@@ -119,6 +119,7 @@ describe("citeFacts", () => {
         sources: read?.sources,
         conflictsWith: read?.conflictsWith,
         outsideOnly: read?.outsideOnly,
+        told: false,
       });
       expect(JSON.stringify(fact)).not.toContain("billing contact");
     }

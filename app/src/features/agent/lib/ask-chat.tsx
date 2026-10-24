@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { AgentUIMessage, Citation, CitedSource } from "../types";
 import { numberSources, segments } from "./footnotes";
+import { RememberedFact } from "./remembered-fact";
 
 /** Ask Mycel's AI disclosure (EU AI Act Art. 50), above every conversation. */
 const DISCLOSURE =
@@ -23,6 +24,7 @@ const DISCLOSURE =
 const TOOL_LABELS: Record<string, string> = {
   search_memory: "Searched memory",
   read_object: "Read memory",
+  remember: "Remembering",
 };
 
 /** What a cited source is, and where the person's copy of it lives. */
@@ -234,6 +236,9 @@ function ReplyPart({
   if (!("state" in part)) return null;
   const name = part.type === "dynamic-tool" ? part.toolName : part.type.slice("tool-".length);
   const label = TOOL_LABELS[name] ?? name;
+  if (name === "remember" && part.state === "output-available") {
+    return <RememberedFact output={part.output} />;
+  }
   if (part.state === "output-error") {
     return <p className="text-xs text-muted-foreground">{label}: it found nothing.</p>;
   }
@@ -285,6 +290,14 @@ function Footnote({
           title="Someone outside the company says this, and it conflicts with what the company said."
         >
           Disputed
+        </Badge>
+      ) : citation.told ? (
+        <Badge
+          variant="outline"
+          className="ml-1 align-middle"
+          title="You told Mycel this. Only you can see it."
+        >
+          Told by you
         </Badge>
       ) : citation.outsideOnly ? (
         <Badge

@@ -47,6 +47,8 @@ export type Citation = {
   disputed: boolean;
   /** Only someone outside the company states it, as far as the person's sources show. */
   outsideOnly: boolean;
+  /** The person told Mycel this ("remember this"): it has no sources, and only they see it. */
+  told: boolean;
   sources: CitedSource[];
 };
 

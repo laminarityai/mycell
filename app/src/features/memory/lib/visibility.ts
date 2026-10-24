@@ -7,6 +7,8 @@
 //   company-wide (such as all@), the company's Workspace domain (a doc shared with the company),
 //   or anyone (a doc shared with anyone who has the link).
 // A fact is visible when one of its source records is, and an object when one of its facts is.
+// A fact a person told Mycel ("remember this") has no source records: it's visible to its teller
+// alone, so to their own workflow runs, which read as them, and to no one else, admins included.
 // Only confirmed entries count (`schema.ts`): what an email's sender wrote in its headers widens
 // nothing. Group membership is never guessed: a group that isn't marked counts only through a
 // copy in the viewer's own mailbox or Drive. Only the Workspace domain counts as the company's:
@@ -72,12 +74,21 @@ export async function visibleSourceRecords(
   return new Set(records.map((record) => record.id));
 }
 
-/** SQL: whether the viewer may see the fact whose ID `factId` is. */
+/**
+ * SQL: whether the viewer may see the fact whose ID `factId` is: one of its sources is visible
+ * to them, or they told it (a told fact has no sources, and only its teller sees it).
+ */
 export function factVisible(reading: Reading, factId: SQL): SQL {
-  return sql`exists (
+  const sourced = sql`exists (
     select 1 from fact_sources vis_fs
     where vis_fs.org_id = ${reading.orgId} and vis_fs.fact_id = ${factId}
       and ${recordVisible(reading, sql`vis_fs.source_record_id`)})`;
+  const { userId } = reading.viewer;
+  if (userId === null) return sourced;
+  return sql`(${sourced} or exists (
+    select 1 from facts vis_told
+    where vis_told.org_id = ${reading.orgId} and vis_told.id = ${factId}
+      and vis_told.told_by_user_id = ${userId}))`;
 }
 
 /** SQL, on `facts`: whether the viewer may see the fact. */

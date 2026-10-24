@@ -63,16 +63,6 @@ export const GOOGLE_APP_SCOPES: Record<GoogleApp, string> = {
   tasks: googleScope("tasks"),
 };
 
-/** How the UI names each Google app. */
-export const GOOGLE_APP_NAMES: Record<GoogleApp, string> = {
-  gmail: "Gmail",
-  drive: "Drive",
-  sheets: "Sheets",
-  calendar: "Calendar",
-  docs: "Docs",
-  tasks: "Tasks",
-};
-
 /** The apps discovery ingests from. Each has its own backfill, cursor and poll. */
 export const ingestedAppSchema = z.enum(["gmail", "drive"]);
 export type IngestedApp = z.infer<typeof ingestedAppSchema>;

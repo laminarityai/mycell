@@ -1,3 +1,4 @@
+import { streamText } from "ai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
@@ -201,6 +202,28 @@ describe("a failed call's billed cost", () => {
     fakeAiGateway.bill("gen_stream", 0.01);
     expect(await correctFailedCallCost(ctx, String(event?.data.entryId))).toBe("corrected");
     expect(await getBalance(ctx)).toBeCloseTo(90);
+  });
+
+  it("is queued for a stream whose failed step's gateway error carries a generation ID", async () => {
+    const { ctx } = await orgWithCredits();
+    fakeAiGateway.fail("language", { streaming: true, generationId: "gen_step", billedUsd: 0.01 });
+    const stream = await openMeteredStream(ctx, "smart");
+    const result = streamText({
+      model: stream.model,
+      prompt: "Hi",
+      maxRetries: 0,
+      onError: ({ error }) => {
+        stream.meterError(error);
+      },
+    });
+    await result.consumeStream();
+
+    await stream.finish("failed");
+
+    const event = fakeInngest.sent(FAILED_CALL).at(0);
+    expect(await correctFailedCallCost(ctx, String(event?.data.entryId))).toBe("corrected");
+    expect(await getBalance(ctx)).toBeCloseTo(90);
+    expect(fakeAiGateway.lookups()).toEqual(["gen_step"]);
   });
 
   it("leaves the call's own error when the lookup can't be queued", async () => {

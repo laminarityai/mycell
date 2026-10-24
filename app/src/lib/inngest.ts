@@ -25,6 +25,12 @@ export const inngest = new Inngest({
   middleware: stepStateEncryption === undefined ? [] : [stepStateEncryption],
 });
 
+/**
+ * At most this many of a job's runs execute at once for one org (its per-org concurrency
+ * key), so one org's large mailboxes or busy workflows leave other orgs' work unblocked.
+ */
+export const PER_ORG_LIMIT = 3;
+
 /** JSON: what a step returns, since Inngest stores it and replays it instead of re-running. */
 export type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
 

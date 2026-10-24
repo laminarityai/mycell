@@ -6,12 +6,15 @@ import { chatModelMessages, chatUIPart } from "@/features/models/server";
 import type { BuilderMessage, BuilderUIMessage } from "../types";
 import { tryItText } from "./try-it-summary";
 
+/** The last turns whose tool results the model is sent (#132); older ones say they were dropped. */
+export const TOOL_RESULT_TURNS = 3;
+
 /**
  * The conversation so far, as the model sees it: the admins' words and try-it summaries, and
- * each agent step's text and tool calls.
+ * each agent step's text and tool calls, with the results of the last 3 turns' calls.
  */
 export function toModelMessages(messages: BuilderMessage[]): ModelMessage[] {
-  return chatModelMessages(messages, tryItText);
+  return chatModelMessages(messages, tryItText, { toolResultTurns: TOOL_RESULT_TURNS });
 }
 
 /** The conversation as the chat page shows it. */

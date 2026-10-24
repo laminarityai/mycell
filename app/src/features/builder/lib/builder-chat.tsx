@@ -6,7 +6,7 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { BuilderUIMessage, Proposal, ProposeSpecResult } from "../types";
@@ -26,12 +26,15 @@ const FILE_CAPABILITY_REQUEST = "file_capability_request";
 export function BuilderChat({
   conversationId,
   initialMessages,
+  summarizedThrough,
   proposals,
   workflow,
   tryIt,
 }: {
   conversationId: string;
   initialMessages: BuilderUIMessage[];
+  /** The last message the builder now reads only as a summary: the cut is marked after it. */
+  summarizedThrough: string | null;
   /** The conversation's proposals, as the server last read them. */
   proposals: Proposal[];
   workflow: ConversationWorkflow | null;
@@ -74,18 +77,20 @@ export function BuilderChat({
             </li>
           ) : null}
           {messages.map((message) => (
-            <li
-              key={message.id}
-              className={
-                message.role === "user"
-                  ? "self-end rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground"
-                  : "flex flex-col gap-1 text-sm"
-              }
-            >
-              {message.parts.map((part, index) => (
-                <MessagePart key={index} part={part} proposals={byId} />
-              ))}
-            </li>
+            <Fragment key={message.id}>
+              <li
+                className={
+                  message.role === "user"
+                    ? "self-end rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground"
+                    : "flex flex-col gap-1 text-sm"
+                }
+              >
+                {message.parts.map((part, index) => (
+                  <MessagePart key={index} part={part} proposals={byId} />
+                ))}
+              </li>
+              {message.id === summarizedThrough ? <SummarizedMarker /> : null}
+            </Fragment>
           ))}
         </ol>
         {workflow === null ? null : <PublishBar workflow={workflow} />}
@@ -127,6 +132,20 @@ export function BuilderChat({
         </Button>
       </form>
     </div>
+  );
+}
+
+// Where the history summary cuts: the builder reads the messages above only as a summary.
+function SummarizedMarker() {
+  return (
+    <li
+      className="flex items-center gap-3 text-xs text-muted-foreground"
+      title="The builder now reads a summary of the messages above, not the messages themselves."
+    >
+      <span aria-hidden="true" className="h-px flex-1 bg-border" />
+      Earlier messages summarized
+      <span aria-hidden="true" className="h-px flex-1 bg-border" />
+    </li>
   );
 }
 

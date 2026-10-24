@@ -11,4 +11,5 @@ export const classifyPrompts = definePrompts(classifyFile, {
 
 export const chatTurnPrompts = definePrompts(chatTurnFile, {
   toolFailed: [],
+  toolResultDropped: ["toolName"],
 });

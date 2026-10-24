@@ -8,8 +8,8 @@ import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { ValidationError } from "@/lib/errors";
 import { gatherContext } from "./context";
 import { appendMessage, findConversation, messagesOf } from "./conversations";
-import { toModelMessages } from "./history";
 import { instructionsWith } from "./instructions";
+import { modelHistory, summarySection } from "./model-history";
 import { builderTools, type TurnInfo } from "./tools";
 
 /** A turn's model steps, at most (spec #43, "Limits"). */
@@ -51,15 +51,17 @@ export async function streamTurn(
     turn,
     maxSteps: MAX_STEPS,
     failedText: FAILED_TEXT,
-    // Runs alongside the credit check; the context doesn't wait on storing the message either.
+    // Runs alongside the credit check; the context and the history, summarized first if it's
+    // grown too long, don't wait on storing the message either.
     async prepare() {
-      const [, context] = await Promise.all([
+      const [, context, sent] = await Promise.all([
         appendMessage(ctx, conversation, { role: "user", parts: [{ type: "text", text }] }),
         gatherContext(ctx, turn),
+        modelHistory(ctx, conversation, history),
       ]);
       return {
-        instructions: instructionsWith(context),
-        messages: [...toModelMessages(history), { role: "user", content: text }],
+        instructions: instructionsWith([...context, ...summarySection(sent.summary)]),
+        messages: [...sent.messages, { role: "user", content: text }],
       };
     },
     store: ({ id, parts }) => appendMessage(ctx, conversation, { id, role: "assistant", parts }),

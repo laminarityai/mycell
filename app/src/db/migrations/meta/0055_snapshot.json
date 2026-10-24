@@ -1,5 +1,5 @@
 {
-  "id": "ac0a895e-4912-448f-95ff-8a9588d826e5",
+  "id": "d6d5e66c-4c82-4945-8353-4a9a4b781833",
   "prevId": "c42bdf9d-9f24-45da-bbbf-9dde10faadb1",
   "version": "7",
   "dialect": "postgresql",
@@ -824,6 +824,16 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "keywords": {
+          "name": "keywords",
+          "type": "tsvector",
+          "primaryKey": false,
+          "notNull": true,
+          "generated": {
+            "as": "jsonb_to_tsvector('english', jsonb_path_query_array(parts, '$[*] ? (@.type == \"text\").text'), '[\"string\"]')",
+            "type": "stored"
+          }
         }
       },
       "indexes": {
@@ -846,6 +856,21 @@
           "isUnique": false,
           "concurrently": false,
           "method": "btree",
+          "with": {}
+        },
+        "agent_messages_keywords_idx": {
+          "name": "agent_messages_keywords_idx",
+          "columns": [
+            {
+              "expression": "keywords",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "gin",
           "with": {}
         }
       },
@@ -3085,27 +3110,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "facts_org_id_told_by_user_id_idx": {
-          "name": "facts_org_id_told_by_user_id_idx",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "told_by_user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -3138,21 +3142,6 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
-        },
-        "facts_told_by_member_fk": {
-          "name": "facts_told_by_member_fk",
-          "tableFrom": "facts",
-          "tableTo": "member",
-          "columnsFrom": [
-            "org_id",
-            "told_by_user_id"
-          ],
-          "columnsTo": [
-            "organization_id",
-            "user_id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -3167,12 +3156,7 @@
         }
       },
       "policies": {},
-      "checkConstraints": {
-        "facts_told_by_user_when_told": {
-          "name": "facts_told_by_user_when_told",
-          "value": "(\"facts\".\"origin\" = 'told_by') = (\"facts\".\"told_by_user_id\" is not null)"
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.memory_objects": {

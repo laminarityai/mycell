@@ -315,6 +315,17 @@ export type EnablementSummary = {
   since: Date;
 };
 
+/** One of the caller's own enablements, as Ask Mycel lists them. */
+export type OwnEnablement = {
+  workflowId: string;
+  name: string;
+  since: Date;
+  /** Every pause that holds, in `PAUSED_REASONS`' order; empty while it runs. */
+  pauses: PausedReason[];
+  /** What a `needs_reenable` pause is about; null while on. */
+  pausedChange: PausedChange | null;
+};
+
 /** What switched a workflow on: one admin's enablement, or an org workflow's org switch. */
 export type Switch = { kind: "member"; enablementId: string } | { kind: "org"; workflowId: string };
 

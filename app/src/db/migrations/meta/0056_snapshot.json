@@ -1,6 +1,6 @@
 {
-  "id": "15d3574b-88f4-4b8d-851b-e86ebf9566d9",
-  "prevId": "ac0a895e-4912-448f-95ff-8a9588d826e5",
+  "id": "ac0a895e-4912-448f-95ff-8a9588d826e5",
+  "prevId": "d6d5e66c-4c82-4945-8353-4a9a4b781833",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -824,6 +824,16 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "keywords": {
+          "name": "keywords",
+          "type": "tsvector",
+          "primaryKey": false,
+          "notNull": true,
+          "generated": {
+            "as": "jsonb_to_tsvector('english', jsonb_path_query_array(parts, '$[*] ? (@.type == \"text\").text'), '[\"string\"]')",
+            "type": "stored"
+          }
         }
       },
       "indexes": {
@@ -846,6 +856,21 @@
           "isUnique": false,
           "concurrently": false,
           "method": "btree",
+          "with": {}
+        },
+        "agent_messages_keywords_idx": {
+          "name": "agent_messages_keywords_idx",
+          "columns": [
+            {
+              "expression": "keywords",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "gin",
           "with": {}
         }
       },
@@ -2949,12 +2974,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
         "valid_from": {
           "name": "valid_from",
           "type": "timestamp with time zone",
@@ -3109,28 +3128,6 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "facts_deleted_at_idx": {
-          "name": "facts_deleted_at_idx",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "deleted_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"facts\".\"deleted_at\" is not null",
           "concurrently": false,
           "method": "btree",
           "with": {}

@@ -1,5 +1,5 @@
-# Ask Mycel's tools: what the model is told each does (agent/lib/memory-tools.ts), and what they
-# tell it beside their results.
+# Ask Mycel's tools: what the model is told each does (agent/lib/memory-tools.ts, mail-tools.ts
+# and work-tools.ts), and what they tell it beside their results.
 
 searchMemory: |-
   Search the company's memory, as this person can see it, for facts about people, companies, deals, projects and documents. Returns the facts found, best match first, each with its id (cite it as [fact:ID]), the object it's about and its markers, and the objects they're about.
@@ -34,3 +34,28 @@ notRemembered: |-
 # remember named nothing it's about.
 nameWhatToRemember: |-
   Say what the fact is about: an objectId, an email address or a domain.
+
+findMessages: |-
+  Find messages in this person's own mail by sender, subject and date. Returns the newest matches, each with its id, its sender, its subject and when it arrived: never what a message says. Give at least one of from, subject, since and until to narrow it; with none, it returns the newest messages.
+findMessagesFrom: |-
+  Words of the sender's name or email address, such as dana@acme.com or acme.com.
+findMessagesSubject: |-
+  Words in the subject.
+findMessagesSince: |-
+  The first day to search from, as YYYY-MM-DD (UTC).
+findMessagesUntil: |-
+  The last day to search, as YYYY-MM-DD (UTC).
+# find_messages, when the person has no Google connection of their own allowed Gmail.
+noMailConnection: |-
+  Message search needs this person's own Google connection, and they haven't connected Google (or haven't allowed Gmail). Tell them to Connect Google on the Connections page to search their mail. Memory still works: keep answering from it.
+# When the injection screen isn't configured, or failed: nothing found was handed on.
+mailUnavailable: |-
+  Message search is unavailable right now: Mycel can't check what it reads for hidden instructions, so it read nothing. Tell the person you can't search their mail at the moment.
+
+listReviews: |-
+  List the reviews waiting for this person: each with the workflow it's from, its kind (approval, escalation, held_send, suggested_edits or calendar_event) and how long it has waited. The page shows each one with a link to it. Approving, editing and declining happen only on the Reviews page: you can't do them.
+listWorkflows: |-
+  List the workflows this person has switched on for their own inbox, each with whether it's running or paused, and why when it's paused.
+# When the injection screen isn't configured, or failed, for the reviews and workflows lists.
+listUnavailable: |-
+  This list is unavailable right now: Mycel can't check what it reads for hidden instructions, so it read nothing. Tell the person to look on the Reviews or Workflows page instead.

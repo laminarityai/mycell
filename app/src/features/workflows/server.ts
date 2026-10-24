@@ -39,6 +39,9 @@ export { listStartable } from "./lib/startable";
 // For admins and members: the version a run they start by hand on a connection runs now (a
 // retry), refused while the workflow is archived, paused there or no longer theirs to see.
 export { startableVersion } from "./lib/startable-version";
+// For a person running one of their own workflows by name (Ask Mycel): their enablement, if a run
+// may start now, refused in words otherwise.
+export { startableEnablement } from "./lib/startable-enablement";
 // For any role: workflows' names, to show beside what another feature lets the caller see,
 // their current versions' IDs, to count by, and versions by ID, to describe a run's steps by.
 export { currentVersionIds, versionsById, workflowNames } from "./lib/names";

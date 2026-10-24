@@ -14,4 +14,9 @@ export const toolPrompts = definePrompts(toolsFile, {
   memoryUnavailable: [],
   screenedOut: ["count"],
   nameAnObject: [],
+  proposeRun: [],
+  proposeRunWorkflowId: [],
+  proposeRunMessageId: [],
+  runProposed: [],
+  runRefused: [],
 });

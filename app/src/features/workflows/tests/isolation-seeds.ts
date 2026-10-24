@@ -64,6 +64,28 @@ export async function versionsOfOrgBUnread(orgs: TwoOrgs) {
   expect([...own.keys()]).toEqual([b.version.id]);
 }
 
+// findWorkflowBySpecId's isolation case: org B's workflow has the spec ID "pricing-replies";
+// org A has none.
+export async function specIdOfOrgBUnfound(orgs: TwoOrgs) {
+  await seedOrgBWorkflow(orgs);
+
+  expect(await server.findWorkflowBySpecId(orgs.orgA.admin.ctx, "pricing-replies")).toBeNull();
+}
+
+// startableEnablement's isolation case: org B's admin's enablement is no one's in org A, and
+// org B's admin gets it.
+export async function startableEnablementOfOrgBUnread(orgs: TwoOrgs) {
+  const b = await switchedOnInOrgB(orgs);
+
+  for (const ctx of [orgs.orgA.admin.ctx, orgs.orgA.member.ctx]) {
+    await expect(server.startableEnablement(ctx, b.workflowId)).rejects.toThrow(NotFoundError);
+  }
+  expect(await server.startableEnablement(orgs.orgB.admin.ctx, b.workflowId)).toMatchObject({
+    workflowId: b.workflowId,
+    connectionId: b.connectionId,
+  });
+}
+
 // startableVersion's isolation case: org A can't start org B's workflow, admin or member, and
 // org B's admin can.
 export async function orgBVersionUnstartable(orgs: TwoOrgs) {

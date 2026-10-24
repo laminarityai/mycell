@@ -53,6 +53,7 @@ export function RunSummary({
           <Item label="Credits">
             <span className="tabular-nums">{creditsText(run.costCredits)}</span>
           </Item>
+          {run.startedBy === "agent" ? <Item label="Started from">Ask Mycel</Item> : null}
           {run.retryOfRunId === null ? null : (
             <Item label="Retry of">
               <Link href={runHref(run.retryOfRunId)} className="underline underline-offset-4">

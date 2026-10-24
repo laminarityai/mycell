@@ -14,6 +14,8 @@ import {
   orgBWorkflowNotFound,
   publishedToSalesInOrgB,
   seedOrgBWorkflow,
+  specIdOfOrgBUnfound,
+  startableEnablementOfOrgBUnread,
   switchedOnInOrgB,
   orgBVersionUnstartable,
   versionsOfOrgBUnread,
@@ -145,6 +147,8 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await server.listStartable(systemCtx(orgs.orgA.id), b.connectionId)).toEqual([]);
     expect(await server.listStartable(systemCtx(orgs.orgB.id), b.connectionId)).toHaveLength(1);
   },
+
+  startableEnablement: startableEnablementOfOrgBUnread,
 
   enable: async (orgs) => {
     const { orgA, orgB } = orgs;
@@ -364,10 +368,5 @@ export const isolationCases = defineIsolationCases(server, {
     expect((await server.listWorkingSpecs(orgs.orgA.admin.ctx)).map((w) => w.id)).toEqual([own.id]);
   },
 
-  findWorkflowBySpecId: async (orgs) => {
-    // Org B's workflow has the spec ID "pricing-replies"; org A has none.
-    await seedOrgBWorkflow(orgs);
-
-    expect(await server.findWorkflowBySpecId(orgs.orgA.admin.ctx, "pricing-replies")).toBeNull();
-  },
+  findWorkflowBySpecId: specIdOfOrgBUnfound,
 });

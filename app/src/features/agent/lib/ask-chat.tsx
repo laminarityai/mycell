@@ -13,8 +13,9 @@ import { DateTime } from "@/components/date-time";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import type { AgentUIMessage, Citation, CitedSource } from "../types";
+import type { AgentUIMessage, Citation, CitedSource, ProposeRunResult } from "../types";
 import { numberSources, segments } from "./footnotes";
+import { ProposeRunPart } from "./pending-run-card";
 
 /** Ask Mycel's AI disclosure (EU AI Act Art. 50), above every conversation. */
 const DISCLOSURE =
@@ -23,6 +24,7 @@ const DISCLOSURE =
 const TOOL_LABELS: Record<string, string> = {
   search_memory: "Searched memory",
   read_object: "Read memory",
+  propose_run: "Offered a run",
 };
 
 /** What a cited source is, and where the person's copy of it lives. */
@@ -234,6 +236,10 @@ function ReplyPart({
   if (!("state" in part)) return null;
   const name = part.type === "dynamic-tool" ? part.toolName : part.type.slice("tool-".length);
   const label = TOOL_LABELS[name] ?? name;
+  if (name === "propose_run" && part.state !== "output-error") {
+    const output = part.state === "output-available" ? part.output : undefined;
+    return <ProposeRunPart output={output as ProposeRunResult | undefined} />;
+  }
   if (part.state === "output-error") {
     return <p className="text-xs text-muted-foreground">{label}: it found nothing.</p>;
   }

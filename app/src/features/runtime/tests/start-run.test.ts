@@ -2,8 +2,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { listConnections } from "@/features/connections/server";
+import { grantCredits } from "@/features/credits/server";
+import { sendWaitingEvents } from "@/features/outbox/server";
 import { saveWorkflow } from "@/features/workflows/server";
+import { systemCtx } from "@/lib/ctx";
 import { ForbiddenError, ValidationError } from "@/lib/errors";
+import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import { connectOrgInbox } from "@/testing/connect-helpers";
 import { fakeInngest } from "@/testing/fake-inngest";
 import { executeRun, getRun, listRuns, startRun } from "../server";
@@ -66,6 +70,32 @@ describe("startRun", () => {
     await expect(
       startRun(orgA.member.ctx, workflowId, memberInbox.connectionId, "m"),
     ).rejects.toThrow(ForbiddenError);
+  });
+
+  it("whose request failed to send is requested by the outbox job, and runs once however often it comes", async () => {
+    const { orgA, admin, inbox } = await adminWithInbox();
+    const system = systemCtx(orgA.id);
+    await grantCredits(system, 100);
+    const workflowId = await publish(admin, threadSpec());
+    const message = inbox.messages[0];
+    fakeInngest.failSends();
+
+    // The run and its request are saved together, so the start succeeds though the send failed.
+    const { runId } = await startRun(admin, workflowId, inbox.connectionId, message.id);
+    fakeInngest.failSends(false);
+    expect(fakeInngest.sent("runtime/run.requested")).toEqual([]);
+    await sendWaitingEvents(system, new Date(Date.now() + 61_000));
+
+    expect(fakeInngest.sent("runtime/run.requested")).toMatchObject([
+      { id: `run-${runId}`, data: { orgId: orgA.id, runId, connectionId: inbox.connectionId } },
+    ]);
+    // What the run job does with the request: the run ends, rather than staying "running".
+    fakeAiGateway.decision({ choice: "yes", probabilities: { yes: 0.9, no: 0.1 } }, { costUsd: 0 });
+    expect(await executeRun(system, runId)).toEqual({ status: "succeeded" });
+    // Delivered again, it finds the run ended, and does nothing more.
+    expect(await executeRun(system, runId)).toEqual({ status: "succeeded" });
+    expect(fakeAiGateway.requests()).toHaveLength(1);
+    expect(await getRun(admin, runId)).toMatchObject({ status: "succeeded" });
   });
 
   it("leaves executing to the system ctx", async () => {

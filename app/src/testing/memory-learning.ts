@@ -27,7 +27,8 @@ const followed = new Set<string>();
 const TO_LEARN = new Set(["discovery/item.stored", "memory/item.queued", "calendar/event.changed"]);
 const REMOVED = new Set(["discovery/item.removed", "calendar/event.removed"]);
 const CHANGED = new Set(["discovery/item.changed", "calendar/event.changed"]);
-// Events sent without an ID (memory's own queued items) are told apart by when they were sent.
+// Every event to learn from has an ID now (memory's queued items too, ADR-0027); one sent without
+// one would be told apart by when it was sent.
 const seenWithoutId = new WeakSet<object>();
 
 /**

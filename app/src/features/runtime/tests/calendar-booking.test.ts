@@ -92,7 +92,7 @@ describe("a run that books a meeting", () => {
   it("books one event when the booking's answer is lost and the step tries again", async () => {
     const retry = recordedBackoff();
     const { owner, calendar, outcome } = await bookingRun(await seedTwoOrgs(), {
-      retry,
+      sleep: retry.sleep,
       // The insert is made, but its answer lost: the step's retry finds the event (409).
       beforeRun: (fake) => {
         fake.writes.loseNextAnswer();

@@ -1,7 +1,7 @@
 // The fake Nango: an in-memory Nango Cloud behind msw's fetch interception, so tests run the
 // real Nango client without network or secrets. Only the endpoints Mycel calls, as documented.
 import { createHmac, randomUUID } from "node:crypto";
-import { http, HttpResponse } from "msw";
+import { delay, http, HttpResponse } from "msw";
 import { env } from "@/env";
 import { FakeCalendar } from "./fake-calendar";
 import { FakeDocs } from "./fake-docs";
@@ -55,6 +55,8 @@ class FakeNango {
   private connections = new Map<string, FakeConnection>();
   private deletesFail = false;
   private answering = true;
+  // Set while Nango takes requests and never answers: called as each one arrives.
+  private hanging: (() => void) | undefined;
   private rateLimitsLeft = 0;
   private rateLimitsServed = 0;
   private writeFailuresLeft = 0;
@@ -72,6 +74,7 @@ class FakeNango {
     this.connections.clear();
     this.deletesFail = false;
     this.answering = true;
+    this.hanging = undefined;
     this.rateLimitsLeft = 0;
     this.rateLimitsServed = 0;
     this.writeFailuresLeft = 0;
@@ -146,6 +149,16 @@ class FakeNango {
    */
   stopAnswering(): void {
     this.answering = false;
+  }
+
+  /**
+   * Nango takes every request to its API, the proxy's included, and never answers (a hung
+   * connection), until the next reset. Resolves when the first such request arrives.
+   */
+  hang(): Promise<void> {
+    return new Promise((arrived) => {
+      this.hanging = arrived;
+    });
   }
 
   /** Serves at most `size` connections per page of the list endpoint, whatever is asked. */
@@ -303,7 +316,13 @@ class FakeNango {
 
   readonly handlers = [
     // Checked first; a resolver that returns nothing hands the request on to the next.
-    http.all(`${NANGO_API}/*`, () => (this.answering ? undefined : HttpResponse.error())),
+    http.all(`${NANGO_API}/*`, async () => {
+      if (this.hanging !== undefined) {
+        this.hanging();
+        await delay("infinite");
+      }
+      return this.answering ? undefined : HttpResponse.error();
+    }),
     ...connectionsApiHandlers(
       () => [...this.connections.values()],
       () => this.listing,

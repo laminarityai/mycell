@@ -1,6 +1,7 @@
 // Polling a connection: for each of its apps, everything new since that app's cursor,
-// normalized and stored exactly as the backfill stores it, then the app's next cursor.
-// Re-running a poll stores nothing twice (events are unique per connection on source_ref).
+// normalized and stored exactly as the backfill stores it, then the app's next cursor, one page
+// or batch per step (poll-pages.ts). Re-running a poll stores nothing twice (events are unique
+// per connection on source_ref).
 // Only `active` apps are polled: one still backfilling has its cursor taken care of by the
 // backfill. A connection needing a reconnect can't reach its source, so it's skipped whole.
 //
@@ -11,16 +12,16 @@
 // needs no second event or trigger for the backfill job, leaves the app `active` instead of
 // showing a fresh 90-day backfill, and a recovery that fails part-way leaves the expired cursor
 // in place, so the next poll simply recovers again.
-import { getConnection, recordIngestState, sourceClient } from "@/features/connections/server";
+import { recordIngestState, sourceClient } from "@/features/connections/server";
 import { ingestedAppSchema, type IngestedApp } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
 import { runInline, type RunStep } from "@/lib/inngest";
 import { DAY_MS } from "@/lib/time";
 import type { PollOutcome } from "../types";
-import { announcedFor, changesOf, sendAnnounced, NOTHING, type Announced } from "./announce";
 import { BACKFILL_DAYS } from "./backfill";
 import { CONNECTORS, storeWindow, whileConnected } from "./ingest-steps";
-import { latestEventTime, storeEvents } from "./store";
+import { readChanges } from "./poll-pages";
+import { latestEventTime } from "./store";
 
 // How far before the latest stored event a recovery starts, for messages Gmail dates a little
 // earlier than one already stored. What it re-reads is stored once.
@@ -59,39 +60,9 @@ async function pollApp(
   app: IngestedApp,
   runStep: RunStep,
 ): Promise<AppPoll> {
-  const polled = await runStep(`${app}-poll`, () =>
-    whileConnected(() => pollOnce(ctx, connectionId, app)),
-  );
-  if (polled.gone) return { outcome: "gone" };
-  if (polled.result === "skipped") return { outcome: "skipped" };
-  if (polled.result === "polled") {
-    await sendAnnounced(ctx, connectionId, app, polled, runStep, `${app}-poll-announce`);
-    return { outcome: "polled", items: polled.items };
-  }
-  return recover(ctx, connectionId, app, runStep);
-}
-
-type PollOnce = { result: "skipped" | "expired" | "polled"; items: number } & Announced;
-
-// Stores what's new, and hands on what it newly stored (Gmail messages, received and sent, and
-// Drive file versions), and what it found removed or changed, for the step after it to announce.
-async function pollOnce(ctx: Ctx, connectionId: string, app: IngestedApp): Promise<PollOnce> {
-  const connection = await getConnection(ctx, connectionId);
-  const state = connection.ingest[app];
-  if (connection.needsReauth || state?.status !== "active") {
-    return { result: "skipped", items: 0, ...NOTHING };
-  }
-  if (state.cursor === null) return { result: "expired", items: 0, ...NOTHING };
-  const found = await CONNECTORS[app].poll(await sourceClient(ctx, connectionId), state.cursor);
-  if ("cursorExpired" in found) return { result: "expired", items: 0, ...NOTHING };
-  const created = await storeEvents(ctx, connection, app, found.events);
-  await recordIngestState(ctx, connectionId, app, {
-    cursor: found.nextCursor,
-    lastPolledAt: new Date(),
-  });
-  const announced = announcedFor(app, created, { newMail: true });
-  const changes = changesOf(app, state.cursor, found, created);
-  return { result: "polled", items: found.events.length, ...announced, changes };
+  const read = await readChanges(ctx, connectionId, app, runStep);
+  if (read.outcome === "expired") return recover(ctx, connectionId, app, runStep);
+  return read;
 }
 
 // The source no longer knows the app's cursor: backfill the app from the latest stored event,

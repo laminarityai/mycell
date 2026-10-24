@@ -6,14 +6,8 @@ import { systemCtx } from "@/lib/ctx";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import { fakeNango } from "@/testing/fake-nango";
 import { executeRun, getRun, startRun } from "../server";
-import {
-  connectInbox,
-  pricingQuestion,
-  publish,
-  recordedBackoff,
-  recordingStepRunner,
-  threadSpec,
-} from "./run-helpers";
+import { connectInbox, pricingQuestion, publish, recordedBackoff, threadSpec } from "./run-helpers";
+import { recordingStepRunner } from "@/testing/recording-step-runner";
 
 beforeEach(resetDatabase);
 

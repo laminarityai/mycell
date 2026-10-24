@@ -9,14 +9,8 @@ import { connectGoogle } from "@/testing/connect-helpers";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import { fakeNango } from "@/testing/fake-nango";
 import { executeRun, getRun, startRun } from "../server";
-import {
-  pricingQuestion,
-  publish,
-  recordedBackoff,
-  recordingStepRunner,
-  recordsOf,
-  threadSpec,
-} from "./run-helpers";
+import { pricingQuestion, publish, recordedBackoff, recordsOf, threadSpec } from "./run-helpers";
+import { recordingStepRunner } from "@/testing/recording-step-runner";
 
 beforeEach(resetDatabase);
 

@@ -19,7 +19,8 @@ import { listReviews, openReview } from "@/features/reviews/server";
 import { fakeNango } from "@/testing/fake-nango";
 import { connectGoogle } from "@/testing/connect-helpers";
 import { dryRun, executeRun, getRun } from "../server";
-import { recordedBackoff, recordingStepRunner, recordsOf } from "./run-helpers";
+import { recordedBackoff, recordsOf } from "./run-helpers";
+import { recordingStepRunner } from "@/testing/recording-step-runner";
 
 beforeEach(resetDatabase);
 

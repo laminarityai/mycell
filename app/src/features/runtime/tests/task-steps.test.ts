@@ -10,7 +10,8 @@ import { systemCtx } from "@/lib/ctx";
 import { connectGoogle } from "@/testing/connect-helpers";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import { executeRun, getRun, listRuns, startRun } from "../server";
-import { pricingQuestion, publish, recordedBackoff, recordingStepRunner } from "./run-helpers";
+import { pricingQuestion, publish, recordedBackoff } from "./run-helpers";
+import { recordingStepRunner } from "@/testing/recording-step-runner";
 
 beforeEach(resetDatabase);
 

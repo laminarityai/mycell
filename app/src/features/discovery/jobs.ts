@@ -13,6 +13,7 @@ import {
   pollAllConnections,
   pollConnection,
   renewWatches,
+  sweepSchedule,
 } from "./server";
 
 // Shared by the backfill and the poll (scope "env" keys them across functions): one ingest run
@@ -50,12 +51,12 @@ export const backfillJob = inngest.createFunction(
 );
 
 /**
- * The sweep (ADR-0026): every minute, sends one poll event per connection that's due in every
- * org. An app with a live watch is due every 15 minutes, one without every minute. Once Drive
- * has push (#147), every ingested app has a watch and this cron can run every 5 minutes.
+ * The sweep (ADR-0026): sends one poll event per connection that's due in every org. An app
+ * with a live watch is due every 15 minutes, one without at each run. It runs every 5 minutes
+ * where Gmail and Drive both have push, and every minute elsewhere (`sweepSchedule`).
  */
 export const pollCron = inngest.createFunction(
-  { id: "poll-connections", triggers: [{ cron: "* * * * *" }] },
+  { id: "poll-connections", triggers: [{ cron: sweepSchedule() }] },
   async ({ step }) => {
     const due = await step.run("list-connections", () => pollAllConnections());
     if (due.length > 0) {

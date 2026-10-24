@@ -2,7 +2,6 @@
 // connector knows about Gmail or Drive (or, later, Outlook).
 import type { z } from "zod";
 import type { AttachmentMeta, Direction, EventType, ObjectRefKind } from "../types";
-import type { GmailPushConfig } from "./gmail-push";
 
 /**
  * Calls to one connection's source API, through the Nango proxy. Null: no such item. A POST
@@ -54,10 +53,30 @@ export type Connector = {
   backfillPage(client: SourceClient, since: Date, pageToken: string | null): Promise<BackfillPage>;
   /** Everything new, and every item removed, since `cursor`. */
   poll(client: SourceClient, cursor: string): Promise<PollResult>;
+  /** The app's watch (ADR-0026), if it can tell Mycel when something changes. */
+  watch?: Watcher;
+};
+
+/** A web-hook channel a watch opened (Drive's): what stopping it needs. */
+export type WatchChannel = { id: string; resourceId: string };
+
+/** What a watch is for: the connection, in its org, and the app's stored cursor. */
+export type WatchTarget = { orgId: string; connectionId: string; cursor: string | null };
+
+/** A watch the app started: when it runs out, and the channel it opened, if it's one. */
+export type StartedWatch = { expiresAt: Date; channel: WatchChannel | null };
+
+export type Watcher = {
+  /** Whether this environment has the app's push settings. Without them no watch starts. */
+  configured(): boolean;
   /**
-   * Starts the app's watch on the account, or renews it (ADR-0026), with the environment's push
-   * settings: the app then tells Mycel when something changes. Returns when the watch runs out.
-   * Only an app that can notify has one; Drive's will take its own settings.
+   * Starts the app's watch on the account, or renews it: the app then tells Mycel when
+   * something changes. Only called when `configured()`.
    */
-  watch?(client: SourceClient, push: GmailPushConfig): Promise<Date>;
+  start(client: SourceClient, target: WatchTarget): Promise<StartedWatch>;
+  /**
+   * Stops a channel an earlier watch opened, once its replacement is open. Only an app whose
+   * watch opens channels has it; a watch that renews in place (Gmail's) needs none.
+   */
+  stop?(client: SourceClient, channel: WatchChannel): Promise<void>;
 };

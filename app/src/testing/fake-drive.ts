@@ -1,15 +1,16 @@
 // A fake Google Drive, served through the fake Nango's proxy. It answers the Drive API v3 calls
 // Mycel makes (about.get, changes.getStartPageToken, files.list, changes.list, files.get and
-// files.export) in the shapes Google documents, from files a test seeds, each with the
-// capabilities the account has on it (whether it may edit it). Every file has a name,
-// and responses carry only the `fields` a request asks for, as Drive's do; asking for a file's
-// name fails the test. Each file has a sharing list (its permissions: its owners, and the
-// people, groups, domains or anyone it's shared with), which Drive shows only to an account
-// that may share the file: an owner, or someone it's shared with as a writer. A test can share
-// and unshare a file, and remove it from the account's Drive (deleted, or no longer shared with
-// the account), each a change in the feed.
+// files.export, and changes.watch and channels.stop in fake-drive-channels.ts) in the shapes
+// Google documents, from files a test seeds, each with the capabilities the account has on it
+// (whether it may edit it). Every file has a name, and responses carry only the `fields` a
+// request asks for, as Drive's do; asking for a file's name fails the test. Each file has a
+// sharing list (its permissions: its owners, and the people, groups, domains or anyone it's
+// shared with), which Drive shows only to an account that may share the file: an owner, or
+// someone it's shared with as a writer. A test can share and unshare a file, and remove it from
+// the account's Drive (deleted, or no longer shared with the account), each a change in the feed.
 import { randomUUID } from "node:crypto";
 import { HttpResponse } from "msw";
+import { FakeDriveChannels } from "./fake-drive-channels";
 import { parseFields, project } from "./fake-drive-fields";
 import { permission, type DrivePermission, type FakeShareInput } from "./fake-drive-sharing";
 
@@ -77,6 +78,8 @@ export class FakeDrive {
   private lastToken = 100;
   // Tokens below this one are no longer accepted.
   private oldestToken = 0;
+  /** Its notification channels (changes.watch and channels.stop). */
+  readonly channels = new FakeDriveChannels();
 
   constructor(readonly emailAddress: string) {}
 
@@ -193,10 +196,9 @@ export class FakeDrive {
    * Throws InvalidPageTokenError for a token Drive no longer accepts.
    */
   listChanges(params: URLSearchParams) {
-    const start = Number(required(params, "pageToken"));
-    if (!Number.isInteger(start) || start < this.oldestToken || start > this.lastToken + 1) {
-      throw new InvalidPageTokenError();
-    }
+    const pageToken = required(params, "pageToken");
+    if (!this.acceptsPageToken(pageToken)) throw new InvalidPageTokenError();
+    const start = Number(pageToken);
     const latest = new Map<string, ChangeRecord>();
     for (const change of this.changes.filter((c) => c.token >= start)) {
       latest.delete(change.fileId);
@@ -224,6 +226,12 @@ export class FakeDrive {
         : { nextPageToken: String(rest.token) }),
     };
     return project(body, fileFields(params));
+  }
+
+  /** Whether Drive still accepts `pageToken` for the changes feed. */
+  acceptsPageToken(pageToken: string): boolean {
+    const token = Number(pageToken);
+    return Number.isInteger(token) && token >= this.oldestToken && token <= this.lastToken + 1;
   }
 
   /** files.get: the file's fields the request names, or null if the account has no such file. */
@@ -325,6 +333,21 @@ export function driveResponse(drive: FakeDrive, path: string, params: URLSearchP
     }
   }
   throw new Error(`The fake Drive doesn't serve ${path}`);
+}
+
+export const DRIVE_WATCH = "/drive/v3/changes/watch";
+export const DRIVE_STOP = "/drive/v3/channels/stop";
+
+// The Drive API's POSTs behind the proxy: changes.watch and channels.stop, which change nothing
+// in the account.
+export function driveWrite(drive: FakeDrive, path: string, params: URLSearchParams, body: unknown) {
+  if (path === DRIVE_WATCH) {
+    const pageToken = params.get("pageToken");
+    const accepted = pageToken !== null && drive.acceptsPageToken(pageToken);
+    return drive.channels.watch(pageToken, accepted, body);
+  }
+  if (path === DRIVE_STOP) return drive.channels.stop(body);
+  throw new Error(`The fake Drive takes no POST to ${path}`);
 }
 
 // An error as Drive returns it: a bad page token is a 400 blaming the `pageToken` parameter, a

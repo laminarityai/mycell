@@ -1,19 +1,30 @@
-// The sweep (ADR-0026): which connections the minute cron polls. A watched app's changes start
+// The sweep (ADR-0026): which connections the sweep cron polls, and how often it runs. A watched app's changes start
 // its connection's poll as they happen, so the sweep only catches what a notification missed;
 // an app without a live watch is still polled every minute. It runs before any ctx exists, so
 // it lists the orgs and reads each one's connections as that org's system ctx (ADR-0009).
 import { listConnectionsForJobs } from "@/features/connections/server";
-import type { AppIngestState, ConnectionDetails } from "@/features/connections/types";
+import {
+  ingestedAppSchema,
+  type AppIngestState,
+  type ConnectionDetails,
+} from "@/features/connections/types";
 import { listOrgIds } from "@/features/orgs/server";
 import { systemCtx } from "@/lib/ctx";
 import type { ConnectionToPoll } from "../types";
+import { watches } from "./watch";
+
+/** How long the sweep leaves an app with a live watch between polls. */
+const SWEEP_WATCHED_EVERY_MS = 15 * 60 * 1000;
 
 /**
- * How long the sweep leaves an app with a live watch between polls. Once every ingested app
- * has a watch (Drive's, #147), nothing is due every minute and the cron itself can run every
- * 5 minutes.
+ * When the sweep cron runs: every 5 minutes where every ingested app has push configured, so
+ * an app whose watch failed or lapsed still waits at most 5 minutes; every minute elsewhere
+ * (local dev, an environment with only Gmail push), where an app without a watch is polled as
+ * it was before push.
  */
-const SWEEP_WATCHED_EVERY_MS = 15 * 60 * 1000;
+export function sweepSchedule(): string {
+  return ingestedAppSchema.options.every(watches) ? "*/5 * * * *" : "* * * * *";
+}
 
 /**
  * Every connection in every org that's due a poll, with the org its poll acts in: one with no

@@ -58,4 +58,14 @@ describe("the environment", () => {
     const local = { ...base, INNGEST_DEV: "1", ...push, GMAIL_PUSH_TOPIC: "gmail-push" };
     expect(() => parseEnv(local)).toThrow(/GMAIL_PUSH_TOPIC/);
   });
+
+  it("takes Drive push's secret only at 32 characters or more, and on its own", () => {
+    const local = { ...base, INNGEST_DEV: "1" };
+    expect(parseEnv(local).DRIVE_PUSH_SECRET).toBeUndefined();
+    const secret = "a-drive-push-secret-of-32-chars!";
+    expect(parseEnv({ ...local, DRIVE_PUSH_SECRET: secret }).DRIVE_PUSH_SECRET).toBe(secret);
+    expect(() => parseEnv({ ...local, DRIVE_PUSH_SECRET: secret.slice(1) })).toThrow(
+      /DRIVE_PUSH_SECRET/,
+    );
+  });
 });

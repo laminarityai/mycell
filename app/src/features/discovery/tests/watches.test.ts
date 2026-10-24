@@ -35,6 +35,7 @@ const PUSH_KEYS = [
   "GMAIL_PUSH_TOPIC",
   "GOOGLE_PUSH_AUDIENCE",
   "GOOGLE_PUSH_SERVICE_ACCOUNT",
+  "DRIVE_PUSH_SECRET",
 ] as const;
 
 // Runs `work` as a deployment without push would: the env is parsed once at startup.
@@ -94,10 +95,9 @@ describe("finishing a Gmail backfill", () => {
     expect(expiry).toEqual(answeredExpiry(connection.mailbox));
     expect(expiry?.getTime()).toBeGreaterThan(Date.now() + 6 * 24 * 60 * 60 * 1000);
     expect(steps.indexOf("gmail-watch")).toBe(steps.indexOf("gmail-finish") + 1);
-    expect(steps).not.toContain("drive-watch");
   });
 
-  it("leaves Drive, which has no watch yet, untouched", async () => {
+  it("watches only the apps the connection may use, each with its own watch", async () => {
     const { orgA } = await seedTwoOrgs();
     const drive = await connectDriveOnly(orgA.member.ctx, orgA.member.email);
     const google = await connectMailbox(orgA.admin.ctx, orgA.admin.email);
@@ -106,9 +106,13 @@ describe("finishing a Gmail backfill", () => {
     await backfillConnection(orgA.admin.ctx, google.id);
 
     expect(drive.mailbox.watches.made).toEqual([]);
-    expect(await watchExpiry(orgA.member.ctx, drive.id, "drive")).toBeNull();
-    expect(await watchExpiry(orgA.admin.ctx, google.id, "drive")).toBeNull();
+    expect(drive.drive.channels.opened).toHaveLength(1);
     expect(google.mailbox.watches.made).toHaveLength(1);
+    expect(google.drive.channels.opened).toHaveLength(1);
+    const { ingest } = await getConnection(orgA.admin.ctx, google.id);
+    // Gmail's watch is no channel; Drive's is (drive-watches.test.ts).
+    expect(ingest.gmail).toMatchObject({ watchChannelId: null, watchResourceId: null });
+    expect(ingest.drive?.watchChannelId).toBe(google.drive.channels.latest().id);
   });
 
   it("leaves Gmail active with no expiry when the watch fails, and logs it", async () => {
@@ -158,7 +162,8 @@ describe("renewWatches", () => {
     await recordIngestState(ctx, lapsed.id, "gmail", { watchExpiresAt: daysAgo(1) });
     await withoutPush(() => backfillConnection(orgA.admin.ctx, missing.id));
 
-    expect(await renewWatches(ctx)).toEqual({ renewed: 3, failed: 0 });
+    // Each connection's Gmail and Drive.
+    expect(await renewWatches(ctx)).toEqual({ renewed: 6, failed: 0 });
 
     for (const connection of [live, lapsed, missing]) {
       expect(connection.mailbox.watches.made.at(-1)).toMatchObject({
@@ -171,7 +176,7 @@ describe("renewWatches", () => {
     expect(missing.mailbox.watches.made).toHaveLength(1);
   });
 
-  it("skips connections needing reconnect, still backfilling, or without Gmail", async () => {
+  it("skips connections needing reconnect or still backfilling, and apps they lack", async () => {
     const { orgA } = await seedTwoOrgs();
     const ctx = systemCtx(orgA.id);
     const reauth = await connectMailbox(orgA.member.ctx, orgA.member.email);
@@ -181,11 +186,15 @@ describe("renewWatches", () => {
     const drive = await connectDriveOnly(orgA.admin.ctx, `support@${orgA.workspaceDomain}`, "org");
     await backfillConnection(orgA.admin.ctx, drive.id);
 
-    expect(await renewWatches(ctx)).toEqual({ renewed: 0, failed: 0 });
+    // Only the Drive-only connection's Drive.
+    expect(await renewWatches(ctx)).toEqual({ renewed: 1, failed: 0 });
 
     expect(reauth.mailbox.watches.made).toHaveLength(1);
+    expect(reauth.drive.channels.opened).toHaveLength(1);
     expect(backfilling.mailbox.watches.made).toEqual([]);
+    expect(backfilling.drive.channels.opened).toEqual([]);
     expect(drive.mailbox.watches.made).toEqual([]);
+    expect(drive.drive.channels.opened).toHaveLength(2);
   });
 
   it("logs a failed renewal and renews the rest, keeping the failed one's expiry", async () => {
@@ -199,7 +208,8 @@ describe("renewWatches", () => {
     failing.mailbox.watches.refuseNext();
     const logged = warnings();
 
-    expect(await renewWatches(ctx)).toEqual({ renewed: 1, failed: 1 });
+    // Both Drives and the other Gmail renew.
+    expect(await renewWatches(ctx)).toEqual({ renewed: 3, failed: 1 });
 
     expect(fine.mailbox.watches.made).toHaveLength(2);
     expect(await watchExpiry(ctx, fine.id)).toEqual(answeredExpiry(fine.mailbox));

@@ -1,5 +1,5 @@
 // The Drive API responses the connector reads, parsed with Zod. Shapes follow Google's reference
-// for changes.getStartPageToken, files.list and changes.list (Drive API v3). Every request names
+// for changes.getStartPageToken, files.list, changes.list and changes.watch (Drive API v3). Every request names
 // its `fields`, and none asks for a file's name: Drive never sends Mycel one (invariant 8).
 import { z } from "zod";
 
@@ -45,6 +45,14 @@ export const changeListSchema = z.object({
     .optional(),
   nextPageToken: z.string().optional(),
   newStartPageToken: z.string().optional(),
+});
+
+// changes.watch's answer: the channel Drive opened, the resource ID it gave the changes feed,
+// and when the channel expires, in milliseconds since the epoch (an int64, so a string).
+export const channelSchema = z.object({
+  id: z.string(),
+  resourceId: z.string(),
+  expiration: z.union([z.string().regex(/^\d+$/), z.number().int()]),
 });
 
 // Google's error body: Drive answers an invalid or expired page token with 400 and an error

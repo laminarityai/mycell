@@ -90,6 +90,8 @@ export function ingestByApp(rows: IngestStateRow[]): Partial<Record<IngestedApp,
         backfilledItems: row.backfilledItems,
         lastPolledAt: row.lastPolledAt,
         watchExpiresAt: row.watchExpiresAt,
+        watchChannelId: row.watchChannelId,
+        watchResourceId: row.watchResourceId,
       },
     ]),
   );

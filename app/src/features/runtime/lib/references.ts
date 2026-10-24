@@ -9,9 +9,13 @@ import type { StepContext } from "./step-context";
 type Literal = string | number | boolean | null;
 type InputValue = Literal | Reference | (Literal | Reference)[];
 
-/** The trigger's fields a reference may read: the message's ID and its thread's. */
+/**
+ * The trigger's fields a reference may read: the message's ID and its thread's, or the invite's
+ * event ID. A run's source_ref is the item that started it.
+ */
 const TRIGGER_FIELDS: Partial<Record<string, (context: StepContext) => Promise<Json>>> = {
   messageId: (context) => Promise.resolve(context.run.sourceRef),
+  eventId: (context) => Promise.resolve(context.run.sourceRef),
   threadId: async (context) =>
     (await messageRef(context.ctx, context.run.connectionId, context.run.sourceRef)).threadId,
 };

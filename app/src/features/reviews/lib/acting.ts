@@ -8,6 +8,7 @@ import { and, eq } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { delegatedCtx } from "@/features/connections/delegation";
 import {
+  calendarEventAdapter,
   escalationAdapter,
   gmailDraftAdapter,
   heldSendAdapter,
@@ -42,6 +43,7 @@ const pendingForms: PendingForms = {
   approval: gmailDraftAdapter,
   escalation: escalationAdapter,
   held_send: heldSendAdapter,
+  calendar_event: calendarEventAdapter,
 };
 
 /**

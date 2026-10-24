@@ -17,6 +17,7 @@ import {
   HeldSendActions,
   ReviewActions,
 } from "./lib/review-actions";
+import { MeetingReview } from "./lib/meeting-review";
 import type {
   HandOff,
   OpenedReview,
@@ -33,6 +34,7 @@ const KIND_LABELS: Record<ReviewKind, string> = {
   approval: "Draft reply",
   escalation: "Escalated message",
   held_send: "Held send",
+  calendar_event: "Meeting",
 };
 
 const ENDINGS: Record<Exclude<ReviewStatus, "waiting">, string> = {
@@ -53,6 +55,14 @@ const HELD_SEND_ENDINGS: Partial<Record<ReviewStatus, string>> = {
   unconfirmed: "It was approved, but its app didn't confirm it was sent, so it may have gone",
 };
 
+// A meeting's own words: its event waited on the calendar, not in Gmail.
+const MEETING_ENDINGS: Partial<Record<ReviewStatus, string>> = {
+  approved: "It was approved, and its guests invited",
+  declined: "It was declined, and its event deleted",
+  done_in_app: "Its guests were invited from Calendar",
+  gone: "Its event is no longer on the calendar",
+};
+
 /**
  * How a review ended, and by whom when someone in Mycel ended it. An escalation ends done by a
  * person in Mycel, or by a reply in Gmail (no one named), or with its message gone.
@@ -62,6 +72,9 @@ function ending(review: Review): string {
   const by = review.endedBy === null ? "" : ` by ${review.endedBy}`;
   if (review.kind === "held_send") {
     return `${HELD_SEND_ENDINGS[review.status] ?? ENDINGS[review.status]}${by}.`;
+  }
+  if (review.kind === "calendar_event") {
+    return `${MEETING_ENDINGS[review.status] ?? ENDINGS[review.status]}${by}.`;
   }
   if (review.kind !== "escalation") return `${ENDINGS[review.status]}${by}.`;
   if (review.status === "gone") return "The message is no longer in Gmail.";
@@ -186,7 +199,8 @@ export function ReviewsList({
 /**
  * An open review: the message and the drafted reply, fetched live, with approve, edit and
  * decline; the escalated message, why it was handed over and a link to it in Gmail, with done;
- * or a held send's request and the fields it sends, with approve, edit and decline. While it waits, who it was handed to, and a colleague to hand it to when the caller
+ * a held send's request and the fields it sends, with approve, edit and decline; or a meeting
+ * on the calendar, with approve and decline. While it waits, who it was handed to, and a colleague to hand it to when the caller
  * may. Once it has ended, how it ended and by whom.
  */
 export function ReviewDetail({
@@ -221,6 +235,7 @@ export function ReviewDetail({
 }
 
 function WaitingItem({ review, view }: { review: Review; view: ItemView }) {
+  if (view.kind === "event") return <MeetingReview reviewId={review.id} view={view} />;
   if (view.kind === "held_send") {
     return (
       <>

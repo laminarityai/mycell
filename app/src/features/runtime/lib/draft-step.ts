@@ -11,6 +11,7 @@ import { findStep, stepsAbove } from "@/features/spec/tree";
 import type { Step } from "@/features/spec/types";
 import { joinPrompts, type PromptText } from "@/lib/prompts";
 import type { Json } from "@/lib/inngest";
+import { pendingDetailsSchema } from "../types";
 import { RunStepError } from "./failures";
 import { messageRef, messageText, threadText } from "./gmail";
 import { lookupText, MEMORY_LOOKUP } from "./memory-lookup";
@@ -104,12 +105,47 @@ function isCustomWrite(step: Step, context: StepContext): boolean {
   return action?.kind === "custom" && action.risk !== "read";
 }
 
+// Whether the step is a tool step booking a meeting, whose output is its waiting event.
+function booksEvent(step: Step, context: StepContext): boolean {
+  if (step.type !== "tool") return false;
+  const action = context.actionSet.find(step.action);
+  return action?.kind === "catalog" && action.channel === "calendar_events";
+}
+
 const draftOutput = z.object({ draftId: z.string(), threadId: z.string() });
 const heldSendOutput = z.object({ heldSendId: z.string(), connectionId: z.string() });
+const bookedOutput = z.object({
+  eventId: z.string(),
+  guests: pendingDetailsSchema.shape.guests,
+  visibility: pendingDetailsSchema.shape.visibility,
+  transparency: pendingDetailsSchema.shape.transparency,
+});
+
+/**
+ * Records a review of each meeting a tool step above it booked, keeping the guests approving it
+ * invites. The run records only the events' IDs.
+ */
+async function awaitBookings(steps: readonly Step[], context: StepContext) {
+  const booked = steps.flatMap((earlier) => {
+    if (!booksEvent(earlier, context)) return [];
+    const parsed = bookedOutput.safeParse(context.outputs[earlier.id]);
+    return parsed.success ? [parsed.data] : [];
+  });
+  for (const { eventId, ...shown } of booked) {
+    await context.awaitReview({
+      kind: "calendar_event",
+      itemRef: eventId,
+      threadRef: eventId,
+      details: { kind: "calendar_event", ...shown },
+    });
+  }
+  return booked.map((event) => event.eventId);
+}
 
 /**
  * Records that what its channel reviews above it on its own path awaits a person: every Gmail
- * draft (`gmail_drafts`) or every held send of a custom write (`held_send`), those an approval
+ * draft (`gmail_drafts`), every held send of a custom write (`held_send`) or every meeting a
+ * tool step booked (`calendar_events`), those an approval
  * above it recorded too, as a v1 approval recorded every draft before it. Each gets a review on
  * its owner's Reviews page (one per item, however often the step or the run is retried). It
  * holds nothing back: a run never sends either, so the steps after it still run.
@@ -120,6 +156,11 @@ export async function approvalStep(
 ): Promise<StepExecution> {
   const stepsAboveIt = stepsAbove(context.spec, step.id);
   const above = stepsAboveIt.map((earlier) => context.outputs[earlier.id]);
+  if (step.channel === "calendar_events") {
+    const eventIds = await awaitBookings(stepsAboveIt, context);
+    const record = { awaiting: "human", channel: step.channel, eventIds };
+    return { next: "continue", output: record, record };
+  }
   if (step.channel === "held_send") {
     // Only a custom write's step holds a send: a read's result, filled from the app's answer,
     // may look like one.

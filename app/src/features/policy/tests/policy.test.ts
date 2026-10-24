@@ -82,6 +82,8 @@ describe("the catalog", () => {
       "google-mail.create-draft": "external_send",
       "google-sheet.read-range": "read",
       "google-sheet.append-row": "internal_reversible",
+      "google-calendar.read-event": "read",
+      "google-calendar.create-event": "external_send",
       "google-tasks.list-tasks": "read",
       "google-tasks.create-task": "internal_reversible",
       "google-tasks.update-task": "internal_reversible",

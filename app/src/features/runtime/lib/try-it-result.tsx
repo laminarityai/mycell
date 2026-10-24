@@ -148,6 +148,16 @@ function Effect({ effect }: { effect: DryRunEffect }) {
           </pre>
         </div>
       );
+    case "event":
+      return (
+        <div className="flex flex-col gap-1">
+          <p className="text-muted-foreground">
+            Would book &ldquo;{effect.title}&rdquo; from {effect.start} to {effect.end}
+            {effect.meet ? ", with a Meet link," : ""} on the calendar with no guests, and invite{" "}
+            {effect.guests.join(", ")} once approved.
+          </p>
+        </div>
+      );
     case "label":
       return (
         <p>

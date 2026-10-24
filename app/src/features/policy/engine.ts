@@ -48,9 +48,9 @@ export function maxRisk(spec: Spec, actions: ActionSet): RiskLevel {
 
 /**
  * Checks the spec's actions against `actions` and makes sure every `external_send` action
- * waits for a person: a `draft` output needs a `gmail_drafts` approval on its own path, and a
- * `tool` step's custom write a `held_send` one (ADR-0020); one is inserted directly after the
- * step when there's none. Returns the spec with what it inserted, or every issue at once.
+ * waits for a person: a `draft` output needs a `gmail_drafts` approval on its own path, a `tool`
+ * step's booking a `calendar_events` one, and its custom write a `held_send` one (ADR-0020); one
+ * is inserted directly after the step when there's none. Returns the spec with what it inserted, or every issue at once.
  */
 export function applyPolicy(spec: Spec, actions: ActionSet): PolicyResult {
   const issues = [...actionIssues(spec, actions), ...conditionIssues(spec, actions)];
@@ -120,7 +120,8 @@ function shortScope(scope: string): string {
 
 /**
  * What a step sends that waits for a person, and the approval channel that reviews it: a draft
- * step's Gmail draft, or a tool step's custom write, which Mycel holds (ADR-0020).
+ * step's Gmail draft, a tool step's catalog send in its app's own pending form (a Calendar event
+ * with no guests), or a tool step's custom write, which Mycel holds (ADR-0020).
  */
 function sendOf(
   step: Step,
@@ -129,8 +130,17 @@ function sendOf(
   if (step.type === "draft") return { action: step.output, channel: "gmail_drafts" };
   if (step.type !== "tool") return undefined;
   const action = actions.find(step.action);
-  if (action?.kind !== "custom" || action.risk !== "external_send") return undefined;
-  return { action: step.action, channel: "held_send" };
+  if (action?.risk !== "external_send") return undefined;
+  if (action.kind === "custom") return { action: step.action, channel: "held_send" };
+  return action.channel === undefined
+    ? undefined
+    : { action: step.action, channel: action.channel };
+}
+
+/** Whether a tool step may run the action: anything but a send that only a draft step makes. */
+function toolMayRun(action: Action): boolean {
+  if (action.kind === "custom" || action.risk !== "external_send") return true;
+  return action.channel !== undefined && action.channel !== "gmail_drafts";
 }
 
 /**
@@ -176,16 +186,12 @@ function actionIssues(spec: Spec, actions: ActionSet): SpecIssue[] {
         path,
         message: `"${name}" isn't a catalog action or one of the org's custom actions.`,
       });
-    } else if (
-      step.type === "tool" &&
-      action.kind === "catalog" &&
-      action.risk === "external_send"
-    ) {
+    } else if (step.type === "tool" && !toolMayRun(action)) {
       issues.push({
         path,
         message: `"${name}" sends outside the company, so it can only be a draft step's output.`,
       });
-    } else if (step.type === "draft" && action.pendingForm === undefined) {
+    } else if (step.type === "draft" && action.channel !== "gmail_drafts") {
       issues.push({ path, message: `"${name}" doesn't create a draft; use it in a tool step.` });
     } else if (step.type === "tool") {
       issues.push(...literalInputIssues(step, location, action));

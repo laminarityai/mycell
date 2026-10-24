@@ -351,6 +351,13 @@
       "when": 1792816679311,
       "tag": "0049_gmail-watch-expiry",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1792818757309,
+      "tag": "0050_review-details",
+      "breakpoints": true
     }
   ]
 }

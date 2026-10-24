@@ -5,26 +5,11 @@
 import { gmailPushConnectionIds } from "@/features/connections/server";
 import { findOrgIdForAddress } from "@/features/orgs/server";
 import { z } from "zod";
-import { env } from "@/env";
 import { systemCtx } from "@/lib/ctx";
 import { inngest } from "@/lib/inngest";
 import { connectionPollDue } from "./events";
 import { isGooglePush } from "./google-push-token";
-
-/** Gmail push's settings, all three set in the env. */
-export type GmailPushConfig = { topic: string; audience: string; serviceAccount: string };
-
-/**
- * Gmail push's settings, or null in an environment without them (local dev, the tests' own
- * choice): no watch starts there, and every app is polled every minute.
- */
-export function gmailPushConfig(): GmailPushConfig | null {
-  const topic = env.GMAIL_PUSH_TOPIC;
-  const audience = env.GOOGLE_PUSH_AUDIENCE;
-  const serviceAccount = env.GOOGLE_PUSH_SERVICE_ACCOUNT;
-  if (topic === undefined || audience === undefined || serviceAccount === undefined) return null;
-  return { topic, audience, serviceAccount };
-}
+import { gmailPushConfig } from "./push-config";
 
 // A Pub/Sub push request's body: one message, whose data is base64.
 const pushBody = z.object({

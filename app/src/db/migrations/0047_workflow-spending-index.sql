@@ -1,0 +1,1 @@
+CREATE INDEX "credit_ledger_org_id_workflow_id_created_at_idx" ON "credit_ledger" USING btree ("org_id","workflow_id","created_at");

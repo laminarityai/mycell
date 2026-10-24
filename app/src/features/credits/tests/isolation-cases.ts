@@ -1,9 +1,10 @@
 import { expect } from "vitest";
-import { defineIsolationCases } from "@/db/testing/isolation";
+import { defineIsolationCases, notTenantScoped } from "@/db/testing/isolation";
 import type { TwoOrgs } from "@/db/testing/two-org-fixture";
 import { systemCtx } from "@/lib/ctx";
 import { OutOfCreditsError } from "@/lib/errors";
 import * as server from "../server";
+import { monthRange } from "../types";
 
 // Org B gets credits and a usage, so every case can check org B is left exactly as it was.
 async function seedOrgBLedger({ orgB }: TwoOrgs) {
@@ -110,5 +111,75 @@ export const isolationCases = defineIsolationCases(server, {
     await seedOrgBLedger(orgs);
 
     expect(await server.listLedger(orgs.orgA.admin.ctx)).toEqual([]);
+    expect(await server.listLedger(orgs.orgA.admin.ctx, { kind: "grant" })).toEqual([]);
   },
+
+  getSpendingSummary: async (orgs) => {
+    await seedOrgBLedger(orgs);
+    await server.recordUsage(systemCtx(orgs.orgB.id), {
+      role: "fast",
+      modelId: "openai/x",
+      costUsd: 0.01,
+      outcome: "succeeded",
+      workflowId: "wf_b",
+      runId: "run_b",
+    });
+
+    const summary = await server.getSpendingSummary(orgs.orgA.admin.ctx, monthRange(new Date()));
+
+    expect(summary).toMatchObject({ openingBalance: 0, spent: 0, granted: 0, byWorkflow: [] });
+    expect(summary.days.every((day) => day.spent === 0 && day.granted === 0)).toBe(true);
+  },
+
+  getLedgerStart: async (orgs) => {
+    await seedOrgBLedger(orgs);
+
+    expect(await server.getLedgerStart(orgs.orgA.admin.ctx)).toBeNull();
+    expect(await server.getLedgerStart(orgs.orgB.admin.ctx)).toBeInstanceOf(Date);
+  },
+
+  getRunway: async (orgs) => {
+    await seedOrgBLedger(orgs);
+
+    expect(await server.getRunway(orgs.orgA.admin.ctx)).toEqual({
+      balance: 0,
+      dailyRate: null,
+      days: null,
+      zeroAt: null,
+    });
+  },
+
+  spentThisMonthByWorkflow: async (orgs) => {
+    await seedOrgBWorkflowRun(orgs);
+
+    expect(await server.spentThisMonthByWorkflow(orgs.orgA.admin.ctx, ["wf-b"])).toEqual(
+      new Map([["wf-b", 0]]),
+    );
+    expect(await server.spentThisMonthByWorkflow(orgs.orgB.admin.ctx, ["wf-b"])).toEqual(
+      new Map([["wf-b", 10]]),
+    );
+  },
+
+  budgetsReached: async (orgs) => {
+    await seedOrgBWorkflowRun(orgs);
+    const budgets = new Map([["wf-b", 5]]);
+
+    expect(await server.budgetsReached(orgs.orgA.member.ctx, budgets)).toEqual(new Set());
+    expect(await server.budgetsReached(orgs.orgB.member.ctx, budgets)).toEqual(new Set(["wf-b"]));
+  },
+
+  nextMonthStart: notTenantScoped("a date worked out from the clock alone"),
 });
+
+// Org B's workflow `wf-b` spends 10 credits in a live run.
+async function seedOrgBWorkflowRun(orgs: TwoOrgs) {
+  await seedOrgBLedger(orgs);
+  await server.recordUsage(systemCtx(orgs.orgB.id), {
+    role: "fast",
+    modelId: "openai/x",
+    costUsd: 0.01,
+    outcome: "succeeded",
+    workflowId: "wf-b",
+    runId: "run-b",
+  });
+}

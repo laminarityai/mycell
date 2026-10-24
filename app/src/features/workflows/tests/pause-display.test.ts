@@ -5,7 +5,7 @@ import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it } from "vitest";
 import { resetDatabase } from "@/db/testing/reset";
-import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
+import { FUNDED_CREDITS, seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { grantCredits } from "@/features/credits/server";
 import { type Ctx, systemCtx } from "@/lib/ctx";
 import { connectGoogle } from "@/testing/connect-helpers";
@@ -15,7 +15,9 @@ import {
   getVisibleWorkflow,
   listEnablementsFor,
   listWorkflows,
+  pauseForFailures,
   publishWorkflow,
+  resumeWorkflow,
   saveWorkflow,
   switchWorkflowOn,
 } from "../server";
@@ -161,5 +163,47 @@ describe("pauses that hold together", () => {
     const after = await memberSees(member.ctx, workflowId);
     expect(after.badge).toBe("Paused: needs your OK for a riskier version");
     expect(after.notice).not.toContain("credits");
+  });
+
+  it("shows failing after out of credits and before a version waiting for the member's OK", async () => {
+    const { orgA, admin, member, workflowId } = await memberEnabled(0);
+    await publishRiskier(admin.ctx, workflowId);
+    await pauseForFailures(systemCtx(orgA.id), workflowId, ["r1", "r2", "r3"]);
+
+    const all = await memberSees(member.ctx, workflowId);
+    expect(all.current?.pauses).toEqual(["out_of_credits", "failures", "needs_reenable"]);
+    expect(all.badge).toBe("Paused: out of credits");
+
+    await grantCredits(systemCtx(orgA.id), 10);
+    const after = await memberSees(member.ctx, workflowId);
+    expect(after.badge).toBe("Paused: failing, an admin will look at it");
+    expect(after.notice).toContain("It's also paused: needs your OK for a riskier version.");
+  });
+});
+
+describe("a switch paused for failing", () => {
+  it("shows a member's enablement and an org switch as paused: failing, until an admin resumes it", async () => {
+    const { orgA, admin, member, workflowId, sharedId } = await memberEnabled(FUNDED_CREDITS);
+    const system = systemCtx(orgA.id);
+    for (const id of [workflowId, sharedId]) {
+      await pauseForFailures(system, id, ["r1", "r2", "r3"]);
+    }
+
+    const own = await memberSees(member.ctx, workflowId);
+    expect(own.badge).toBe("Paused: failing, an admin will look at it");
+    expect(own.notice).toContain("Its last three runs failed");
+    expect(own.notice).toContain("once an admin resumes it");
+    expect(own.notice).toContain("Your switch stays on.");
+    expect(own.current).toMatchObject<Partial<WorkflowSwitch>>({
+      status: "on",
+      pausedReason: null,
+      pauses: ["failures"],
+    });
+    const shared = await memberSees(member.ctx, sharedId);
+    expect(shared.badge).toBe("Paused: failing, an admin will look at it");
+    expect(shared.notice).toContain("Its switch stays on.");
+
+    await resumeWorkflow(admin.ctx, workflowId);
+    expect((await memberSees(member.ctx, workflowId)).badge).toBe("On for your Google account");
   });
 });

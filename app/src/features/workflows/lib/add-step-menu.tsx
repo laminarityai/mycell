@@ -2,7 +2,9 @@
 
 // What "+" on the graph offers: the model steps, each action in the company's action set grouped
 // by its app with its fixed risk level, and a branch. A draft's external send isn't offered as an
-// action: a draft step writes it, and the policy engine adds its review.
+// action: a draft step writes it, and the policy engine adds its review. A send a tool step makes
+// (edits suggested in a Doc, or booking a meeting) is offered, and the policy engine adds its
+// review too.
 import { X } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 import { z } from "zod";
@@ -27,7 +29,7 @@ const BRANCH: Item = { label: "Branch", hint: "Split into paths", kind: { type: 
 function actionGroups(actions: ActionSet): { app: string; items: Item[] }[] {
   const groups = new Map<string, Item[]>();
   for (const action of actions.actions) {
-    if (action.pendingForm !== undefined) continue;
+    if (action.channel === "gmail_drafts") continue;
     const verb = action.name.split(".").at(-1)?.replaceAll("-", " ") ?? action.name;
     const label = `${action.app} · ${verb.charAt(0).toUpperCase()}${verb.slice(1)}`;
     const inputs = action.input instanceof z.ZodObject ? Object.keys(action.input.shape) : [];
@@ -41,9 +43,14 @@ function toolKind(action: string, inputs: string[]): NewStepKind {
   return { type: "tool", action, inputs };
 }
 
-function menuGroups(actions: ActionSet): { app: string; items: Item[] }[] {
+// A trigger that isn't repliable (a new invite) has no Gmail message to draft a reply to or
+// hand over, so its menu offers neither.
+function menuGroups(actions: ActionSet, repliable: boolean): { app: string; items: Item[] }[] {
+  const steps = repliable
+    ? STEPS
+    : STEPS.filter((item) => item.kind.type !== "draft" && item.kind.type !== "escalate");
   return [
-    { app: "Steps", items: STEPS },
+    { app: "Steps", items: steps },
     ...actionGroups(actions),
     { app: "Paths", items: [BRANCH] },
   ];
@@ -53,14 +60,20 @@ export function AddStepMenu({
   point,
   onPick,
   onClose,
+  repliable = true,
 }: {
   /** Where to open in the graph's frame: under the "+", kept inside the frame. */
   point: { left: number; top: number };
   onPick: (kind: NewStepKind) => void;
   onClose: () => void;
+  /**
+   * Whether the trigger starts runs on a Gmail message, which a draft replies to and an
+   * escalation hands over: not so for a new invite, which offers neither.
+   */
+  repliable?: boolean;
 }) {
   const actions = useActionSet();
-  const groups = useMemo(() => menuGroups(actions), [actions]);
+  const groups = useMemo(() => menuGroups(actions, repliable), [actions, repliable]);
   const menu = useRef<HTMLDivElement>(null);
   // What had focus when the menu opened (the "+"), to hand it back when the menu closes unused.
   const opener = useRef<Element | null>(null);

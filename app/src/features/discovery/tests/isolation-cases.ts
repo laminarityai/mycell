@@ -1,9 +1,9 @@
 import { expect } from "vitest";
-import { defineIsolationCases } from "@/db/testing/isolation";
+import { defineIsolationCases, notTenantScoped } from "@/db/testing/isolation";
 import type { TwoOrgs } from "@/db/testing/two-org-fixture";
 import { getConnection, listConnections } from "@/features/connections/server";
 import { systemCtx } from "@/lib/ctx";
-import { NotFoundError } from "@/lib/errors";
+import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import * as server from "../server";
 import { connectMailbox, daysAgo } from "@/testing/connect-helpers";
 import { fakeGooglePush } from "@/testing/fake-google-push";
@@ -31,7 +31,12 @@ async function seedOrgB({ orgB }: TwoOrgs) {
   await server.backfillConnection(orgB.admin.ctx, org.id);
   member.mailbox.add({ from: CUSTOMER, to: [orgB.member.email], text: "Again", at: new Date() });
   org.mailbox.add({ from: CUSTOMER, to: [inbox], text: "Again", at: new Date() });
-  return { ids: [member.id, org.id], snapshot: () => orgBState(orgB) };
+  return {
+    ids: [member.id, org.id],
+    mailboxes: [member.mailbox, org.mailbox],
+    drives: [member.drive, org.drive],
+    snapshot: () => orgBState(orgB),
+  };
 }
 
 async function orgBState(orgB: TwoOrgs["orgB"]) {
@@ -105,6 +110,53 @@ export const isolationCases = defineIsolationCases(server, {
       await expect(getConnection(systemCtx(other), connectionId)).rejects.toThrow(NotFoundError);
     }
   },
+
+  // Org A's system ctx renews only org A's watches; no one else's ctx renews any.
+  renewWatches: async (orgs) => {
+    const { mailboxes, drives } = await seedOrgB(orgs);
+    const { orgA } = orgs;
+    const own = await connectMailbox(orgA.member.ctx, orgA.member.email);
+    await server.backfillConnection(orgA.member.ctx, own.id);
+    const watchesMade = () => [
+      ...mailboxes.map((mailbox) => mailbox.watches.made.length),
+      ...drives.map((drive) => drive.channels.live().map((channel) => channel.id)),
+    ];
+    const before = watchesMade();
+
+    for (const ctx of [orgA.admin.ctx, orgA.member.ctx]) {
+      await expect(server.renewWatches(ctx)).rejects.toThrow(ForbiddenError);
+    }
+    // Its Gmail and its Drive.
+    expect(await server.renewWatches(systemCtx(orgA.id))).toEqual({ renewed: 2, failed: 0 });
+
+    expect(own.mailbox.watches.made).toHaveLength(2);
+    expect(own.drive.channels.opened).toHaveLength(2);
+    expect(watchesMade()).toEqual(before);
+  },
+
+  // Takes no ctx: the channel's token names the org. Each org's channels start only its own
+  // polls, and another org's token pointed at this org's connection is refused.
+  handleDrivePush: async (orgs) => {
+    const { ids, drives } = await seedOrgB(orgs);
+    const { orgA, orgB } = orgs;
+    const own = await connectMailbox(orgA.member.ctx, orgA.member.email);
+    await server.backfillConnection(orgA.member.ctx, own.id);
+
+    expect((await own.drive.channels.notify(own.drive.channels.latest())).status).toBe(204);
+    expect(polled()).toEqual([{ orgId: orgA.id, connectionId: own.id }]);
+
+    for (const drive of drives) await drive.channels.notify(drive.channels.latest());
+    expect(polled().slice(1)).toEqual(
+      ids.map((connectionId) => ({ orgId: orgB.id, connectionId })),
+    );
+
+    const [, , mac] = (drives[0]?.channels.latest().token ?? "").split(".");
+    const crossed = { ...own.drive.channels.latest(), token: `${orgA.id}.${own.id}.${mac}` };
+    expect((await own.drive.channels.notify(crossed)).status).toBe(401);
+    expect(polled()).toHaveLength(3);
+  },
+
+  sweepSchedule: notTenantScoped("It reads the environment's push settings, and no org's data."),
 
   // Takes no ctx: a notification names only an address. Org A's notifications must start only
   // org A's polls, and an address in org B only org B's.

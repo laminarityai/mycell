@@ -17,6 +17,7 @@ import {
   pricingQuestion,
   publish,
   recordingStepRunner,
+  recordsOf,
   stepStateRecorder,
   threadSpec,
 } from "./run-helpers";
@@ -108,7 +109,7 @@ describe("a run passing content between steps", () => {
         output: { fields: { updatedRange: { kind: "text", size: "Log!A1:C1".length } } },
       },
     ]);
-    const records = JSON.stringify(run);
+    const records = recordsOf(run);
     for (const content of [MARKER, SUBJECT, "Log!A1:C1"]) {
       expect(records).not.toContain(content);
     }

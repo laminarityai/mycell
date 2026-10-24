@@ -87,7 +87,7 @@ function graph(page: Page) {
 async function saveInJson(page: Page, spec: object) {
   await page.getByRole("tab", { name: "JSON" }).click();
   await jsonView(page).fill(JSON.stringify(spec));
-  await expect(page.getByText("Ready to save.")).toBeVisible();
+  await expect(page.getByText("Ready to save.").filter({ visible: true })).toBeVisible();
   await page.getByRole("button", { name: "Save" }).click();
 }
 
@@ -144,9 +144,9 @@ test("an admin writes a branching workflow in the JSON view and sees its paths o
   await jsonView(page).fill(JSON.stringify(renamed));
   await page.getByRole("tab", { name: "Graph" }).click();
   await expect(graph(page).getByRole("group", { name: "Path Prices" })).toBeVisible();
-  await expect(page.getByText("Ready to save.")).toBeVisible();
+  await expect(page.getByText("Ready to save.").filter({ visible: true })).toBeVisible();
   await page.getByRole("button", { name: "Save" }).click();
-  await expect(page.getByText("All changes saved.")).toBeVisible();
+  await expect(page.getByText("All changes saved.").filter({ visible: true })).toBeVisible();
 
   await page.reload();
   await expect(graph(page).getByRole("group", { name: "Path Prices" })).toBeVisible();
@@ -210,9 +210,9 @@ test("an admin edits the workflow on the graph: a step and a path in the side pa
     graph(page).getByRole("group", { name: "Step add-label", exact: true }),
   ).toContainText("Internal, reversible");
 
-  await expect(page.getByText("Ready to save.")).toBeVisible();
+  await expect(page.getByText("Ready to save.").filter({ visible: true })).toBeVisible();
   await page.getByRole("button", { name: "Save" }).click();
-  await expect(page.getByText("All changes saved.")).toBeVisible();
+  await expect(page.getByText("All changes saved.").filter({ visible: true })).toBeVisible();
 
   // What was saved is what the graph showed, in the JSON view too.
   await page.reload();
@@ -247,7 +247,7 @@ test("an admin edits the workflow on the graph: a step and a path in the side pa
     .getByRole("complementary", { name: "Editor" })
     .getByRole("textbox", { name: "Question" })
     .fill("Saved second?");
-  await expect(other.getByText("Ready to save.")).toBeVisible();
+  await expect(other.getByText("Ready to save.").filter({ visible: true })).toBeVisible();
   await other.getByRole("button", { name: "Save" }).click();
   await expect(other.getByText("The working spec was saved again")).toBeVisible();
 });
@@ -270,10 +270,10 @@ test("saving over a newer working spec is refused, and members can't reach the e
   const other = await context.newPage();
   await other.goto(workflowUrl);
   await saveInJson(other, edited("Saved first?"));
-  await expect(other.getByText("All changes saved.")).toBeVisible();
+  await expect(other.getByText("All changes saved.").filter({ visible: true })).toBeVisible();
   // Its next save is over the revision it just made, without a reload.
   await saveInJson(other, edited("Saved first!"));
-  await expect(other.getByText("All changes saved.")).toBeVisible();
+  await expect(other.getByText("All changes saved.").filter({ visible: true })).toBeVisible();
 
   await saveInJson(page, edited("Saved second?"));
   await expect(page.getByText("The working spec was saved again")).toBeVisible();

@@ -15,6 +15,7 @@ import type { Spec, Step } from "@/features/spec/types";
 import { getWorkflowVersion, listSwitchedOn } from "@/features/workflows/server";
 import { type Ctx, requireSystem } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
+import { now } from "@/lib/time";
 import type { RetryPolicy, RunErrorCode, RunOutcome } from "../types";
 import { runInline, type RunStep } from "@/lib/inngest";
 import { actionExecutors } from "./actions";
@@ -77,7 +78,7 @@ export async function executeRun(
 type RunPlace = StepPlace & { spec: Spec; actionSet: ActionSet; retry: RetryPolicy };
 
 async function executeStep(ctx: Ctx, run: Run, step: Step, place: RunPlace): Promise<StepResult> {
-  const startedAt = new Date();
+  const startedAt = now();
   if (!(await mayGoOn(ctx, run))) return CANCELLED;
   const context: StepContext = {
     ctx,
@@ -183,7 +184,7 @@ async function recordStep(
     attempts: tries.attempts,
     lastAttemptAt: tries.lastAttemptAt,
     startedAt,
-    finishedAt: new Date(),
+    finishedAt: now(),
   };
   const values =
     "execution" in end
@@ -232,7 +233,7 @@ async function finishRun(
   const costUsd = steps.reduce((sum, step) => sum + step.costUsd, 0);
   const ended = await forOrg(ctx).update(
     runs,
-    { status, errorCode, costUsd, finishedAt: new Date() },
+    { status, errorCode, costUsd, finishedAt: now() },
     and(eq(runs.id, runId), eq(runs.status, "running")),
   );
   return ended.length > 0;

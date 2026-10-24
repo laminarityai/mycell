@@ -160,6 +160,10 @@ _Avoid_: Test run, preview, simulation (a replay of past cases is a shadow eval)
 The kind of model a step or a model call asks for (`classify`, `fast`, `smart`, `judge` or `embed`), which each org maps to a concrete model. `embed` turns text into vectors for memory, and no step names it.
 _Avoid_: Model, model tier
 
+**Decision model**:
+A model that answers a question by picking one of the offered labels, with how likely each is, rather than by writing text (Jev, Laya). Config lists them. When an org's `classify` model isn't one, `fast` answers instead.
+_Avoid_: Classifier model
+
 **Paused**:
 The state of a workflow or enablement that will not run, always shown together with its reason.
 _Avoid_: Disabled, suspended, stopped

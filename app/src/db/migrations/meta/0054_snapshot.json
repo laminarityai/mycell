@@ -1,6 +1,6 @@
 {
-  "id": "63ea96f8-11b7-45bc-a601-23506a5081d1",
-  "prevId": "486f29d5-dc11-4d19-bd74-594d9a68089e",
+  "id": "c42bdf9d-9f24-45da-bbbf-9dde10faadb1",
+  "prevId": "ef26f8b5-ee6b-4efc-aa43-a73372a25527",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -872,185 +872,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.agent_pending_runs": {
-      "name": "agent_pending_runs",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "org_id": {
-          "name": "org_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "conversation_id": {
-          "name": "conversation_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "workflow_id": {
-          "name": "workflow_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "connection_id": {
-          "name": "connection_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "owner_scope": {
-          "name": "owner_scope",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'member'"
-        },
-        "source_ref": {
-          "name": "source_ref",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "run_id": {
-          "name": "run_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "agent_pending_runs_org_id_conversation_id_idx": {
-          "name": "agent_pending_runs_org_id_conversation_id_idx",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "conversation_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "agent_pending_runs_org_id_workflow_id_idx": {
-          "name": "agent_pending_runs_org_id_workflow_id_idx",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "workflow_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "agent_pending_runs_org_id_connection_id_idx": {
-          "name": "agent_pending_runs_org_id_connection_id_idx",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "connection_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "agent_pending_runs_conversation_fk": {
-          "name": "agent_pending_runs_conversation_fk",
-          "tableFrom": "agent_pending_runs",
-          "tableTo": "agent_conversations",
-          "columnsFrom": [
-            "org_id",
-            "conversation_id"
-          ],
-          "columnsTo": [
-            "org_id",
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "agent_pending_runs_workflow_fk": {
-          "name": "agent_pending_runs_workflow_fk",
-          "tableFrom": "agent_pending_runs",
-          "tableTo": "workflows",
-          "columnsFrom": [
-            "org_id",
-            "workflow_id"
-          ],
-          "columnsTo": [
-            "org_id",
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "agent_pending_runs_connection_fk": {
-          "name": "agent_pending_runs_connection_fk",
-          "tableFrom": "agent_pending_runs",
-          "tableTo": "connections",
-          "columnsFrom": [
-            "org_id",
-            "connection_id"
-          ],
-          "columnsTo": [
-            "org_id",
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.builder_conversations": {
       "name": "builder_conversations",
       "schema": "",
@@ -1489,7 +1310,7 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -1603,7 +1424,7 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -2330,7 +2151,7 @@
         },
         "occurred_at": {
           "name": "occurred_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
         },
@@ -2378,7 +2199,7 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -4687,40 +4508,6 @@
         }
       },
       "indexes": {
-        "runs_agent_running_unique": {
-          "name": "runs_agent_running_unique",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "workflow_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "connection_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "source_ref",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"runs\".\"started_by\" = 'agent' and \"runs\".\"status\" = 'running'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "runs_org_id_workflow_id_idx": {
           "name": "runs_org_id_workflow_id_idx",
           "columns": [
@@ -5156,7 +4943,7 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -5255,7 +5042,7 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"

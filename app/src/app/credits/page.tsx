@@ -5,6 +5,7 @@ import { creditsQuerySchema, type RangePreset } from "@/features/credits/types";
 import { CreditsOverview, RangeControl } from "@/features/credits/ui";
 import { getCtx } from "@/features/orgs/server";
 import { isAdmin } from "@/lib/ctx";
+import { now } from "@/lib/time";
 import { loadCreditsPage } from "./credits-data";
 
 // Where the company stands on credits over the range in the address (`?range=`, and Custom's
@@ -35,7 +36,7 @@ type Query = Pick<PageProps<"/credits">, "searchParams">;
 const load = cache(async (preset: RangePreset, from?: string, to?: string) => {
   const ctx = await getCtx();
   if (!isAdmin(ctx)) redirect("/");
-  return loadCreditsPage(ctx, new Date(), { preset, from, to });
+  return loadCreditsPage(ctx, now(), { preset, from, to });
 });
 
 async function read({ searchParams }: Query) {

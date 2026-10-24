@@ -54,6 +54,19 @@ const envSchema = z.object({
   // The embed role has a default, so existing .env files keep working. Its vectors have 1536
   // dimensions, and stored vectors must keep one size: change it only together with them.
   MODEL_EMBED: modelIdSchema.default("openai/text-embedding-3-small"),
+  // The decision models: a classify model whose ID starts with one of these `provider/model`
+  // prefixes is asked through experimental_decide, any other through a structured output on
+  // `fast`. Comma-separated; Jev, and Laya, which an org may try through its role table.
+  MODEL_DECISION_PREFIXES: z
+    .string()
+    .default("typesafe-ai/jev,convaiinnovations/laya")
+    .transform((value) =>
+      value
+        .split(",")
+        .map((prefix) => prefix.trim())
+        .filter((prefix) => prefix !== ""),
+    )
+    .pipe(z.array(modelIdSchema)),
   // Credits (ADR-0010): how many credits one US dollar of gateway cost uses up, and the per-role
   // estimate a call must find in the balance before it is made. Placeholders until M7's pricing.
   CREDITS_PER_USD: positiveNumber("1000"),

@@ -19,6 +19,7 @@ import {
 } from "@/features/workflows/server";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { ConflictError, NotFoundError } from "@/lib/errors";
+import { now } from "@/lib/time";
 import type { Proposal, ProposalStatus, ProposeSpecResult } from "../types";
 import { findConversation } from "./conversations";
 import { toolResultPrompts } from "./prompts";
@@ -171,7 +172,7 @@ export async function acceptProposal(
       if (newWorkflow) {
         await tx.update(
           builderConversations,
-          { workflowId: saved.id, updatedAt: new Date() },
+          { workflowId: saved.id, updatedAt: now() },
           and(
             eq(builderConversations.id, row.conversationId),
             isNull(builderConversations.workflowId),
@@ -232,7 +233,7 @@ async function decide(
 ): Promise<void> {
   await db.update(
     builderProposals,
-    { ...extra, status, decidedBy: ctx.userId, decidedAt: new Date() },
+    { ...extra, status, decidedBy: ctx.userId, decidedAt: now() },
     eq(builderProposals.id, proposalId),
   );
 }

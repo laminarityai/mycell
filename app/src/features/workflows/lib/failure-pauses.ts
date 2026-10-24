@@ -5,6 +5,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { type Ctx, requireAdmin, requireSystem } from "@/lib/ctx";
+import { now } from "@/lib/time";
 import type { FailurePause } from "../types";
 import { findWorkflow } from "./access";
 import { latestVersions } from "./latest-versions";
@@ -39,7 +40,7 @@ export async function pauseForFailures(
   requireSystem(ctx);
   await forOrg(ctx).update(
     workflows,
-    { pausedReason: "failures", pausedAt: new Date(), pausedByRunIds: [...runIds] },
+    { pausedReason: "failures", pausedAt: now(), pausedByRunIds: [...runIds] },
     and(eq(workflows.id, workflowId), isNull(workflows.pausedReason)),
   );
 }
@@ -54,7 +55,7 @@ export async function resumeWorkflow(ctx: Ctx, workflowId: string): Promise<void
   if (workflow.pausedReason === null) return;
   await forOrg(ctx).update(
     workflows,
-    { pausedReason: null, pausedAt: null, pausedByRunIds: null, resumedAt: new Date() },
+    { pausedReason: null, pausedAt: null, pausedByRunIds: null, resumedAt: now() },
     eq(workflows.id, workflowId),
   );
 }

@@ -5,6 +5,7 @@
 import { eq } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
+import { now } from "@/lib/time";
 import { findWorkflow } from "./access";
 import { workflows } from "./schema";
 
@@ -13,7 +14,7 @@ export async function archiveWorkflow(ctx: Ctx, workflowId: string): Promise<voi
   requireAdmin(ctx);
   const workflow = await findWorkflow(ctx, workflowId);
   if (workflow.archivedAt !== null) return;
-  await forOrg(ctx).update(workflows, { archivedAt: new Date() }, eq(workflows.id, workflowId));
+  await forOrg(ctx).update(workflows, { archivedAt: now() }, eq(workflows.id, workflowId));
 }
 
 /** Restores an archived workflow, with everyone's enablements and its org switch as they were. */

@@ -8,7 +8,7 @@ import { and, arrayContains, desc, eq, inArray, lt } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { userNames } from "@/features/orgs/server";
 import { type Ctx, isAdmin, isSystem, requireRole, requireSystem } from "@/lib/ctx";
-import { DAY_MS } from "@/lib/time";
+import { DAY_MS, now as clockNow } from "@/lib/time";
 import {
   ACCESS_LOG_RETENTION_DAYS,
   type AccessLogEntry,
@@ -163,7 +163,7 @@ async function objectNamesSeenBy(ctx: Ctx, factIds: string[]): Promise<Map<strin
  */
 export async function pruneAccessLog(
   ctx: Ctx,
-  now: Date = new Date(),
+  now: Date = clockNow(),
 ): Promise<{ entries: number; consents: number }> {
   requireSystem(ctx);
   const cutoff = new Date(now.getTime() - ACCESS_LOG_RETENTION_DAYS * DAY_MS);

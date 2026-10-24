@@ -1,6 +1,6 @@
 {
-  "id": "7987bd5d-b6a2-4cd4-8f0b-dc4cc659255f",
-  "prevId": "486f29d5-dc11-4d19-bd74-594d9a68089e",
+  "id": "c42bdf9d-9f24-45da-bbbf-9dde10faadb1",
+  "prevId": "ef26f8b5-ee6b-4efc-aa43-a73372a25527",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -824,16 +824,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "keywords": {
-          "name": "keywords",
-          "type": "tsvector",
-          "primaryKey": false,
-          "notNull": true,
-          "generated": {
-            "as": "jsonb_to_tsvector('english', jsonb_path_query_array(parts, '$[*] ? (@.type == \"text\").text'), '[\"string\"]')",
-            "type": "stored"
-          }
         }
       },
       "indexes": {
@@ -856,21 +846,6 @@
           "isUnique": false,
           "concurrently": false,
           "method": "btree",
-          "with": {}
-        },
-        "agent_messages_keywords_idx": {
-          "name": "agent_messages_keywords_idx",
-          "columns": [
-            {
-              "expression": "keywords",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "gin",
           "with": {}
         }
       },
@@ -1335,7 +1310,7 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -1449,7 +1424,7 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -2176,7 +2151,7 @@
         },
         "occurred_at": {
           "name": "occurred_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
         },
@@ -2224,7 +2199,7 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -4968,7 +4943,7 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -5067,7 +5042,7 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"

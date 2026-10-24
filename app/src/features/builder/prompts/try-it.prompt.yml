@@ -27,6 +27,12 @@ wouldAppendRow: |-
 # `document` is the step's documentId input as the spec writes it; `count` how many requests.
 wouldSuggestEdits: |-
   {{step}}: would suggest {{count}} edits in {{document}}, waiting as suggestions until reviewed.
+# A task's title and notes may come from the email, so neither is named.
+wouldAddTask: |-
+  {{step}}: would add a task to the default Tasks list.
+# `task` is the step's taskId input: a literal ID, or the reference that fills it.
+wouldUpdateTask: |-
+  {{step}}: would change the task named by {{task}} on the default Tasks list.
 readRows: |-
   {{step}}: read {{count}} rows from {{range}}.
 # `label` and `p` as JSON.

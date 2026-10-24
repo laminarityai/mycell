@@ -89,7 +89,7 @@ describe("the catalog's condition fields", () => {
     }
   });
 
-  it("let a condition test a thread's message count, a sheet's row count, an event's guest count and memory's fact count", () => {
+  it("let a condition test a thread's message count, a sheet's row count, open tasks, an event's guest count and facts", () => {
     const declared = Object.values(catalog).flatMap((action) =>
       (action.conditionFields ?? []).map((field) => [action.name, field.name, field.type]),
     );
@@ -98,6 +98,7 @@ describe("the catalog's condition fields", () => {
       ["google-mail.read-thread", "messageCount", "number"],
       ["google-sheet.read-range", "rowCount", "number"],
       ["google-calendar.read-event", "guestCount", "number"],
+      ["google-tasks.list-tasks", "taskCount", "number"],
       ["memory.lookup", "factCount", "number"],
     ]);
   });

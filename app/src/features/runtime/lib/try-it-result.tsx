@@ -196,6 +196,23 @@ function Effect({ effect }: { effect: DryRunEffect }) {
           {effect.values.map((value) => String(value)).join(", ")}
         </p>
       );
+    case "task":
+      return (
+        <div className="flex flex-col gap-1">
+          <p className="text-muted-foreground">
+            Would add the task <strong>{effect.title}</strong> to the default Tasks list
+            {effect.due === null ? "" : `, due ${effect.due}`}:
+          </p>
+          <pre
+            aria-label="Task notes"
+            className="rounded bg-muted p-2 font-sans text-sm whitespace-pre-wrap"
+          >
+            {effect.notes}
+          </pre>
+        </div>
+      );
+    case "task_update":
+      return <TaskUpdate effect={effect} />;
     case "draft":
       return (
         <div className="flex flex-col gap-1">
@@ -234,4 +251,29 @@ function Effect({ effect }: { effect: DryRunEffect }) {
         </div>
       );
   }
+}
+
+function TaskUpdate({ effect }: { effect: Extract<DryRunEffect, { kind: "task_update" }> }) {
+  const changes = [
+    effect.title === null ? null : `title “${effect.title}”`,
+    effect.due === null ? null : `due ${effect.due}`,
+    effect.done === null ? null : effect.done ? "marked done" : "marked not done",
+    effect.notes === null ? null : "these notes",
+  ].filter((change) => change !== null);
+  return (
+    <div className="flex flex-col gap-1">
+      <p className="text-muted-foreground">
+        Would change the task on the default Tasks list: {changes.join(", ")}
+        {effect.notes === null ? "." : ":"}
+      </p>
+      {effect.notes === null ? null : (
+        <pre
+          aria-label="Task notes"
+          className="rounded bg-muted p-2 font-sans text-sm whitespace-pre-wrap"
+        >
+          {effect.notes}
+        </pre>
+      )}
+    </div>
+  );
 }

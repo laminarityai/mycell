@@ -15,12 +15,14 @@ export const runStepErrorCodes = [
   "bad_reference",
   // A tool's resolved input didn't match its catalog action's input schema.
   "invalid_input",
-  // The source has no such item (Gmail or Sheets answered 404).
+  // The source has no such item (Gmail, Sheets or Tasks answered 404).
   "source_item_missing",
-  // The source refused the account access to the item (Sheets answered 403).
+  // The source refused the account access to the item (Sheets or Tasks answered 403).
   "source_forbidden",
   // An executor's result didn't match its catalog action's output schema.
   "invalid_output",
+  // The task was assigned to the person from Docs or Chat, which Mycel leaves alone.
+  "task_assigned",
   // A custom action's app has no connection the run may call it through (ADR-0018).
   "app_not_connected",
   // Docs saved none of a step's suggestions, so its edits may have landed directly (ADR-0017).

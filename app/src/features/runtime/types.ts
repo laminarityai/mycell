@@ -316,6 +316,16 @@ export type DryRunEffect =
   | { kind: "row"; range: string; values: (string | number | boolean | null)[] }
   /** Edits a step would suggest in a Doc: its title, and each request's kind and text. */
   | { kind: "suggestions"; documentId: string; title: string; requests: string[] }
+  /** A task it would add to the default list: its title, notes as written, and due date. */
+  | { kind: "task"; title: string; notes: string; due: string | null }
+  /** What it would change on a task; null for what it leaves as it is. */
+  | {
+      kind: "task_update";
+      title: string | null;
+      notes: string | null;
+      due: string | null;
+      done: boolean | null;
+    }
   | { kind: "review"; channel: string }
   /** A custom write's request, exactly as it would be sent once approved (nothing is sent). */
   | {

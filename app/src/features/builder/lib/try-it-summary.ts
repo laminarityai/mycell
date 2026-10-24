@@ -59,6 +59,10 @@ function lineOf(dryRunStep: DryRunStep, spec: Spec): PromptText {
         count: String(effect.requests.length),
         document: input("documentId"),
       });
+    case "task":
+      return tryItPrompts.wouldAddTask({ step });
+    case "task_update":
+      return tryItPrompts.wouldUpdateTask({ step, task: input("taskId") });
     case "rows_read":
       return tryItPrompts.readRows({
         step,

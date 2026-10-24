@@ -146,8 +146,9 @@ export const runSteps = pgTable(
 
 /**
  * Where a trigger that polls its app resumes on one connection: for the Calendar trigger, the
- * sync token of the connection's primary calendar. Only the token is kept, never the events it
- * listed (invariant 8), and it cascades from its connection (invariant 3).
+ * sync token of the connection's primary calendar, which memory's reading of the calendar shares
+ * (ADR-0029: one poll serves both). Only the token is kept, never the events it listed
+ * (invariant 8), and it cascades from its connection (invariant 3).
  */
 export const triggerCursors = pgTable(
   "trigger_cursors",

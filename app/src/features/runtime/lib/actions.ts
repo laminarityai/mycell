@@ -14,6 +14,7 @@ import type { ActionExecutors } from "./step-context";
 import type { SuggestEditsInput } from "./suggested-edits";
 import { suggestedEditsAdapter } from "./suggested-edits-adapter";
 import { InvariantError } from "@/lib/errors";
+import { createTask, listTasks, updateTask, type NewTask, type TaskChanges } from "./tasks";
 
 export const actionExecutors: ActionExecutors = {
   "google-mail.read-message": {
@@ -83,6 +84,21 @@ export const actionExecutors: ActionExecutors = {
         transparency: details.transparency,
       };
     },
+  },
+  // On the person's default list; a task's title and notes leave the step only as its ID.
+  "google-tasks.list-tasks": {
+    status: "ready",
+    run: (ctx, connectionId) => listTasks(ctx, connectionId),
+  },
+  "google-tasks.create-task": {
+    status: "ready",
+    run: (ctx, connectionId, input: NewTask, marker, _compose, run) =>
+      createTask(ctx, connectionId, input, marker, run),
+  },
+  "google-tasks.update-task": {
+    status: "ready",
+    run: (ctx, connectionId, input: TaskChanges, _marker, _compose, run) =>
+      updateTask(ctx, connectionId, input, run),
   },
   // Reads as the run: in its member's view, or company-wide only (memory-lookup.ts).
   "memory.lookup": {

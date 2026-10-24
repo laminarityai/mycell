@@ -7,6 +7,7 @@ import summarizeFile from "../prompts/summarize.prompt.yml";
 export const extractPrompts = definePrompts(extractFile, {
   emailQuestion: [],
   documentQuestion: [],
+  inviteQuestion: [],
   system: ["kind", "domain"],
   prompt: ["kind", "text"],
   objectRef: [],

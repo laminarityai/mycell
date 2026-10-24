@@ -47,7 +47,7 @@ _Avoid_: Shared connection
 Whether a piece of data belongs to one member or to the whole org.
 
 **Access list**:
-Who Mycel saw can see an item, kept on Mycel's record of it: a doc's sharing list as the app gives it, or for an email the mailboxes holding it and, on one the company sent, everyone on it (never just the addresses its sender wrote). A fact is visible to anyone who can see one of its sources.
+Who Mycel saw can see an item, kept on Mycel's record of it: a doc's sharing list as the app gives it; for an email the mailboxes holding it and, on one the company sent, everyone on it; for an invite the calendars holding it and, on one a colleague organised, everyone on it (never just the addresses its sender or organizer wrote). A fact is visible to anyone who can see one of its sources.
 _Avoid_: Promotion (replaced), ACL, permissions
 
 **Event**:
@@ -145,7 +145,7 @@ What starts a workflow's runs: a new message in Gmail, or a new invite on a pers
 _Avoid_: Hook, watcher, event (an event is what discovery ingests)
 
 **Invite**:
-An event on a person's calendar that someone else organised and that the person hasn't answered yet. A new one can start a run; Mycel keeps none of it.
+An event on a person's calendar with guests. A new one that someone else organised and the person hasn't answered yet can start a run (the Calendar trigger), and memory learns facts from any business one. Mycel keeps none of its content.
 _Avoid_: Meeting request, invitation, event
 
 **Run**:
@@ -175,6 +175,10 @@ _Avoid_: Deleted, retired
 **Catalog action**:
 One operation on an external source that a workflow is allowed to call, with a fixed risk level.
 _Avoid_: Tool, integration, capability
+
+**Default list**:
+The Google Tasks list a person's own tasks go to, the first of their lists. Mycel's Tasks actions act only on it, and leave alone any task on it that someone assigned from Docs or Chat.
+_Avoid_: My Tasks, task list (any list)
 
 **Risk level**:
 The fixed danger class of a catalog action: read, internal-reversible, external-send, financial, or destructive.
@@ -259,11 +263,11 @@ A short statement about an object that a source states or a person told Mycel, l
 _Avoid_: Memory (for a single item), note, insight, inference
 
 **Source record**:
-Mycel's record of one item memory learned from, such as an email or a version of a Drive doc, as one connection holds it, with the item's access list and a pointer to re-fetch it, never its content.
+Mycel's record of one item memory learned from, such as an email, a version of a Drive doc or a version of a Calendar invite, as one connection holds it, with the item's access list and a pointer to re-fetch it, never its content.
 _Avoid_: Document, source (the app), evidence
 
 **Item key**:
-What every copy of one item shares, such as an email's Message-ID or a Drive file's ID, so copies in several mailboxes or Drives are known to be the same item.
+What every copy of one item shares, such as an email's Message-ID, a Drive file's ID or an invite's iCalUID, so copies in several mailboxes, Drives or calendars are known to be the same item.
 
 **Object key**:
 An exact identifier of an object, such as a person's email address or a company's domain, unique in an org; objects with the same key are one object.

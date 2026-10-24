@@ -2,10 +2,13 @@
 // removes, checks or shows what a run left waiting in its app. The `reviews` feature calls them,
 // chosen by a review's kind. This entry file stays clear of `reviews`, which the interpreter
 // imports to create reviews, so the two features' files never import each other in a cycle.
+export { calendarEventAdapter } from "./lib/calendar-event-adapter";
 export { escalationAdapter } from "./lib/escalation-adapter";
 export { gmailDraftAdapter } from "./lib/gmail-draft-adapter";
 export { heldSendAdapter } from "./lib/held-send-adapter";
+export { suggestedEditsAdapter } from "./lib/suggested-edits-adapter";
 export {
+  type EventView,
   type HeldSendField,
   type ItemState,
   type ItemView,
@@ -14,4 +17,5 @@ export {
   type PendingItem,
   type PreparedItem,
   type ReviewEdits,
+  type SuggestedEditsView,
 } from "./lib/pending-forms";

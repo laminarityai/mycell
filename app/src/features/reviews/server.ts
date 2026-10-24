@@ -14,6 +14,8 @@ export { endReviewsInThread } from "./lib/ended-in-app";
 export { reviewStats } from "./lib/stats";
 // The same counts as the Workflows page lists them, per workflow (and per person, for admins).
 export { reviewCountsByWorkflow } from "./lib/count-rows";
+// The reviews a run created, for the run's page.
+export { reviewsOfRun } from "./lib/run-reviews";
 // The count in the app's navigation, read on each page load.
 export { countWaitingReviews } from "./lib/reviews";
 // Handing a review to a colleague, when its workflow allows it.

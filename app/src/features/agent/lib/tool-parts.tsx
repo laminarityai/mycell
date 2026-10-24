@@ -26,6 +26,8 @@ const KIND_LABELS: Record<ReviewKind, string> = {
   approval: "approval",
   escalation: "escalation",
   held_send: "held send",
+  suggested_edits: "suggested edits",
+  calendar_event: "meeting",
 };
 
 /** A tool call: its name, how it stands, and what the conversation stored of its result. */

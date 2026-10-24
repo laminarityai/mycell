@@ -20,6 +20,7 @@ import {
   type MemoryEstimate,
   type PostponeReason,
 } from "../types";
+import { MAX_INVITE_CHARS } from "./calendar";
 import { sendItemsQueued, sendMemoryStarted, sendPostponedDue } from "./events";
 import { GOOGLE_DOC, MAX_DOC_CHARS } from "./drive";
 import { MAX_TEXT_CHARS } from "./gmail";
@@ -37,13 +38,13 @@ export function monthStart(now = new Date()): Date {
 const LEARNABLE = { driveMimeType: GOOGLE_DOC };
 
 /**
- * The most learning one item costs: two injection screens (a doc is screened again before
- * extraction, since it can change) of the longest text memory reads, `classify`, extraction and
- * embedding.
+ * The most learning one item costs: two injection screens (a doc or an invite is screened again
+ * before extraction, since it can change) of the longest text memory reads, `classify`,
+ * extraction and embedding.
  */
 export function creditsPerItem(): number {
   return (
-    2 * estimateScreenCredits(Math.max(MAX_TEXT_CHARS, MAX_DOC_CHARS)) +
+    2 * estimateScreenCredits(Math.max(MAX_TEXT_CHARS, MAX_DOC_CHARS, MAX_INVITE_CHARS)) +
     CREDIT_ESTIMATES.classify +
     CREDIT_ESTIMATES.fast +
     CREDIT_ESTIMATES.embed
@@ -54,6 +55,15 @@ export async function estimate(ctx: Ctx): Promise<MemoryEstimate> {
   const items = await countStoredItems(ctx, LEARNABLE);
   const perItem = creditsPerItem();
   return { items, creditsPerItem: perItem, credits: items * perItem };
+}
+
+/**
+ * Whether an admin has started memory in the org: the Calendar poll then reads every calendar
+ * for memory (ADR-0029). Jobs only.
+ */
+export async function hasMemoryStarted(ctx: Ctx): Promise<boolean> {
+  requireSystem(ctx);
+  return (await forOrg(ctx).count(memorySettings)) > 0;
 }
 
 export async function settingsOf(ctx: Ctx) {

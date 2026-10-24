@@ -8,8 +8,14 @@ import type { RecentMessages, TryItState } from "@/features/runtime/types";
 import { tryInConversationAction } from "../actions";
 import type { BuilderUIMessage, TryItSummary } from "../types";
 
-/** The panel's state: closed until the admin asks (so no inbox is read), or open with mail. */
-export type ConversationTryIt = { open: false } | { open: true; sources: RecentMessages[] };
+/**
+ * The panel's state: closed until the admin asks (so no inbox is read), or open with mail, or
+ * with invites for a workflow that starts on one.
+ */
+export type ConversationTryIt = ({ open: false } | { open: true; sources: RecentMessages[] }) & {
+  /** What the spec's trigger starts a run on; a message unless it says otherwise. */
+  item?: "message" | "invite";
+};
 
 export function ConversationTryItPanel({
   conversationId,
@@ -26,6 +32,7 @@ export function ConversationTryItPanel({
       {tryIt.open ? (
         <TryItPanel
           sources={tryIt.sources}
+          item={tryIt.item}
           fields={{ conversationId }}
           action={async (previous: TryItState, form: FormData) => {
             const next = await tryInConversationAction(previous, form);
@@ -35,9 +42,10 @@ export function ConversationTryItPanel({
         />
       ) : (
         <p className="text-sm text-muted-foreground">
-          See what the working spec would do with one recent message, writing nothing.{" "}
+          See what the working spec would do with one recent {tryIt.item ?? "message"}, writing
+          nothing.{" "}
           <Link href={`/builder/${conversationId}?try=1`} className="underline">
-            Choose a message
+            Choose {tryIt.item === "invite" ? "an invite" : "a message"}
           </Link>
         </p>
       )}

@@ -8,6 +8,7 @@ import { useMemo, useState } from "react";
 import { issuesByTarget, readDraftTree, type SpecDraft } from "@/features/spec/draft";
 import { insertStep, type InsertAt } from "@/features/spec/edit";
 import { newStep, type NewStepKind } from "@/features/spec/new-step";
+import { triggers } from "@/features/spec/triggers";
 import type { Spec, SpecIssue, Step } from "@/features/spec/types";
 import { AddStepMenu } from "./add-step-menu";
 import { useGraphTrace } from "./graph-trace";
@@ -105,6 +106,7 @@ export function GraphEditor({
       {menu === null ? null : (
         <AddStepMenu
           point={{ left: menu.left, top: menu.top }}
+          repliable={triggers[base.trigger.type].repliable}
           onPick={(kind) => {
             add(menu.at, kind);
           }}

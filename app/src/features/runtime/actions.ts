@@ -1,11 +1,13 @@
 "use server";
 
 import { refresh } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { runFormAction } from "@/features/orgs/form-action";
 import { getWorkflow } from "@/features/workflows/server";
 import type { ActionResult } from "@/lib/errors";
-import { dryRun, startRun } from "./server";
+import { runHref } from "./lib/runs-table";
+import { dryRun, retryRun, startRun } from "./server";
 import type { TryItState } from "./types";
 
 const tryInput = z.object({
@@ -53,4 +55,16 @@ export async function startRunAction(
     },
     { after: refresh },
   );
+}
+
+const retryInput = z.object({ runId: z.string().min(1) });
+
+/** Retries a failed run on the same message, from its page, and opens the retry's page. */
+export async function retryRunAction(
+  _previous: ActionResult,
+  form: FormData,
+): Promise<ActionResult> {
+  return runFormAction(form, retryInput, (ctx, { runId }) => retryRun(ctx, runId), {
+    after: ({ runId }) => redirect(runHref(runId)),
+  });
 }

@@ -1,7 +1,7 @@
 "use client";
 
 // One Ask Mycel conversation: the stored messages, then each turn as it streams in, each reply
-// with its facts as numbered footnotes linking the email or doc they came from, and the
+// with its facts as numbered footnotes linking the email, doc or invite they came from, and the
 // composer pinned below. Only the person's new message goes to the server, which holds the rest;
 // when a turn ends the page reads the conversation again for its new citations.
 import { useChat } from "@ai-sdk/react";
@@ -13,13 +13,25 @@ import { DateTime } from "@/components/date-time";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import type { AgentUIMessage, Citation, FoundItems } from "../types";
+import type { AgentUIMessage, Citation, CitedSource, FoundItems } from "../types";
 import { numberSources, segments } from "./footnotes";
 import { ToolPart } from "./tool-parts";
 
 /** Ask Mycel's AI disclosure (EU AI Act Art. 50), above every conversation. */
 const DISCLOSURE =
   "You're talking to Mycel, an AI. It answers only from what you can see in memory, and it can be wrong, so check its sources. Being an admin doesn't let it see more. Only you can see this conversation.";
+
+/** What a cited source is, and where the person's copy of it lives. */
+const SOURCE_NAMES: Record<CitedSource["kind"], string> = {
+  email: "Email",
+  doc: "Google Doc",
+  invite: "Calendar invite",
+};
+const SOURCE_PLACES: Record<CitedSource["kind"], string> = {
+  email: "mailbox",
+  doc: "Drive",
+  invite: "calendar",
+};
 
 type Part = AgentUIMessage["parts"][number];
 
@@ -170,16 +182,15 @@ function Reply({ message, shown }: { message: AgentUIMessage; shown: Shown }) {
             <li key={source.key} id={`fn-${scope}-${String(i + 1)}`} className="flex gap-1.5">
               <span className="tabular-nums">{i + 1}.</span>
               {source.href === null ? (
-                <span>{source.kind === "email" ? "Email" : "Google Doc"}</span>
+                <span>{SOURCE_NAMES[source.kind]}</span>
               ) : (
                 <a href={source.href} target="_blank" rel="noreferrer" className="underline">
-                  {source.kind === "email" ? "Email" : "Google Doc"}
+                  {SOURCE_NAMES[source.kind]}
                 </a>
               )}
               <span>
                 {source.yours ? "in your " : "seen by you, not in your "}
-                {source.kind === "email" ? "mailbox" : "Drive"},{" "}
-                <DateTime value={source.occurredAt} day />
+                {SOURCE_PLACES[source.kind]}, <DateTime value={source.occurredAt} day />
               </span>
             </li>
           ))}

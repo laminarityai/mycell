@@ -36,7 +36,7 @@ mailUnavailable: |-
   Message search is unavailable right now: Mycel can't check what it reads for hidden instructions, so it read nothing. Tell the person you can't search their mail at the moment.
 
 listReviews: |-
-  List the reviews waiting for this person: each with the workflow it's from, its kind (approval, escalation or held_send) and how long it has waited. The page shows each one with a link to it. Approving, editing and declining happen only on the Reviews page: you can't do them.
+  List the reviews waiting for this person: each with the workflow it's from, its kind (approval, escalation, held_send, suggested_edits or calendar_event) and how long it has waited. The page shows each one with a link to it. Approving, editing and declining happen only on the Reviews page: you can't do them.
 listWorkflows: |-
   List the workflows this person has switched on for their own inbox, each with whether it's running or paused, and why when it's paused.
 # When the injection screen isn't configured, or failed, for the reviews and workflows lists.

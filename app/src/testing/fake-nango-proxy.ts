@@ -45,7 +45,7 @@ async function proxy(state: ProxyState, request: Request, method: ProxyMethod) {
   if (connection.refreshFails === true) return proxyRefusal("refresh-failed");
   const host = baseUrl(request, connection);
   const source = proxiedSource(host, path);
-  const refused = refusal(source, connection, method);
+  const refused = refusal(source, connection, method, path);
   if (refused !== undefined || source === undefined) return refused;
   const retries = Number(request.headers.get("Retries") ?? 0);
   for (let attempt = 0; attempt <= retries && state.takeRateLimit(); attempt++) {

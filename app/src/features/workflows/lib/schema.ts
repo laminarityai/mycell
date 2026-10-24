@@ -20,7 +20,7 @@ import { zodJsonb } from "@/db/columns";
 import { connections } from "@/features/connections/lib/schema";
 import { requirementsGainedSchema, type RiskLevel } from "@/features/policy/types";
 import { storedSpecSchema } from "@/features/spec/stored";
-import type { EnablementStatus, StoredPausedReason } from "../types";
+import type { EnablementStatus, StoredPausedReason, WorkflowPausedReason } from "../types";
 // A version's tags reference the tag itself, so renaming a tag keeps who sees the workflow.
 import { tags } from "@/features/tags/lib/schema";
 
@@ -45,10 +45,23 @@ export const workflows = pgTable(
     // Set while an admin has it archived: hidden from members, and no new runs start for its
     // enablements or its org switch, which are kept for when it's restored.
     archivedAt: timestamp("archived_at", { withTimezone: true }),
+    // Set while its runs' failures pause it (M8), for its enablements and org switch alike: the
+    // reason, since when, and the three runs in a row that paused it, newest first. Plain run
+    // IDs: the runs belong to runtime, and a run gone with its connection just isn't listed.
+    pausedReason: text("paused_reason", { enum: ["failures"] }).$type<WorkflowPausedReason>(),
+    pausedAt: timestamp("paused_at", { withTimezone: true }),
+    pausedByRunIds: zodJsonb("paused_by_run_ids", z.array(z.string())),
+    // When an admin last resumed it: its runs' failures are counted from then, or from its
+    // latest version's publishing if that's later.
+    resumedAt: timestamp("resumed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
+    check(
+      "workflows_paused_with_runs",
+      sql`(${table.pausedReason} is null) = (${table.pausedAt} is null) and (${table.pausedReason} is null) = (${table.pausedByRunIds} is null)`,
+    ),
     unique("workflows_org_id_spec_id_unique").on(table.orgId, table.specId),
     unique("workflows_org_id_id_unique").on(table.orgId, table.id),
     index("workflows_org_connection_id_idx").on(table.orgConnectionId),

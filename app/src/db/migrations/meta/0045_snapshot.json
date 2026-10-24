@@ -1,5 +1,5 @@
 {
-  "id": "261f00b3-7402-4d21-bf6c-9c59fcb96eb4",
+  "id": "df1d7239-005a-4888-9a10-2a06d271bdf5",
   "prevId": "24822607-8f9a-455e-8b32-d9fe6e727d88",
   "version": "7",
   "dialect": "postgresql",
@@ -3531,12 +3531,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "details": {
-          "name": "details",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
         "handed_to_user_id": {
           "name": "handed_to_user_id",
           "type": "text",
@@ -4201,6 +4195,12 @@
           "notNull": true,
           "default": "'manual'"
         },
+        "retry_of_run_id": {
+          "name": "retry_of_run_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "enablement_id": {
           "name": "enablement_id",
           "type": "text",
@@ -4360,6 +4360,19 @@
         }
       },
       "foreignKeys": {
+        "runs_retry_of_fk": {
+          "name": "runs_retry_of_fk",
+          "tableFrom": "runs",
+          "tableTo": "runs",
+          "columnsFrom": [
+            "retry_of_run_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
         "runs_enablement_fk": {
           "name": "runs_enablement_fk",
           "tableFrom": "runs",
@@ -4420,6 +4433,13 @@
           "columns": [
             "org_id",
             "trigger_key"
+          ]
+        },
+        "runs_retry_of_run_id_unique": {
+          "name": "runs_retry_of_run_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "retry_of_run_id"
           ]
         }
       },

@@ -2,10 +2,15 @@
 // connector knows about Gmail or Drive (or, later, Outlook).
 import type { z } from "zod";
 import type { AttachmentMeta, Direction, EventType, ObjectRefKind } from "../types";
+import type { GmailPushConfig } from "./gmail-push";
 
-/** GETs against one connection's source API, through the Nango proxy. Null: no such item. */
+/**
+ * Calls to one connection's source API, through the Nango proxy. Null: no such item. A POST
+ * isn't retried (connections' `proxyPost`).
+ */
 export type SourceClient = {
   get<T>(path: string, schema: z.ZodType<T>): Promise<T | null>;
+  post<T>(path: string, body: unknown, schema: z.ZodType<T>): Promise<T | null>;
 };
 
 /**
@@ -49,4 +54,10 @@ export type Connector = {
   backfillPage(client: SourceClient, since: Date, pageToken: string | null): Promise<BackfillPage>;
   /** Everything new, and every item removed, since `cursor`. */
   poll(client: SourceClient, cursor: string): Promise<PollResult>;
+  /**
+   * Starts the app's watch on the account, or renews it (ADR-0026), with the environment's push
+   * settings: the app then tells Mycel when something changes. Returns when the watch runs out.
+   * Only an app that can notify has one; Drive's will take its own settings.
+   */
+  watch?(client: SourceClient, push: GmailPushConfig): Promise<Date>;
 };

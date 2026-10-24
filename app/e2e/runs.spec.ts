@@ -47,16 +47,20 @@ async function memberRuns(org: FixtureOrg) {
     accountEmail: org.member.email,
     scopes: gmail,
   });
-  const run = { orgId: org.id, connectionId, ownerScope: "member" as const, workflowId };
+  const run = {
+    orgId: org.id,
+    connectionId,
+    ownerScope: "member" as const,
+    workflowId,
+    workflowVersionId: version.id,
+  };
   await seedRun({
     ...run,
-    workflowVersionId: version.id,
     sourceRef: "message-1",
     status: "succeeded",
   });
-  await seedRun({
+  const failed = await seedRun({
     ...run,
-    workflowVersionId: version.id,
     sourceRef: "message-2",
     status: "failed",
     failed: {
@@ -66,6 +70,7 @@ async function memberRuns(org: FixtureOrg) {
       errorMessage: "Gmail has no such item.",
     },
   });
+  return { run, failed };
 }
 
 test("an admin opens Runs, sees a colleague's runs without their mail, and filters to failed", async ({
@@ -126,4 +131,39 @@ test("an admin opens a colleague's failed run from Runs and sees its steps, not 
   await expect(page.getByRole("region", { name: "Reviews" })).toContainText(
     "This run created no reviews.",
   );
+});
+
+// Retrying sends an Inngest event, which the e2e app has nowhere to send, so retrying itself is
+// Vitest's (runtime/tests/retry-runs.test.ts); this checks what the pages show of retries.
+test("an admin can't retry a colleague's failed run, and sees its retry marked", async ({
+  page,
+  orgs: { orgA },
+  signInAs,
+}) => {
+  const { run, failed } = await memberRuns(orgA);
+  const retry = await seedRun({
+    ...run,
+    sourceRef: "message-2",
+    status: "succeeded",
+    retryOfRunId: failed.id,
+  });
+  await signInAs(orgA.admin);
+
+  await page.goto("/runs");
+  const rows = page.getByRole("table", { name: "Runs" }).getByRole("row");
+  await expect(rows.filter({ hasText: "A retry" })).toHaveCount(1);
+
+  await page.goto(`/runs/${failed.id}`);
+  const summary = page.getByRole("region", { name: "Run" });
+  await expect(summary.getByRole("button", { name: "Retry" })).toBeDisabled();
+  await expect(summary).toContainText(
+    `Only ${orgA.member.email} can retry a run on their own inbox.`,
+  );
+  await summary.getByRole("link", { name: "The retry" }).click();
+
+  await expect(page).toHaveURL(new RegExp(`/runs/${retry.id}$`));
+  await expect(page.getByRole("region", { name: "Run" })).toContainText("Succeeded");
+  await expect(
+    page.getByRole("region", { name: "Run" }).getByRole("link", { name: "The run that failed" }),
+  ).toHaveAttribute("href", `/runs/${failed.id}`);
 });

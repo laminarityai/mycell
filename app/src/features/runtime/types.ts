@@ -115,6 +115,10 @@ export type RunRecord = {
   ownerScope: "member" | "org";
   enablementId: string | null;
   startedBy: RunStartedBy;
+  /** The failed run this one retries; null unless it's a retry. */
+  retryOfRunId: string | null;
+  /** The run that retries this one; null until it's retried. */
+  retriedByRunId: string | null;
   inbox: RunInbox;
   /** Shown in full to the caller: its message, and what its steps handed on. */
   full: boolean;
@@ -137,8 +141,18 @@ export type RunRecord = {
   trace: GraphTrace;
 };
 
-/** What started a run: an admin by hand, a member's enablement, or an org workflow's switch. */
-export type RunStartedBy = "manual" | "enablement" | "org_switch";
+/**
+ * What started a run: an admin by hand, a member's enablement, an org workflow's switch, or a
+ * retry of a failed run by its inbox's reader.
+ */
+export const runStartedBy = ["manual", "enablement", "org_switch", "retry"] as const;
+export type RunStartedBy = (typeof runStartedBy)[number];
+
+/**
+ * Whether the caller may retry a run now (`checkRetry`), and why not when they may not: in
+ * words for the run page, the message `retryRun` would refuse with.
+ */
+export type RetryCheck = { allowed: true } | { allowed: false; why: string };
 
 /** Which runs `listRuns` lists: each filter left out lets every value through. */
 export type RunFilters = { workflowId?: string; status?: RunStatus; connectionId?: string };

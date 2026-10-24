@@ -7,6 +7,7 @@ import { type Ctx, requireRole } from "@/lib/ctx";
 import { now as clockNow } from "@/lib/time";
 import { monthRange } from "../types";
 import { creditLedger } from "./schema";
+import { utcDay } from "./spending";
 
 /** The start of this calendar month, UTC: when this month's budgets began. */
 export function monthStart(now = clockNow()): Date {
@@ -48,6 +49,51 @@ export async function budgetsReached(
   );
 }
 
+/**
+ * Which of `budgets`' workflows (monthly credits, by workflow ID) have used their budget or more
+ * in live runs this calendar month (UTC), as `budgetsReached` says, each with the UTC day its
+ * running total this month reached the budget: since when it has been paused, for admins'
+ * alerts. Admins (and jobs) only, since it says when the company spent. One query, grouped by
+ * workflow and day, or none when no workflow has a budget.
+ */
+export async function budgetsReachedOn(
+  ctx: Ctx,
+  budgets: ReadonlyMap<string, number>,
+): Promise<Map<string, Date>> {
+  requireRole(ctx, "admin", "system");
+  if (budgets.size === 0) return new Map();
+  const daily = await forOrg(ctx).sumBy(
+    creditLedger,
+    creditLedger.amount,
+    { workflowId: creditLedger.workflowId, day: utcDay },
+    liveRunUsageThisMonth([...budgets.keys()]),
+  );
+  const totals = new Map<string, number>();
+  const reached = new Map<string, Date>();
+  // Day by day, as "2026-10-23" sorts: the first day each running total is at its budget.
+  for (const { workflowId, day, total } of daily.sort((a, b) => a.day.localeCompare(b.day))) {
+    const budget = workflowId === null ? undefined : budgets.get(workflowId);
+    if (workflowId === null || budget === undefined || reached.has(workflowId)) continue;
+    // Usage is negative.
+    const spent = (totals.get(workflowId) ?? 0) - total;
+    totals.set(workflowId, spent);
+    if (spent >= budget) reached.set(workflowId, new Date(`${day}T00:00:00Z`));
+  }
+  return reached;
+}
+
+/** Usage entries the workflows' live runs made this calendar month (UTC), not Try it's. */
+function liveRunUsageThisMonth(workflowIds: string[]) {
+  return and(
+    eq(creditLedger.kind, "usage"),
+    inArray(creditLedger.workflowId, workflowIds),
+    // A live run's usage: one a run made, not Try it's.
+    isNotNull(creditLedger.runId),
+    eq(creditLedger.dryRun, false),
+    gte(creditLedger.createdAt, monthStart()),
+  );
+}
+
 async function spentThisMonth(
   ctx: Ctx,
   workflowIds: readonly string[],
@@ -57,14 +103,7 @@ async function spentThisMonth(
     creditLedger,
     creditLedger.amount,
     { workflowId: creditLedger.workflowId },
-    and(
-      eq(creditLedger.kind, "usage"),
-      inArray(creditLedger.workflowId, [...workflowIds]),
-      // A live run's usage: one a run made, not Try it's.
-      isNotNull(creditLedger.runId),
-      eq(creditLedger.dryRun, false),
-      gte(creditLedger.createdAt, monthStart()),
-    ),
+    liveRunUsageThisMonth([...workflowIds]),
   );
   // Usage is negative; `|| 0` turns no spending's -0 into 0.
   const byWorkflow = new Map(totals.map((row) => [row.workflowId, -row.total || 0]));

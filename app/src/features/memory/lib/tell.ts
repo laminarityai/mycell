@@ -181,6 +181,8 @@ async function sameToldFact(ctx: Ctx, subjectId: string, statement: string) {
         eq(facts.toldByUserId, ctx.userId),
         eq(facts.statement, statement),
         isNull(facts.supersededAt),
+        // One they deleted is no longer theirs to find: the same words make a new note.
+        isNull(facts.deletedAt),
       ),
       limit: 1,
     })

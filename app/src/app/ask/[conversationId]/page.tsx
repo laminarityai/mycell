@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { getConversation, listConversations } from "@/features/agent/server";
-import { AskMycel } from "@/features/agent/ui";
+import { AskMycel, ToldFactsLink } from "@/features/agent/ui";
 import { getCtx } from "@/features/orgs/server";
 import { NotFoundError } from "@/lib/errors";
 import { AppShell } from "@/app/_shell/app-shell";
@@ -16,10 +16,16 @@ export default function AskConversationPage({ params }: PageProps<"/ask/[convers
       title="Ask Mycel"
       width="full"
       actions={
-        // Narrower than the rail's column, the rail is the conversation-less page.
-        <Link href="/ask" className="text-sm text-muted-foreground hover:text-foreground md:hidden">
-          All conversations
-        </Link>
+        <span className="flex items-center gap-4">
+          {/* Narrower than the rail's column, the rail is the conversation-less page. */}
+          <Link
+            href="/ask"
+            className="text-sm text-muted-foreground hover:text-foreground md:hidden"
+          >
+            All conversations
+          </Link>
+          <ToldFactsLink />
+        </span>
       }
     >
       <Suspense

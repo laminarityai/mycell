@@ -1,13 +1,13 @@
 import { Suspense } from "react";
 import { listConversations } from "@/features/agent/server";
-import { AskMycel } from "@/features/agent/ui";
+import { AskMycel, ToldFactsLink } from "@/features/agent/ui";
 import { getCtx } from "@/features/orgs/server";
 import { AppShell } from "@/app/_shell/app-shell";
 
 // Ask Mycel with no conversation open: the person's conversations, and New conversation.
 export default function AskPage() {
   return (
-    <AppShell current="ask" title="Ask Mycel" width="full">
+    <AppShell current="ask" title="Ask Mycel" width="full" actions={<ToldFactsLink />}>
       <Suspense fallback={<p className="p-4 text-sm text-muted-foreground">Loading…</p>}>
         <Conversations />
       </Suspense>

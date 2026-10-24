@@ -9,6 +9,7 @@ import {
   learnJob,
   newMonthCron,
   pruneAccessLogJob,
+  purgeDeletedToldFactsJob,
   rereadAccessJob,
   rereadDriveAccessJob,
   resumeOnCreditsJob,
@@ -51,6 +52,7 @@ export const { GET, POST, PUT } = serve({
     forgetPersonAgainJob,
     retentionCron,
     applyRetentionJob,
+    purgeDeletedToldFactsJob,
     failedCallCostJob,
   ],
 });

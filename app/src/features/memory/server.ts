@@ -27,6 +27,10 @@ export { citeFacts } from "./lib/cite";
 // and embedded, all charged to the agent, and seen by them alone. Refuses the do-not-learn list
 // and what isn't a work fact.
 export { tellFact } from "./lib/tell";
+// "What I've told Mycel": a person's own told facts, listed (logged as their read), deleted at
+// once from every read, and brought back within the undo window. Anyone else gets
+// NotFoundError. The org's system ctx deletes for good those past their window.
+export { deleteToldFact, listToldFacts, purgeDeletedToldFacts, restoreToldFact } from "./lib/told";
 // The access log: admins see the company's, members the reads of facts from their own sources.
 // Pruned nightly, as the org's system ctx.
 export { listAccessLog, pruneAccessLog } from "./lib/access-log";

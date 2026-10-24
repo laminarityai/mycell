@@ -16,7 +16,7 @@ export async function citeFacts(ctx: Ctx, factIds: string[]): Promise<FactCitati
   const ids = [...new Set(factIds)];
   if (ids.length === 0) return [];
   const rows = await forOrg(ctx).select(facts, {
-    columns: ["id", "conflictsWithId", "toldByUserId"],
+    columns: ["id", "conflictsWithId", "toldByUserId", "deletedAt"],
     where: inArray(facts.id, ids),
   });
   const reading = await readingOf(ctx);

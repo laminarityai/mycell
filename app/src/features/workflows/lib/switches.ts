@@ -9,13 +9,14 @@ import { listConnections } from "@/features/connections/server";
 import { getActionSet } from "@/features/custom-actions/server";
 import type { ConnectionSummary } from "@/features/connections/types";
 import type { ActionSet } from "@/features/policy/types";
+import { triggers } from "@/features/spec/triggers";
 import type { Spec, SpecIssue } from "@/features/spec/types";
 import { type Ctx, requireAdmin, requireSystem } from "@/lib/ctx";
 import { NotFoundError, SpecInvalidError, ValidationError } from "@/lib/errors";
 import type { Switch, SwitchedOn, WorkflowSwitch } from "../types";
 import { enablements, workflows } from "./schema";
 import { scopeIssues } from "./scope-check";
-import { reachesGmail } from "./validation";
+import { reachesTriggerApp } from "./validation";
 import { latestVersions } from "./latest-versions";
 import { findWorkflow } from "./access";
 import { deleteEnablement, switchOnEnablement } from "./enablement-rows";
@@ -105,7 +106,7 @@ export async function listSwitchedOn(ctx: Ctx, connectionId: string): Promise<Sw
         switch: by,
         versionId: version.id,
         since,
-        labelIds: version.spec.trigger.labelIds,
+        trigger: version.spec.trigger,
       },
     ];
   };
@@ -237,11 +238,12 @@ function connectionIssues(
   connection: ConnectionSummary,
   actions: ActionSet,
 ): SpecIssue[] {
-  if (!reachesGmail(connection)) {
+  if (!reachesTriggerApp(spec, connection)) {
+    const app = triggers[spec.trigger.type].app;
     return [
       {
         path: ["credentials"],
-        message: `${connection.accountEmail} wasn't allowed Gmail. Reconnect it to allow Gmail.`,
+        message: `${connection.accountEmail} wasn't allowed ${app}. Reconnect it to allow ${app}.`,
       },
     ];
   }

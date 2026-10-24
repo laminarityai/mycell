@@ -58,14 +58,14 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await snapshot()).toEqual(before);
   },
 
-  rereadDriveAccess: async (orgs) => {
+  rereadAllAccess: async (orgs) => {
     const { snapshot } = await seedOrgB(orgs);
     const before = await snapshot();
     const { orgA } = orgs;
 
-    expect(await server.rereadDriveAccess(systemCtx(orgA.id))).toEqual({ files: 0, removed: 0 });
+    expect(await server.rereadAllAccess(systemCtx(orgA.id))).toEqual({ items: 0, removed: 0 });
     for (const ctx of [orgA.admin.ctx, orgA.member.ctx]) {
-      await expect(server.rereadDriveAccess(ctx)).rejects.toThrow(ForbiddenError);
+      await expect(server.rereadAllAccess(ctx)).rejects.toThrow(ForbiddenError);
     }
 
     expect(await snapshot()).toEqual(before);

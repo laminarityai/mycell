@@ -65,6 +65,18 @@ export const isolationCases = defineIsolationCases(server, {
     await untouched(orgs, b);
   },
 
+  reviewsOfRun: async (orgs) => {
+    const b = await orgBReview(orgs);
+
+    for (const ctx of orgAUsers(orgs)) {
+      expect(await server.reviewsOfRun(ctx, b.runId)).toEqual([]);
+    }
+    expect(await server.reviewsOfRun(orgs.orgB.member.ctx, b.runId)).toMatchObject([
+      { id: b.review.id, openable: true },
+    ]);
+    await untouched(orgs, b);
+  },
+
   // Org A's daily check never checks (and so never ends) org B's reviews.
   checkWaitingReviews: async (orgs) => {
     const b = await orgBReview(orgs);
@@ -156,6 +168,8 @@ export const isolationCases = defineIsolationCases(server, {
       approvals: none,
       escalations: none,
       heldSends: none,
+      suggestedEdits: none,
+      meetings: none,
       approvedWithoutEdits: null,
       byUser: [],
     };

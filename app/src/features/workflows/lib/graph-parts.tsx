@@ -7,6 +7,7 @@ import {
   CircleX,
   GitBranch,
   Hand,
+  ListChecks,
   Mail,
   PenLine,
   ScanText,
@@ -30,8 +31,12 @@ const STEP_ICONS: Record<StepType, LucideIcon> = {
   branch: GitBranch,
 };
 
+// A tool step's icon by the app it acts in, where that isn't Gmail's.
+const APP_ICONS: Partial<Record<string, LucideIcon>> = { Sheets: Table2, Tasks: ListChecks };
+
 export function StepIcon({ step }: { step: Pick<GraphStep, "type" | "app"> }) {
-  const Icon = step.type === "tool" && step.app === "Sheets" ? Table2 : STEP_ICONS[step.type];
+  const appIcon = step.type === "tool" && step.app !== null ? APP_ICONS[step.app] : undefined;
+  const Icon = appIcon ?? STEP_ICONS[step.type];
   return <Icon aria-hidden className="size-3.5 shrink-0" />;
 }
 
@@ -104,8 +109,17 @@ const NOT_RUN: Record<"not_checked" | "not_needed", string> = {
   not_needed: "Not needed: another path applied",
 };
 
-/** Whether a Try it took the path, and why: each check passed or failed, with its reason. */
-export function PathRunSummary({ run }: { run: GraphPath["run"] }) {
+/**
+ * Whether a Try it or a run took the path, and why: each check passed or failed, with its
+ * reason. A run redacted for the viewer gives no checks, so a named path just says taken.
+ */
+export function PathRunSummary({
+  run,
+  otherwise = false,
+}: {
+  run: GraphPath["run"];
+  otherwise?: boolean;
+}) {
   if (run === null) return null;
   if (run.status === "not_checked" || run.status === "not_needed") {
     return (
@@ -128,11 +142,7 @@ export function PathRunSummary({ run }: { run: GraphPath["run"] }) {
         ) : (
           <CircleX aria-hidden className="size-3" />
         )}
-        {taken
-          ? run.checks.length === 0
-            ? "Taken: no other path applied"
-            : "Taken"
-          : "Didn't apply"}
+        {taken ? (otherwise ? "Taken: no other path applied" : "Taken") : "Didn't apply"}
       </p>
       {run.checks.map((check, index) => (
         <p

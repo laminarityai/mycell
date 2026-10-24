@@ -2,7 +2,7 @@
 // person's own Gmail. Nothing is prepared or removed there: approving means the person is done
 // with it, and replying to it in Gmail finishes it on its own. Every call goes through the Nango
 // proxy with the caller's ctx; the message's text is held in memory only (invariant 8).
-import { GMAIL } from "@/features/connections/gmail";
+import { GMAIL, gmailLink } from "@/features/connections/gmail";
 import { getConnection, proxyGet } from "@/features/connections/server";
 import { fullMessageSchema, mailOf, messageRefSchema } from "./gmail";
 import { ItemGoneError } from "@/lib/errors";
@@ -50,12 +50,10 @@ export const escalationAdapter: PendingFormAdapter<EscalatedMessage> = {
     );
     if (message === null) throw new ItemGoneError();
     const { accountEmail } = await getConnection(ctx, item.connectionId);
-    return { kind: "message", message: mailOf(message), link: gmailLink(accountEmail, item) };
+    return {
+      kind: "message",
+      message: mailOf(message),
+      link: gmailLink(accountEmail, item.threadRef),
+    };
   },
 };
-
-/** The message's thread in Gmail's web app, opened in the connection's account. */
-function gmailLink(accountEmail: string, item: { threadRef: string }): string {
-  const account = encodeURIComponent(accountEmail);
-  return `https://mail.google.com/mail/?authuser=${account}#all/${encodeURIComponent(item.threadRef)}`;
-}

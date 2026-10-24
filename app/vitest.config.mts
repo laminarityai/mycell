@@ -52,6 +52,9 @@ process.env.VERCEL_OIDC_TOKEN = [
 process.env.GMAIL_PUSH_TOPIC = "projects/mycel-test/topics/gmail-push";
 process.env.GOOGLE_PUSH_AUDIENCE = "http://localhost:3000/api/google/gmail-push";
 process.env.GOOGLE_PUSH_SERVICE_ACCOUNT = "gmail-push-sender@mycel-test.iam.gserviceaccount.com";
+// Drive push is configured too: Drive's channels post to BETTER_AUTH_URL's /api/google/drive-push
+// with tokens signed under this secret (src/testing/fake-drive-channels.ts posts them there).
+process.env.DRIVE_PUSH_SECRET = "drive-push-test-secret-0123456789abcdef";
 // The key store reaches the fake KMS (src/testing/fake-kms.ts) at AWS's regional endpoint, and
 // the fake checks requests are signed with this access key.
 process.env.KMS_REGION = "us-east-1";

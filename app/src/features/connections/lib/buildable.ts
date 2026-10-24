@@ -1,9 +1,11 @@
 // The connections an admin may build on, read examples from, and try a spec on: their own
-// member connections and the org's, granted Gmail. Another member's connection, another
-// admin's own included, is never one (ADR-0001), nor is another org's.
+// member connections and the org's, granted the app the spec's trigger watches (Gmail, unless
+// it says otherwise). Another member's connection, another admin's own included, is never one
+// (ADR-0001), nor is another org's.
 import type { Ctx } from "@/lib/ctx";
 import { NotFoundError, ValidationError } from "@/lib/errors";
-import type { ConnectionSummary } from "../types";
+import { GOOGLE_APP_NAMES } from "@/lib/google";
+import type { ConnectionSummary, GoogleApp } from "../types";
 import { listConnections } from "./list";
 
 /** Which connections: the caller's own for `member` credentials, the org's for `org`. */
@@ -14,33 +16,48 @@ export function gmailConnections(
   pools: { own: ConnectionSummary[]; org: ConnectionSummary[] },
   credentials?: BuildCredentials,
 ): ConnectionSummary[] {
+  return connectionsGranted(pools, "gmail", credentials);
+}
+
+/** The caller's own and the org's connections, each pool narrowed to those granted `app`. */
+export function connectionsGranted(
+  pools: { own: ConnectionSummary[]; org: ConnectionSummary[] },
+  app: GoogleApp,
+  credentials?: BuildCredentials,
+): ConnectionSummary[] {
   const pool =
     credentials === undefined
       ? [...pools.own, ...pools.org]
       : credentials === "member"
         ? pools.own
         : pools.org;
-  return pool.filter((connection) => connection.apps.includes("gmail"));
+  return pool.filter((connection) => connection.apps.includes(app));
 }
 
-/** The connections the caller may build on, with `credentials`, only those a spec could use. */
+/**
+ * The connections the caller may build on, with `credentials`, only those a spec could use:
+ * granted `app`, the one its trigger watches.
+ */
 export async function buildableConnections(
   ctx: Ctx,
   credentials?: BuildCredentials,
+  app: GoogleApp = "gmail",
 ): Promise<ConnectionSummary[]> {
   const listing = await listConnections(ctx);
-  return gmailConnections({ own: listing.connections, org: listing.orgConnections }, credentials);
+  const pools = { own: listing.connections, org: listing.orgConnections };
+  return connectionsGranted(pools, app, credentials);
 }
 
 /**
  * The connection, when the caller may build on it. NotFoundError for any other member's or
  * another org's; ValidationError, saying why, for one of the wrong kind for `credentials` or
- * not granted Gmail.
+ * not granted `app` (Gmail, unless the spec's trigger watches another).
  */
 export async function requireBuildableConnection(
   ctx: Ctx,
   connectionId: string,
   credentials?: BuildCredentials,
+  app: GoogleApp = "gmail",
 ): Promise<ConnectionSummary> {
   const listing = await listConnections(ctx);
   const own = listing.connections.find(({ id }) => id === connectionId);
@@ -53,8 +70,10 @@ export async function requireBuildableConnection(
         : "This workflow uses org credentials: try it on an org connection.",
     );
   }
-  if (!connection.apps.includes("gmail")) {
-    throw new ValidationError(`${connection.accountEmail} wasn't granted Gmail.`);
+  if (!connection.apps.includes(app)) {
+    throw new ValidationError(
+      `${connection.accountEmail} wasn't granted ${GOOGLE_APP_NAMES[app]}.`,
+    );
   }
   return connection;
 }

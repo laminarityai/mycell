@@ -53,6 +53,35 @@ describe("validateSpec", () => {
     ]);
   });
 
+  it("checks a reference anywhere inside an input's lists and records", () => {
+    const spec = exampleSpec();
+    spec.steps[2] = {
+      ...spec.steps[2],
+      input: {
+        spreadsheetId: "sheet-1",
+        range: "Prices!A1:C50",
+        edits: [
+          { insertText: { text: { from: "classify.label" }, location: { index: 1 } } },
+          { insertText: { text: { from: "draft.text" }, endOfSegmentLocation: {} } },
+        ],
+      },
+    };
+
+    expect(issuePaths(spec)).toEqual([
+      ["steps", 2, "input", "edits", 1, "insertText", "text", "from"],
+    ]);
+  });
+
+  it("reads a record whose only key is `from` as a reference, so it must be written as one", () => {
+    const spec = exampleSpec();
+    spec.steps[2] = {
+      ...spec.steps[2],
+      input: { spreadsheetId: "sheet-1", range: { nested: { from: "not a reference" } } },
+    };
+
+    expect(validateSpec(spec).ok).toBe(false);
+  });
+
   it("refuses a step that refers to itself", () => {
     const spec = exampleSpec();
     spec.steps[3] = { ...spec.steps[3], context: ["draft"] };

@@ -18,6 +18,7 @@
 // again), and a fact from inside supersedes anything older.
 import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 import type { OrgScopedDb } from "@/db/for-org";
+import { now as clockNow } from "@/lib/time";
 import { factSources, facts, sourceRecords } from "./schema";
 import { type CompanyWide, recordCompanyWide } from "./visibility";
 
@@ -101,7 +102,7 @@ async function relink(tx: OrgScopedDb, timeline: Standing[], added: Set<string>)
     return undefined;
   });
 
-  const now = new Date();
+  const now = clockNow();
   const changed = ordered.flatMap(({ row }, i) => {
     const next = replacements[i];
     const linked: Linked = {

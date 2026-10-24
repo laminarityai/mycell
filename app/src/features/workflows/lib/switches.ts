@@ -13,6 +13,7 @@ import { triggers } from "@/features/spec/triggers";
 import type { Spec, SpecIssue } from "@/features/spec/types";
 import { type Ctx, requireAdmin, requireSystem } from "@/lib/ctx";
 import { NotFoundError, SpecInvalidError, ValidationError } from "@/lib/errors";
+import { now } from "@/lib/time";
 import type { Switch, SwitchedOn, WorkflowSwitch } from "../types";
 import { enablements, workflows } from "./schema";
 import { scopeIssues } from "./scope-check";
@@ -51,7 +52,7 @@ export async function switchWorkflowOn(
     if (workflow.orgConnectionId === connectionId) return;
     await forOrg(ctx).update(
       workflows,
-      { orgConnectionId: connectionId, orgSwitchedOnAt: new Date() },
+      { orgConnectionId: connectionId, orgSwitchedOnAt: now() },
       eq(workflows.id, workflowId),
     );
     return;

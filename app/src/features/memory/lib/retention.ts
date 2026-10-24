@@ -9,6 +9,7 @@ import { and, eq, lt, sql } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { type Ctx, requireAdmin, requireSystem } from "@/lib/ctx";
 import { ConflictError, ValidationError } from "@/lib/errors";
+import { now as clockNow } from "@/lib/time";
 import {
   MAX_RETENTION_MONTHS,
   retentionWindowSchema,
@@ -29,7 +30,7 @@ export async function setRetentionWindow(ctx: Ctx, input: RetentionWindow): Prom
   }
   const updated = await forOrg(ctx).update(memorySettings, {
     retentionMonths: parsed.data.months,
-    updatedAt: new Date(),
+    updatedAt: clockNow(),
   });
   if (updated.length === 0) throw new ConflictError("Memory hasn't started yet.");
 }
@@ -39,7 +40,7 @@ export async function setRetentionWindow(ctx: Ctx, input: RetentionWindow): Prom
  * past the window. A day the earlier month lacks becomes its last day (31 March less a month is
  * the last day of February).
  */
-export function retentionCutoff(months: number, now = new Date()): Date {
+export function retentionCutoff(months: number, now = clockNow()): Date {
   const month = now.getUTCMonth() - months;
   const lastDay = new Date(Date.UTC(now.getUTCFullYear(), month + 1, 0)).getUTCDate();
   return new Date(

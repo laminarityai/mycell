@@ -10,6 +10,7 @@ import {
 } from "@/features/connections/types";
 import { listOrgIds } from "@/features/orgs/server";
 import { systemCtx } from "@/lib/ctx";
+import { now as clockNow } from "@/lib/time";
 import type { ConnectionToPoll } from "../types";
 import { watches } from "./watch";
 
@@ -31,7 +32,7 @@ export function sweepSchedule(): string {
  * reconnect pending and an `active` app that's due. The poll then polls all its active apps.
  */
 export async function pollAllConnections(): Promise<ConnectionToPoll[]> {
-  const now = Date.now();
+  const now = clockNow().getTime();
   const due: ConnectionToPoll[] = [];
   for (const orgId of await listOrgIds()) {
     for (const connection of await listConnectionsForJobs(systemCtx(orgId))) {

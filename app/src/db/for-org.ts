@@ -43,16 +43,19 @@ type ColumnOf<T extends TenantTable> = T["_"]["columns"][keyof T["_"]["columns"]
 export type NumberColumn<T extends TenantTable> = Extract<ColumnOf<T>, { _: { data: number } }>;
 
 /**
- * The columns `countBy` and `sumBy` group by, each under the name its value comes back as.
+ * The columns `countBy` and `sumBy` group by, each under the name its value comes back as. A
+ * group may also be SQL computed from the row (its UTC day), typed by what it returns.
  * `count` and `total` are taken: they're the group's count and sum.
  */
-export type GroupColumns<T extends TenantTable> = Record<string, ColumnOf<T>> & {
+export type GroupColumns<T extends TenantTable> = Record<string, ColumnOf<T> | SQL> & {
   count?: never;
   total?: never;
 };
 
 /** One group's value of each group column. */
-type GroupValues<G> = { [K in keyof G]: G[K] extends Column ? GetColumnData<G[K]> : never };
+type GroupValues<G> = {
+  [K in keyof G]: G[K] extends Column ? GetColumnData<G[K]> : G[K] extends SQL<infer V> ? V : never;
+};
 
 /** One group `countBy` found: its value of each group column, and how many rows it has. */
 export type GroupCount<G> = GroupValues<G> & { count: number };
@@ -185,7 +188,7 @@ function scoped(ctx: Ctx, db: Executor): OrgScopedDb {
 
     async sumBy(table, column, groupBy, where) {
       const source: PgTable = table;
-      const columns: Record<string, PgColumn> = groupBy;
+      const columns: Record<string, PgColumn | SQL> = groupBy;
       const rows = await db
         .select({ ...columns, total: total(column) })
         .from(source)
@@ -196,7 +199,7 @@ function scoped(ctx: Ctx, db: Executor): OrgScopedDb {
 
     async countBy(table, groupBy, where) {
       const source: PgTable = table;
-      const columns: Record<string, PgColumn> = groupBy;
+      const columns: Record<string, PgColumn | SQL> = groupBy;
       const rows = await db
         .select({ ...columns, count: count() })
         .from(source)

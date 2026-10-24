@@ -24,6 +24,7 @@ import type {
   WorkflowVersionSummary,
 } from "../types";
 import { findWorkflow } from "./access";
+import { failurePauseOf } from "./failure-pauses";
 import { latestVersions } from "./latest-versions";
 import { requiredApps } from "./requirements";
 import { workflows, workflowVersions } from "./schema";
@@ -190,6 +191,7 @@ export async function getWorkflow(
     versions: versions.map(versionSummary),
     switch: await switchOf(ctx, row),
     archivedAt: row.archivedAt,
+    failurePause: failurePauseOf(row),
     createdBy: row.createdBy,
     updatedAt: row.updatedAt,
   };

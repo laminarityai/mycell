@@ -1,12 +1,13 @@
-// The Gmail connector: the history ID as the cursor, messages.list for the backfill, and
-// history.list for polling: messages added, which it fetches and normalizes as the backfill
-// does, and messages deleted for good or moved to the trash, which it reports removed. Deleting
-// in Gmail's own app moves a message to the trash, where it stays 30 days before it's deleted
-// for good, so a trashed message counts as removed: what Mycel learned from it goes at once.
+// The Gmail connector: the history ID as the cursor, messages.list for the backfill,
+// history.list for polling, and users.watch for push (ADR-0026). Polling reads messages added,
+// which it fetches and normalizes as the backfill does, and messages deleted for good or moved
+// to the trash, which it reports removed. Deleting in Gmail's own app moves a message to the
+// trash, where it stays 30 days before it's deleted for good, so a trashed message counts as
+// removed: what Mycel learned from it goes at once.
 import { GMAIL, messageListSchema, messageSchema } from "@/features/connections/gmail";
 import { InvariantError } from "@/lib/errors";
 import type { Connector, NormalizedEvent, SourceClient } from "../connector";
-import { historyListSchema, profileSchema } from "./api";
+import { historyListSchema, profileSchema, watchSchema } from "./api";
 import { normalizeMessage } from "./normalize";
 
 // Messages per backfill page, so one page (one Inngest step) stays well inside a serverless
@@ -21,8 +22,9 @@ const HISTORY_PAGE_SIZE = 500;
 const HISTORY_TYPES = ["messageAdded", "messageDeleted", "labelAdded"];
 // messages.list leaves spam and trash out unless asked (includeSpamTrash), so polling does too.
 // Drafts are left out of both: each save replaces a draft's message with a new message ID (Gmail
-// drafts guide), so every autosave would otherwise become another event.
-const EXCLUDED_LABELS = ["SPAM", "TRASH", "DRAFT"];
+// drafts guide), so every autosave would otherwise become another event. The watch leaves them
+// out too, so a draft save doesn't notify.
+const EXCLUDED_LABELS = ["DRAFT", "SPAM", "TRASH"];
 
 export const gmailConnector: Connector = {
   async readStartCursor(client) {
@@ -80,6 +82,19 @@ export const gmailConnector: Connector = {
       fetchEvent(client, id),
     );
     return { events: events.filter(isIngested), removed: [...removed], nextCursor };
+  },
+
+  // Gmail publishes to the topic whenever the mailbox changes, except for changes to a message
+  // with an excluded label. Asking again renews the watch; Gmail's lasts 7 days.
+  async watch(client, push) {
+    const body = {
+      topicName: push.topic,
+      labelFilterBehavior: "exclude",
+      labelIds: EXCLUDED_LABELS,
+    };
+    const answer = await client.post(`${GMAIL}/watch`, body, watchSchema);
+    if (answer === null) throw new InvariantError("Gmail has no mailbox to watch");
+    return new Date(Number(answer.expiration));
   },
 };
 

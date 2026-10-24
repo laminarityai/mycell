@@ -44,6 +44,7 @@ describe("recording a connection", () => {
       cursor: null,
       backfilledItems: 0,
       lastPolledAt: null,
+      watchExpiresAt: null,
     };
     expect(await getConnection(orgA.member.ctx, id)).toEqual({
       id,

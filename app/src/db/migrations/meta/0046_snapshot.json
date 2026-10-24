@@ -1,6 +1,6 @@
 {
-  "id": "2089fb77-a6ee-4dff-853c-f32c009d9b93",
-  "prevId": "261f00b3-7402-4d21-bf6c-9c59fcb96eb4",
+  "id": "849286b3-a995-4204-a1af-91ae507b9629",
+  "prevId": "df1d7239-005a-4888-9a10-2a06d271bdf5",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -3531,12 +3531,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "details": {
-          "name": "details",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
         "handed_to_user_id": {
           "name": "handed_to_user_id",
           "type": "text",
@@ -4201,6 +4195,12 @@
           "notNull": true,
           "default": "'manual'"
         },
+        "retry_of_run_id": {
+          "name": "retry_of_run_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "enablement_id": {
           "name": "enablement_id",
           "type": "text",
@@ -4360,6 +4360,19 @@
         }
       },
       "foreignKeys": {
+        "runs_retry_of_fk": {
+          "name": "runs_retry_of_fk",
+          "tableFrom": "runs",
+          "tableTo": "runs",
+          "columnsFrom": [
+            "retry_of_run_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
         "runs_enablement_fk": {
           "name": "runs_enablement_fk",
           "tableFrom": "runs",
@@ -4421,148 +4434,12 @@
             "org_id",
             "trigger_key"
           ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.suggested_edit_writes": {
-      "name": "suggested_edit_writes",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
         },
-        "org_id": {
-          "name": "org_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "connection_id": {
-          "name": "connection_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "run_id": {
-          "name": "run_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "step_id": {
-          "name": "step_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "source_ref": {
-          "name": "source_ref",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "owner_scope": {
-          "name": "owner_scope",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "document_id": {
-          "name": "document_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "suggestion_ids_before": {
-          "name": "suggestion_ids_before",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_suggestion_ids": {
-          "name": "created_suggestion_ids",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "suggested_edit_writes_org_id_connection_id_idx": {
-          "name": "suggested_edit_writes_org_id_connection_id_idx",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "connection_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "suggested_edit_writes_connection_fk": {
-          "name": "suggested_edit_writes_connection_fk",
-          "tableFrom": "suggested_edit_writes",
-          "tableTo": "connections",
-          "columnsFrom": [
-            "org_id",
-            "connection_id"
-          ],
-          "columnsTo": [
-            "org_id",
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "suggested_edit_writes_run_fk": {
-          "name": "suggested_edit_writes_run_fk",
-          "tableFrom": "suggested_edit_writes",
-          "tableTo": "runs",
-          "columnsFrom": [
-            "org_id",
-            "run_id"
-          ],
-          "columnsTo": [
-            "org_id",
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "suggested_edit_writes_org_id_run_id_step_id_unique": {
-          "name": "suggested_edit_writes_org_id_run_id_step_id_unique",
+        "runs_retry_of_run_id_unique": {
+          "name": "runs_retry_of_run_id_unique",
           "nullsNotDistinct": false,
           "columns": [
-            "org_id",
-            "run_id",
-            "step_id"
+            "retry_of_run_id"
           ]
         }
       },
@@ -5235,6 +5112,30 @@
           "primaryKey": false,
           "notNull": false
         },
+        "paused_reason": {
+          "name": "paused_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "paused_at": {
+          "name": "paused_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "paused_by_run_ids": {
+          "name": "paused_by_run_ids",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "resumed_at": {
+          "name": "resumed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -5302,7 +5203,12 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "workflows_paused_with_runs": {
+          "name": "workflows_paused_with_runs",
+          "value": "(\"workflows\".\"paused_reason\" is null) = (\"workflows\".\"paused_at\" is null) and (\"workflows\".\"paused_reason\" is null) = (\"workflows\".\"paused_by_run_ids\" is null)"
+        }
+      },
       "isRLSEnabled": false
     }
   },

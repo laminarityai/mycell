@@ -127,7 +127,7 @@ export const isolationCases = defineIsolationCases(server, {
     const ctxB = systemCtx(orgs.orgB.id);
     fakeAiGateway.fail("language", { generationId: "gen_b", billedUsd: 0.01 });
     await expect(server.callModel(ctxB, "fast", { prompt: testPrompts.hi() })).rejects.toThrow();
-    const failed = (await listLedger(ctxB, 1)).at(0);
+    const failed = (await listLedger(ctxB, { limit: 1 })).at(0);
     const ledgerBefore = await listLedger(ctxB);
 
     // Org B's failed call, from org A: no lookup, and nothing recorded in either org.

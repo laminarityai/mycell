@@ -19,7 +19,13 @@ import {
 } from "@/features/memory/jobs";
 import { failedCallCostJob } from "@/features/models/jobs";
 import { checkWaitingReviewsJob, endedInGmailJob } from "@/features/reviews/jobs";
-import { fanOutMessageJob, runWorkflowJob } from "@/features/runtime/jobs";
+import {
+  calendarPollCron,
+  calendarPollJob,
+  fanOutInviteJob,
+  fanOutMessageJob,
+  runWorkflowJob,
+} from "@/features/runtime/jobs";
 import { assignmentRemovedJob, tagDeletedJob, tagRenamedJob } from "@/features/workflows/jobs";
 import { inngest } from "@/lib/inngest";
 
@@ -32,6 +38,9 @@ export const { GET, POST, PUT } = serve({
     renewWatchesJob,
     reconcileJob,
     fanOutMessageJob,
+    calendarPollCron,
+    calendarPollJob,
+    fanOutInviteJob,
     runWorkflowJob,
     assignmentRemovedJob,
     tagDeletedJob,

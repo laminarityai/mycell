@@ -140,8 +140,16 @@ _Avoid_: Instance, subscription, install, activation
 The one on/off switch of a workflow that uses an org connection, such as a support@ inbox. An admin turns it on for that connection, and the workflow then runs on new mail there for the whole org.
 _Avoid_: Org enablement, global toggle
 
+**Trigger**:
+What starts a workflow's runs: a new message in Gmail, or a new invite on a person's calendar. Each workflow has one, and its connection must allow the trigger's app.
+_Avoid_: Hook, watcher, event (an event is what discovery ingests)
+
+**Invite**:
+An event on a person's calendar that someone else organised and that the person hasn't answered yet. A new one can start a run; Mycel keeps none of it.
+_Avoid_: Meeting request, invitation, event
+
 **Run**:
-One execution of one workflow version on one trigger, such as one incoming email.
+One execution of one workflow version on one trigger, such as one incoming email or one new invite.
 _Avoid_: Execution, job, invocation
 
 **Try it**:
@@ -155,6 +163,10 @@ _Avoid_: Model, model tier
 **Paused**:
 The state of a workflow or enablement that will not run, always shown together with its reason.
 _Avoid_: Disabled, suspended, stopped
+
+**Alert**:
+A notice in Mycel telling admins something needs them, such as a workflow paused for failing or credits running out. It goes away by itself once the cause is fixed.
+_Avoid_: Notification, warning, email
 
 **Archived**:
 A workflow an admin has stopped everywhere and hidden from members. Its enablements and org switch are kept, so restoring it brings them back as they were. It isn't paused: nothing about it waits on anyone else.

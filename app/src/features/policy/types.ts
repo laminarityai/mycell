@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { TriggerType } from "@/features/spec/triggers";
 import type { ConditionField, Spec, SpecIssue } from "@/features/spec/types";
 
 /** Risk levels, least to most dangerous (docs/architecture.md, "Risk policy"). */
@@ -147,6 +148,8 @@ export type Requirements = {
   maxRisk: RiskLevel;
   /** The actions the version calls. */
   requiredActions: readonly string[];
+  /** What starts its runs; a new Gmail message when left out. */
+  trigger?: TriggerType;
 };
 
 /**

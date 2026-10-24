@@ -41,28 +41,29 @@ function migrationsThrough(last: number): string {
   return folder;
 }
 
-async function admin(query: string): Promise<void> {
+// The scratch database is made once and kept, like the checkout's own test database: dropping a
+// database waits for a checkpoint, which takes minutes while a full verify has the server busy.
+// Each run starts it empty by dropping its schemas instead.
+beforeAll(async () => {
   const client = new Client({ connectionString: adminUrl.toString() });
   await client.connect();
   try {
-    await client.query(query);
+    const found = await client.query("select 1 from pg_database where datname = $1", [scratchName]);
+    if (found.rowCount === 0) await client.query(`create database "${scratchName}"`);
+    // Outside UTC, as a local Postgres may be: a naive time converted in the session's zone
+    // would shift by hours.
+    await client.query(`alter database "${scratchName}" set timezone to 'America/Los_Angeles'`);
   } finally {
     await client.end();
   }
-}
-
-beforeAll(async () => {
-  await admin(`drop database if exists "${scratchName}" with (force)`);
-  await admin(`create database "${scratchName}"`);
-  // Outside UTC, as a local Postgres may be: a naive time converted in the session's zone
-  // would shift by hours.
-  await admin(`alter database "${scratchName}" set timezone to 'America/Los_Angeles'`);
   pool = new Pool({ connectionString: scratchUrl.toString() });
+  await pool.query("drop schema if exists drizzle cascade");
+  await pool.query("drop schema public cascade");
+  await pool.query("create schema public");
 });
 
 afterAll(async () => {
   await pool.end();
-  await admin(`drop database if exists "${scratchName}" with (force)`);
   for (const folder of folders) rmSync(folder, { recursive: true, force: true });
 });
 

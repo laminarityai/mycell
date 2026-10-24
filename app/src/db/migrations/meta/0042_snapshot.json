@@ -1,5 +1,5 @@
 {
-  "id": "4a48eaa2-509a-4440-b41c-56b134b9988f",
+  "id": "c5511de3-2e46-4f86-aac5-96a265285da4",
   "prevId": "d4f585f5-df96-43f4-8340-a556ef3ae9c8",
   "version": "7",
   "dialect": "postgresql",
@@ -1442,6 +1442,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "corrects_id": {
+          "name": "corrects_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -1492,9 +1498,38 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "credit_ledger_corrects_id_unique": {
+          "name": "credit_ledger_corrects_id_unique",
+          "columns": [
+            {
+              "expression": "corrects_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "credit_ledger_corrects_id_fk": {
+          "name": "credit_ledger_corrects_id_fk",
+          "tableFrom": "credit_ledger",
+          "tableTo": "credit_ledger",
+          "columnsFrom": [
+            "corrects_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -4950,30 +4985,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "paused_reason": {
-          "name": "paused_reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "paused_at": {
-          "name": "paused_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "paused_by_run_ids": {
-          "name": "paused_by_run_ids",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "resumed_at": {
-          "name": "resumed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -5041,12 +5052,7 @@
         }
       },
       "policies": {},
-      "checkConstraints": {
-        "workflows_paused_with_runs": {
-          "name": "workflows_paused_with_runs",
-          "value": "(\"workflows\".\"paused_reason\" is null) = (\"workflows\".\"paused_at\" is null) and (\"workflows\".\"paused_reason\" is null) = (\"workflows\".\"paused_by_run_ids\" is null)"
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     }
   },

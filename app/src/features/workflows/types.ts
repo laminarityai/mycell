@@ -101,6 +101,8 @@ export type WorkflowSummary = {
   latestVersion: WorkflowVersionSummary | null;
   /** Whose connections the latest version runs on; null while not published. */
   credentials: Spec["credentials"] | null;
+  /** The apps the latest version uses, as admins name them; none while not published. */
+  requiredApps: string[];
   /** The caller's enablement, or the org switch; null while off. */
   switch: WorkflowSwitch | null;
   /** Who the latest version is published to; null while not published. */
@@ -128,11 +130,13 @@ export type VisibleWorkflow = {
   name: string;
   /** What the latest version does, a sentence per step. */
   description: string[];
-  /** The apps the latest version uses, as the catalog names them ("Gmail", "Sheets"). */
+  /** The apps the latest version uses, as admins name them ("Gmail", "Sheets", "Calendar"). */
   requiredApps: string[];
   maxRisk: RiskLevel;
   /** `org` runs on a shared inbox that only admins switch on. */
   credentials: Spec["credentials"];
+  /** The address of the shared inbox the org switch is on; null for a member workflow, or off. */
+  sharedInbox: string | null;
   versionNumber: number;
   /** The caller's enablement, or the org switch; null while off. */
   switch: WorkflowSwitch | null;
@@ -223,6 +227,8 @@ export type FailurePause = { pausedAt: Date; runIds: string[] };
  */
 export type PausingRun = {
   runId: string;
+  /** The run's page. */
+  href: string;
   finishedAt: Date | null;
   /** "support@org-a.test", "Your inbox", or "Ada's inbox" for a colleague's. */
   inbox: string;
@@ -280,10 +286,10 @@ export type SwitchedOn = {
   switch: Switch;
   /** The latest version, which the run pins. */
   versionId: string;
-  /** Messages that occurred before this start nothing. */
+  /** Messages and invites that occurred before this start nothing. */
   since: Date;
-  /** The trigger's label filter: a message starts a run when it has one of them. */
-  labelIds: string[];
+  /** The latest version's trigger: a Gmail message with one of its labels, or a new invite. */
+  trigger: Spec["trigger"];
 };
 
 /** A spec that passed every validation stage, with what the policy engine made of it. */

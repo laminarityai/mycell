@@ -298,10 +298,15 @@ export const stepTypes: readonly StepType[] = stepSchema.options.map(
 export const specSettings = {
   id: slug,
   credentials: z.enum(["member", "org"]),
-  trigger: specObject({
-    type: z.literal("gmail.message_received"),
-    labelIds: z.array(z.string().min(1)).min(1).default(["INBOX"]),
-  }),
+  // What starts a run (`triggers.ts`): a new Gmail message with one of the labels, or a new
+  // invite on the connection's calendar.
+  trigger: z.discriminatedUnion("type", [
+    specObject({
+      type: z.literal("gmail.message_received"),
+      labelIds: z.array(z.string().min(1)).min(1).default(["INBOX"]),
+    }),
+    specObject({ type: z.literal("calendar.invite_received") }),
+  ]),
   autonomy: specObject({ rung: z.union([z.literal(0), z.literal(3), z.literal(4)]) }),
   // Accepted and stored, unused until M7.
   budget: specObject({ monthlyCredits: z.number().int().positive().optional() }).optional(),

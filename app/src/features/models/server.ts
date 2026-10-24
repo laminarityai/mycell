@@ -17,3 +17,5 @@ export { openMeteredStream } from "./lib/metered-stream";
 export { streamChatTurn, type ChatTurnRequest } from "./lib/chat-turn";
 export { chatTool, type ChatTool, type ChatToolDefinition, type ChatTools } from "./lib/chat-tools";
 export { chatModelMessages, chatUIPart } from "./lib/chat-history";
+// For the failed-call job: a failed call's billed cost, looked up in the gateway, into the ledger.
+export { correctFailedCallCost } from "./lib/failed-call-costs";

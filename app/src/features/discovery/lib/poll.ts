@@ -15,9 +15,10 @@ import { getConnection, recordIngestState, sourceClient } from "@/features/conne
 import { ingestedAppSchema, type IngestedApp } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
 import { runInline, type RunStep } from "@/lib/inngest";
+import { DAY_MS } from "@/lib/time";
 import type { PollOutcome } from "../types";
 import { announcedFor, changesOf, sendAnnounced, NOTHING, type Announced } from "./announce";
-import { BACKFILL_DAYS, DAY_MS } from "./backfill";
+import { BACKFILL_DAYS } from "./backfill";
 import { CONNECTORS, storeWindow, whileConnected } from "./ingest-steps";
 import { latestEventTime, storeEvents } from "./store";
 

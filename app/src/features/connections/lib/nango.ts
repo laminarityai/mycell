@@ -48,15 +48,20 @@ export async function createReconnectSession(
   return connectSessionResponse.parse(await response.json()).data.token;
 }
 
+// Nango's API path for one connection of an integration.
+function connectionPath(connectionId: string, integration: string): string {
+  const query = new URLSearchParams({ provider_config_key: integration });
+  return `/connections/${encodeURIComponent(connectionId)}?${query.toString()}`;
+}
+
 /** Deletes the connection at Nango, revoking Mycel's access. Already gone counts as done. */
 export async function deleteNangoConnection(
   connectionId: string,
   integration: string,
 ): Promise<void> {
-  const query = new URLSearchParams({ provider_config_key: integration });
   const response = await nangoFetch(
     "connection delete",
-    `/connections/${encodeURIComponent(connectionId)}?${query.toString()}`,
+    connectionPath(connectionId, integration),
     { method: "DELETE" },
   );
   if (!response.ok && response.status !== 404) {
@@ -134,12 +139,9 @@ export async function nangoConnectionExists(
   integration: string,
 ): Promise<boolean> {
   // The response carries credentials; only the status is read, and nothing is kept.
-  const query = new URLSearchParams({ provider_config_key: integration });
-  const response = await nangoFetch(
-    "connection read",
-    `/connections/${encodeURIComponent(connectionId)}?${query.toString()}`,
-    { method: "GET" },
-  );
+  const response = await nangoFetch("connection read", connectionPath(connectionId, integration), {
+    method: "GET",
+  });
   await response.body?.cancel();
   // 424: Nango has the connection, but its token refresh is exhausted.
   if (response.ok || response.status === 424) return true;
@@ -164,12 +166,9 @@ export async function readGrantedScopes(
   integration: string,
 ): Promise<string[]> {
   // The response carries credentials; only the scopes are read, and nothing else is kept.
-  const query = new URLSearchParams({ provider_config_key: integration });
-  const response = await nangoFetch(
-    "connection read",
-    `/connections/${encodeURIComponent(connectionId)}?${query.toString()}`,
-    { method: "GET" },
-  );
+  const response = await nangoFetch("connection read", connectionPath(connectionId, integration), {
+    method: "GET",
+  });
   if (response.status === 404) throw new NangoConnectionGoneError();
   if (!response.ok) throw new NangoRequestError("connection read", response.status);
   const { credentials } = connectionCredentials.parse(await response.json());

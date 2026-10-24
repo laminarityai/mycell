@@ -165,7 +165,7 @@ describe("three failed runs in a row", () => {
 });
 
 describe("the runs that paused it, as an admin's Health check lists them", () => {
-  it("say when, whose inbox, the failed step and the error, and nothing of the message", async () => {
+  it("say when, whose inbox, the failed step and the error, link each run, and say nothing of the message", async () => {
     const { admin, member, system, inbox, workflowId } = await workflowOn();
     await failTimes(system, inbox, 2);
     const [crashed] = await arrives(system, inbox);
@@ -177,6 +177,7 @@ describe("the runs that paused it, as an admin's Health check lists them", () =>
     expect(listed).toEqual([
       {
         runId: crashed,
+        href: `/runs/${crashed}`,
         finishedAt: expect.any(Date) as Date,
         inbox: `${member.email}'s inbox`,
         failedStep: null,
@@ -184,6 +185,7 @@ describe("the runs that paused it, as an admin's Health check lists them", () =>
       },
       ...runIds.slice(1).map((runId) => ({
         runId,
+        href: `/runs/${runId}`,
         finishedAt: expect.any(Date) as Date,
         inbox: `${member.email}'s inbox`,
         failedStep: "details",

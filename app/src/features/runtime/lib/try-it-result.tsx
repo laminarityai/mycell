@@ -5,7 +5,7 @@ import type { BranchPath, DryRunEffect, DryRunResult, DryRunStep } from "../type
 
 const ENDINGS: Record<DryRunResult["ended"], string> = {
   succeeded: "Ran to the end.",
-  skipped: "Stopped at a branch: the workflow would do nothing more with this message.",
+  skipped: "Stopped at a branch: the workflow would do nothing more with it.",
   escalated: "Escalated: the workflow would hand this message to a person.",
   failed: "Failed at the step marked below.",
   partly_failed:

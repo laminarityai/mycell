@@ -122,6 +122,23 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await listLedger(orgs.orgB.admin.ctx)).toEqual(ledgerBefore);
   },
 
+  correctFailedCallCost: async (orgs) => {
+    await seedOrgB(orgs);
+    const ctxB = systemCtx(orgs.orgB.id);
+    fakeAiGateway.fail("language", { generationId: "gen_b", billedUsd: 0.01 });
+    await expect(server.callModel(ctxB, "fast", { prompt: testPrompts.hi() })).rejects.toThrow();
+    const failed = (await listLedger(ctxB, 1)).at(0);
+    const ledgerBefore = await listLedger(ctxB);
+
+    // Org B's failed call, from org A: no lookup, and nothing recorded in either org.
+    expect(await server.correctFailedCallCost(systemCtx(orgs.orgA.id), failed?.id ?? "")).toBe(
+      "nothing_to_correct",
+    );
+    expect(fakeAiGateway.lookups()).toEqual([]);
+    expect(await listLedger(orgs.orgA.admin.ctx)).toEqual([]);
+    expect(await listLedger(ctxB)).toEqual(ledgerBefore);
+  },
+
   embed: async (orgs) => {
     const { ledgerBefore } = await seedOrgB(orgs);
     const ctxA = systemCtx(orgs.orgA.id);

@@ -9,6 +9,7 @@ import type { ConnectionsListing } from "@/features/connections/types";
 import type { PausingRun } from "@/features/workflows/types";
 import { type Ctx, requireAdmin } from "@/lib/ctx";
 import { INTERNAL_ERROR_MESSAGE } from "../types";
+import { runHref } from "./runs-table";
 import { runs, runSteps } from "./schema";
 
 /**
@@ -44,6 +45,7 @@ export async function pausingRuns(ctx: Ctx, runIds: readonly string[]): Promise<
     return [
       {
         runId: run.id,
+        href: runHref(run.id),
         finishedAt: run.finishedAt,
         inbox: inboxOf(run.connectionId),
         failedStep: crashed ? null : step.stepId,

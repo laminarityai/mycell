@@ -1,6 +1,7 @@
 // The workflow page's failures check (M8): whether its runs' failures pause it, and while they
 // do, the three runs in a row that paused it and Resume. M7's Health tab lists it with its
 // other checks; until then the page shows it in its own Health section.
+import Link from "next/link";
 import { DateTime } from "@/components/date-time";
 import {
   Table,
@@ -73,7 +74,9 @@ export function FailuresCheck({
           {runs.map((run) => (
             <TableRow key={run.runId}>
               <TableCell>
-                {run.finishedAt === null ? "—" : <DateTime value={run.finishedAt} />}
+                <Link href={run.href} className="underline underline-offset-4">
+                  {run.finishedAt === null ? "Open run" : <DateTime value={run.finishedAt} />}
+                </Link>
               </TableCell>
               <TableCell>{run.inbox}</TableCell>
               <TableCell>

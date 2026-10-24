@@ -97,8 +97,8 @@ export const enablements = pgTable(
     pausedReason: text("paused_reason", { enum: ["needs_reenable"] }).$type<StoredPausedReason>(),
     // What a `needs_reenable` pause is about: what the new version needs that the old didn't.
     pausedChange: zodJsonb("paused_change", requirementsGainedSchema),
-    // Written from JS, like the message times it's compared with (no default: the column has
-    // no time zone, and the database's now() would be read back hours off).
+    // Written from JS (no default), like the message times it's compared with, so both come
+    // from the same clock.
     enabledAt: timestamp("enabled_at", { withTimezone: true }).notNull(),
   },
   (table) => [

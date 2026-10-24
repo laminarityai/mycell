@@ -22,12 +22,18 @@ import { layoutTree } from "@/features/spec/layout";
 import type { Spec } from "@/features/spec/types";
 import { cn } from "@/lib/utils";
 import { useActionSet } from "./action-set-context";
-import { selectionOf, toDrawing, type Drawing, type GraphEditing } from "./graph-drawing";
+import {
+  selectionOf,
+  toDrawing,
+  type Drawing,
+  type GraphEditing,
+  type GraphSelecting,
+} from "./graph-drawing";
 import { AddMenuContext, edgeTypes } from "./graph-edges";
 import { nodeTypes } from "./graph-nodes";
 import { MARGIN, OpenReadable } from "./graph-viewport";
 
-export type { GraphEditing, GraphSelection } from "./graph-drawing";
+export type { GraphEditing, GraphSelecting, GraphSelection } from "./graph-drawing";
 export { selectedNodeId } from "./graph-drawing";
 
 export type WorkflowGraphProps = {
@@ -35,8 +41,10 @@ export type WorkflowGraphProps = {
   spec: Spec | null;
   /** A proposed spec, drawn as its changes to `spec`. */
   proposal?: Spec;
-  /** A Try it of `spec`, whose steps and paths the graph lights up. */
+  /** A Try it of `spec`, or a run of it, whose steps and paths the graph lights up. */
   trace?: GraphTrace | null;
+  /** What the caption over a lit graph says it shows; a Try it unless given. */
+  traceCaption?: string;
   /** With no steps to draw, a box under the trigger says where the workflow will appear. */
   placeholder?: boolean;
   /**
@@ -49,6 +57,8 @@ export type WorkflowGraphProps = {
    * step. Left out, it's read only.
    */
   editing?: GraphEditing;
+  /** Read only, but its boxes can be selected, as a run's page picks a step to show. */
+  selecting?: GraphSelecting;
   /** Drawn over the graph, inside its frame: a caption, or a panel sliding over its edge. */
   children?: ReactNode;
   className?: string;
@@ -58,9 +68,11 @@ export function WorkflowGraph({
   spec,
   proposal,
   trace,
+  traceCaption = "Try it: lit steps ran, faded ones didn't. Each path says why.",
   placeholder = false,
   fill = false,
   editing,
+  selecting,
   children,
   className,
 }: WorkflowGraphProps) {
@@ -75,18 +87,16 @@ export function WorkflowGraph({
     });
   }, [spec, proposal, trace, actions]);
   const layout = useMemo(
-    () => toDrawing(layoutTree(view), placeholder, editing),
-    [view, placeholder, editing],
+    () => toDrawing(layoutTree(view), placeholder, editing, selecting),
+    [view, placeholder, editing, selecting],
   );
   return (
     <div className={cn("flex flex-col gap-2", fill && "h-full min-h-0", className)}>
       {view.tried ? (
-        <p className={cn("text-sm text-muted-foreground", fill && "px-4 pt-3")}>
-          Try it: lit steps ran, faded ones didn&apos;t. Each path says why.
-        </p>
+        <p className={cn("text-sm text-muted-foreground", fill && "px-4 pt-3")}>{traceCaption}</p>
       ) : null}
       <ReactFlowProvider>
-        <Canvas layout={layout} fill={fill} editing={editing}>
+        <Canvas layout={layout} fill={fill} editing={editing} selecting={selecting}>
           {children}
         </Canvas>
       </ReactFlowProvider>
@@ -114,16 +124,22 @@ const FILL_TOP = 80;
 const MIN_HEIGHT = 320;
 const MIN_EDITING_HEIGHT = 560;
 const MAX_HEIGHT = 720;
+/** What a screen reader hears on a focused box: how to open it, not React Flow's own keys. */
+const ARIA_LABELS = {
+  "node.a11yDescription.default": "Press Enter or Space to open it in the side panel.",
+};
 
 function Canvas({
   layout,
   fill,
   editing,
+  selecting,
   children,
 }: {
   layout: Drawing;
   fill: boolean;
   editing: GraphEditing | undefined;
+  selecting: GraphSelecting | undefined;
   children: ReactNode;
 }) {
   const wrapper = useRef<HTMLDivElement>(null);
@@ -154,7 +170,12 @@ function Canvas({
           edgeTypes={edgeTypes}
           nodesDraggable={false}
           nodesConnectable={false}
+          // Only a box that opens is focusable (toDrawing marks it): the rest are read, not used.
+          nodesFocusable={false}
           elementsSelectable={false}
+          ariaLabelConfig={ARIA_LABELS}
+          // Read only, no box opens, so there's nothing to do from the keyboard.
+          disableKeyboardA11y={editing === undefined}
           panOnScroll
           zoomOnScroll={false}
           minZoom={0.25}
@@ -162,7 +183,24 @@ function Canvas({
           proOptions={{ hideAttribution: true }}
           onNodeClick={(_, node) => {
             const selection = selectionOf(node);
-            if (selection !== null) editing?.onSelect(selection);
+            if (selection !== null) (editing ?? selecting)?.onSelect(selection);
+          }}
+          onKeyDown={(event) => {
+            // Enter or Space on a focused box opens it, as a click does.
+            const opener = editing ?? selecting;
+            if (opener === undefined || (event.key !== "Enter" && event.key !== " ")) return;
+            const target = event.target;
+            if (
+              !(target instanceof HTMLElement) ||
+              !target.classList.contains("react-flow__node")
+            ) {
+              return;
+            }
+            const node = layout.nodes.find((candidate) => candidate.id === target.dataset.id);
+            const selection = node === undefined ? null : selectionOf(node);
+            if (selection === null) return;
+            event.preventDefault();
+            opener.onSelect(selection);
           }}
           onPaneClick={editing?.onPaneClick}
           onMoveStart={(event) => {

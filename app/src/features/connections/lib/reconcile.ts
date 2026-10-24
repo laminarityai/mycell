@@ -1,7 +1,7 @@
 // The nightly reconciliation: makes deletion certain even when a webhook was missed (Nango
 // sends none for bulk deletes). It compares Mycel's connections with Nango's in both
 // directions, inside each org as its system ctx (ADR-0009).
-import { and, eq, gt, sql } from "drizzle-orm";
+import { and, eq, gt } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { listOrgIds } from "@/features/orgs/server";
 import { systemCtx } from "@/lib/ctx";
@@ -87,11 +87,7 @@ async function readOurs(since: Date) {
   for (const orgId of await listOrgIds()) {
     const db = forOrg(systemCtx(orgId));
     const attempts = await db.select(connectAttempts, {
-      where: and(
-        eq(connectAttempts.status, "pending"),
-        // created_at has no time zone: Postgres reads it in the session's, as now() wrote it.
-        gt(connectAttempts.createdAt, sql`${since.toISOString()}::timestamptz`),
-      ),
+      where: and(eq(connectAttempts.status, "pending"), gt(connectAttempts.createdAt, since)),
     });
     for (const attempt of attempts) pendingAttemptIds.add(attempt.id);
     for (const row of await db.select(connections)) {

@@ -8,7 +8,6 @@ import { backfilledItems, ingestStatesOf, lastPolledAt, overallStatus } from "./
 import { connectAttempts, connections, type ingestStates } from "./schema";
 
 // A pending attempt older than this was abandoned (the popup closed without connecting).
-// Compared in the database: created_at has no time zone, so a JS Date would be off by one.
 const attemptShownSince = sql`now() - interval '1 hour'`;
 
 type Connection = typeof connections.$inferSelect;

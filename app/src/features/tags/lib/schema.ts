@@ -19,7 +19,7 @@ export const tags = pgTable(
     orgId: text("org_id").notNull(),
     // A normalized slug (tagNameSchema), so uniqueness is case-insensitive by construction.
     name: text("name").notNull(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     unique("tags_org_id_name_unique").on(table.orgId, table.name),
@@ -33,7 +33,7 @@ export const tagAssignments = pgTable(
     orgId: text("org_id").notNull(),
     tagId: text("tag_id").notNull(),
     userId: text("user_id").notNull(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     primaryKey({ columns: [table.tagId, table.userId] }),

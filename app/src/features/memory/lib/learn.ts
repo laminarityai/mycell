@@ -1,8 +1,10 @@
-// Learning from one item discovery stored (a Gmail message or a Drive file version), as the org's
+// Learning from one item discovery stored (a Gmail message or a Drive file version), or the
+// Calendar poll found (a Calendar invite's version), as the org's
 // system ctx (ADR-0009), in two steps. The first decides: nothing before an admin started
 // memory, and nothing once the month's budget is spent (the item is postponed to next month);
-// then learned already, not a kind memory reads (a Drive file that isn't a Google Doc), changed
-// since (a newer Drive version is learned on its own), covered by an exclusion, sent by someone
+// then learned already, not a kind memory reads (a Drive file that isn't a Google Doc, a Calendar
+// event with no guests), changed since (a newer Drive or Calendar version is learned on its own),
+// covered by an exclusion, sent by someone
 // on the do-not-learn list (`forgotten`), a copy of an item another connection taught (linked
 // to its facts there and then), or else, once the injection screen has passed it (an item it
 // flags, or one nothing could screen, is skipped before any model reads it), whether it's
@@ -25,6 +27,7 @@ import { OutOfCreditsError } from "@/lib/errors";
 import { runInline, untilGone, type RunStep } from "@/lib/inngest";
 import type { ItemToLearn, LearnOutcome, MemoryApp, PostponeReason } from "../types";
 import { gate, MEMORY_USAGE, postpone } from "./budget";
+import { readInvite } from "./calendar";
 import { readDoc } from "./drive";
 import { isExcluded } from "./exclusions";
 import { extract, isBusiness } from "./extract";
@@ -42,9 +45,10 @@ const CONNECTION_FOREIGN_KEYS = [
 ];
 
 // Whether an app's items can change between the two steps' reads. A Gmail message never
-// changes, so the second step reads what the first one screened; a Drive doc can be edited at
-// any moment, so the second step screens what it read again before a model reads it.
-const CAN_CHANGE: Record<MemoryApp, boolean> = { gmail: false, drive: true };
+// changes, so the second step reads what the first one screened; a Drive doc or a Calendar
+// invite can be edited at any moment, so the second step screens what it read again before a
+// model reads it.
+const CAN_CHANGE: Record<MemoryApp, boolean> = { gmail: false, drive: true, calendar: true };
 
 type Unread = "gone" | "unsupported" | "outdated";
 
@@ -200,7 +204,9 @@ async function read(ctx: Ctx, item: ItemToLearn): Promise<Source | Unread> {
   const read =
     item.app === "drive"
       ? await readDoc(ctx, client, item.sourceRef)
-      : ((await readEmail(client, item.sourceRef)) ?? "gone");
+      : item.app === "calendar"
+        ? await readInvite(client, item.sourceRef)
+        : ((await readEmail(client, item.sourceRef)) ?? "gone");
   return typeof read === "string"
     ? read
     : { client, connection: client.connection, app: item.app, item: read };

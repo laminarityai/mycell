@@ -46,7 +46,10 @@ export const fanOutInviteJob = inngest.createFunction(
     step.run("start-runs", () => startInviteRuns(systemCtx(event.data.orgId), event.data)),
 );
 
-/** Every minute, sends one poll event per calendar a Calendar-triggered workflow watches. */
+/**
+ * Every minute, sends one poll event per calendar a Calendar-triggered workflow watches, and per
+ * calendar in an org where memory has started (ADR-0029).
+ */
 export const calendarPollCron = inngest.createFunction(
   { id: "poll-calendars", triggers: [{ cron: "* * * * *" }] },
   async ({ step }) => {
@@ -61,7 +64,10 @@ export const calendarPollCron = inngest.createFunction(
   },
 );
 
-/** Polls one connection's calendar for new invites, one at a time per connection. */
+/**
+ * Polls one connection's calendar for new invites and what memory follows, one at a time per
+ * connection.
+ */
 export const calendarPollJob = inngest.createFunction(
   {
     id: "poll-calendar",

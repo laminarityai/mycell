@@ -2,8 +2,10 @@
 // discovery sends gmail.message_received, and runtime's fan-out triggers on it; discovery sends
 // gmail.message_sent, and reviews ends a review its person finished in Gmail; discovery sends
 // item.stored, and memory learns from the item; discovery sends item.removed and item.changed,
-// and memory deletes what it learned from the item or re-reads who may see it; granting credits
-// sends credits.granted, and memory learns what it postponed for want of credits.
+// and memory deletes what it learned from the item or re-reads who may see it; runtime's Calendar
+// poll sends calendar/event.changed and calendar/event.removed, and memory learns from the event,
+// re-reads who may see it or deletes what it learned from it; granting credits sends
+// credits.granted, and memory learns what it postponed for want of credits.
 import { eventType } from "inngest";
 import { z } from "zod";
 import { inngest } from "./inngest";
@@ -145,6 +147,65 @@ export async function sendItemsRemovedAndChanged(
     ...changed.map((data) =>
       itemChanged.create(data, {
         id: `item-changed-${data.connectionId}-${data.app}-${data.sourceRef}-${cursor}`,
+      }),
+    ),
+  ]);
+}
+
+/**
+ * The Calendar poll (runtime's, which memory shares, ADR-0029) found an event made or changed on
+ * a connection's primary calendar. Memory learns from it, if it hasn't learned this version, and
+ * reads again who may see it. Pointers only: `sourceRef` is `<event ID>@<sequence>`, the version
+ * of the event as its organizer last changed what it says, and `occurredAt` when it last changed.
+ */
+export const calendarEventChanged = eventType("calendar/event.changed", {
+  schema: z.object({
+    orgId: z.string().min(1),
+    connectionId: z.string().min(1),
+    app: z.literal("calendar"),
+    sourceRef: z.string().min(1),
+    occurredAt: z.iso.datetime(),
+  }),
+});
+
+export type CalendarEventChanged = z.infer<typeof calendarEventChanged.schema>;
+
+/**
+ * The Calendar poll found an event gone from a connection's primary calendar: cancelled, deleted,
+ * or no longer the account's. Memory deletes what it learned from it. `itemId` is the event ID
+ * (every version of the event).
+ */
+export const calendarEventRemoved = eventType("calendar/event.removed", {
+  schema: z.object({
+    orgId: z.string().min(1),
+    connectionId: z.string().min(1),
+    app: z.literal("calendar"),
+    itemId: z.string().min(1),
+  }),
+});
+
+export type CalendarEventRemoved = z.infer<typeof calendarEventRemoved.schema>;
+
+/**
+ * Sends one event per calendar event one poll found changed or removed, listing from the sync
+ * token `syncToken`. The event IDs name the token, so a resent poll starts nothing new, while the
+ * same event changing again, found by a later poll, does.
+ */
+export async function sendCalendarEventsChanged(
+  changed: CalendarEventChanged[],
+  removed: CalendarEventRemoved[],
+  syncToken: string,
+): Promise<void> {
+  if (changed.length === 0 && removed.length === 0) return;
+  await inngest.send([
+    ...changed.map((data) =>
+      calendarEventChanged.create(data, {
+        id: `calendar-changed-${data.connectionId}-${data.sourceRef}-${syncToken}`,
+      }),
+    ),
+    ...removed.map((data) =>
+      calendarEventRemoved.create(data, {
+        id: `calendar-removed-${data.connectionId}-${data.itemId}-${syncToken}`,
       }),
     ),
   ]);

@@ -3,10 +3,10 @@
 // Titles and organizers are fetched through the proxy for display only, every time, and never
 // stored (invariant 8). Unlike the trigger's poll, it lists with filters and no sync token.
 import { z } from "zod";
+import { CALENDAR_EVENTS } from "@/features/connections/calendar";
 import { buildableConnections, proxyGet } from "@/features/connections/server";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import type { RecentMessages } from "../types";
-import { CALENDAR_EVENTS } from "./calendar";
 import { newestAcross, RECENT_LIMIT, type Recent } from "./recent-messages";
 
 // How far back the picker looks for changed events.

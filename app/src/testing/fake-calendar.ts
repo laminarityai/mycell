@@ -4,7 +4,10 @@
 // token lists only what changed since it was handed out, deletions included as `cancelled`; it
 // answers 410 once a test expires the tokens; and it answers 400 to a sync token combined with
 // a filter, or to a request whose other parameters differ from the request that made the token
-// (https://developers.google.com/workspace/calendar/api/guides/sync).
+// (https://developers.google.com/workspace/calendar/api/guides/sync). Like Google, an event's
+// `sequence` goes up when its organizer changes what it says (its title or description),
+// and not when a guest answers; and the same event on several calendars (`receive`) shares its
+// ID and iCalUID.
 import { randomBytes } from "node:crypto";
 import { HttpResponse } from "msw";
 import { parseFields, project } from "./fake-drive-fields";
@@ -21,6 +24,7 @@ export type FakeInviteInput = {
   guests?: string[];
   eventType?: CalendarEventResource["eventType"];
   attendeesOmitted?: boolean;
+  location?: string;
 };
 
 type Attendee = {
@@ -37,8 +41,11 @@ export type CalendarEventResource = {
   status: "confirmed" | "tentative" | "cancelled";
   created: string;
   updated: string;
+  // Goes up each time the organizer changes what the event says, as iCalendar's SEQUENCE.
+  sequence: number;
   summary: string;
   description?: string;
+  location?: string;
   start: { dateTime: string };
   end: { dateTime: string };
   organizer: { email: string; self?: boolean };
@@ -94,8 +101,10 @@ export class FakeCalendar {
       status: "confirmed",
       created: at,
       updated: at,
+      sequence: 0,
       summary: input.title,
       ...(input.description === undefined ? {} : { description: input.description }),
+      ...(input.location === undefined ? {} : { location: input.location }),
       start: { dateTime: start.toISOString() },
       end: { dateTime: new Date(start.getTime() + 30 * 60 * 1000).toISOString() },
       organizer: { email: input.organizer },
@@ -117,22 +126,74 @@ export class FakeCalendar {
     return event;
   }
 
-  /** The account makes an event itself, inviting `guests`. */
-  organize(input: { title: string; guests: string[]; at?: Date }): CalendarEventResource {
+  /** The account makes an event itself, inviting `guests` (none: an event of its own). */
+  organize(
+    input: Omit<FakeInviteInput, "organizer" | "guests" | "attendeesOmitted"> & {
+      guests: string[];
+    },
+  ): CalendarEventResource {
     const event = this.invite({ ...input, organizer: this.emailAddress });
     event.organizer = { email: this.emailAddress, self: true };
     event.creator = { email: this.emailAddress, self: true };
-    event.attendees = [
-      { email: this.emailAddress, self: true, organizer: true, responseStatus: "accepted" },
-      ...input.guests.map((email) => ({ email, responseStatus: "needsAction" as const })),
-    ];
+    event.attendees =
+      input.guests.length === 0
+        ? undefined
+        : [
+            { email: this.emailAddress, self: true, organizer: true, responseStatus: "accepted" },
+            ...input.guests.map((email) => ({ email, responseStatus: "needsAction" as const })),
+          ];
+    if (event.attendees === undefined) delete event.attendees;
     return event;
   }
 
-  /** The organizer changes the event (its title, say), so it's listed as changed again. */
-  edit(id: string, changes: { title?: string }): void {
+  /**
+   * The same event, as Google puts it on this account's calendar too: another calendar's event
+   * that names this account as a guest (or organizer). Same ID and iCalUID; `self` marks this
+   * account's own entries.
+   */
+  receive(event: CalendarEventResource): CalendarEventResource {
+    const mine = (email: string) => email.toLowerCase() === this.emailAddress.toLowerCase();
+    const copy: CalendarEventResource = {
+      ...structuredClone(event),
+      organizer: { email: event.organizer.email, self: mine(event.organizer.email) || undefined },
+      creator: { email: event.creator.email, self: mine(event.creator.email) || undefined },
+      attendees: event.attendees?.map((guest) => ({
+        ...guest,
+        self: mine(guest.email) || undefined,
+      })),
+    };
+    this.save(copy);
+    return copy;
+  }
+
+  /**
+   * The organizer changes what the event says (its title or description): listed as changed
+   * again, at a new sequence.
+   */
+  edit(id: string, changes: { title?: string; description?: string }): void {
     const event = this.event(id);
     if (changes.title !== undefined) event.summary = changes.title;
+    if (changes.description !== undefined) event.description = changes.description;
+    event.sequence += 1;
+    event.updated = new Date().toISOString();
+    this.save(event);
+  }
+
+  /**
+   * The organizer changes who's invited, leaving what the event says as it was: listed as
+   * changed again, at the same sequence.
+   */
+  setGuests(id: string, guests: string[]): void {
+    const event = this.event(id);
+    const kept = (event.attendees ?? []).filter(
+      (attendee) => attendee.organizer === true || attendee.self === true,
+    );
+    event.attendees = [
+      ...kept,
+      ...guests
+        .filter((email) => !kept.some((attendee) => attendee.email === email))
+        .map((email) => ({ email, responseStatus: "needsAction" as const })),
+    ];
     event.updated = new Date().toISOString();
     this.save(event);
   }

@@ -100,6 +100,19 @@ export const settingsIsolationCases = {
     expect(await settingsSnapshot()).toEqual(before);
   },
 
+  hasMemoryStarted: async (orgs: TwoOrgs) => {
+    const { settingsSnapshot, before } = await seedOrgBSettings(orgs);
+
+    // Org B started memory; org A didn't.
+    expect(await server.hasMemoryStarted(systemCtx(orgs.orgA.id))).toBe(false);
+    expect(await server.hasMemoryStarted(systemCtx(orgs.orgB.id))).toBe(true);
+    for (const ctx of [orgs.orgA.admin.ctx, orgs.orgA.member.ctx]) {
+      await expect(server.hasMemoryStarted(ctx)).rejects.toThrow(ForbiddenError);
+    }
+
+    expect(await settingsSnapshot()).toEqual(before);
+  },
+
   queueStoredItems: async (orgs: TwoOrgs) => {
     await seedOrgBSettings(orgs);
     const sent = fakeInngest.sent("memory/item.queued").length;

@@ -48,6 +48,30 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await server.listConversations(orgs.orgA.admin.ctx)).toEqual([]);
   },
 
+  searchConversations: async (orgs) => {
+    await seedOrgB(orgs);
+    await fundOrg(orgs.orgA.id);
+    const member = orgs.orgA.member.ctx;
+    const own = await server.startConversation(member);
+    fakeAiGateway.reply({ text: "Hello from org A." });
+    await readTurn(await server.streamTurn(member, own.id, "Hello"));
+
+    // Org B's conversation says "Hello" too, and is found only there.
+    expect((await server.searchConversations(member, "hello")).map((hit) => hit.id)).toEqual([
+      own.id,
+    ]);
+    expect(await server.searchConversations(orgs.orgA.admin.ctx, "hello")).toEqual([]);
+  },
+
+  listRail: async (orgs) => {
+    await seedOrgB(orgs);
+
+    for (const ctx of people(orgs)) {
+      expect(await server.listRail(ctx, undefined)).toEqual({ query: null, conversations: [] });
+      expect(await server.listRail(ctx, "hello")).toEqual({ query: "hello", hits: [] });
+    }
+  },
+
   getConversation: async (orgs) => {
     const orgB = await seedOrgB(orgs);
 

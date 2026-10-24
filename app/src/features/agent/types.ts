@@ -40,6 +40,36 @@ export type CitedSource = {
   yours: boolean;
 };
 
+/** Text split around the words a search matched, in order, for highlighting. */
+export type MarkedText = { text: string; match: boolean }[];
+
+/** One of the person's conversations a search found, as the rail shows it. */
+export type ConversationHit = AgentConversationSummary & {
+  /** The whole title, split around the words that matched; null when the title didn't match. */
+  titleMatch: MarkedText | null;
+  /**
+   * A stretch of its best-matching message, the person's or Mycel's, split the same way; null
+   * when only the title matched.
+   */
+  snippet: MarkedText | null;
+};
+
+/** What the rail lists: the person's conversations, or the conversations their search found. */
+export type RailList =
+  | { query: null; conversations: AgentConversationSummary[] }
+  | { query: string; hits: ConversationHit[] };
+
+// A query parameter's one value: the first of several, trimmed, and none for a blank one.
+const queryValue = (value: unknown) => {
+  const first: unknown = Array.isArray(value) ? value[0] : value;
+  return typeof first === "string" && first.trim() !== "" ? first.trim() : undefined;
+};
+
+/** Ask Mycel's address query: `q`, the rail's search, when there is one. */
+export const askQuerySchema = z.object({
+  q: z.preprocess(queryValue, z.string().optional()).catch(undefined),
+});
+
 /** A fact a reply read, with its sources and markers in the person's view, never its words. */
 export type Citation = {
   factId: string;

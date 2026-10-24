@@ -3,11 +3,13 @@
 // gets NotFoundError, and the system ctx ForbiddenError. Nothing imports this feature.
 import "server-only";
 import type { Ctx } from "@/lib/ctx";
-import type { AgentConversation } from "./types";
+import type { AgentConversation, RailList } from "./types";
 import { citationsOf } from "./lib/citations";
-import { findConversation, messagesOf, summary } from "./lib/conversations";
+import { findConversation, listConversations, messagesOf, summary } from "./lib/conversations";
+import { searchConversations } from "./lib/search";
 
 export { deleteConversation, listConversations, startConversation } from "./lib/conversations";
+export { searchConversations } from "./lib/search";
 // Called by the streaming route: Mycel's reply as a UI message stream.
 export { streamTurn } from "./lib/turn";
 
@@ -24,4 +26,11 @@ export async function getConversation(
     messages,
     citations: await citationsOf(ctx, messages),
   };
+}
+
+/** What the rail lists: the person's conversations, or, given a search, what it found. */
+export async function listRail(ctx: Ctx, query: string | undefined): Promise<RailList> {
+  return query === undefined
+    ? { query: null, conversations: await listConversations(ctx) }
+    : { query, hits: await searchConversations(ctx, query) };
 }

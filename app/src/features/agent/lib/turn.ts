@@ -7,6 +7,7 @@ import type { Ctx } from "@/lib/ctx";
 import { ValidationError } from "@/lib/errors";
 import { appendMessage, findConversation, messagesOf } from "./conversations";
 import { instructionPrompts } from "./prompts";
+import { storeReply } from "./reply-sources";
 import { agentTools, type AgentTurn } from "./tools";
 
 /** A turn's model steps, at most. */
@@ -45,9 +46,11 @@ export async function streamTurn(
         instructions: instructionPrompts.instructions({
           today: new Date().toISOString().slice(0, 10),
         }),
+        // A removed reply reaches the model as nothing at all: its words went with its data.
         messages: [...chatModelMessages(history, () => undefined), { role: "user", content: text }],
       };
     },
-    store: ({ id, parts }) => appendMessage(ctx, conversation, { id, role: "assistant", parts }),
+    // With what it drew on, so it goes when that does (invariant 3).
+    store: (reply) => storeReply(ctx, conversation, history, reply),
   });
 }

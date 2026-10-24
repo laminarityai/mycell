@@ -2,14 +2,20 @@
 // own the conversation, with no admin or system exception (spec #154): anyone else gets
 // NotFoundError, which tells them nothing, and the system ctx, which is no one, ForbiddenError.
 import { randomUUID } from "node:crypto";
-import { and, asc, desc, eq, isNull } from "drizzle-orm";
-import { forOrg } from "@/db/for-org";
-import { requireRole, type Ctx } from "@/lib/ctx";
+import { and, asc, desc, eq, isNull, lt } from "drizzle-orm";
+import { forOrg, type OrgScopedDb } from "@/db/for-org";
+import { requireRole, requireSystem, type Ctx } from "@/lib/ctx";
 import { InvariantError, NotFoundError } from "@/lib/errors";
-import type { AgentConversationSummary, AgentMessage, StoredPart } from "../types";
+import { DAY_MS } from "@/lib/time";
+import {
+  IDLE_CONVERSATION_DAYS,
+  type AgentConversationSummary,
+  type AgentMessage,
+  type StoredPart,
+} from "../types";
 import { agentConversations, agentMessages } from "./schema";
 
-type ConversationRow = typeof agentConversations.$inferSelect;
+export type ConversationRow = typeof agentConversations.$inferSelect;
 
 /** A conversation's title: the start of its first message. */
 const TITLE_LENGTH = 80;
@@ -86,13 +92,31 @@ export async function messagesOf(ctx: Ctx, conversationId: string): Promise<Agen
   return rows;
 }
 
-/** Appends a message, and titles the conversation by its first one. */
+/**
+ * Deletes the org's conversations nobody has used for IDLE_CONVERSATION_DAYS before `now`, with
+ * their messages. The nightly job's, as the org's system ctx: the one write to conversations
+ * that isn't their owner's. Returns how many went.
+ */
+export async function deleteIdleConversations(
+  ctx: Ctx,
+  now: Date = new Date(),
+): Promise<{ conversations: number }> {
+  requireSystem(ctx);
+  const cutoff = new Date(now.getTime() - IDLE_CONVERSATION_DAYS * DAY_MS);
+  const conversations = await forOrg(ctx).deleteCount(
+    agentConversations,
+    lt(agentConversations.updatedAt, cutoff),
+  );
+  return { conversations };
+}
+
+/** Appends a message, and titles the conversation by its first one, in `db` when given. */
 export async function appendMessage(
   ctx: Ctx,
   conversation: ConversationRow,
   message: { id?: string; role: "user" | "assistant"; parts: StoredPart[] },
+  db: OrgScopedDb = forOrg(ctx),
 ): Promise<void> {
-  const db = forOrg(ctx);
   await db.insert(agentMessages, {
     id: message.id ?? randomUUID(),
     conversationId: conversation.id,

@@ -1,4 +1,5 @@
 import { serve } from "inngest/next";
+import { deleteIdleConversationsJob } from "@/features/agent/jobs";
 import { reconcileJob } from "@/features/connections/jobs";
 import { backfillJob, pollCron, pollJob } from "@/features/discovery/jobs";
 import {
@@ -52,5 +53,6 @@ export const { GET, POST, PUT } = serve({
     retentionCron,
     applyRetentionJob,
     failedCallCostJob,
+    deleteIdleConversationsJob,
   ],
 });

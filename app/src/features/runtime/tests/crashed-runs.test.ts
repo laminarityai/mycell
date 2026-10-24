@@ -9,7 +9,8 @@ import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import { fakeNango } from "@/testing/fake-nango";
 import { executeRun, failCrashedRun, getRun } from "../server";
 import { INTERNAL_ERROR_MESSAGE } from "../types";
-import { classifyWith, recordedBackoff, recordingStepRunner, runOn } from "./run-helpers";
+import { classifyWith, recordedBackoff, runOn } from "./run-helpers";
+import { recordingStepRunner } from "@/testing/recording-step-runner";
 
 beforeEach(resetDatabase);
 
@@ -109,7 +110,7 @@ describe("a step that fails unexpectedly", () => {
       return run();
     };
 
-    expect(await executeRun(system, runId, runStep, recordedBackoff())).toEqual({
+    expect(await executeRun(system, runId, runStep, recordedBackoff().sleep)).toEqual({
       status: "failed",
     });
 

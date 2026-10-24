@@ -5,9 +5,8 @@
 import { grantCredits } from "@/features/credits/server";
 import { listReviews } from "@/features/reviews/server";
 import { executeRun, startRun, startTriggeredRuns } from "@/features/runtime/server";
-import type { RetryPolicy } from "@/features/runtime/types";
 import { enable } from "@/features/workflows/server";
-import type { RunStep } from "@/lib/inngest";
+import type { RunSleep, RunStep } from "@/lib/inngest";
 import { systemCtx, type Ctx } from "@/lib/ctx";
 import { connectGoogle } from "@/testing/connect-helpers";
 import type { DocAccess } from "@/testing/fake-docs";
@@ -71,7 +70,8 @@ export type SuggestedEditsOptions = {
   /** Before the run, what the fake Docs is told to do with the step's write. */
   docs?: "lose_answer" | "fail_save";
   runStep?: RunStep;
-  retry?: RetryPolicy;
+  /** How a retry waits: the recorded backoff, in tests that make a step retry. */
+  sleep?: RunSleep;
 };
 
 /**
@@ -120,7 +120,7 @@ export async function suggestedEdits(orgs: TwoOrgs, options: SuggestedEditsOptio
   }
   if (options.docs === "lose_answer") google.docs.loseNextAnswer();
   if (options.docs === "fail_save") google.docs.failNextSuggestionSave();
-  const outcome = await executeRun(system, runId, options.runStep, options.retry);
+  const outcome = await executeRun(system, runId, options.runStep, options.sleep);
   const reviewId = (await listReviews(runner)).at(0)?.id ?? "";
   return {
     owner: runner,

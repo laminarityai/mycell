@@ -1,6 +1,7 @@
 // The Drive connector: the changes feed's page token as the cursor, files.list for the backfill,
-// changes.list for polling, and a changes.watch channel for push (channel.ts). Both read the same file fields (never the name) and normalize
-// each file the same way. My Drive and files shared with the user only: no shared drives. The
+// changes.list for polling, a page at a time, and a changes.watch channel for push
+// (channel.ts). Both read the same file fields (never the name) and normalize each file the
+// same way. My Drive and files shared with the user only: no shared drives. The
 // changes feed also reports files removed: deleted, no longer shared with the account (Drive's
 // `removed`), or put in the trash.
 import { FILES } from "@/features/connections/drive";
@@ -45,44 +46,40 @@ export const driveConnector: Connector = {
     };
   },
 
-  async poll(client, cursor) {
+  async pollPage(client, cursor, pageToken) {
+    const page = await changesPage(client, pageToken ?? cursor);
+    if (page === "expired") return { cursorExpired: true };
     const found = new Map<string, NormalizedEvent>();
     const removed = new Set<string>();
-    let pageToken = cursor;
-    for (;;) {
-      const page = await changesPage(client, pageToken);
-      if (page === "expired") return { cursorExpired: true };
-      for (const change of page.changes ?? []) {
-        // A change to a shared drive itself.
-        if (change.changeType !== "file") continue;
-        const fileId = change.fileId ?? change.file?.id;
-        const file = change.removed === true ? undefined : change.file;
-        if (file === undefined || file.trashed === true) {
-          if (fileId === undefined) continue;
-          removed.add(fileId);
-          // Gone after a change earlier in the feed: none of its versions is stored.
-          for (const ref of found.keys()) if (ref.startsWith(`${fileId}@`)) found.delete(ref);
-          continue;
-        }
-        // Back in the account's Drive after a removal earlier in the feed.
-        removed.delete(file.id);
-        const event = normalizeFile(file);
-        found.set(event.sourceRef, event);
-      }
-      if (page.nextPageToken !== undefined) {
-        pageToken = page.nextPageToken;
+    for (const change of page.changes ?? []) {
+      // A change to a shared drive itself.
+      if (change.changeType !== "file") continue;
+      const fileId = change.fileId ?? change.file?.id;
+      const file = change.removed === true ? undefined : change.file;
+      if (file === undefined || file.trashed === true) {
+        if (fileId === undefined) continue;
+        removed.add(fileId);
+        // Gone after a change earlier on the page: none of its versions is stored.
+        for (const ref of found.keys()) if (ref.startsWith(`${fileId}@`)) found.delete(ref);
         continue;
       }
-      if (page.newStartPageToken === undefined) {
-        throw new InvariantError("Drive's last changes page had no newStartPageToken");
-      }
-      // The last page's token: the next poll starts where this one ended.
-      return {
-        events: [...found.values()],
-        removed: [...removed],
-        nextCursor: page.newStartPageToken,
-      };
+      // Back in the account's Drive after a removal earlier on the page.
+      removed.delete(file.id);
+      const event = normalizeFile(file);
+      found.set(event.sourceRef, event);
     }
+    const last = page.nextPageToken === undefined;
+    if (last && page.newStartPageToken === undefined) {
+      throw new InvariantError("Drive's last changes page had no newStartPageToken");
+    }
+    return {
+      events: [...found.values()],
+      added: [],
+      removed: [...removed],
+      nextPageToken: page.nextPageToken ?? null,
+      // The last page's token: the next poll starts where this one ended.
+      nextCursor: last ? (page.newStartPageToken ?? null) : null,
+    };
   },
 
   watch: driveWatcher,

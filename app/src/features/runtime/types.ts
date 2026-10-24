@@ -5,16 +5,6 @@ import type { ModelRole, Spec, StepType } from "@/features/spec/types";
 import type { Json } from "@/lib/inngest";
 import { z } from "zod";
 
-/**
- * How often a failing step is tried, and how long it waits before attempt `attempt + 1`. The
- * attempts run inside the step, so each one is counted on the step's record.
- */
-export type RetryPolicy = {
-  attempts: number;
-  delayMs: (attempt: number) => number;
-  sleep: (ms: number) => Promise<void>;
-};
-
 export const runStatuses = [
   "running",
   "succeeded",

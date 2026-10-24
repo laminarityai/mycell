@@ -85,6 +85,9 @@ export function describeStep(step: Step, actionDescription?: string, words?: Sub
       return `${what}: "${step.instructions}"`;
     }
     case "approval":
+      if (step.channel === "suggested_edits") {
+        return "Waits for a person to accept or reject the suggested edits before the doc changes.";
+      }
       return step.channel === "calendar_events"
         ? "Waits for a person to approve the meetings before any guest is invited."
         : "Waits for a person to review the Gmail drafts before they go anywhere.";

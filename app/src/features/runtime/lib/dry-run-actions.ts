@@ -3,9 +3,11 @@
 // reports what it would have done, writing nothing. A custom write reports the exact request it
 // would send, and holds nothing. Each one reports to `report`, and returns an
 // output that passes the catalog's schema, so later steps run as they would.
+import { isRecord } from "@/lib/utils";
 import type { DryRunEffect } from "../types";
 import { actionExecutors } from "./actions";
 import { renderCustomCall, type HoldSend } from "./custom-action";
+import { docs, liveDocument } from "./docs";
 import { guestAddresses, type Booking } from "./calendar-events";
 import { RunStepError } from "./failures";
 import { messageRef } from "./gmail";
@@ -13,6 +15,7 @@ import { replyTarget } from "./gmail-drafts";
 import { lookUp, type LookupInput } from "./memory-lookup";
 import { rangeRows, readRange } from "./sheets";
 import type { ActionExecutors } from "./step-context";
+import type { SuggestEditsInput } from "./suggested-edits";
 import { editableTask, signature, taskNotes, type NewTask, type TaskChanges } from "./tasks";
 
 /** What stands in for a write's ID: nothing was made. */
@@ -51,6 +54,17 @@ export function dryRunActions(report: (effect: DryRunEffect) => void): ActionExe
         const text = await compose();
         report({ kind: "draft", to: target.to, subject: target.subject, text });
         return { draftId: DRY_RUN_ID, threadId: target.threadId };
+      },
+    },
+    "google-docs.read-document": actionExecutors["google-docs.read-document"],
+    // Reads the doc, to name it, and reports each edit it would suggest; suggests nothing.
+    "google-docs.suggest-edits": {
+      status: "ready",
+      run: async (ctx, connectionId, input: SuggestEditsInput) => {
+        const document = await docs(liveDocument(ctx, connectionId, input.documentId));
+        const { documentId, title } = document;
+        report({ kind: "suggestions", documentId, title, requests: input.requests.map(described) });
+        return { documentId, suggestionIds: [] };
       },
     },
     "google-calendar.read-event": actionExecutors["google-calendar.read-event"],
@@ -129,4 +143,20 @@ export function dryRunHoldSend(report: (effect: DryRunEffect) => void): HoldSend
     });
     return { heldSendId: DRY_RUN_ID, connectionId };
   };
+}
+
+/**
+ * A Docs request as Try it shows it: its kind, with the text it would insert, or what it would
+ * replace and with what. Shown to the admin only, never stored.
+ */
+function described(request: Record<string, unknown>): string {
+  const [kind, fields] = Object.entries(request).at(0) ?? ["", undefined];
+  const text = (value: unknown) => (typeof value === "string" ? JSON.stringify(value) : "");
+  if (!isRecord(fields)) return kind;
+  if (kind === "insertText") return `${kind} ${text(fields.text)}`;
+  if (kind === "replaceAllText") {
+    const find = isRecord(fields.containsText) ? fields.containsText.text : undefined;
+    return `${kind} ${text(find)} with ${text(fields.replaceText)}`;
+  }
+  return kind;
 }

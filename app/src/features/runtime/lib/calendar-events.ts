@@ -8,7 +8,7 @@ import { proxyGet, proxyPost } from "@/features/connections/server";
 import { SourceRequestError } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
 import { emailAddressesIn } from "@/lib/email-addresses";
-import type { PendingDetails } from "../types";
+import type { CalendarEventDetails } from "../types";
 import { CALENDAR_EVENTS } from "@/features/connections/calendar";
 import { RunStepError } from "./failures";
 
@@ -97,8 +97,8 @@ export type Booking = {
   location?: string;
   guests: string[];
   meet: boolean;
-  visibility: PendingDetails["visibility"];
-  transparency: PendingDetails["transparency"];
+  visibility: CalendarEventDetails["visibility"];
+  transparency: CalendarEventDetails["transparency"];
 };
 
 /** The guests' addresses, lowercased, each once, from entries that may carry a name too. */
@@ -124,7 +124,7 @@ export async function bookEvent(
   connectionId: string,
   booking: Booking,
   marker: string,
-): Promise<{ eventId: string; details: PendingDetails }> {
+): Promise<{ eventId: string; details: CalendarEventDetails }> {
   const id = bookedEventId(marker);
   const params = new URLSearchParams({ sendUpdates: "none" });
   if (booking.meet) params.set("conferenceDataVersion", "1");
@@ -157,7 +157,7 @@ export async function bookEvent(
       throw new RunStepError("source_item_missing", "The event this step booked was deleted.");
     }
   }
-  const details: PendingDetails = {
+  const details: CalendarEventDetails = {
     kind: "calendar_event",
     guests: guestAddresses(booking.guests),
     visibility: booking.visibility,

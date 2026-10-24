@@ -9,7 +9,7 @@ import { z } from "zod";
 import { proxyDelete, proxyPatch } from "@/features/connections/server";
 import type { Ctx } from "@/lib/ctx";
 import { InvariantError, ItemGoneError, ValidationError } from "@/lib/errors";
-import type { PendingDetails } from "../types";
+import type { CalendarEventDetails } from "../types";
 import {
   bookEvent,
   eventPath,
@@ -96,7 +96,7 @@ export const calendarEventAdapter: PendingFormAdapter<BookingInput> = {
   },
 };
 
-function detailsOf(item: PendingItem): PendingDetails {
+function detailsOf(item: PendingItem): CalendarEventDetails {
   if (item.details?.kind !== "calendar_event") {
     throw new InvariantError("A meeting's review keeps no guests.");
   }
@@ -110,7 +110,7 @@ async function eventOf(ctx: Ctx, item: PendingItem): Promise<CalendarEvent> {
 }
 
 // Whether the event already shows as approving it would make it.
-function showsAs(event: CalendarEvent, details: PendingDetails): boolean {
+function showsAs(event: CalendarEvent, details: CalendarEventDetails): boolean {
   const visibility = event.visibility ?? "default";
   const transparency = event.transparency ?? "opaque";
   return visibility === details.visibility && transparency === details.transparency;

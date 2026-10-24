@@ -24,6 +24,9 @@ wouldLabel: |-
   {{step}}: would add {{label}}.
 wouldAppendRow: |-
   {{step}}: would append a row to {{range}}.
+# `document` is the step's documentId input as the spec writes it; `count` how many requests.
+wouldSuggestEdits: |-
+  {{step}}: would suggest {{count}} edits in {{document}}, waiting as suggestions until reviewed.
 # A task's title and notes may come from the email, so neither is named.
 wouldAddTask: |-
   {{step}}: would add a task to the default Tasks list.

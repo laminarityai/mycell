@@ -172,6 +172,8 @@ describe("executorCoverage", () => {
         "google-mail.create-draft": "ready",
         "google-sheet.read-range": "ready",
         "google-sheet.append-row": "ready",
+        "google-docs.read-document": "ready",
+        "google-docs.suggest-edits": "ready",
         "google-calendar.read-event": "ready",
         "google-calendar.create-event": "ready",
         "google-tasks.list-tasks": "ready",

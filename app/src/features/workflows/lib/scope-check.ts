@@ -14,6 +14,7 @@ import { GOOGLE_APP_NAMES, GOOGLE_SCOPE_PREFIX as SCOPE_PREFIX } from "@/lib/goo
 const CATALOG_APPS: Record<ConnectionApp, GoogleApp> = {
   Gmail: "gmail",
   Sheets: "sheets",
+  Docs: "docs",
   Tasks: "tasks",
   Calendar: "calendar",
 };

@@ -1,12 +1,14 @@
 // The action catalog, as code (invariant 4): every catalog action's risk level is fixed here
 // by our team, and nothing a spec or a model says changes it. v1 has six Gmail and Sheets
-// actions, three Tasks actions, two Calendar actions (`calendar-actions.ts`) and one that reads
-// memory; no action is `financial` or `destructive`. Code that looks up the action a workflow
-// names takes the company's action set (`action-set.ts`), which starts from this catalog.
+// actions, two Docs actions (`docs-actions.ts`), two Calendar actions (`calendar-actions.ts`),
+// three Tasks actions and one that reads memory; no action is `financial` or `destructive`. Code
+// that looks up the action a workflow names takes the company's action set (`action-set.ts`),
+// which starts from this catalog.
 import { z } from "zod";
 import { GOOGLE_HOSTS, googleScope as scope } from "@/lib/google";
 import { actionSetOf, scopesOf } from "./action-set";
 import { calendarActions } from "./calendar-actions";
+import { docsActions } from "./docs-actions";
 import type { ActionSet, CatalogAction } from "./types";
 
 const GMAIL_HOST = GOOGLE_HOSTS.gmail;
@@ -129,6 +131,7 @@ const actions = [
     input: z.object({ spreadsheetId: id, range: sheetRange, values: z.array(cell).min(1) }),
     output: z.object({ updatedRange: z.string() }),
   },
+  ...docsActions,
   ...calendarActions,
   {
     kind: "catalog",

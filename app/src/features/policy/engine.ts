@@ -2,6 +2,7 @@
 // in the org's action set, which the caller resolves and hands in (ADR-0018).
 // Pure: no IO, no ctx.
 import { z } from "zod";
+import { isReference, throughReference } from "@/features/spec/input-values";
 import { eachStep, mapStepLists, type PlacedStep } from "@/features/spec/tree";
 import type { ApprovalChannel, Spec, SpecIssue, Step } from "@/features/spec/types";
 import { SpecInvalidError } from "@/lib/errors";
@@ -49,8 +50,10 @@ export function maxRisk(spec: Spec, actions: ActionSet): RiskLevel {
 /**
  * Checks the spec's actions against `actions` and makes sure every `external_send` action
  * waits for a person: a `draft` output needs a `gmail_drafts` approval on its own path, a `tool`
- * step's booking a `calendar_events` one, and its custom write a `held_send` one (ADR-0020); one
- * is inserted directly after the step when there's none. Returns the spec with what it inserted, or every issue at once.
+ * step's catalog send one of its action's channel (`suggested_edits` for edits suggested in a
+ * Doc, `calendar_events` for a booking), and its custom write a `held_send` one (ADR-0020); one
+ * is inserted directly after the step when there's none. Returns the spec with what it
+ * inserted, or every issue at once.
  */
 export function applyPolicy(spec: Spec, actions: ActionSet): PolicyResult {
   const issues = [...actionIssues(spec, actions), ...conditionIssues(spec, actions)];
@@ -120,8 +123,9 @@ function shortScope(scope: string): string {
 
 /**
  * What a step sends that waits for a person, and the approval channel that reviews it: a draft
- * step's Gmail draft, a tool step's catalog send in its app's own pending form (a Calendar event
- * with no guests), or a tool step's custom write, which Mycel holds (ADR-0020).
+ * step's Gmail draft, a tool step's catalog send in its app's own pending form (edits suggested
+ * in a Doc, or a Calendar event with no guests), or a tool step's custom write, which Mycel
+ * holds (ADR-0020).
  */
 function sendOf(
   step: Step,
@@ -201,8 +205,9 @@ function actionIssues(spec: Spec, actions: ActionSet): SpecIssue[] {
 }
 
 /**
- * Each literal input value the action's schema refuses for its field. A reference is resolved
- * only in a run, so the run checks it then; so do fields the action doesn't name.
+ * Each literal input value the action's schema refuses for its field, a list's or record's
+ * literals included, each at its own path. A reference is resolved only in a run, so the run
+ * checks it then, and what's inside it; so do fields the action doesn't name.
  */
 function literalInputIssues(
   step: Extract<Step, { type: "tool" }>,
@@ -213,11 +218,13 @@ function literalInputIssues(
   const shape = action.input.shape as Record<string, z.ZodType | undefined>;
   return Object.entries(step.input).flatMap(([name, value]) => {
     const field = shape[name];
-    if (field === undefined || (typeof value === "object" && value !== null)) return [];
+    if (field === undefined || isReference(value)) return [];
     const parsed = field.safeParse(value);
     if (parsed.success) return [];
-    const reason = parsed.error.issues.at(0)?.message ?? "It isn't valid.";
-    return [{ path: [...location, "input", name], message: `${name}: ${reason}` }];
+    const issue = parsed.error.issues.find((one) => !throughReference(value, one.path));
+    if (issue === undefined) return [];
+    const path = issue.path.map((key) => (typeof key === "number" ? key : String(key)));
+    return [{ path: [...location, "input", name, ...path], message: `${name}: ${issue.message}` }];
   });
 }
 

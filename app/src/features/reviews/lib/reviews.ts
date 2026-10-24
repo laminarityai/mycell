@@ -148,8 +148,8 @@ export function itemOf(row: ReviewRow): PendingItem {
     itemRef: row.itemRef,
     threadRef: row.threadRef,
     sourceRef: row.sourceRef,
-    details: row.details,
     createdAt: row.createdAt,
+    details: row.details,
   };
 }
 

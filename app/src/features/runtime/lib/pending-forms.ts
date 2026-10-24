@@ -1,11 +1,11 @@
 // The pending-form adapter seam (ADR-0013): every `external_send` catalog action holds what it
-// prepared in its app's own pending form (a Gmail draft, or a Calendar event with no guests;
-// M11 adds suggested edits in a Doc), and a custom write, whose app has none, is held by Mycel
+// prepared in its app's own pending form (a Gmail draft, suggested edits in a Doc, or a Calendar
+// event with no guests), and a custom write, whose app has none, is held by Mycel
 // itself (ADR-0020). One adapter per pending form is the only code that prepares, carries out,
 // removes, checks or shows a waiting item. The `reviews` feature calls
 // adapters only, chosen by the review's kind, and never the app's API.
 import type { Ctx } from "@/lib/ctx";
-import type { PendingDetails } from "../types";
+import type { CalendarEventDetails, PendingDetails } from "../types";
 
 /** Where a waiting item is: pointers only, never its content (invariant 8). */
 export type PendingItem = {
@@ -13,22 +13,28 @@ export type PendingItem = {
   connectionId: string;
   /**
    * The item in its app: a Gmail draft's ID, an escalated message's (its source_ref), a held
-   * send's, or a Calendar event's.
+   * send's, the first of a step's suggested edits in a Doc, or a Calendar event's.
    */
   itemRef: string;
-  /** The thread it belongs to: a Gmail thread's ID, or a held send's or an event's own ID. */
+  /**
+   * The thread it belongs to: a Gmail thread's ID, a held send's or an event's own ID, or the
+   * Doc's.
+   */
   threadRef: string;
   /** The message (or invite) that started the run that prepared it. */
   sourceRef: string;
   /** When its review was created: only what happened after it can have finished it. */
   createdAt: Date;
-  /** What approving it needs that its app doesn't hold yet: a booked event's guests. */
+  /**
+   * What approving it needs that its app doesn't show or hold yet: a step's suggestions' IDs, or
+   * a booked event's guests.
+   */
   details: PendingDetails | null;
 };
 
 /**
  * What an adapter's `prepare` made: the pointers a review keeps, and what approving it will need
- * that the app doesn't hold yet, if anything.
+ * that the app doesn't show or hold yet, if anything.
  */
 export type PreparedItem = { itemRef: string; threadRef: string; details?: PendingDetails };
 
@@ -51,6 +57,20 @@ export type MailView = { from: string; to: string; subject: string; date: string
 export type HeldSendField = { name: string; description: string; value: string; editable: boolean };
 
 /**
+ * Edits a step suggested in a Doc, as their review shows them, fetched live: the doc's title and
+ * link, what each of the step's suggestions still in it changes, and whether the person may
+ * accept them (edit access), or null when Drive can't say. Without edit access the review offers
+ * only the link (ADR-0017).
+ */
+export type SuggestedEditsView = {
+  kind: "suggested_edits";
+  title: string;
+  link: string;
+  changes: { added: string; removed: string; restyled: boolean }[];
+  canEdit: boolean | null;
+};
+
+/**
  * A booked meeting as its review shows it: the event as it is on the calendar now, with a link
  * to it and its Meet link, if any, and the guests approving invites and how it then shows.
  */
@@ -64,18 +84,19 @@ export type EventView = {
   link: string;
   meetLink: string | null;
   guests: string[];
-  visibility: PendingDetails["visibility"];
-  transparency: PendingDetails["transparency"];
+  visibility: CalendarEventDetails["visibility"];
+  transparency: CalendarEventDetails["transparency"];
 };
 
 /**
  * A waiting item as its review shows it, fetched live: for a Gmail draft, the message it
  * replies to (null when that message is gone) and the draft itself; for an escalated message,
  * the message and a link to it in Gmail; for a held send, the app, the custom action, the
- * request's method and address, and each input it sends, decrypted in memory; for a booked
- * meeting, the event.
+ * request's method and address, and each input it sends, decrypted in memory; for suggested
+ * edits, the doc and the suggestions; for a booked meeting, the event.
  */
 export type ItemView =
+  | SuggestedEditsView
   | EventView
   | { kind: "draft"; message: MailView | null; draft: MailView }
   | { kind: "message"; message: MailView; link: string }

@@ -12,6 +12,7 @@ import {
   escalationAdapter,
   gmailDraftAdapter,
   heldSendAdapter,
+  suggestedEditsAdapter,
   type ItemState,
   type PendingFormAdapter,
   type PendingItem,
@@ -43,6 +44,7 @@ const pendingForms: PendingForms = {
   approval: gmailDraftAdapter,
   escalation: escalationAdapter,
   held_send: heldSendAdapter,
+  suggested_edits: suggestedEditsAdapter,
   calendar_event: calendarEventAdapter,
 };
 

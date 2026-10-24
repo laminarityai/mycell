@@ -115,6 +115,7 @@ function tally(groups: Group[]): ReviewTally {
     approvals,
     escalations: countsOf(groups.filter((group) => group.kind === "escalation")),
     heldSends: countsOf(groups.filter((group) => group.kind === "held_send")),
+    suggestedEdits: countsOf(groups.filter((group) => group.kind === "suggested_edits")),
     meetings: countsOf(groups.filter((group) => group.kind === "calendar_event")),
     approvedWithoutEdits: ended === 0 ? null : approved / ended,
   };

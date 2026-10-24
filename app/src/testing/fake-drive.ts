@@ -1,6 +1,7 @@
 // A fake Google Drive, served through the fake Nango's proxy. It answers the Drive API v3 calls
 // Mycel makes (about.get, changes.getStartPageToken, files.list, changes.list, files.get and
-// files.export) in the shapes Google documents, from files a test seeds. Every file has a name,
+// files.export) in the shapes Google documents, from files a test seeds, each with the
+// capabilities the account has on it (whether it may edit it). Every file has a name,
 // and responses carry only the `fields` a request asks for, as Drive's do; asking for a file's
 // name fails the test. Each file has a sharing list (its permissions: its owners, and the
 // people, groups, domains or anyone it's shared with), which Drive shows only to an account
@@ -245,14 +246,17 @@ export class FakeDrive {
     return { text: this.texts.get(id) ?? "" };
   }
 
-  // The file as the account sees it: its sharing list only if the account may share the file.
-  private view(file: DriveFileResource): DriveFileResource {
+  // The file as the account sees it: what it may do with the file (whether it may edit it, as
+  // an owner or a writer), and its sharing list only if it may share the file.
+  private view(
+    file: DriveFileResource,
+  ): DriveFileResource & { capabilities: { canEdit: boolean } } {
     const { permissions, ...rest } = file;
     const mine = (permissions ?? []).filter(
       (p) => p.type === "user" && p.emailAddress === this.emailAddress,
     );
-    const canShare = mine.some((p) => p.role === "owner" || p.role === "writer");
-    return canShare ? file : rest;
+    const canEdit = mine.some((p) => p.role === "owner" || p.role === "writer");
+    return { ...(canEdit ? file : rest), capabilities: { canEdit } };
   }
 
   // Shared drives' files show only to requests that ask for all drives.

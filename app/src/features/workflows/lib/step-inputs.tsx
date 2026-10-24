@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { isReference } from "@/features/spec/input-values";
 import type { Step } from "@/features/spec/types";
 import type { StepEdit } from "./panel-shell";
 
@@ -100,7 +101,7 @@ export function ExtractFields({
 
 /**
  * Each input the action takes: text typed as it's sent, or a value read from the trigger or a
- * step above (`<step>.<field>`). A list is edited in the JSON view.
+ * step above (`<step>.<field>`). A list or a record is edited in the JSON view.
  */
 export function ToolInputs({
   step,
@@ -122,26 +123,28 @@ export function ToolInputs({
     <fieldset className="flex flex-col gap-2">
       <legend className="mb-1 text-sm font-medium">Inputs</legend>
       {Object.entries(step.input).map(([name, value]) => {
-        if (Array.isArray(value)) {
+        if (value !== null && typeof value === "object" && !isReference(value)) {
           return (
             <p key={name} className="text-xs text-muted-foreground">
-              <code className="font-mono">{name}</code>: a list, edited in the JSON view.
+              <code className="font-mono">{name}</code>:{" "}
+              {Array.isArray(value) ? "a list" : "a record"}, edited in the JSON view.
             </p>
           );
         }
-        const reference = value !== null && typeof value === "object";
+        const reference = isReference(value) ? value : undefined;
+        const literal = isReference(value) || typeof value === "object" ? null : value;
         return (
           <label key={name} className="flex flex-col gap-1 text-sm font-medium">
             {reference ? `${name} (read from)` : name}
             <Input
               aria-invalid={invalid}
-              value={reference ? value.from : value === null ? "" : String(value)}
+              value={reference ? reference.from : literal === null ? "" : String(literal)}
               className={reference ? "font-mono text-xs" : undefined}
               onChange={(event) => {
                 const typed = event.target.value;
                 set(
                   name,
-                  reference ? { from: typed } : typeof value === "number" ? Number(typed) : typed,
+                  reference ? { from: typed } : typeof literal === "number" ? Number(typed) : typed,
                 );
               }}
             />

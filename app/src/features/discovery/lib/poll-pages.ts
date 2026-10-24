@@ -26,6 +26,7 @@ import {
 } from "./announce";
 import { CONNECTORS, whileConnected, type Gone } from "./ingest-steps";
 import { storeEvents } from "./store";
+import { now } from "@/lib/time";
 
 // Items a batch step reads: a backfill page's worth (Gmail's backfill pages hold 100 messages),
 // so a batch, like a page, stays well inside one Inngest step.
@@ -89,7 +90,7 @@ export async function readChanges(
     whileConnected(async () => {
       await recordIngestState(ctx, connectionId, app, {
         cursor: nextCursor,
-        lastPolledAt: new Date(),
+        lastPolledAt: now(),
       });
       return {};
     }),

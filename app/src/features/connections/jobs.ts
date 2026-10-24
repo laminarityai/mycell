@@ -3,6 +3,7 @@ import "server-only";
 import { cron } from "inngest";
 import { inngest, stepRunner } from "@/lib/inngest";
 import { reconcileConnections } from "./server";
+import { now } from "@/lib/time";
 
 /**
  * Reconciles Mycel's connections with Nango's every night, at 03:00 UTC: one step reading both
@@ -15,5 +16,5 @@ export const reconcileJob = inngest.createFunction(
     // One run at a time: a slow run must not overlap the next.
     concurrency: [{ limit: 1 }],
   },
-  async ({ step }) => reconcileConnections(new Date(), stepRunner(step)),
+  async ({ step }) => reconcileConnections(now(), stepRunner(step)),
 );

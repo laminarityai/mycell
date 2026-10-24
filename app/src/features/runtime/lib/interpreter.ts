@@ -29,6 +29,7 @@ import { findRun, stepsOf } from "./runs";
 import { runs, runSteps } from "./schema";
 import type { StepContext, StepExecution } from "./step-context";
 import { walkSteps, type StepEnding, type StepPlace, type WalkedStep } from "./walk";
+import { now } from "@/lib/time";
 
 type Run = NonNullable<Awaited<ReturnType<typeof findRun>>>;
 type Ended = RunOutcome["status"];
@@ -190,7 +191,7 @@ async function recordStep(
     attempts: tries.attempts,
     lastAttemptAt: tries.lastAttemptAt,
     startedAt,
-    finishedAt: new Date(),
+    finishedAt: now(),
   };
   const values =
     "execution" in end
@@ -239,7 +240,7 @@ async function finishRun(
   const costUsd = steps.reduce((sum, step) => sum + step.costUsd, 0);
   const ended = await forOrg(ctx).update(
     runs,
-    { status, errorCode, costUsd, finishedAt: new Date() },
+    { status, errorCode, costUsd, finishedAt: now() },
     and(eq(runs.id, runId), eq(runs.status, "running")),
   );
   return ended.length > 0;

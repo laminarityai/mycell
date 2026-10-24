@@ -5,6 +5,7 @@
 // failure is recorded rather than thrown.
 import type { Json, RunSleep, RunStep } from "@/lib/inngest";
 import { describeFailure, type Failure } from "./failures";
+import { now } from "@/lib/time";
 
 /** How often a failing step is tried: 3 attempts. */
 export const ATTEMPTS = 3;
@@ -35,7 +36,7 @@ export async function tryOnce<T>(
   attempt: number,
   work: () => Promise<T>,
 ): Promise<Attempted<T> | "retry"> {
-  const tries = { attempts: attempt, lastAttemptAt: new Date() };
+  const tries = { attempts: attempt, lastAttemptAt: now() };
   try {
     return { ok: true, value: await work(), ...tries };
   } catch (error) {
@@ -59,7 +60,7 @@ export async function runAttempts<T extends Json>(
   let startedAt: Date | undefined;
   for (let n = 1; ; n++) {
     const stepId = n === 1 ? id : `${id}:attempt-${String(n)}`;
-    const at = { attempt: n, startedAt: startedAt ?? new Date() };
+    const at = { attempt: n, startedAt: startedAt ?? now() };
     const result = await runStep<T | Retry>(stepId, () => attempt(at));
     if (!isRetry(result)) return result;
     startedAt = new Date(result.retry.startedAt);

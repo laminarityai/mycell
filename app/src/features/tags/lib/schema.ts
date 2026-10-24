@@ -22,7 +22,7 @@ export const tags = pgTable(
     name: text("name").notNull(),
     // Counts the tag's renames: a rename's event ID names the revision it made (ADR-0027).
     revision: integer("revision").notNull().default(0),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     unique("tags_org_id_name_unique").on(table.orgId, table.name),
@@ -36,7 +36,7 @@ export const tagAssignments = pgTable(
     orgId: text("org_id").notNull(),
     tagId: text("tag_id").notNull(),
     userId: text("user_id").notNull(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     primaryKey({ columns: [table.tagId, table.userId] }),

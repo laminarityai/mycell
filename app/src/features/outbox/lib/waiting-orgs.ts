@@ -5,9 +5,10 @@ import { asc, lt } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { WAIT_MS } from "./outbox";
 import { outbox } from "./schema";
+import { now as clockNow } from "@/lib/time";
 
 /** The IDs of the orgs with an event that has waited more than a minute at `now`. Jobs only. */
-export async function listOrgsWithWaitingEvents(now = new Date()): Promise<string[]> {
+export async function listOrgsWithWaitingEvents(now = clockNow()): Promise<string[]> {
   const rows = await getDb()
     .selectDistinct({ orgId: outbox.orgId })
     .from(outbox)

@@ -166,6 +166,44 @@ const MODEL_CALLERS = [
   "src/features/models/tests/**",
 ];
 
+// Server code reads the time from now() (src/lib/time.ts), which a test can set, never from
+// `new Date()` or `Date.now()`; and only tests set it. A client component ("use client") reads
+// the browser's own clock, so it's left alone.
+const clockRule = {
+  meta: {
+    type: "problem",
+    schema: [],
+    messages: {
+      clock: "Read the time with now() from @/lib/time, so a test can set it.",
+      setter: "Only tests set the clock.",
+    },
+  },
+  create(context) {
+    const isClient = context.sourceCode.ast.body.some(
+      (node) => node.type === "ExpressionStatement" && node.directive === "use client",
+    );
+    if (isClient) return {};
+    const report = (messageId) => (node) => {
+      context.report({ node, messageId });
+    };
+    return {
+      "NewExpression[callee.name='Date'][arguments.length=0]": report("clock"),
+      "CallExpression[callee.object.name='Date'][callee.property.name='now']": report("clock"),
+      "ImportDeclaration[source.value='@/lib/time'] > ImportSpecifier[imported.name=/^(setNow|resetNow)$/]":
+        report("setter"),
+    };
+  },
+};
+const CLOCK_ALLOWED = [
+  "src/lib/time.ts",
+  "src/testing/**",
+  "src/db/testing/**",
+  "src/**/tests/**",
+  "src/**/*.test.{ts,tsx}",
+  // Better Auth's generated schema, as `npx auth generate` writes it.
+  "src/db/auth-schema.ts",
+];
+
 export default defineConfig([
   ...nextVitals,
   ...nextTs,
@@ -317,6 +355,12 @@ export default defineConfig([
     // Where the role helpers compare roles.
     files: ["src/lib/ctx.ts"],
     rules: { "no-restricted-syntax": ["error", ...dateFormatting, ...plainErrors, ...promptCasts] },
+  },
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: CLOCK_ALLOWED,
+    plugins: { mycel: { rules: { clock: clockRule } } },
+    rules: { "mycel/clock": "error" },
   },
   { files: ["src/env.ts"], rules: { "no-restricted-properties": "off" } },
   { files: [NEXT_DEFAULT_EXPORT_FILES], rules: { "import/no-default-export": "off" } },

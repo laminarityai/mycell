@@ -12,6 +12,7 @@ import { inngest } from "@/lib/inngest";
 import type { Emit } from "../types";
 import { carriedEvent } from "./carried-events";
 import { outbox } from "./schema";
+import { now as clockNow } from "@/lib/time";
 
 /** How old a waiting event is before the job sends it: the action's own send has had its go. */
 export const WAIT_MS = 60_000;
@@ -37,7 +38,7 @@ export async function saveWithEvents<R>(
   const result = await forOrg(ctx).transaction(async (tx) => {
     const saved = await save(tx, emit);
     if (events.size > 0) {
-      const writtenAt = new Date();
+      const writtenAt = clockNow();
       await tx.insert(
         outbox,
         [...events.values()].map(({ name, data, id }) => ({
@@ -72,7 +73,7 @@ async function sendRightAway(ctx: Ctx, events: OutboxEvent[]): Promise<void> {
  * throws, for the job's step to retry; an event that no longer fits its schema stays, and is
  * InvariantError once the rest are sent.
  */
-export async function sendWaitingEvents(ctx: Ctx, now = new Date()): Promise<{ sent: number }> {
+export async function sendWaitingEvents(ctx: Ctx, now = clockNow()): Promise<{ sent: number }> {
   requireSystem(ctx);
   const db = forOrg(ctx);
   const before = new Date(now.getTime() - WAIT_MS);

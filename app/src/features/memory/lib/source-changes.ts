@@ -14,6 +14,7 @@ import { sourceClient } from "@/features/connections/server";
 import type { SourceClient } from "@/features/connections/types";
 import { type Ctx, requireSystem } from "@/lib/ctx";
 import { runInline, untilGone, type RunStep } from "@/lib/inngest";
+import { now as clockNow } from "@/lib/time";
 import type { AccessReread, ChangedItem, MemoryApp, RemovedItem } from "../types";
 import { calendarVersion, readInviteAccess } from "./calendar";
 import { driveVersion, readAccess } from "./drive";
@@ -75,7 +76,7 @@ export async function rereadAllAccess(
 ): Promise<{ items: number; removed: number }> {
   requireSystem(ctx);
   const { startedAt } = await runStep("start", () =>
-    Promise.resolve({ startedAt: new Date().toISOString() }),
+    Promise.resolve({ startedAt: clockNow().toISOString() }),
   );
   const totals = { items: 0, removed: 0 };
   let after: string | null = null;
@@ -214,7 +215,7 @@ async function rewrite(
     await tx.delete(accessListEntries, inArray(accessListEntries.sourceRecordId, ids));
     const kept = await tx.update(
       sourceRecords,
-      { accessCheckedAt: new Date() },
+      { accessCheckedAt: clockNow() },
       inArray(sourceRecords.id, ids),
     );
     await tx.insert(

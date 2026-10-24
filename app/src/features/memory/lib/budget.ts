@@ -14,6 +14,7 @@ import { type Ctx, requireRole, requireSystem } from "@/lib/ctx";
 import { ConflictError, ValidationError } from "@/lib/errors";
 import type { RunStep } from "@/lib/inngest";
 import { itemQueued, memoryStarted, postponedDue } from "../events";
+import { now as clockNow } from "@/lib/time";
 import {
   memoryBudgetSchema,
   POSTPONE_REASONS,
@@ -32,7 +33,7 @@ import { memorySettings, postponedItems } from "./schema";
 export const MEMORY_USAGE = { purpose: "memory" } as const;
 
 /** The start of this calendar month, UTC: when this month's budget began. */
-export function monthStart(now = new Date()): Date {
+export function monthStart(now = clockNow()): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 }
 
@@ -87,7 +88,7 @@ export async function startMemory(ctx: Ctx, input: MemoryBudget): Promise<void> 
   await saveWithEvents(ctx, async (tx, emit) => {
     const inserted = await tx.insert(
       memorySettings,
-      { monthlyBudget, startedAt: new Date(), startedByUserId: ctx.userId },
+      { monthlyBudget, startedAt: clockNow(), startedByUserId: ctx.userId },
       { onConflictDoNothing: true },
     );
     if (inserted.length === 0) throw new ConflictError("Memory has already started.");
@@ -101,7 +102,7 @@ export async function setMemoryBudget(ctx: Ctx, input: MemoryBudget): Promise<vo
   requireRole(ctx, "admin", "system");
   const monthlyBudget = budgetOf(input);
   await saveWithEvents(ctx, async (tx, emit) => {
-    const updatedAt = new Date();
+    const updatedAt = clockNow();
     const updated = await tx.update(memorySettings, { monthlyBudget, updatedAt });
     if (updated.length === 0) throw new ConflictError("Memory hasn't started yet.");
     emit(
@@ -181,7 +182,7 @@ export async function resumePostponed(
 ): Promise<{ queued: number }> {
   requireSystem(ctx);
   const db = forOrg(ctx);
-  const began = new Date();
+  const began = clockNow();
   let queued = 0;
   for (;;) {
     const items = await db.select(postponedItems, {

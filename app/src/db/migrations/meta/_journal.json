@@ -376,8 +376,15 @@
     {
       "idx": 53,
       "version": "7",
-      "when": 1792826646908,
-      "tag": "0053_outbox",
+      "when": 1792831110336,
+      "tag": "0053_timestamptz",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1792838288770,
+      "tag": "0054_outbox",
       "breakpoints": true
     }
   ]

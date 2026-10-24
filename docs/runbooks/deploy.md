@@ -89,7 +89,7 @@ If you already made a Neon project (say `mycel-staging`), reuse it: rename it to
 4. **Settings → Domains** shows the production domain, `<name>.vercel.app`. Vercel bases it on the project name, adding a suffix if the plain one is taken. If you want a different free name, edit it there now, because everything below is tied to it. From here on it's `<host>`.
 5. Change these settings:
    - **Settings → Build and Deployment → Node.js Version: 24.x.** `.nvmrc` and `engines` say 24.
-   - **Settings → Functions → Function Region: Washington, D.C., USA (`iad1`)**, next to Neon's `us-east-1`. The builder chat and the workflow page set `maxDuration = 300`, which Pro allows.
+   - **Settings → Functions → Function Region: Washington, D.C., USA (`iad1`)**, next to Neon's `us-east-1`. The builder chat, the workflow page and the Inngest route set `maxDuration = 300`, which Pro allows.
    - **Settings → Environments → Production → Branch Tracking: `main`** (the default).
    - **Settings → Build and Deployment → Ignored Build Step**, with this custom command:
 

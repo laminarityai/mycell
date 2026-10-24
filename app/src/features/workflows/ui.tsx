@@ -33,6 +33,8 @@ import type {
 } from "./types";
 
 export { VisibleWorkflowsList } from "./lib/visible-workflows";
+// Whether its runs' failures pause it, and Resume (M8).
+export { FailuresCheck, WorkflowHealthSection } from "./lib/failures-check";
 // How a switch's state shows: its badge and the notice explaining its pauses.
 export { PausedNotice, StateBadge };
 export type { SwitchConnectionOption };

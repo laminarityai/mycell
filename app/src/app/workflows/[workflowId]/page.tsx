@@ -5,7 +5,7 @@ import { listConversations } from "@/features/builder/server";
 import { ConversationList, NewConversationButton } from "@/features/builder/ui";
 import { listCustomActions } from "@/features/custom-actions/server";
 import { getCtx } from "@/features/orgs/server";
-import { listRuns } from "@/features/runtime/server";
+import { listRuns, pausingRuns } from "@/features/runtime/server";
 import { triggers } from "@/features/spec/triggers";
 import { listTags } from "@/features/tags/server";
 import { RunOnMessageForm, RunsTable, runsHref } from "@/features/runtime/ui";
@@ -15,6 +15,7 @@ import {
   GraphTraceProvider,
   WorkflowArchiveSection,
   WorkflowEditor,
+  WorkflowHealthSection,
   WorkflowSwitchSection,
 } from "@/features/workflows/ui";
 import { isAdmin } from "@/lib/ctx";
@@ -55,7 +56,7 @@ async function Workflow({ params }: Pick<PageProps<"/workflows/[workflowId]">, "
     if (error instanceof NotFoundError) notFound();
     throw error;
   });
-  const [runs, runnable, conversations, tags, customActions, preview] = await Promise.all([
+  const [runs, runnable, conversations, tags, customActions, preview, paused] = await Promise.all([
     listRuns(ctx, { workflowId }, { size: RECENT_RUNS }),
     runnableConnections(ctx, workflowId),
     listConversations(ctx, { workflowId }),
@@ -66,6 +67,8 @@ async function Workflow({ params }: Pick<PageProps<"/workflows/[workflowId]">, "
     workflow.unpublishedChanges && workflow.maxRisk !== null
       ? previewPublish(ctx, workflowId, workflow.workingSpec)
       : null,
+    // The runs that paused it for failing, if they did.
+    pausingRuns(ctx, workflow.failurePause?.runIds ?? []),
   ]);
   // Only the connections a run could use, the one it's switched on for first.
   const connections = runnable.map((connection) => ({
@@ -76,6 +79,11 @@ async function Workflow({ params }: Pick<PageProps<"/workflows/[workflowId]">, "
     // The graph, the step menu and the side panel look actions up in the company's action set.
     <ActionSetProvider customActions={customActions}>
       <div className="flex flex-col gap-8">
+        {/* While it's paused for failing, what paused it and Resume lead the page (M7's Health
+            tab takes the check in once it lands). */}
+        {workflow.failurePause === null ? null : (
+          <WorkflowHealthSection workflow={workflow} runs={paused} />
+        )}
         <WorkflowEditor
           workflow={workflow}
           tags={tags.map((tag) => ({ id: tag.id, name: tag.name }))}

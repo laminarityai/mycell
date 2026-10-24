@@ -7,6 +7,7 @@ import { connectGmail, connectMailbox } from "@/testing/connect-helpers";
 import { renameTag, unassignTag } from "@/features/tags/server";
 import { publishTo, tagUsers } from "@/testing/visibility-helpers";
 import * as server from "../server";
+import { failurePauseIsolationCases } from "./failure-pause-isolation-cases";
 import {
   currentVersionsOfOrgBUnread,
   orgBTags,
@@ -281,6 +282,8 @@ export const isolationCases = defineIsolationCases(server, {
     );
     expect(await server.listVisibleWorkflows(orgB.member.ctx)).toEqual([]);
   },
+
+  ...failurePauseIsolationCases,
 
   removeInvisibleEnablements: async (orgs) => {
     const { orgA, orgB } = orgs;

@@ -12,6 +12,9 @@ export { checkWorkflowSave, saveWorkflowIn } from "./lib/workflows";
 export { switchWorkflowOff, switchWorkflowOn } from "./lib/switches";
 // Admins stop a workflow everywhere, and bring it back as it was.
 export { archiveWorkflow, restoreWorkflow } from "./lib/archiving";
+// Pausing after the runs' failures (M8): the run job, as the system ctx, reads when the count
+// starts and pauses with the three runs it counted; an admin resumes it.
+export { failureStreakStart, pauseForFailures, resumeWorkflow } from "./lib/failure-pauses";
 // Members switching a workflow they can see on and off for their own Google connection.
 export { disable, enable, listEnablements } from "./lib/enablements";
 // For the Workflows page: every workflow's enablements and runnable connections, read together.

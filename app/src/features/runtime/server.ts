@@ -14,6 +14,8 @@ export { getRun, getRunMessage } from "./lib/run-details";
 // Retrying a failed run on the same message, by whoever reads its connection: the owning member,
 // or an admin for an org connection; and whether the caller may, for the run page's button.
 export { checkRetry, retryRun } from "./lib/retries";
+// For a workflow paused for failing: the runs that paused it, as its Health check lists them.
+export { pausingRuns } from "./lib/pausing-runs";
 // "Try it": a spec on one message, in memory, with every write stubbed. Nothing is stored.
 export { dryRun } from "./lib/dry-run";
 export { recentMessages } from "./lib/recent-messages";

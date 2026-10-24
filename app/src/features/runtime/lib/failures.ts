@@ -55,6 +55,22 @@ const CHECK_CODES: Record<StepCheck, string> = {
   requiredFields: "check_required_fields",
 };
 
+// The status Nango's proxy answers when the app refused to refresh the connection's token.
+const TOKEN_REFUSED = 424;
+
+/**
+ * Step failure codes that come from one connection or from credits rather than from the
+ * workflow, so they don't count toward pausing it (M8): one person's broken connection mustn't
+ * pause everyone, and running out of credits pauses every workflow anyway.
+ */
+export const NOT_THE_WORKFLOWS_FAULT: ReadonlySet<string> = new Set([
+  "out_of_credits",
+  "connection_gone",
+  "app_not_connected",
+  "source_forbidden",
+  "needs_reconnect",
+]);
+
 // A write that hits one of these means the run's connection, and with it the run, is gone.
 const GONE_FOREIGN_KEYS = ["runs_connection_fk", "run_steps_connection_fk", "run_steps_run_fk"];
 
@@ -105,6 +121,16 @@ function describeBreak(error: unknown): Omit<Failure, "stepStatus"> {
       code: `model_${error.code}`,
       message: error.message,
       retryable: true,
+      runStatus: "failed",
+    };
+  }
+  // Nango's 424: the app refused the connection's token, so nothing reaches it until its owner
+  // reconnects. Another attempt wouldn't help.
+  if (error instanceof SourceRequestError && error.status === TOKEN_REFUSED) {
+    return {
+      code: "needs_reconnect",
+      message: "The app refused the connection's sign-in. Reconnect it.",
+      retryable: false,
       runStatus: "failed",
     };
   }

@@ -26,3 +26,10 @@ export const historyListSchema = z.object({
   // The mailbox's current history ID: where the next poll starts.
   historyId: z.string(),
 });
+
+// users.watch's answer: the mailbox's history ID, and when the watch expires, in milliseconds
+// since the epoch, as a string.
+export const watchSchema = z.object({
+  historyId: z.string(),
+  expiration: z.string().regex(/^\d+$/),
+});

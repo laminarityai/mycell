@@ -24,6 +24,12 @@ const cloud = {
   INNGEST_ENCRYPTION_KEY: "an-encryption-key-of-32-chars-at-least",
 };
 
+const push = {
+  GMAIL_PUSH_TOPIC: "projects/mycel/topics/gmail-push",
+  GOOGLE_PUSH_AUDIENCE: "https://mycel.example/api/google/gmail-push",
+  GOOGLE_PUSH_SERVICE_ACCOUNT: "gmail-push-sender@mycel.iam.gserviceaccount.com",
+};
+
 describe("the environment", () => {
   it("needs KMS_REGION unless INNGEST_DEV=1, since every held send needs the key store", () => {
     expect(() => parseEnv(cloud)).toThrow(/KMS_REGION/);
@@ -33,5 +39,49 @@ describe("the environment", () => {
 
   it("needs Inngest Cloud's keys unless INNGEST_DEV=1", () => {
     expect(() => parseEnv({ ...base, KMS_REGION: "eu-west-2" })).toThrow(/INNGEST_EVENT_KEY/);
+  });
+
+  it("takes Gmail push's three settings all together or not at all", () => {
+    const local = { ...base, INNGEST_DEV: "1" };
+    expect(parseEnv(local).GMAIL_PUSH_TOPIC).toBeUndefined();
+    expect(parseEnv({ ...local, ...push })).toMatchObject(push);
+    for (const left of Object.keys(push)) {
+      const some = Object.fromEntries(Object.entries(push).filter(([key]) => key !== left));
+      expect(() => parseEnv({ ...local, ...some })).toThrow(new RegExp(left));
+    }
+    expect(() => parseEnv({ ...local, GMAIL_PUSH_TOPIC: push.GMAIL_PUSH_TOPIC })).toThrow(
+      /GOOGLE_PUSH_AUDIENCE/,
+    );
+  });
+
+  it("takes Gmail's topic only as its full resource name", () => {
+    const local = { ...base, INNGEST_DEV: "1", ...push, GMAIL_PUSH_TOPIC: "gmail-push" };
+    expect(() => parseEnv(local)).toThrow(/GMAIL_PUSH_TOPIC/);
+  });
+
+  it("knows Jev and Laya as decision models unless config lists others", () => {
+    const local = { ...base, INNGEST_DEV: "1" };
+    expect(parseEnv(local).MODEL_DECISION_PREFIXES).toEqual([
+      "typesafe-ai/jev",
+      "convaiinnovations/laya",
+    ]);
+    expect(
+      parseEnv({ ...local, MODEL_DECISION_PREFIXES: "typesafe-ai/jev, acme/decider" })
+        .MODEL_DECISION_PREFIXES,
+    ).toEqual(["typesafe-ai/jev", "acme/decider"]);
+    expect(parseEnv({ ...local, MODEL_DECISION_PREFIXES: "" }).MODEL_DECISION_PREFIXES).toEqual([]);
+    expect(() => parseEnv({ ...local, MODEL_DECISION_PREFIXES: "jev" })).toThrow(
+      /MODEL_DECISION_PREFIXES/,
+    );
+  });
+
+  it("takes Drive push's secret only at 32 characters or more, and on its own", () => {
+    const local = { ...base, INNGEST_DEV: "1" };
+    expect(parseEnv(local).DRIVE_PUSH_SECRET).toBeUndefined();
+    const secret = "a-drive-push-secret-of-32-chars!";
+    expect(parseEnv({ ...local, DRIVE_PUSH_SECRET: secret }).DRIVE_PUSH_SECRET).toBe(secret);
+    expect(() => parseEnv({ ...local, DRIVE_PUSH_SECRET: secret.slice(1) })).toThrow(
+      /DRIVE_PUSH_SECRET/,
+    );
   });
 });

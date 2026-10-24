@@ -26,7 +26,7 @@ export const events = pgTable(
     // The Gmail message ID, or the Drive file ID and modified time (`<id>@<RFC 3339 time>`).
     sourceRef: text("source_ref").notNull(),
     type: text("type", { enum: EVENT_TYPES }).notNull(),
-    occurredAt: timestamp("occurred_at").notNull(),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
     // Lowercased addresses: who acted, and everyone else involved.
     actor: text("actor"),
     counterparties: text("counterparties").array().notNull(),
@@ -37,7 +37,7 @@ export const events = pgTable(
     labelIds: text("label_ids").array().notNull(),
     // A Drive file's MIME type; null for an email.
     mimeType: text("mime_type"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     // Re-running a backfill or a poll stores nothing twice.

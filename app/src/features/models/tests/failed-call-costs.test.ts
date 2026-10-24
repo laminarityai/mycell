@@ -33,7 +33,7 @@ async function failedRunCall(ctx: Ctx): Promise<string> {
   await expect(
     callModel(ctx, "fast", { prompt: testPrompts.hi(), workflowId: "wf_1", runId: "run_1" }),
   ).rejects.toThrow(ModelCallError);
-  const entry = (await listLedger(ctx, 1)).at(0);
+  const entry = (await listLedger(ctx, { limit: 1 })).at(0);
   if (entry === undefined) throw new Error("The failed call left no entry.");
   return entry.id;
 }
@@ -286,7 +286,7 @@ describe("a failed call's billed cost", () => {
         schema: z.object({ name: z.string() }),
       }),
     ).rejects.toThrow(ModelCallError);
-    const entry = (await listLedger(ctx, 1)).at(0);
+    const entry = (await listLedger(ctx, { limit: 1 })).at(0);
     expect(entry).toMatchObject({ outcome: "failed", costUsd: 0.003, generationId: "gen_off" });
 
     expect(fakeInngest.sent(FAILED_CALL)).toEqual([]);

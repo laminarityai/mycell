@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DateTime } from "@/components/date-time";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -16,6 +17,8 @@ import {
   HeldSendActions,
   ReviewActions,
 } from "./lib/review-actions";
+import { MeetingReview } from "./lib/meeting-review";
+import { SuggestedEditsReview } from "./lib/suggested-edits-review";
 import type {
   HandOff,
   OpenedReview,
@@ -23,6 +26,7 @@ import type {
   ReviewKind,
   ReviewStatus,
   ReviewSummary,
+  RunReview,
 } from "./types";
 
 export { ReviewCountsSection } from "./lib/review-counts";
@@ -31,6 +35,8 @@ const KIND_LABELS: Record<ReviewKind, string> = {
   approval: "Draft reply",
   escalation: "Escalated message",
   held_send: "Held send",
+  suggested_edits: "Suggested doc edits",
+  calendar_event: "Meeting",
 };
 
 const ENDINGS: Record<Exclude<ReviewStatus, "waiting">, string> = {
@@ -43,12 +49,28 @@ const ENDINGS: Record<Exclude<ReviewStatus, "waiting">, string> = {
   unconfirmed: "It was approved, but its app didn't confirm it was sent",
 };
 
-// A held send's own words where they differ: Mycel held the request, not Gmail.
-const HELD_SEND_ENDINGS: Partial<Record<ReviewStatus, string>> = {
-  declined: "It was declined, and its request deleted",
-  gone: "Its request is no longer held",
-  expired: "Nobody acted on it within 30 days, so it expired and its request was deleted",
-  unconfirmed: "It was approved, but its app didn't confirm it was sent, so it may have gone",
+// Each kind's own words where they differ from a draft's: Mycel held a held send's request, not
+// Gmail; suggested edits are accepted and rejected in the doc; a meeting's event waited on the
+// calendar.
+const KIND_ENDINGS: Partial<Record<ReviewKind, Partial<Record<ReviewStatus, string>>>> = {
+  held_send: {
+    declined: "It was declined, and its request deleted",
+    gone: "Its request is no longer held",
+    expired: "Nobody acted on it within 30 days, so it expired and its request was deleted",
+    unconfirmed: "It was approved, but its app didn't confirm it was sent, so it may have gone",
+  },
+  suggested_edits: {
+    approved: "Its suggestions were accepted",
+    declined: "Its suggestions were rejected",
+    done_in_app: "Its suggestions were accepted or rejected in Docs",
+    gone: "Its suggestions are no longer in the doc",
+  },
+  calendar_event: {
+    approved: "It was approved, and its guests invited",
+    declined: "It was declined, and its event deleted",
+    done_in_app: "Its guests were invited from Calendar",
+    gone: "Its event is no longer on the calendar",
+  },
 };
 
 /**
@@ -58,10 +80,9 @@ const HELD_SEND_ENDINGS: Partial<Record<ReviewStatus, string>> = {
 function ending(review: Review): string {
   if (review.status === "waiting") return "";
   const by = review.endedBy === null ? "" : ` by ${review.endedBy}`;
-  if (review.kind === "held_send") {
-    return `${HELD_SEND_ENDINGS[review.status] ?? ENDINGS[review.status]}${by}.`;
+  if (review.kind !== "escalation") {
+    return `${KIND_ENDINGS[review.kind]?.[review.status] ?? ENDINGS[review.status]}${by}.`;
   }
-  if (review.kind !== "escalation") return `${ENDINGS[review.status]}${by}.`;
   if (review.status === "gone") return "The message is no longer in Gmail.";
   if (review.endedByUserId === null) return "It was replied to from Gmail.";
   return `It was marked done${by}.`;
@@ -77,6 +98,54 @@ function handOffText(handOff: HandOff, viewerId: string): string {
 /** Who an org review is shared with, as the viewer knows them: "Shared with sales, support". */
 function sharedText(tags: string[]): string {
   return tags.length === 0 ? "Shared inbox" : `Shared with ${tags.join(", ")}`;
+}
+
+const RUN_REVIEW_STATUSES: Record<ReviewStatus, string> = {
+  waiting: "waiting",
+  approved: "approved",
+  edited_approved: "edited and approved",
+  declined: "declined",
+  done_in_app: "done in its app",
+  gone: "gone",
+  expired: "expired",
+  unconfirmed: "approved, not confirmed sent",
+};
+
+/**
+ * The reviews a run created, each with how it stands and since when, linked when the viewer may
+ * open it; one in a colleague's inbox is named but not linked.
+ */
+export function RunReviews({ reviews }: { reviews: RunReview[] }) {
+  if (reviews.length === 0) {
+    return <p className="text-sm text-muted-foreground">This run created no reviews.</p>;
+  }
+  return (
+    <ul className="flex flex-col gap-1 text-sm">
+      {reviews.map((review) => (
+        <li key={review.id} className="flex flex-wrap items-center gap-2">
+          {review.openable ? (
+            <Link
+              href={`/reviews/${review.id}`}
+              className="font-medium underline-offset-4 hover:underline"
+            >
+              {KIND_LABELS[review.kind]}
+            </Link>
+          ) : (
+            <span className="font-medium">{KIND_LABELS[review.kind]}</span>
+          )}
+          <Badge variant={review.status === "waiting" ? "secondary" : "outline"}>
+            {RUN_REVIEW_STATUSES[review.status]}
+          </Badge>
+          <span className="text-muted-foreground">
+            created <DateTime value={review.createdAt} />
+          </span>
+          {review.openable ? null : (
+            <span className="text-xs text-muted-foreground">In its owner&apos;s inbox</span>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 /**
@@ -136,8 +205,10 @@ export function ReviewsList({
 /**
  * An open review: the message and the drafted reply, fetched live, with approve, edit and
  * decline; the escalated message, why it was handed over and a link to it in Gmail, with done;
- * or a held send's request and the fields it sends, with approve, edit and decline. While it waits, who it was handed to, and a colleague to hand it to when the caller
- * may. Once it has ended, how it ended and by whom.
+ * a held send's request and the fields it sends, with approve, edit and decline; the edits a
+ * step suggested in a Doc, with its link, approve and decline; or a meeting on the calendar,
+ * with approve and decline. While it waits, who it was handed to, and a colleague to hand it to
+ * when the caller may. Once it has ended, how it ended and by whom.
  */
 export function ReviewDetail({
   opened,
@@ -171,6 +242,9 @@ export function ReviewDetail({
 }
 
 function WaitingItem({ review, view }: { review: Review; view: ItemView }) {
+  if (view.kind === "suggested_edits")
+    return <SuggestedEditsReview reviewId={review.id} view={view} />;
+  if (view.kind === "event") return <MeetingReview reviewId={review.id} view={view} />;
   if (view.kind === "held_send") {
     return (
       <>

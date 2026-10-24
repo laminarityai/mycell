@@ -1,7 +1,8 @@
 import type { z } from "zod";
 import { branchIssues } from "./branch-issues";
+import { referencesIn } from "./input-values";
 import { eachStep } from "./tree";
-import { triggerFacts } from "./triggers";
+import { triggers } from "./triggers";
 import {
   MAX_BRANCH_DEPTH,
   specSchema,
@@ -47,6 +48,7 @@ function schemaIssues(error: z.ZodError): SpecIssue[] {
 function structuralIssues(spec: Spec): SpecIssue[] {
   const issues: SpecIssue[] = [];
   const seen = new Set<string>();
+  const trigger = triggers[spec.trigger.type];
   for (const { step, location, above } of eachStep(spec)) {
     const at: At = (...path) => [...location, ...path];
     const refersBack = (stepId: string, path: (string | number)[]) => {
@@ -63,7 +65,7 @@ function structuralIssues(spec: Spec): SpecIssue[] {
     seen.add(step.id);
 
     if (step.type === "branch") {
-      const declared = { trigger: triggerFacts[spec.trigger.type] };
+      const declared = { trigger: trigger.facts };
       issues.push(...branchIssues(step, at, above, refersBack, seen, declared));
       const depth = above.filter((candidate) => candidate.type === "branch").length + 1;
       if (depth > MAX_BRANCH_DEPTH) {
@@ -78,6 +80,15 @@ function structuralIssues(spec: Spec): SpecIssue[] {
         message: "Nothing can follow a branch, since its paths never join: move this onto them.",
       });
     }
+    if ((step.type === "draft" || step.type === "escalate") && !trigger.repliable) {
+      issues.push({
+        path: location,
+        message:
+          step.type === "draft"
+            ? `A draft replies to the Gmail message that started the run, and a run on a new ${trigger.item} has none to reply to.`
+            : `An escalation hands a person the Gmail message that started the run, and a run on a new ${trigger.item} has none.`,
+      });
+    }
     if (step.type === "draft") {
       step.context.forEach((entry, i) => {
         if (entry === ORG_MEMORY) {
@@ -85,22 +96,27 @@ function structuralIssues(spec: Spec): SpecIssue[] {
             path: at("context", i),
             message: "Org memory isn't available as draft context yet.",
           });
-        } else if (!TRIGGER_CONTEXT.has(entry)) {
+        } else if (entry.startsWith("trigger.")) {
+          if (!trigger.context.includes(entry)) {
+            issues.push({ path: at("context", i), message: triggerMiss(entry, trigger.context) });
+          }
+        } else {
           refersBack(entry, at("context", i));
         }
       });
     }
     if (step.type === "tool") {
       for (const [name, value] of Object.entries(step.input)) {
-        const values = Array.isArray(value) ? value : [value];
-        values.forEach((item, i) => {
-          if (item === null || typeof item !== "object") return;
-          const [source = ""] = item.from.split(".");
-          const path = Array.isArray(value)
-            ? at("input", name, i, "from")
-            : at("input", name, "from");
-          if (source !== "trigger") refersBack(source, path);
-        });
+        for (const { reference, path: below } of referencesIn(value)) {
+          const [source = ""] = reference.from.split(".");
+          const path = at("input", name, ...below, "from");
+          if (source !== "trigger") {
+            refersBack(source, path);
+          } else if (!trigger.fields.some((field) => reference.from === `trigger.${field}`)) {
+            const fields = trigger.fields.map((field) => `trigger.${field}`);
+            issues.push({ path, message: triggerMiss(reference.from, fields) });
+          }
+        }
       }
     }
 
@@ -135,8 +151,12 @@ function checkIssues(step: Step, at: At) {
   return issues;
 }
 
-/** What a draft may read from the trigger: the message, or its whole thread. */
-const TRIGGER_CONTEXT = new Set(["trigger.message", "trigger.thread"]);
+/** The issue of reading what the trigger doesn't offer, naming what it does. */
+function triggerMiss(from: string, offered: readonly string[]): string {
+  return offered.length === 0
+    ? `The trigger offers nothing to read as ${from}.`
+    : `The trigger offers ${offered.join(" and ")}, not ${from}.`;
+}
 
 /** Named in the architecture's example; refused until memory exists (M9). */
 const ORG_MEMORY = "org_memory";

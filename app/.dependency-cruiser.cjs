@@ -87,6 +87,14 @@ module.exports = {
       to: { path: `^${R}/memory/` },
     },
     {
+      name: "no-feature-imports-alerts",
+      comment:
+        "Alerts read workflows', credits' and connections' entry files to work out what needs admins; no feature reads alerts back (pages and the app shell do), so it can read any of them without a cycle.",
+      severity: "error",
+      from: { path: `^${R}/`, pathNot: `^${R}/alerts/` },
+      to: { path: `^${R}/alerts/` },
+    },
+    {
       name: "no-circular",
       comment:
         "No dependency cycles. Scope to `^${R}/` if you want to allow cycles outside features.",

@@ -5,6 +5,7 @@ import { AccessLog, StaffConsents } from "@/features/memory/ui";
 import { getCtx } from "@/features/orgs/server";
 import { workflowNames } from "@/features/workflows/server";
 import { isAdmin } from "@/lib/ctx";
+import { now } from "@/lib/time";
 
 export default function AccessLogPage() {
   return (
@@ -32,7 +33,7 @@ async function Log() {
       {admin ? (
         <>
           <h2 className="text-lg font-medium">Staff access</h2>
-          <StaffConsents consents={consents} now={new Date()} />
+          <StaffConsents consents={consents} now={now()} />
           <h2 className="text-lg font-medium">Reads</h2>
         </>
       ) : null}

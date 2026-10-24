@@ -62,6 +62,17 @@ describe("the credit balance", () => {
     await expect(grantCredits(systemCtx(orgA.id), 0)).rejects.toThrow(ValidationError);
     expect(await getBalance(orgA.admin.ctx)).toBe(0);
   });
+
+  it("keeps a grant's note, and refuses a blank one", async () => {
+    const { orgA } = await seedTwoOrgs();
+
+    await grantCredits(systemCtx(orgA.id), 100, "  October allowance ");
+    await expect(grantCredits(systemCtx(orgA.id), 100, "   ")).rejects.toThrow(ValidationError);
+
+    expect(await listLedger(orgA.admin.ctx)).toMatchObject([
+      { kind: "grant", amount: 100, note: "October allowance" },
+    ]);
+  });
 });
 
 describe("checkCredits", () => {

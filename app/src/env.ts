@@ -54,6 +54,19 @@ const envSchema = z.object({
   // The embed role has a default, so existing .env files keep working. Its vectors have 1536
   // dimensions, and stored vectors must keep one size: change it only together with them.
   MODEL_EMBED: modelIdSchema.default("openai/text-embedding-3-small"),
+  // The decision models: a classify model whose ID starts with one of these `provider/model`
+  // prefixes is asked through experimental_decide, any other through a structured output on
+  // `fast`. Comma-separated; Jev, and Laya, which an org may try through its role table.
+  MODEL_DECISION_PREFIXES: z
+    .string()
+    .default("typesafe-ai/jev,convaiinnovations/laya")
+    .transform((value) =>
+      value
+        .split(",")
+        .map((prefix) => prefix.trim())
+        .filter((prefix) => prefix !== ""),
+    )
+    .pipe(z.array(modelIdSchema)),
   // Credits (ADR-0010): how many credits one US dollar of gateway cost uses up, and the per-role
   // estimate a call must find in the balance before it is made. Placeholders until M7's pricing.
   CREDITS_PER_USD: positiveNumber("1000"),
@@ -84,6 +97,21 @@ const envSchema = z.object({
     )
     .optional(),
   GCP_SERVICE_ACCOUNT_EMAIL: z.email().optional(),
+  // Gmail push (ADR-0026): Gmail's watches publish to this Pub/Sub topic, and its push
+  // subscription posts each notification to /api/google/gmail-push with a token Google signs
+  // for the audience (the route's URL) as the push service account. All three or none: unset,
+  // no watch starts, the route answers 404, and every app is polled every minute.
+  GMAIL_PUSH_TOPIC: z
+    .string()
+    .regex(/^projects\/[^/]+\/topics\/[^/]+$/, "Expected projects/<project>/topics/<topic>")
+    .optional(),
+  GOOGLE_PUSH_AUDIENCE: z.url().optional(),
+  GOOGLE_PUSH_SERVICE_ACCOUNT: z.email().optional(),
+  // Drive push (ADR-0026): each Drive's changes.watch channel posts to BETTER_AUTH_URL's
+  // /api/google/drive-push with a token naming the org and connection, signed with this secret
+  // (HMAC-SHA256). Unset, no channel opens, the route answers 404, and Drive is polled every
+  // minute.
+  DRIVE_PUSH_SECRET: z.string().min(32).optional(),
   // The key store (ADR-0020, ADR-0024): AWS KMS holds two keys per org, made on first use under
   // the aliases `alias/<KMS_ALIAS_PREFIX>/org/<org ID>` (encryption) and `…/<org ID>/hash` (keyed
   // hashes). The key store needs KMS_REGION, which is required unless INNGEST_DEV=1, like the
@@ -123,6 +151,21 @@ const checkedEnvSchema = envSchema.superRefine((parsed, context) => {
           message: "Required with MODEL_ARMOR_TEMPLATE",
         });
       }
+    }
+  }
+  const pushKeys = [
+    "GMAIL_PUSH_TOPIC",
+    "GOOGLE_PUSH_AUDIENCE",
+    "GOOGLE_PUSH_SERVICE_ACCOUNT",
+  ] as const;
+  const pushUnset = pushKeys.filter((key) => parsed[key] === undefined);
+  if (pushUnset.length > 0 && pushUnset.length < pushKeys.length) {
+    for (const key of pushUnset) {
+      context.addIssue({
+        code: "custom",
+        path: [key],
+        message: "Required with the other Gmail push settings, or leave all three unset",
+      });
     }
   }
   if ((parsed.KMS_ACCESS_KEY_ID === undefined) !== (parsed.KMS_SECRET_ACCESS_KEY === undefined)) {

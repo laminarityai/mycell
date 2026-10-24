@@ -1,7 +1,7 @@
 // Review counts as the Workflows page shows them (the ship bar's measurement): for each row (a
 // workflow, or a person under it) how many reviews wait and how many ended each way, the share
-// approved without edits, and the escalations and held sends apart. Counts only: nothing from
-// anyone's mail.
+// approved without edits, and the escalations, held sends, suggested edits and meetings apart.
+// Counts only: nothing from anyone's mail.
 import Link from "next/link";
 import {
   Table,
@@ -88,6 +88,8 @@ function CountsTable({ rows }: { rows: ReviewCountsRow[] }) {
           <TableHead>Approved without edits</TableHead>
           <TableHead>Escalations</TableHead>
           <TableHead>Held sends</TableHead>
+          <TableHead>Doc edits</TableHead>
+          <TableHead>Meetings</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -111,6 +113,10 @@ function CountsTable({ rows }: { rows: ReviewCountsRow[] }) {
                 {escalations(row.tally.escalations)}
               </TableCell>
               <TableCell className="whitespace-normal">{heldSends(row.tally.heldSends)}</TableCell>
+              <TableCell className="whitespace-normal">
+                {suggestedEdits(row.tally.suggestedEdits)}
+              </TableCell>
+              <TableCell className="whitespace-normal">{meetings(row.tally.meetings)}</TableCell>
             </TableRow>
           );
         })}
@@ -119,9 +125,16 @@ function CountsTable({ rows }: { rows: ReviewCountsRow[] }) {
   );
 }
 
-// Drafts, escalated messages and held sends still waiting.
+// Drafts, escalated messages, held sends, suggested edits and meetings still waiting.
 function waiting(tally: ReviewTally): number {
-  return tally.approvals.waiting + tally.escalations.waiting + tally.heldSends.waiting;
+  const { approvals, escalations, heldSends, suggestedEdits, meetings } = tally;
+  return (
+    approvals.waiting +
+    escalations.waiting +
+    heldSends.waiting +
+    suggestedEdits.waiting +
+    meetings.waiting
+  );
 }
 
 function share(value: number | null): string {
@@ -148,6 +161,32 @@ function heldSends(counts: ReviewCounts): string {
     counts.expired > 0 ? `${String(counts.expired)} expired` : null,
     counts.gone > 0 ? `${String(counts.gone)} gone` : null,
     counts.unconfirmed > 0 ? `${String(counts.unconfirmed)} unconfirmed` : null,
+    counts.waiting > 0 ? `${String(counts.waiting)} waiting` : null,
+  ].filter((part) => part !== null);
+  return parts.length === 0 ? "None" : parts.join(", ");
+}
+
+// Suggested edits end approved (accepted), declined (rejected), done in Docs (each of them
+// accepted or rejected there) or gone (the doc with them).
+function suggestedEdits(counts: ReviewCounts): string {
+  const parts = [
+    counts.approved > 0 ? `${String(counts.approved)} approved` : null,
+    counts.declined > 0 ? `${String(counts.declined)} declined` : null,
+    counts.done_in_app > 0 ? `${String(counts.done_in_app)} done in Docs` : null,
+    counts.gone > 0 ? `${String(counts.gone)} gone` : null,
+    counts.waiting > 0 ? `${String(counts.waiting)} waiting` : null,
+  ].filter((part) => part !== null);
+  return parts.length === 0 ? "None" : parts.join(", ");
+}
+
+// A meeting ends approved (its guests invited), declined (its event deleted), done in Calendar
+// (guests added there) or gone (its event deleted there).
+function meetings(counts: ReviewCounts): string {
+  const parts = [
+    counts.approved > 0 ? `${String(counts.approved)} approved` : null,
+    counts.declined > 0 ? `${String(counts.declined)} declined` : null,
+    counts.done_in_app > 0 ? `${String(counts.done_in_app)} done in Calendar` : null,
+    counts.gone > 0 ? `${String(counts.gone)} gone` : null,
     counts.waiting > 0 ? `${String(counts.waiting)} waiting` : null,
   ].filter((part) => part !== null);
   return parts.length === 0 ? "None" : parts.join(", ");

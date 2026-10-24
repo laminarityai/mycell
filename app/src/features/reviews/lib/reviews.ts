@@ -14,6 +14,7 @@ import type { ReviewSharing } from "@/features/workflows/types";
 import { reviewSharing, workflowNames } from "@/features/workflows/server";
 import { type Ctx, isAdmin, isSystem, requireSystem } from "@/lib/ctx";
 import { InvariantError, NotFoundError } from "@/lib/errors";
+import { now } from "@/lib/time";
 import type { HandOff, NewReview, Review, ReviewSummary } from "../types";
 import { reviews } from "./schema";
 
@@ -95,7 +96,7 @@ export async function visibleReview(ctx: Ctx, reviewId: string): Promise<ReviewR
  * whoever sees its workflow now (every admin included), and either the colleague it was handed
  * to. The system ctx, which jobs act as, sees every review in its org (ADR-0009).
  */
-async function visibleOf(ctx: Ctx, rows: ReviewRow[]): Promise<ReviewRow[]> {
+export async function visibleOf(ctx: Ctx, rows: ReviewRow[]): Promise<ReviewRow[]> {
   if (isSystem(ctx)) return rows;
   // An admin sees every org review; anyone else those of workflows they see through a tag.
   const sharing = isAdmin(ctx) ? new Map<string, ReviewSharing>() : await sharingOf(ctx, rows);
@@ -149,6 +150,7 @@ export function itemOf(row: ReviewRow): PendingItem {
     threadRef: row.threadRef,
     sourceRef: row.sourceRef,
     createdAt: row.createdAt,
+    details: row.details,
   };
 }
 
@@ -161,7 +163,7 @@ export async function endReview(
 ): Promise<ReviewRow | undefined> {
   const ended = await forOrg(ctx).update(
     reviews,
-    { status, endedByUserId, endedAt: new Date() },
+    { status, endedByUserId, endedAt: now() },
     and(eq(reviews.id, reviewId), eq(reviews.status, "waiting")),
   );
   return ended.at(0);

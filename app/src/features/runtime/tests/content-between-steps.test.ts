@@ -12,11 +12,12 @@ import { systemCtx } from "@/lib/ctx";
 import { connectGoogle } from "@/testing/connect-helpers";
 import { decryptStepState } from "@/testing/inngest-step-state";
 import { fakeNango } from "@/testing/fake-nango";
-import { executeRun, getRun, listRuns, startRun } from "../server";
+import { executeRun, getRun, startRun } from "../server";
 import {
   pricingQuestion,
   publish,
   recordingStepRunner,
+  recordsOf,
   stepStateRecorder,
   threadSpec,
 } from "./run-helpers";
@@ -82,7 +83,7 @@ describe("a run passing content between steps", () => {
   });
 
   it("records each result field's kind and size, and no table holds the body", async () => {
-    const { admin, system, message, workflowId, runId } = await logRun();
+    const { admin, system, message, runId } = await logRun();
 
     expect(await executeRun(system, runId)).toEqual({ status: "succeeded" });
 
@@ -108,7 +109,7 @@ describe("a run passing content between steps", () => {
         output: { fields: { updatedRange: { kind: "text", size: "Log!A1:C1".length } } },
       },
     ]);
-    const records = JSON.stringify([run, await listRuns(admin, workflowId)]);
+    const records = recordsOf(run);
     for (const content of [MARKER, SUBJECT, "Log!A1:C1"]) {
       expect(records).not.toContain(content);
     }

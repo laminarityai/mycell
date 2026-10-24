@@ -66,7 +66,6 @@ describe("startRun", () => {
     await expect(
       startRun(orgA.member.ctx, workflowId, memberInbox.connectionId, "m"),
     ).rejects.toThrow(ForbiddenError);
-    await expect(listRuns(orgA.member.ctx, workflowId)).rejects.toThrow(ForbiddenError);
   });
 
   it("leaves executing to the system ctx", async () => {
@@ -85,9 +84,9 @@ describe("listRuns", () => {
     const first = await startRun(admin, workflowId, inbox.connectionId, "msg-1");
     const second = await startRun(admin, workflowId, inbox.connectionId, "msg-2");
 
-    const listed = await listRuns(admin, workflowId);
+    const listed = await listRuns(admin, { workflowId });
 
-    expect(listed.map((run) => run.id)).toEqual([second.runId, first.runId]);
+    expect(listed.runs.map((run) => run.id)).toEqual([second.runId, first.runId]);
   });
 });
 
@@ -111,29 +110,32 @@ describe("reading runs", () => {
     return { orgA, admin, promoted, memberWorkflow, orgWorkflow, ownRun, otherRun, orgRun };
   }
 
-  it("shows an admin their own member runs and the org's runs, not another user's", async () => {
-    const { admin, memberWorkflow, orgWorkflow, ownRun, otherRun, orgRun } = await threeRuns();
+  it("gives an admin their own member runs and the org's in full, another user's redacted", async () => {
+    const { admin, ownRun, otherRun, orgRun } = await threeRuns();
 
-    expect((await listRuns(admin, memberWorkflow)).map((run) => run.id)).toEqual([ownRun.runId]);
-    expect((await listRuns(admin, orgWorkflow)).map((run) => run.id)).toEqual([orgRun.runId]);
-    expect(await getRun(admin, ownRun.runId)).toMatchObject({ id: ownRun.runId });
-    expect(await getRun(admin, orgRun.runId)).toMatchObject({ id: orgRun.runId });
-    await expect(getRun(admin, otherRun.runId)).rejects.toThrow(ForbiddenError);
+    expect(await getRun(admin, ownRun.runId)).toMatchObject({ id: ownRun.runId, full: true });
+    expect(await getRun(admin, orgRun.runId)).toMatchObject({ id: orgRun.runId, full: true });
+    expect(await getRun(admin, otherRun.runId)).toMatchObject({
+      id: otherRun.runId,
+      full: false,
+      sourceRef: null,
+    });
   });
 
-  it("shows another admin only their own member runs, and the org's", async () => {
-    const { promoted, memberWorkflow, orgWorkflow, ownRun, otherRun } = await threeRuns();
+  it("gives another admin their own member runs and the org's in full, the first's redacted", async () => {
+    const { promoted, ownRun, otherRun, orgRun } = await threeRuns();
 
-    expect((await listRuns(promoted, memberWorkflow)).map((run) => run.id)).toEqual([
-      otherRun.runId,
-    ]);
-    expect(await listRuns(promoted, orgWorkflow)).toHaveLength(1);
-    await expect(getRun(promoted, ownRun.runId)).rejects.toThrow(ForbiddenError);
+    expect(await getRun(promoted, otherRun.runId)).toMatchObject({ full: true, sourceRef: "m-2" });
+    expect(await getRun(promoted, orgRun.runId)).toMatchObject({ full: true, sourceRef: "m-3" });
+    expect(await getRun(promoted, ownRun.runId)).toMatchObject({ full: false, sourceRef: null });
   });
 
-  it("shows a member no runs, not even on their own connection", async () => {
-    const { orgA, otherRun } = await threeRuns();
+  it("gives a member their own runs, and no one else's", async () => {
+    const { orgA, ownRun, otherRun, orgRun } = await threeRuns();
+    const member = orgA.member.ctx;
 
-    await expect(getRun(orgA.member.ctx, otherRun.runId)).rejects.toThrow(ForbiddenError);
+    expect(await getRun(member, otherRun.runId)).toMatchObject({ full: true, sourceRef: "m-2" });
+    await expect(getRun(member, ownRun.runId)).rejects.toThrow(ForbiddenError);
+    await expect(getRun(member, orgRun.runId)).rejects.toThrow(ForbiddenError);
   });
 });

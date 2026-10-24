@@ -1,6 +1,7 @@
 // Steps and their attempts. A run's step runs once through RunStep (Inngest's step.run in the
 // job), and inside it the step's work is tried up to `attempts` times with backoff, so the
 // attempts are counted on the step's record and a failure is recorded rather than thrown.
+import { now } from "@/lib/time";
 import type { RetryPolicy } from "../types";
 import { describeFailure, type Failure } from "./failures";
 
@@ -29,7 +30,7 @@ export async function withRetries<T>(
   work: () => Promise<T>,
 ): Promise<Attempted<T>> {
   for (let attempt = 1; ; attempt++) {
-    const tries = { attempts: attempt, lastAttemptAt: new Date() };
+    const tries = { attempts: attempt, lastAttemptAt: now() };
     try {
       return { ok: true, value: await work(), ...tries };
     } catch (error) {

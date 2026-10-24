@@ -2,6 +2,7 @@ import { expect } from "vitest";
 import { NotFoundError } from "@/lib/errors";
 import { defineIsolationCases, notTenantScoped } from "@/db/testing/isolation";
 import { seedUserWithoutOrg } from "@/db/testing/seed-user";
+import { seedUser } from "@/db/testing/two-org-fixture";
 import * as server from "../server";
 
 export const isolationCases = defineIsolationCases(server, {
@@ -28,6 +29,20 @@ export const isolationCases = defineIsolationCases(server, {
   listOrgIds: notTenantScoped(
     "lists every org's ID for scheduled jobs, which then act inside one org at a time",
   ),
+
+  // Cross-org by design: a Gmail notification names only an address. What it must keep
+  // straight is that each address finds its own org, and only an org ID comes back.
+  findOrgIdForAddress: async ({ orgA, orgB }) => {
+    const pat = await seedUser(orgB.id, "pat@secondary-b.test", "member");
+
+    expect(await server.findOrgIdForAddress(orgA.member.email)).toBe(orgA.id);
+    expect(await server.findOrgIdForAddress(orgB.admin.email.toUpperCase())).toBe(orgB.id);
+    expect(await server.findOrgIdForAddress(pat.email)).toBe(orgB.id);
+    expect(await server.findOrgIdForAddress(`support@${orgA.workspaceDomain}`)).toBe(orgA.id);
+    expect(await server.findOrgIdForAddress(`support@${orgB.workspaceDomain}`)).toBe(orgB.id);
+    expect(await server.findOrgIdForAddress("someone@secondary-b.test")).toBeUndefined();
+    expect(await server.findOrgIdForAddress("someone@elsewhere.test")).toBeUndefined();
+  },
 
   findCtx: async ({ orgA, orgB }) => {
     expect(await server.findCtx(orgA.member.id)).toEqual(orgA.member.ctx);

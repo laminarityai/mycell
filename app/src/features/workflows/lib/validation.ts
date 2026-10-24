@@ -1,11 +1,12 @@
 // Save-time validation: the spec schema, the policy engine, then checks against the org's
 // setup. Every failing stage's issues come back together in one SpecInvalidError.
-import { gmailConnections, listConnections } from "@/features/connections/server";
-import type { ConnectionSummary } from "@/features/connections/types";
+import { connectionsGranted, listConnections } from "@/features/connections/server";
+import type { ConnectionSummary, GoogleApp } from "@/features/connections/types";
 import { actionSetWith } from "@/features/custom-actions/description";
 import { listCustomActions } from "@/features/custom-actions/server";
 import type { CustomActionRecord } from "@/features/custom-actions/types";
 import type { ActionSet } from "@/features/policy/types";
+import { triggers } from "@/features/spec/triggers";
 import type { Spec, SpecIssue } from "@/features/spec/types";
 import { issuesAsWritten } from "@/features/spec/upgrade";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
@@ -76,26 +77,28 @@ export async function checkWorkflowSpec(
 
 /**
  * The connections a spec could run on: the caller's own member connections for `member`
- * credentials, the org's connections for `org`, narrowed to those that reach Gmail (the
- * trigger's source). Later checks (scopes) look only at these.
+ * credentials, the org's connections for `org`, narrowed to those that reach the app its
+ * trigger watches (Gmail, or Calendar). Later checks (scopes) look only at these.
  */
 export function candidateConnections(spec: Spec, setup: OrgSetup): ConnectionSummary[] {
-  return gmailConnections(
+  return connectionsGranted(
     { own: setup.ownConnections, org: setup.orgConnections },
+    triggerApp(spec),
     spec.credentials,
   );
 }
 
-/** A spec needs at least one connection of the kind its credentials name. */
+/** A spec needs at least one connection of the kind its credentials name, granted its app. */
 const connectionCheck: SetupCheck = (spec, setup) => {
   if (candidateConnections(spec, setup).length > 0) return [];
+  const app = triggers[spec.trigger.type].app;
   return [
     {
       path: ["credentials"],
       message:
         spec.credentials === "member"
-          ? "A member-credential workflow needs your own Google connection, allowed Gmail. Connect Google first, or reconnect it to allow Gmail."
-          : "An org-credential workflow needs an org Google connection, allowed Gmail. Connect a shared account first, or reconnect it to allow Gmail.",
+          ? `A member-credential workflow needs your own Google connection, allowed ${app}. Connect Google first, or reconnect it to allow ${app}.`
+          : `An org-credential workflow needs an org Google connection, allowed ${app}. Connect a shared account first, or reconnect it to allow ${app}.`,
     },
   ];
 };
@@ -121,9 +124,14 @@ const appConnectionCheck: SetupCheck = (spec, setup, actions) => {
 
 const SETUP_CHECKS: SetupCheck[] = [connectionCheck, scopeCheck, appConnectionCheck];
 
-// A Google connection reaches Gmail when it was granted Gmail (ADR-0014).
-export function reachesGmail(connection: ConnectionSummary): boolean {
-  return connection.apps.includes("gmail");
+/** The Google app the spec's trigger watches, as connections name it. */
+export function triggerApp(spec: Pick<Spec, "trigger">): GoogleApp {
+  return triggers[spec.trigger.type].googleApp;
+}
+
+// A Google connection reaches the trigger's app when it was granted it (ADR-0014).
+export function reachesTriggerApp(spec: Spec, connection: ConnectionSummary): boolean {
+  return connection.apps.includes(triggerApp(spec));
 }
 
 export async function readSetup(ctx: Ctx): Promise<OrgSetup> {

@@ -2,6 +2,7 @@
 // sidebar (a client component), the error page and the tests all read the same list.
 import {
   Activity,
+  Bell,
   Bot,
   Brain,
   Building2,
@@ -21,6 +22,7 @@ export type NavGroupKey = "work" | "company" | "accounts";
 export type NavKey =
   | "reviews"
   | "workflows"
+  | "alerts"
   | "runs"
   | "builder"
   | "credits"
@@ -70,6 +72,14 @@ const NAV_GROUPS: NavGroup[] = [
     key: "company",
     label: "Company",
     items: [
+      {
+        key: "alerts",
+        label: "Alerts",
+        href: "/alerts",
+        icon: Bell,
+        admin: true,
+        counts: { label: "open", tone: "destructive" },
+      },
       { key: "builder", label: "Builder chat", href: "/builder", icon: Bot, admin: true },
       { key: "credits", label: "Credits", href: "/credits", icon: Coins, admin: true },
       {

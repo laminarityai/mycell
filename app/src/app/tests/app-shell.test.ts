@@ -23,7 +23,14 @@ describe("the sidebar's items", () => {
       ["Your work", ["Reviews", "Workflows", "Runs"]],
       [
         "Company",
-        ["Builder chat", "Credits", "Custom actions", "Capability requests", "Manage tags"],
+        [
+          "Alerts",
+          "Builder chat",
+          "Credits",
+          "Custom actions",
+          "Capability requests",
+          "Manage tags",
+        ],
       ],
       ["Accounts and memory", ["Connections", "Your org", "Memory log", "Memory settings"]],
     ]);
@@ -65,12 +72,13 @@ describe("what the shell reads for the signed-in person", () => {
       orgName: "Org A",
       counts: { reviews: 2 },
     });
-    // The member's reviews aren't the admin's, and only the admin sees the company's credits.
+    // The member's reviews aren't the admin's, and only the admin sees the company's credits
+    // and alerts: with none granted, credits are out.
     expect(await loadShell(orgA.admin.ctx)).toEqual({
       admin: true,
       viewer: { name: orgA.admin.email, role: "admin" },
       orgName: "Org A",
-      counts: { reviews: 0 },
+      counts: { reviews: 0, alerts: 1 },
       credits: { balance: 0, runwayDays: null },
     });
   });

@@ -3,6 +3,7 @@
 // credits. Each page renders the shell itself, rather than a layout, because a layout isn't
 // rendered again on navigation, and the counts must be read on each page load.
 import "server-only";
+import { countAlerts } from "@/features/alerts/server";
 import { getRunway } from "@/features/credits/server";
 import { findUser, getOrgSettings } from "@/features/orgs/server";
 import { countWaitingReviews } from "@/features/reviews/server";
@@ -19,7 +20,7 @@ export type ShellData = {
   admin: boolean;
   viewer: ShellViewer;
   orgName: string;
-  /** M8 adds the open Alerts here. */
+  /** Reviews waiting for them, and for an admin the open alerts. */
   counts: NavCounts;
   /** Admins only: members never see the company's balance. */
   credits?: ShellCredits;
@@ -28,11 +29,12 @@ export type ShellData = {
 /** The shell's reads, a fixed few whatever the page. */
 export async function loadShell(ctx: Ctx): Promise<ShellData> {
   const admin = isAdmin(ctx);
-  const [viewer, org, waiting, runway] = await Promise.all([
+  const [viewer, org, waiting, runway, alerts] = await Promise.all([
     findUser(ctx, ctx.userId),
     getOrgSettings(ctx),
     countWaitingReviews(ctx),
     admin ? getRunway(ctx) : undefined,
+    admin ? countAlerts(ctx) : undefined,
   ]);
   // The ctx was just read from this person's membership.
   if (viewer === null) throw new InvariantError("The signed-in person isn't in their org");
@@ -40,7 +42,7 @@ export async function loadShell(ctx: Ctx): Promise<ShellData> {
     admin,
     viewer: { name: viewer.name, role: viewer.role },
     orgName: org.name,
-    counts: { reviews: waiting },
+    counts: { reviews: waiting, ...(alerts === undefined ? {} : { alerts }) },
     ...(runway === undefined
       ? {}
       : { credits: { balance: runway.balance, runwayDays: runway.days } }),

@@ -9,6 +9,8 @@ export { deleteMemberConnectionsOf, disconnect } from "./lib/disconnect";
 // it an ingested app it didn't have, or one whose backfill failed. Ingest jobs trigger on them.
 export { connectionAppsGranted, connectionRecorded } from "./lib/events";
 export { listConnections, sharedInboxes } from "./lib/list";
+// What waits on the caller to reconnect, for admins' alerts.
+export { listConnectionsToFix } from "./lib/to-fix";
 // The one rule for which connections an admin may build on: their own and the org's, granted
 // the app the trigger watches (Gmail, or Calendar). Used by the builder's read_examples and
 // context, Try it, and spec validation.

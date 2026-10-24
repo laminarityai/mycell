@@ -61,6 +61,16 @@ function parseMetering(answer: unknown): Metering | undefined {
   };
 }
 
+// The AI SDK's gateway error (`GatewayError` in `@ai-sdk/gateway`, which `ai` doesn't export)
+// sets `generationId` from the gateway's error body.
+const gatewayErrorSchema = z.object({ generationId: z.string() });
+
+/** The generation ID the gateway's error carries, or undefined when it carries none. */
+export function generationIdOf(error: unknown): string | undefined {
+  const parsed = gatewayErrorSchema.safeParse(error);
+  return parsed.success ? parsed.data.generationId : undefined;
+}
+
 export function meteredGateway(): MeteredGateway {
   const total: Metering = { costUsd: 0, generationId: undefined };
 

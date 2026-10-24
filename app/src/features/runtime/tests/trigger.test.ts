@@ -84,20 +84,23 @@ describe("a polled message", () => {
     const runIds = await pollAndFanOut(orgA.id, inbox.id);
 
     expect(runIds).toHaveLength(2);
-    const runs = [...(await listRuns(admin, first)), ...(await listRuns(admin, second))];
+    const runs = [
+      ...(await listRuns(admin, { workflowId: first })).runs,
+      ...(await listRuns(admin, { workflowId: second })).runs,
+    ];
     expect(runs).toMatchObject([
-      { connectionId: inbox.id, sourceRef: message.id, status: "running" },
-      { connectionId: inbox.id, sourceRef: message.id, status: "running" },
+      { connectionId: inbox.id, message: { sourceRef: message.id }, status: "running" },
+      { connectionId: inbox.id, message: { sourceRef: message.id }, status: "running" },
     ]);
-    expect(runs.map((run) => run.enablementId)).toEqual([expect.any(String), expect.any(String)]);
+    expect(runs.map((run) => run.startedBy)).toEqual(["enablement", "enablement"]);
     expect(fakeInngest.sent("runtime/run.requested").map((event) => event.id)).toEqual(
       runIds.map((runId) => `run-${runId}`),
     );
 
     const supportRuns = await pollAndFanOut(orgA.id, support.id);
     expect(supportRuns).toHaveLength(1);
-    expect(await listRuns(admin, shared)).toMatchObject([
-      { connectionId: support.id, ownerScope: "org", enablementId: null, status: "running" },
+    expect((await listRuns(admin, { workflowId: shared })).runs).toMatchObject([
+      { connectionId: support.id, ownerScope: "org", startedBy: "org_switch", status: "running" },
     ]);
   });
 
@@ -144,7 +147,7 @@ describe("a polled message", () => {
     theirs.mailbox.add(arriving());
 
     expect(await pollAndFanOut(orgA.id, theirs.id)).toEqual([]);
-    expect(await listRuns(admin, workflowId)).toEqual([]);
+    expect((await listRuns(admin, { workflowId })).runs).toEqual([]);
   });
 
   it("starts one run when its trigger event comes twice", async () => {
@@ -163,7 +166,7 @@ describe("a polled message", () => {
     const first = await startTriggeredRuns(system, event);
     const again = await startTriggeredRuns(system, event);
 
-    expect(await listRuns(admin, workflowId)).toHaveLength(1);
+    expect((await listRuns(admin, { workflowId })).runs).toHaveLength(1);
     expect(again.runIds).toEqual(first.runIds);
     // Sent again with the same event ID, in case the first send was lost: Inngest runs it once.
     expect(new Set(fakeInngest.sent("runtime/run.requested").map((e) => e.id)).size).toBe(1);
@@ -249,7 +252,7 @@ describe("a triggered run that writes", () => {
     expect(await executeRun(system, runId)).toEqual({ status: "succeeded" });
 
     expectOneOfEach(inbox, [message.id, `mycel:${runId}/log`]);
-    expect(await listRuns(admin, workflowId)).toHaveLength(1);
+    expect((await listRuns(admin, { workflowId })).runs).toHaveLength(1);
   });
 
   it("makes no second draft, label or row when every step runs again from scratch", async () => {

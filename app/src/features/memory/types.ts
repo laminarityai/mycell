@@ -2,8 +2,8 @@
 // it (ADR-0022).
 import { z } from "zod";
 
-/** The apps memory learns from: Gmail messages and Drive docs. Calendar joins with its ticket. */
-export const MEMORY_APPS = ["gmail", "drive"] as const;
+/** The apps memory learns from: Gmail messages, Drive docs and Calendar invites. */
+export const MEMORY_APPS = ["gmail", "drive", "calendar"] as const;
 export type MemoryApp = (typeof MEMORY_APPS)[number];
 
 /**
@@ -25,7 +25,10 @@ export type ObjectKind = (typeof OBJECT_KINDS)[number];
 export const OBJECT_KEY_KINDS = ["email", "domain"] as const;
 export type ObjectKeyKind = (typeof OBJECT_KEY_KINDS)[number];
 
-/** One item to learn from: what discovery's `discovery/item.stored` points at. */
+/**
+ * One item to learn from: what discovery's `discovery/item.stored` points at, or the Calendar
+ * poll's `calendar/event.changed`.
+ */
 export const itemToLearnSchema = z.object({
   connectionId: z.string().min(1),
   app: z.enum(MEMORY_APPS),
@@ -34,8 +37,9 @@ export const itemToLearnSchema = z.object({
 export type ItemToLearn = z.infer<typeof itemToLearnSchema>;
 
 /**
- * An item gone from a connection's app: what discovery's `discovery/item.removed` points at.
- * `itemId` is a Gmail message ID, or a Drive file ID (every version of the file).
+ * An item gone from a connection's app: what discovery's `discovery/item.removed` points at, or
+ * the Calendar poll's `calendar/event.removed`. `itemId` is a Gmail message ID, a Drive file ID
+ * (every version of the file), or a Calendar event ID (every version of the event).
  */
 export const removedItemSchema = z.object({
   connectionId: z.string().min(1),
@@ -45,20 +49,22 @@ export const removedItemSchema = z.object({
 export type RemovedItem = z.infer<typeof removedItemSchema>;
 
 /**
- * A Drive file changed in place, its sharing perhaps: what discovery's `discovery/item.changed`
- * points at. `sourceRef` is the version it's at.
+ * A Drive file or Calendar event changed in place, who may see it perhaps: what discovery's
+ * `discovery/item.changed`, or the Calendar poll's `calendar/event.changed`, points at.
+ * `sourceRef` is the version it's at.
  */
 export const changedItemSchema = z.object({
   connectionId: z.string().min(1),
-  app: z.literal("drive"),
+  app: z.enum(["drive", "calendar"]),
   sourceRef: z.string().min(1),
 });
 export type ChangedItem = z.infer<typeof changedItemSchema>;
 
 /**
- * What reading a file's sharing list again did: rewrote its access lists, deleted what memory
- * learned from it (Drive no longer gives the account the file), found nothing memory learned
- * from it, or couldn't reach it (its connection needs reconnecting).
+ * What reading an item's access list again did (a Drive file's sharing list, a Calendar event's
+ * guests): rewrote its access lists, deleted what memory learned from it (the app no longer gives
+ * the account the item), found nothing memory learned from it, or couldn't reach it (its
+ * connection needs reconnecting).
  */
 export type AccessReread = { outcome: "rewritten" | "removed" | "unknown" | "unreachable" };
 
@@ -68,7 +74,8 @@ export type AccessReread = { outcome: "rewritten" | "removed" | "unknown" | "unr
  * kept failing); an exclusion covers it; it's from a person an admin
  * asked memory to forget (`forgotten`); learned already (for a
  * Drive file, this version or a newer one); not a kind of item memory reads (a Drive file that
- * isn't a Google Doc); changed since (a Drive file's newer version is learned on its own); the
+ * isn't a Google Doc, a Calendar event with no guests); changed since (a Drive file's or a
+ * Calendar event's newer version is learned on its own); the
  * injection screen flagged it, or no screen is configured, so no model read it; not business;
  * or it stated no fact memory keeps.
  */

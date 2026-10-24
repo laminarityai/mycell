@@ -13,6 +13,8 @@ import { findCtx } from "./lib/find-ctx";
 export { findUser, findUsersByEmail, listUsers, userCtx, userNames } from "./lib/list-users";
 // Called only by scheduled jobs, which take no ctx until they pick an org.
 export { listOrgIds } from "./lib/list-org-ids";
+// Called only by the Gmail push route, which has no ctx until it finds the mailbox's org.
+export { findOrgIdForAddress } from "./lib/org-for-address";
 export { getOrgSettings, getWorkspaceDomain } from "./lib/workspace-domain";
 export { removeUser, setRole } from "./lib/manage-users";
 // Who was removed, kept from rejoining by sign-in until an admin re-adds them.

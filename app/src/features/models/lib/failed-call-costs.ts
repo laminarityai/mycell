@@ -10,7 +10,7 @@ import {
 } from "@/features/credits/server";
 import type { Usage } from "@/features/credits/types";
 import { type Ctx, requireSystem } from "@/lib/ctx";
-import { DAY_MS } from "@/lib/time";
+import { DAY_MS, now } from "@/lib/time";
 import type { FailedCallCostOutcome } from "../types";
 import { sendFailedCallRecorded } from "./events";
 import { lookUpGenerationCost } from "./generation-lookup";
@@ -46,7 +46,7 @@ export async function correctFailedCallCost(
   requireSystem(ctx);
   const call = await findUncostedFailedCall(ctx, entryId);
   if (call === undefined) return "nothing_to_correct";
-  if (Date.now() - call.createdAt.getTime() > LOOKUP_WINDOW_MS) return "given_up";
+  if (now().getTime() - call.createdAt.getTime() > LOOKUP_WINDOW_MS) return "given_up";
   const costUsd = await lookUpGenerationCost(call.generationId);
   if (costUsd === undefined) return "not_billed_yet";
   const correction = await recordFailedCallCost(ctx, call.id, costUsd);

@@ -86,9 +86,11 @@ export async function streamChatTurn<T>(ctx: Ctx, request: ChatTurnRequest<T>): 
       metered.meterStep(step.providerMetadata);
       parts.push(...storedParts(tools, step));
     },
-    // A failed step ends the turn; the error itself may quote the model, so it isn't kept.
-    onError: () => {
+    // A failed step ends the turn. Its error may quote the model, so it isn't kept; the
+    // metering reads only the generation ID off it, for the cost the gateway may still bill.
+    onError: ({ error }) => {
       failed = true;
+      metered.meterError(error);
     },
   });
 
@@ -102,8 +104,9 @@ export async function streamChatTurn<T>(ctx: Ctx, request: ChatTurnRequest<T>): 
         }),
       );
       await result.consumeStream({
-        onError: () => {
+        onError: (error) => {
           failed = true;
+          metered.meterError(error);
         },
       });
       if (failed) parts.push({ type: "notice", ...failedNotice });

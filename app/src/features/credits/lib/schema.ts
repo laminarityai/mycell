@@ -40,6 +40,8 @@ export const creditLedger = pgTable(
     // What the usage was spent on when no run or Try it made it: memory's learning, a person's
     // summary, or the builder chat.
     purpose: text("purpose", { enum: CREDIT_PURPOSES }),
+    // Grants only: what our team granted it for ("October allowance"), shown on the Credits page.
+    note: text("note"),
     // A correction: the failed call's usage entry whose billed cost this entry records, with the
     // same attribution. At most one per failed call, however often its lookup is retried.
     correctsId: text("corrects_id"),
@@ -51,6 +53,12 @@ export const creditLedger = pgTable(
     index("credit_ledger_org_id_purpose_created_at_idx").on(
       table.orgId,
       table.purpose,
+      table.createdAt,
+    ),
+    // A workflow's budget adds up its runs' spending this month, at every fan-out.
+    index("credit_ledger_org_id_workflow_id_created_at_idx").on(
+      table.orgId,
+      table.workflowId,
       table.createdAt,
     ),
     uniqueIndex("credit_ledger_corrects_id_unique").on(table.correctsId),

@@ -177,7 +177,7 @@ describe("a custom Google read in a workflow", () => {
       issues: [
         {
           path: ["steps", 0, "action"],
-          message: `google.read-event needs the calendar.events scope, which ${admin.email} wasn't granted. Reconnect it to grant it.`,
+          message: `google.read-event needs Calendar, which ${admin.email} wasn't granted. Reconnect it to allow Calendar.`,
         },
       ],
     });
@@ -212,9 +212,12 @@ describe("a custom Google read in a workflow", () => {
     });
     await publishWorkflow(admin.ctx, workflowId);
 
-    expect((await getVisibleWorkflow(member.ctx, workflowId)).switch).toMatchObject({
+    const visible = await getVisibleWorkflow(member.ctx, workflowId);
+    // Each custom read counts as the Google app its path reaches: Calendar is new.
+    expect(visible.requiredApps).toEqual(["Gmail", "Calendar"]);
+    expect(visible.switch).toMatchObject({
       status: "paused",
-      pausedChange: { newScopes: ["calendar.events"] },
+      pausedChange: { newApps: ["Calendar"], newScopes: ["calendar.events"] },
     });
     expect(await enable(member.ctx, workflowId)).toEqual({
       needs: "reconnect",

@@ -37,7 +37,7 @@ export const connections = pgTable(
     // Set when Nango reports the app refused to refresh the token, cleared by a reconnect or a
     // later successful refresh. Polling skips the connection meanwhile.
     needsReauth: boolean("needs_reauth").notNull().default(false),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     unique("connections_org_id_source_account_unique").on(
@@ -71,6 +71,13 @@ export const ingestStates = pgTable(
     cursor: text("cursor"),
     // When polling last finished for the app. Null until the first poll.
     lastPolledAt: timestamp("last_polled_at", { withTimezone: true }),
+    // When the app's watch on the account runs out (ADR-0026), as the app answered the last
+    // watch or renewal. Null until a watch starts; it stays as it was when a renewal fails.
+    watchExpiresAt: timestamp("watch_expires_at", { withTimezone: true }),
+    // The channel the app's watch opened, for an app whose watch is a web-hook channel (Drive's):
+    // its ID and the resource ID the app gave it, which stopping it needs. Null for Gmail's.
+    watchChannelId: text("watch_channel_id"),
+    watchResourceId: text("watch_resource_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
@@ -97,7 +104,7 @@ export const connectAttempts = pgTable(
     source: text("source", { enum: ["google", "microsoft", "gmail", "drive"] }).notNull(),
     status: text("status", { enum: ["pending", "connected", "refused"] }).notNull(),
     refusal: text("refusal"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     index("connect_attempts_org_id_user_id_idx").on(table.orgId, table.userId),

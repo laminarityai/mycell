@@ -11,21 +11,24 @@ import { startRunAction } from "../actions";
 export type RunConnectionOption = { id: string; label: string };
 
 /**
- * Runs the workflow's latest version on one Gmail message by ID: a debugging aid beside the
- * trigger.
+ * Runs the workflow's latest version on one Gmail message, or one calendar event for a
+ * workflow that starts on a new invite, by ID: a debugging aid beside the trigger.
  */
 export function RunOnMessageForm({
   workflowId,
   connections,
+  item = "message",
 }: {
   workflowId: string;
   connections: RunConnectionOption[];
+  /** What the workflow's trigger starts a run on: a message, or an invite. */
+  item?: string;
 }) {
   const [result, start, starting] = useActionState(startRunAction, {});
   if (connections.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        Connect a Google account this workflow can run on to try it on a message.
+        Connect a Google account this workflow can run on to try it on {article(item)} {item}.
       </p>
     );
   }
@@ -48,7 +51,7 @@ export function RunOnMessageForm({
         </NativeSelect>
       </label>
       <label className="flex flex-col gap-1 text-sm font-medium">
-        Gmail message ID
+        {item === "invite" ? "Calendar event ID" : "Gmail message ID"}
         <Input
           name="sourceRef"
           defaultValue={result.values?.sourceRef}
@@ -58,10 +61,14 @@ export function RunOnMessageForm({
       </label>
       <div>
         <Button type="submit" variant="outline" disabled={starting}>
-          Run on this message
+          Run on this {item}
         </Button>
       </div>
       <FormError message={result.error} />
     </form>
   );
+}
+
+function article(word: string): string {
+  return /^[aeiou]/.test(word) ? "an" : "a";
 }

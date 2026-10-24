@@ -1,5 +1,6 @@
 import { z } from "zod";
-import type { ConditionField, Spec, SpecIssue } from "@/features/spec/types";
+import type { TriggerType } from "@/features/spec/triggers";
+import type { ApprovalChannel, ConditionField, Spec, SpecIssue } from "@/features/spec/types";
 
 /** Risk levels, least to most dangerous (docs/architecture.md, "Risk policy"). */
 export const riskLevelSchema = z.enum([
@@ -12,7 +13,7 @@ export const riskLevelSchema = z.enum([
 export type RiskLevel = z.infer<typeof riskLevelSchema>;
 
 /** The connection apps a Google catalog action may act in, as admins name them. */
-export type ConnectionApp = "Gmail" | "Sheets";
+export type ConnectionApp = "Gmail" | "Sheets" | "Docs" | "Tasks" | "Calendar";
 
 /** What every catalog action has, whatever it acts on. */
 type CatalogActionBase = {
@@ -26,6 +27,11 @@ type CatalogActionBase = {
    * such as "a Gmail draft". Every external send has one; other actions have none.
    */
   readonly pendingForm?: string;
+  /**
+   * The approval channel that reviews what an `external_send` action left waiting: a draft step's
+   * output is reviewed in `gmail_drafts`; any other channel's action runs in a tool step.
+   */
+  readonly channel?: ApprovalChannel;
   /** The action's input once references are resolved. */
   readonly input: z.ZodType;
   /** What the action hands on to later steps, content included, never into a run record (ADR-0021). */
@@ -99,6 +105,7 @@ export type CustomAction = {
   readonly description: string;
   readonly risk: RiskLevel;
   readonly pendingForm?: undefined;
+  readonly channel?: undefined;
   /** The registered app's ID, as `connections` names it. */
   readonly registeredApp: string;
   /**
@@ -147,6 +154,8 @@ export type Requirements = {
   maxRisk: RiskLevel;
   /** The actions the version calls. */
   requiredActions: readonly string[];
+  /** What starts its runs; a new Gmail message when left out. */
+  trigger?: TriggerType;
 };
 
 /**

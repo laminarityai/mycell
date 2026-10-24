@@ -12,6 +12,7 @@ import { registeredAppIdSchema } from "@/features/connections/types";
 import { type Ctx, requireAdmin, requireRole, requireSystem } from "@/lib/ctx";
 import { InvariantError, NotFoundError, ValidationError } from "@/lib/errors";
 import type { PromptText } from "@/lib/prompts";
+import { now } from "@/lib/time";
 import {
   capabilityRequestInputSchema,
   type CapabilityRequest,
@@ -63,7 +64,7 @@ export async function fileCapabilityRequest(
             {
               ...details,
               ...(request.codeDraft === undefined ? {} : { codeDraft: request.codeDraft }),
-              updatedAt: new Date(),
+              updatedAt: now(),
             },
             eq(capabilityRequests.key, key),
           )
@@ -144,7 +145,7 @@ export async function setCapabilityRequestStatus(
     {
       status: change.status,
       note: note === undefined || note === "" ? null : note,
-      updatedAt: new Date(),
+      updatedAt: now(),
     },
     eq(capabilityRequests.id, requestId),
   );

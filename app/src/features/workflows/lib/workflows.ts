@@ -15,6 +15,7 @@ import { sameValue } from "@/features/spec/diff";
 import { readStoredSpec } from "@/features/spec/stored";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { ConflictError, ValidationError } from "@/lib/errors";
+import { now } from "@/lib/time";
 import type {
   CheckedSave,
   SavedWorkflow,
@@ -24,7 +25,9 @@ import type {
   WorkflowVersionSummary,
 } from "../types";
 import { findWorkflow } from "./access";
+import { failurePauseOf } from "./failure-pauses";
 import { latestVersions } from "./latest-versions";
+import { requiredApps } from "./requirements";
 import { workflows, workflowVersions } from "./schema";
 import { switchesOf, switchOf } from "./switches";
 import { validateWorkflowSpec } from "./validation";
@@ -96,7 +99,7 @@ export async function saveWorkflowIn(
     // One conditional update: it saves only while the working spec is still at `base`.
     const updated = await tx.update(
       workflows,
-      { ...values, revision: base + 1, updatedAt: new Date() },
+      { ...values, revision: base + 1, updatedAt: now() },
       and(eq(workflows.id, workflowId), eq(workflows.revision, base)),
     );
     if (updated.length === 0) {
@@ -129,12 +132,13 @@ export async function listWorkflows(ctx: Ctx): Promise<WorkflowSummary[]> {
     ],
     orderBy: [workflows.name],
   });
-  const [latest, switches] = await Promise.all([
+  const [latest, switches, actions] = await Promise.all([
     latestVersions(
       ctx,
       rows.map((row) => row.id),
     ),
     switchesOf(ctx, rows),
+    getActionSet(ctx),
   ]);
   const audiences = await audiencesOf(
     ctx,
@@ -148,6 +152,7 @@ export async function listWorkflows(ctx: Ctx): Promise<WorkflowSummary[]> {
       specId: row.specId,
       latestVersion: version === undefined ? null : versionSummary(version),
       credentials: version === undefined ? null : version.spec.credentials,
+      requiredApps: version === undefined ? [] : requiredApps(version, actions),
       switch: switches.get(row.id) ?? null,
       audience: version === undefined ? null : (audiences.get(version.id) ?? null),
       archivedAt: row.archivedAt,
@@ -187,6 +192,7 @@ export async function getWorkflow(
     versions: versions.map(versionSummary),
     switch: await switchOf(ctx, row),
     archivedAt: row.archivedAt,
+    failurePause: failurePauseOf(row),
     createdBy: row.createdBy,
     updatedAt: row.updatedAt,
   };

@@ -10,9 +10,11 @@ import {
 } from "@/features/builder/ui";
 import { listCustomActions } from "@/features/custom-actions/server";
 import { getCtx } from "@/features/orgs/server";
-import { recentMessages } from "@/features/runtime/server";
+import { recentInvites, recentMessages } from "@/features/runtime/server";
+import { triggers } from "@/features/spec/triggers";
+import type { Spec } from "@/features/spec/types";
 import { getWorkflow } from "@/features/workflows/server";
-import { isAdmin } from "@/lib/ctx";
+import { type Ctx, isAdmin } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
 import { AppShell } from "@/app/_shell/app-shell";
 
@@ -70,8 +72,8 @@ async function ConversationView({ params, searchParams }: PageProps<"/builder/[c
     workflow === null
       ? null
       : (await searchParams).try === undefined
-        ? { open: false }
-        : { open: true, sources: await recentMessages(ctx, workflow.workingSpec.credentials) };
+        ? { open: false, item: triggers[workflow.workingSpec.trigger.type].item }
+        : await openTryIt(ctx, workflow.workingSpec);
   return (
     <div className="flex min-h-0 flex-1">
       <aside className="hidden w-56 shrink-0 flex-col gap-3 overflow-y-auto border-r p-3 lg:flex">
@@ -99,4 +101,14 @@ async function ConversationView({ params, searchParams }: PageProps<"/builder/[c
       </div>
     </div>
   );
+}
+
+// The open panel: the recent messages, or the recent invites when the spec starts on one.
+async function openTryIt(ctx: Ctx, spec: Spec): Promise<ConversationTryIt> {
+  const { item } = triggers[spec.trigger.type];
+  const sources =
+    item === "invite"
+      ? await recentInvites(ctx, spec.credentials)
+      : await recentMessages(ctx, spec.credentials);
+  return { open: true, sources, item };
 }

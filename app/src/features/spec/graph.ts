@@ -7,6 +7,7 @@ import type { SubjectWords } from "./conditions";
 import { describeCondition, specWords, type ActionInfo } from "./describe";
 import { changeMarks, type ChangeMarks } from "./graph-changes";
 import { stepWords } from "./graph-words";
+import { triggers } from "./triggers";
 import type { BranchStep, Condition, Spec, Step, StepType } from "./types";
 
 /** What the caller knows about one catalog action, and the app it acts in. */
@@ -78,6 +79,8 @@ export type GraphPath<Risk extends string = string> = {
 };
 
 export type GraphView<Risk extends string = string> = {
+  /** What starts a run, in words, as the trigger's box says it. */
+  trigger: string;
   /** The steps under the trigger. None before a workflow has any. */
   steps: GraphStep<Risk>[];
   /** A Try it is drawn: the steps it ran, and the paths it took. */
@@ -108,7 +111,8 @@ export function graphView<Risk extends string = string>(
 ): GraphView<Risk> {
   const { proposal } = options;
   const drawn = proposal?.spec ?? spec;
-  if (drawn === null) return { steps: [], tried: false };
+  if (drawn === null)
+    return { trigger: triggers["gmail.message_received"].words, steps: [], tried: false };
   // Each check's subject in words: the drawn spec's, and the base's for what it removes.
   const drawnWords = specWords(drawn, options.action);
   const baseWords = spec === null ? drawnWords : specWords(spec, options.action);
@@ -182,7 +186,11 @@ export function graphView<Risk extends string = string>(
     const base = marks.basePaths(step.id);
     return [...withRemoved(base, marks.pathGone, drawnPaths, removedPath), ...otherwise];
   };
-  return { steps: list(drawn.steps, "root"), tried: options.trace !== undefined };
+  return {
+    trigger: triggers[drawn.trigger.type].words,
+    steps: list(drawn.steps, "root"),
+    tried: options.trace !== undefined,
+  };
 }
 
 /** A branch's path or its otherwise path, which has no name or condition. */

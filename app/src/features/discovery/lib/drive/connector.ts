@@ -1,5 +1,5 @@
 // The Drive connector: the changes feed's page token as the cursor, files.list for the backfill,
-// and changes.list for polling. Both read the same file fields (never the name) and normalize
+// changes.list for polling, and a changes.watch channel for push (channel.ts). Both read the same file fields (never the name) and normalize
 // each file the same way. My Drive and files shared with the user only: no shared drives. The
 // changes feed also reports files removed: deleted, no longer shared with the account (Drive's
 // `removed`), or put in the trash.
@@ -15,6 +15,7 @@ import {
   fileListSchema,
   startPageTokenSchema,
 } from "./api";
+import { driveWatcher } from "./channel";
 import { normalizeFile } from "./normalize";
 
 // Files per backfill page, and changes per poll page: Drive's maximum for both. A page needs
@@ -83,6 +84,8 @@ export const driveConnector: Connector = {
       };
     }
   },
+
+  watch: driveWatcher,
 };
 
 // One page of the changes feed, or "expired" when Drive no longer accepts the token: it answers

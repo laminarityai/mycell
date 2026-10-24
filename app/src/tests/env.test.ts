@@ -58,4 +58,30 @@ describe("the environment", () => {
     const local = { ...base, INNGEST_DEV: "1", ...push, GMAIL_PUSH_TOPIC: "gmail-push" };
     expect(() => parseEnv(local)).toThrow(/GMAIL_PUSH_TOPIC/);
   });
+
+  it("knows Jev and Laya as decision models unless config lists others", () => {
+    const local = { ...base, INNGEST_DEV: "1" };
+    expect(parseEnv(local).MODEL_DECISION_PREFIXES).toEqual([
+      "typesafe-ai/jev",
+      "convaiinnovations/laya",
+    ]);
+    expect(
+      parseEnv({ ...local, MODEL_DECISION_PREFIXES: "typesafe-ai/jev, acme/decider" })
+        .MODEL_DECISION_PREFIXES,
+    ).toEqual(["typesafe-ai/jev", "acme/decider"]);
+    expect(parseEnv({ ...local, MODEL_DECISION_PREFIXES: "" }).MODEL_DECISION_PREFIXES).toEqual([]);
+    expect(() => parseEnv({ ...local, MODEL_DECISION_PREFIXES: "jev" })).toThrow(
+      /MODEL_DECISION_PREFIXES/,
+    );
+  });
+
+  it("takes Drive push's secret only at 32 characters or more, and on its own", () => {
+    const local = { ...base, INNGEST_DEV: "1" };
+    expect(parseEnv(local).DRIVE_PUSH_SECRET).toBeUndefined();
+    const secret = "a-drive-push-secret-of-32-chars!";
+    expect(parseEnv({ ...local, DRIVE_PUSH_SECRET: secret }).DRIVE_PUSH_SECRET).toBe(secret);
+    expect(() => parseEnv({ ...local, DRIVE_PUSH_SECRET: secret.slice(1) })).toThrow(
+      /DRIVE_PUSH_SECRET/,
+    );
+  });
 });

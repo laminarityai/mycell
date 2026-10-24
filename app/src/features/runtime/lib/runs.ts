@@ -1,5 +1,5 @@
 // Run records: starting a run by hand, and reading a run's rows back. The manual start is
-// admin-only; the interpreter writes as the system ctx (interpreter.ts). What a person may read
+// admin-only (a retry is retries.ts's); the interpreter writes as the system ctx (interpreter.ts). What a person may read
 // of a run is run-details.ts's and run-list.ts's business.
 import { randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
@@ -15,8 +15,8 @@ type Run = typeof runs.$inferSelect;
 type RunStepRow = typeof runSteps.$inferSelect;
 
 /**
- * Runs the workflow's latest version on one message of a connection, as a debugging aid: the
- * manual twin of the trigger. The connection must suit the spec's credentials (the admin's own
+ * Runs the workflow's latest version on one message of a connection, or one calendar event
+ * when its trigger is a new invite, as a debugging aid: the manual twin of the trigger. The connection must suit the spec's credentials (the admin's own
  * member connection, or an org connection) and be the admin's to read.
  */
 export async function startRun(
@@ -27,7 +27,9 @@ export async function startRun(
 ): Promise<{ runId: string }> {
   requireAdmin(ctx);
   const messageId = sourceRef.trim();
-  if (messageId === "") throw new ValidationError("Give the ID of a Gmail message.");
+  if (messageId === "") {
+    throw new ValidationError("Give the ID of a Gmail message, or of a calendar event.");
+  }
   const workflow = await getWorkflow(ctx, workflowId);
   const latest = workflow.versions.at(0);
   if (latest === undefined) throw new ValidationError("Publish the workflow before running it.");
@@ -56,6 +58,11 @@ export async function startRun(
 
 export async function findRun(ctx: Ctx, runId: string): Promise<Run | undefined> {
   return (await forOrg(ctx).select(runs, { where: eq(runs.id, runId), limit: 1 })).at(0);
+}
+
+/** The run that retries this one, if it was retried. */
+export async function findRetry(ctx: Ctx, runId: string): Promise<Run | undefined> {
+  return (await forOrg(ctx).select(runs, { where: eq(runs.retryOfRunId, runId), limit: 1 })).at(0);
 }
 
 /** The run's recorded steps, in spec order. */

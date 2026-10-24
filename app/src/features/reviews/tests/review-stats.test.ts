@@ -83,6 +83,8 @@ describe("reviewStats", () => {
       }),
       escalations: counts(),
       heldSends: counts(),
+      suggestedEdits: counts(),
+      meetings: counts(),
       // 4 of approved 4, edited 1, declined 1, gone 1: sent from Gmail is left out.
       approvedWithoutEdits: 4 / 7,
       byUser: [],
@@ -113,6 +115,8 @@ describe("reviewStats", () => {
         approvals: counts({ approved: 1, waiting: 1 }),
         escalations: counts(),
         heldSends: counts(),
+        suggestedEdits: counts(),
+        meetings: counts(),
         approvedWithoutEdits: 1,
       },
       {
@@ -127,6 +131,8 @@ describe("reviewStats", () => {
         }),
         escalations: counts(),
         heldSends: counts(),
+        suggestedEdits: counts(),
+        meetings: counts(),
         approvedWithoutEdits: 3 / 6,
       },
     ]);
@@ -195,6 +201,8 @@ describe("reviewStats", () => {
       approvals: counts(),
       escalations: counts(),
       heldSends: counts(),
+      suggestedEdits: counts(),
+      meetings: counts(),
       approvedWithoutEdits: null,
       byUser: [],
     });
@@ -265,6 +273,8 @@ describe("reviewStats", () => {
         approvals: counts({ approved: 1 }),
         escalations: counts(),
         heldSends: counts(),
+        suggestedEdits: counts(),
+        meetings: counts(),
         approvedWithoutEdits: 1,
       },
     ]);

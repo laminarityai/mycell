@@ -90,14 +90,15 @@ describe("a run's page's query budget", () => {
     const small = await budget(one);
     const large = await budget(twelve);
 
-    // Whose each connection is (2), the run, its steps, its version, its workflow's name, and,
-    // for a run shown in full, the company's custom actions, for its checks' words.
-    expect(small.full.queries).toBe(7);
+    // Whose each connection is (2), the run, its steps, its version, its workflow's name, its
+    // retry, and, for a run shown in full, the company's custom actions, for its checks' words.
+    expect(small.full.queries).toBe(8);
     expect(large.full.queries).toBe(small.full.queries);
     expect(large.redacted.queries).toBe(small.redacted.queries);
     expect(large.member.queries).toBe(small.member.queries);
-    // The run, and its connection to fetch the message through.
-    expect(small.message.queries).toBe(2);
+    // The run, its version (whose trigger says whether it's a message or an invite), and its
+    // connection to fetch it through.
+    expect(small.message.queries).toBe(3);
     expect(large.message.queries).toBe(small.message.queries);
   });
 });

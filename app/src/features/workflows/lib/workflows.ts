@@ -15,6 +15,7 @@ import { sameValue } from "@/features/spec/diff";
 import { readStoredSpec } from "@/features/spec/stored";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { ConflictError, ValidationError } from "@/lib/errors";
+import { now } from "@/lib/time";
 import type {
   CheckedSave,
   SavedWorkflow,
@@ -24,6 +25,7 @@ import type {
   WorkflowVersionSummary,
 } from "../types";
 import { findWorkflow } from "./access";
+import { failurePauseOf } from "./failure-pauses";
 import { latestVersions } from "./latest-versions";
 import { requiredApps } from "./requirements";
 import { workflows, workflowVersions } from "./schema";
@@ -97,7 +99,7 @@ export async function saveWorkflowIn(
     // One conditional update: it saves only while the working spec is still at `base`.
     const updated = await tx.update(
       workflows,
-      { ...values, revision: base + 1, updatedAt: new Date() },
+      { ...values, revision: base + 1, updatedAt: now() },
       and(eq(workflows.id, workflowId), eq(workflows.revision, base)),
     );
     if (updated.length === 0) {
@@ -190,6 +192,7 @@ export async function getWorkflow(
     versions: versions.map(versionSummary),
     switch: await switchOf(ctx, row),
     archivedAt: row.archivedAt,
+    failurePause: failurePauseOf(row),
     createdBy: row.createdBy,
     updatedAt: row.updatedAt,
   };

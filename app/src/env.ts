@@ -54,6 +54,19 @@ const envSchema = z.object({
   // The embed role has a default, so existing .env files keep working. Its vectors have 1536
   // dimensions, and stored vectors must keep one size: change it only together with them.
   MODEL_EMBED: modelIdSchema.default("openai/text-embedding-3-small"),
+  // The decision models: a classify model whose ID starts with one of these `provider/model`
+  // prefixes is asked through experimental_decide, any other through a structured output on
+  // `fast`. Comma-separated; Jev, and Laya, which an org may try through its role table.
+  MODEL_DECISION_PREFIXES: z
+    .string()
+    .default("typesafe-ai/jev,convaiinnovations/laya")
+    .transform((value) =>
+      value
+        .split(",")
+        .map((prefix) => prefix.trim())
+        .filter((prefix) => prefix !== ""),
+    )
+    .pipe(z.array(modelIdSchema)),
   // Credits (ADR-0010): how many credits one US dollar of gateway cost uses up, and the per-role
   // estimate a call must find in the balance before it is made. The defaults are the placeholders
   // the tests are written against; the real values are in docs/credit-pricing.md and .env.example.
@@ -95,6 +108,11 @@ const envSchema = z.object({
     .optional(),
   GOOGLE_PUSH_AUDIENCE: z.url().optional(),
   GOOGLE_PUSH_SERVICE_ACCOUNT: z.email().optional(),
+  // Drive push (ADR-0026): each Drive's changes.watch channel posts to BETTER_AUTH_URL's
+  // /api/google/drive-push with a token naming the org and connection, signed with this secret
+  // (HMAC-SHA256). Unset, no channel opens, the route answers 404, and Drive is polled every
+  // minute.
+  DRIVE_PUSH_SECRET: z.string().min(32).optional(),
   // The key store (ADR-0020, ADR-0024): AWS KMS holds two keys per org, made on first use under
   // the aliases `alias/<KMS_ALIAS_PREFIX>/org/<org ID>` (encryption) and `…/<org ID>/hash` (keyed
   // hashes). The key store needs KMS_REGION, which is required unless INNGEST_DEV=1, like the

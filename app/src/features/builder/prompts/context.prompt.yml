@@ -8,6 +8,21 @@ organization: |-
   Name: {{name}}
   Workspace domain: {{domain}}
 
+# What can start a run (builder/lib/triggers-context.ts): an entry per trigger type, each the
+# trigger as a spec writes it, what a run on it is about, and what its steps may read. The last
+# of each entry's lines is one of `triggerReplies` and `triggerNoReply`.
+triggersTitle: |-
+  Triggers
+triggersIntro: |-
+  A spec has exactly one trigger. Each run starts on one item the trigger found:
+trigger: |-
+  - {{trigger}}: {{words}}. Each run is about one {{item}}; its connection must be granted {{app}}.
+triggerReads: "  Classify and extract steps read the {{item}}. A tool input may read {{fields}}."
+triggerReplies: "  A draft replies to the {{item}} and may read {{context}}; an escalate hands it to a person."
+triggerNoReply: "  There is no Gmail message to reply to: use no draft step and no escalate step."
+triggersDefault: |-
+  Gmail's labelIds default to ["INBOX"]. Change the trigger only when the admin asks.
+
 # Every action a spec may use, catalog and custom. `inputs` and `outputs` are JSON schemas, and
 # `runs` is one of the two lines after it.
 actionCatalogTitle: |-
@@ -41,7 +56,7 @@ conditionChecks: |-
     - boolean field (yes/no): {{yesNoChecks}}
   Trigger facts and tool step results take the same checks for their type:
 triggerFacts: |-
-  - The {{trigger}} trigger's facts about the message, as { "subject": { "from": "trigger.<fact>" }, ... }:
+  - The {{trigger}} trigger's facts about the {{item}}, as { "subject": { "from": "trigger.<fact>" }, ... }:
 triggerFact: "  - trigger.{{name}} ({{type}}): {{label}}"
 resultFields: |-
   - A tool step's result fields, as { "subject": { "from": "<tool step id>.<field>" }, ... }, for the actions that declare them:

@@ -177,7 +177,7 @@ describe("checking a custom action's description", () => {
   it("refuses a name in the catalog's own words, which it keeps for actions it adds later", () => {
     for (const [name, word] of [
       ["google-mail.read-labels", "google-mail"],
-      ["google-calendar.read-event", "google-calendar"],
+      ["google-calendar.list-calendars", "google-calendar"],
     ]) {
       expect(checkCustomAction(readOutlookMessage({ name })), name).toEqual({
         ok: false,

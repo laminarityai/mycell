@@ -50,6 +50,16 @@ describe("the catalog", () => {
       "memory.lookup",
     ]);
     expect(names([])).toEqual(["memory.lookup"]);
+    expect(names([googleScope("tasks.readonly")])).toEqual([
+      "google-tasks.list-tasks",
+      "memory.lookup",
+    ]);
+    expect(names([googleScope("tasks")])).toEqual([
+      "google-tasks.list-tasks",
+      "google-tasks.create-task",
+      "google-tasks.update-task",
+      "memory.lookup",
+    ]);
   });
 
   it("reads memory at read risk, needing no app of the connection", () => {
@@ -72,6 +82,13 @@ describe("the catalog", () => {
       "google-mail.create-draft": "external_send",
       "google-sheet.read-range": "read",
       "google-sheet.append-row": "internal_reversible",
+      "google-docs.read-document": "read",
+      "google-docs.suggest-edits": "external_send",
+      "google-calendar.read-event": "read",
+      "google-calendar.create-event": "external_send",
+      "google-tasks.list-tasks": "read",
+      "google-tasks.create-task": "internal_reversible",
+      "google-tasks.update-task": "internal_reversible",
       "memory.lookup": "read",
     });
   });

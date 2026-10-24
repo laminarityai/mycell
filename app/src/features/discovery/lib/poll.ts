@@ -15,7 +15,7 @@ import { getConnection, recordIngestState, sourceClient } from "@/features/conne
 import { ingestedAppSchema, type IngestedApp } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
 import { runInline, type RunStep } from "@/lib/inngest";
-import { DAY_MS } from "@/lib/time";
+import { DAY_MS, now } from "@/lib/time";
 import type { PollOutcome } from "../types";
 import { announcedFor, changesOf, sendAnnounced, NOTHING, type Announced } from "./announce";
 import { BACKFILL_DAYS } from "./backfill";
@@ -87,7 +87,7 @@ async function pollOnce(ctx: Ctx, connectionId: string, app: IngestedApp): Promi
   const created = await storeEvents(ctx, connection, app, found.events);
   await recordIngestState(ctx, connectionId, app, {
     cursor: found.nextCursor,
-    lastPolledAt: new Date(),
+    lastPolledAt: now(),
   });
   const announced = announcedFor(app, created, { newMail: true });
   const changes = changesOf(app, state.cursor, found, created);
@@ -120,7 +120,7 @@ async function recover(
   const { cursor } = start;
   const end = await runStep(`${app}-recover-finish`, () =>
     whileConnected(async () => {
-      await recordIngestState(ctx, connectionId, app, { cursor, lastPolledAt: new Date() });
+      await recordIngestState(ctx, connectionId, app, { cursor, lastPolledAt: now() });
       return {};
     }),
   );
@@ -129,7 +129,7 @@ async function recover(
 
 // Just before the latest stored event, but never further back than a backfill reaches.
 function recoverySince(latest: Date | null): Date {
-  const windowStart = Date.now() - BACKFILL_DAYS * DAY_MS;
+  const windowStart = now().getTime() - BACKFILL_DAYS * DAY_MS;
   if (latest === null) return new Date(windowStart);
   return new Date(Math.max(latest.getTime() - RECOVERY_OVERLAP_MS, windowStart));
 }

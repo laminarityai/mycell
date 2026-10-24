@@ -1,0 +1,1 @@
+ALTER TABLE "ingest_states" ADD COLUMN "watch_expires_at" timestamp with time zone;

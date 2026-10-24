@@ -1,6 +1,5 @@
-// The workflow page's failures check (M8): whether its runs' failures pause it, and while they
-// do, the three runs in a row that paused it and Resume. M7's Health tab lists it with its
-// other checks; until then the page shows it in its own Health section.
+// The workflow page's failures check (M8), one of its Health tab's checks: whether its runs'
+// failures pause it, and while they do, the three runs in a row that paused it and Resume.
 import Link from "next/link";
 import { DateTime } from "@/components/date-time";
 import {
@@ -11,25 +10,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { FailurePause, PausingRun, WorkflowDetails } from "../types";
+import type { FailurePause, PausingRun } from "../types";
 import { ResumeForm } from "./resume-form";
 
-/** The workflow page's Health section, for a published workflow: its failures check. */
-export function WorkflowHealthSection({
-  workflow,
-  runs,
-}: {
-  workflow: Pick<WorkflowDetails, "id" | "failurePause">;
-  runs: PausingRun[];
-}) {
-  return (
-    <section className="flex flex-col gap-2" aria-label="Health">
-      <h2 className="text-lg font-semibold">Health</h2>
-      <FailuresCheck workflowId={workflow.id} pause={workflow.failurePause} runs={runs} />
-    </section>
-  );
-}
-
+/**
+ * What the Health tab's failures check says under its title: what would pause it while nothing
+ * does, and while it's paused, what that means, the runs that paused it and Resume.
+ */
 export function FailuresCheck({
   workflowId,
   pause,
@@ -42,26 +29,20 @@ export function FailuresCheck({
 }) {
   if (pause === null) {
     return (
-      <div role="group" aria-label="Failures" className="flex flex-col gap-1 text-sm">
-        <p className="font-medium">Its runs aren&apos;t failing.</p>
-        <p className="text-muted-foreground">
-          Three failed runs in a row would pause it for everyone until you resume it. Failures from
-          one person&apos;s connection or from running out of credits don&apos;t count.
-        </p>
-      </div>
+      <p>
+        Three failed runs in a row would pause it for everyone until you resume it. Failures from
+        one person&apos;s connection or from running out of credits don&apos;t count.
+      </p>
     );
   }
   return (
-    <div role="group" aria-label="Failures" className="flex flex-col gap-3 text-sm">
-      <p className="font-medium">
-        Paused: failing, since <DateTime value={pause.pausedAt} />.
-      </p>
-      <p className="text-muted-foreground">
+    <>
+      <p>
         Its last three runs failed, so new messages start no runs, for everyone who has it on and
         the org switch alike. Their switches stay on. Fix what failed, then resume it; messages that
         arrive until then aren&apos;t run later.
       </p>
-      <Table aria-label="Runs that paused it">
+      <Table aria-label="Runs that paused it" className="text-foreground">
         <TableHeader>
           <TableRow>
             <TableHead>Ended</TableHead>
@@ -92,6 +73,6 @@ export function FailuresCheck({
         </TableBody>
       </Table>
       <ResumeForm workflowId={workflowId} />
-    </div>
+    </>
   );
 }

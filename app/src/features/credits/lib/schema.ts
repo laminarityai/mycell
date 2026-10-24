@@ -53,6 +53,12 @@ export const creditLedger = pgTable(
       table.purpose,
       table.createdAt,
     ),
+    // A workflow's budget adds up its runs' spending this month, at every fan-out.
+    index("credit_ledger_org_id_workflow_id_created_at_idx").on(
+      table.orgId,
+      table.workflowId,
+      table.createdAt,
+    ),
     uniqueIndex("credit_ledger_corrects_id_unique").on(table.correctsId),
     foreignKey({
       name: "credit_ledger_corrects_id_fk",

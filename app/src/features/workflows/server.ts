@@ -6,6 +6,8 @@ export { getWorkflowVersion, publishWorkflow } from "./lib/versions";
 export { previewPublish } from "./lib/publish-preview";
 export { getVisibleWorkflow, listVisibleWorkflows } from "./lib/visibility";
 export { getWorkflow, listWorkflows, saveWorkflow } from "./lib/workflows";
+// For the workflow page's Health tab: the company's credits and the workflow's budget.
+export { getWorkflowHealth } from "./lib/health";
 // Saving inside the caller's transaction, as accepting a proposal does: everything a save reads
 // and checks first, then the writes through the caller's `tx`.
 export { checkWorkflowSave, saveWorkflowIn } from "./lib/workflows";

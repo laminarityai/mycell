@@ -94,6 +94,8 @@ test("three failed runs pause a workflow for its members until an admin resumes 
   await page.context().clearCookies();
   await signInAs(orgA.admin);
   await page.goto(workflowPage);
+  // While it's paused, the page opens on its Health tab.
+  await expect(page.getByRole("tab", { name: /Health/ })).toHaveAttribute("aria-selected", "true");
   const health = page.getByRole("region", { name: "Health" });
   await expect(health).toContainText("Paused: failing");
   const runs = health.getByRole("table", { name: "Runs that paused it" }).getByRole("row");
@@ -102,7 +104,8 @@ test("three failed runs pause a workflow for its members until an admin resumes 
   await expect(runs.nth(1)).toContainText(`${orgA.member.email}'s inbox`);
   await expect(runs.nth(1)).toContainText("Something went wrong on our side.");
   await health.getByRole("button", { name: "Resume" }).click();
-  await expect(health).toHaveCount(0);
+  await expect(health).toContainText("Its runs aren't failing");
+  await expect(health.getByRole("button", { name: "Resume" })).toHaveCount(0);
 
   await page.context().clearCookies();
   await signInAs(orgA.member);

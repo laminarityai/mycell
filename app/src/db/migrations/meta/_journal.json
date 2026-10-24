@@ -330,6 +330,13 @@
       "when": 1792803670676,
       "tag": "0046_workflow-failure-pause",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1792805658892,
+      "tag": "0047_workflow-spending-index",
+      "breakpoints": true
     }
   ]
 }

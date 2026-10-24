@@ -60,7 +60,7 @@ export function TriggerNode({ data }: Of<"trigger">) {
       <p className={HEADING}>
         <Inbox aria-hidden className="size-3.5 shrink-0" /> Trigger
       </p>
-      <p className="text-sm leading-snug">When a message arrives in Gmail</p>
+      <p className="text-sm leading-snug">{data.label}</p>
       <Handles />
     </div>
   );
@@ -156,7 +156,7 @@ export function PathNode({ data }: Of<"path">) {
           Before: {path.before}
         </p>
       )}
-      <PathRunSummary run={path.run} />
+      <PathRunSummary run={path.run} otherwise={otherwise} />
       <Handles />
     </div>
   );

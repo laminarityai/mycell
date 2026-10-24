@@ -1,5 +1,5 @@
-// The model calls learning makes (ADR-0022): `classify` decides whether an item (an email or a
-// doc) is business, and a structured-output call on `fast` extracts objects and short facts
+// The model calls learning makes (ADR-0022): `classify` decides whether an item (an email, a doc
+// or a Calendar invite) is business, and a structured-output call on `fast` extracts objects and short facts
 // from it. What the model answers is then checked against the item itself, deterministically:
 // an object's key must appear in it, each fact must quote it, a fact that copies a long run of
 // it word for word is dropped, and so is a personal fact about someone outside the company. The quotes are checked here and never stored (invariant 8).
@@ -24,6 +24,10 @@ const BUSINESS_QUESTIONS: Record<SourceItem["kind"], { question: PromptText; lab
   document: {
     question: extractPrompts.documentQuestion(),
     labels: [BUSINESS, "personal", "template", "other"],
+  },
+  invite: {
+    question: extractPrompts.inviteQuestion(),
+    labels: [BUSINESS, "personal", "other"],
   },
 };
 
@@ -51,7 +55,8 @@ const WEBMAIL_DOMAINS = new Set([
 
 /**
  * Whether the item is business: an email rather than a newsletter, marketing, a notification
- * or personal mail; a doc about the company's work rather than a personal one or a template.
+ * or personal mail; a doc about the company's work rather than a personal one or a template; a
+ * meeting about the company's work rather than a personal appointment.
  */
 export async function isBusiness(ctx: Ctx, item: SourceItem): Promise<boolean> {
   const { label } = await classify(ctx, {

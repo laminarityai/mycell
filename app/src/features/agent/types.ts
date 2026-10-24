@@ -36,16 +36,17 @@ export type AgentConversationSummary = { id: string; title: string | null; updat
 
 /** Where a cited fact's source is, as the person may open it. */
 export type CitedSource = {
-  /** One per item: copies of one email or doc are one source. */
+  /** One per item: copies of one email, doc or invite are one source. */
   key: string;
-  kind: "email" | "doc";
+  kind: "email" | "doc" | "invite";
   occurredAt: Date;
   /**
    * The email in the person's own Gmail (their copy by its ID, anyone else's by its Message-ID)
-   * or the doc in Drive; null when no link reaches it (a colleague's email with no Message-ID).
+   * the doc in Drive, or the invite in their own calendar; null when no link reaches it (a
+   * colleague's email with no Message-ID, or an invite on someone else's calendar).
    */
   href: string | null;
-  /** The copy is in the person's own mailbox or Drive. */
+  /** The copy is in the person's own mailbox, Drive or calendar. */
   yours: boolean;
 };
 

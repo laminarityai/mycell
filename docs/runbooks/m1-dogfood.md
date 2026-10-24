@@ -58,7 +58,7 @@ It checks the API key, that `google` exists on its own provider with credentials
 npx --ignore-scripts=false inngest-cli@latest dev -u http://localhost:3000/api/inngest
 ```
 
-Open <http://localhost:8288>. Once `pnpm dev` is up (next step), **Apps** shows `mycel` synced, and **Functions** lists `backfill-connection`, `poll-connections`, `poll-connection` and `reconcile-connections`. The dev server runs `poll-connections` every minute on its own.
+Open <http://localhost:8288>. Once `pnpm dev` is up (next step), **Apps** shows `mycel` synced, and **Functions** lists `backfill-connection`, `poll-connections`, `poll-connection` and `reconcile-connections`. The dev server runs `poll-connections` every minute on its own. With the push variables (`GMAIL_PUSH_TOPIC`, `GOOGLE_PUSH_AUDIENCE`, `GOOGLE_PUSH_SERVICE_ACCOUNT`) unset, as in `app/.env.example`, no watch starts and that cron still polls every active connection every minute; with them set, a connection whose only active app is a watched Gmail is polled by the cron every 15 minutes, and by each notification in between (ADR-0026).
 
 ## 5. The app and the tunnel
 

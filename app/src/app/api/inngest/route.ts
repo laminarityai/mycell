@@ -1,7 +1,7 @@
 import { serve } from "inngest/next";
 import { deleteIdleConversationsJob } from "@/features/agent/jobs";
 import { reconcileJob } from "@/features/connections/jobs";
-import { backfillJob, pollCron, pollJob } from "@/features/discovery/jobs";
+import { backfillJob, pollCron, pollJob, renewWatchesJob } from "@/features/discovery/jobs";
 import {
   applyRetentionJob,
   deleteRemovedItemJob,
@@ -11,7 +11,7 @@ import {
   newMonthCron,
   pruneAccessLogJob,
   rereadAccessJob,
-  rereadDriveAccessJob,
+  rereadAllAccessJob,
   resumeOnCreditsJob,
   resumePostponedJob,
   retentionCron,
@@ -20,7 +20,13 @@ import {
 } from "@/features/memory/jobs";
 import { failedCallCostJob } from "@/features/models/jobs";
 import { checkWaitingReviewsJob, endedInGmailJob } from "@/features/reviews/jobs";
-import { fanOutMessageJob, runWorkflowJob } from "@/features/runtime/jobs";
+import {
+  calendarPollCron,
+  calendarPollJob,
+  fanOutInviteJob,
+  fanOutMessageJob,
+  runWorkflowJob,
+} from "@/features/runtime/jobs";
 import { assignmentRemovedJob, tagDeletedJob, tagRenamedJob } from "@/features/workflows/jobs";
 import { inngest } from "@/lib/inngest";
 
@@ -30,8 +36,12 @@ export const { GET, POST, PUT } = serve({
     backfillJob,
     pollCron,
     pollJob,
+    renewWatchesJob,
     reconcileJob,
     fanOutMessageJob,
+    calendarPollCron,
+    calendarPollJob,
+    fanOutInviteJob,
     runWorkflowJob,
     assignmentRemovedJob,
     tagDeletedJob,
@@ -48,7 +58,7 @@ export const { GET, POST, PUT } = serve({
     pruneAccessLogJob,
     deleteRemovedItemJob,
     rereadAccessJob,
-    rereadDriveAccessJob,
+    rereadAllAccessJob,
     forgetPersonAgainJob,
     retentionCron,
     applyRetentionJob,

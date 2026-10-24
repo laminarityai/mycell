@@ -18,17 +18,22 @@ import { systemCtx } from "@/lib/ctx";
 import { fakeAiGateway } from "./fake-ai-gateway";
 import { fakeInngest } from "./fake-inngest";
 
-// Event IDs name their connection, a fresh one in every test, so one set serves every test:
-// the events learned from, and those followed.
+// Event IDs name their connection, a fresh one in every test, so one set serves every test: the
+// events learned from, and, apart (memory both learns from a changed Calendar event and re-reads
+// who may see it), those followed.
 const learned = new Set<string>();
+const followed = new Set<string>();
 
-const TO_LEARN = new Set(["discovery/item.stored", "memory/item.queued"]);
+const TO_LEARN = new Set(["discovery/item.stored", "memory/item.queued", "calendar/event.changed"]);
+const REMOVED = new Set(["discovery/item.removed", "calendar/event.removed"]);
+const CHANGED = new Set(["discovery/item.changed", "calendar/event.changed"]);
 // Events sent without an ID (memory's own queued items) are told apart by when they were sent.
 const seenWithoutId = new WeakSet<object>();
 
 /**
- * Learns every item discovery announced, or memory queued, since the last call, in order, as
- * memory's job does: as the org's system ctx. Returns each item's outcome.
+ * Learns every item discovery announced, the Calendar poll found changed, or memory queued,
+ * since the last call, in order, as memory's job does: as the org's system ctx. Returns each
+ * item's outcome.
  */
 export async function learnStoredItems(orgId: string): Promise<LearnOutcome[]> {
   const outcomes: LearnOutcome[] = [];
@@ -47,18 +52,18 @@ export async function learnStoredItems(orgId: string): Promise<LearnOutcome[]> {
 }
 
 /**
- * Follows every item discovery found removed or changed since the last call, in order, as
- * memory's jobs do: as the org's system ctx.
+ * Follows every item discovery, or the Calendar poll, found removed or changed since the last
+ * call, in order, as memory's jobs do: as the org's system ctx.
  */
 export async function followAppChanges(orgId: string): Promise<void> {
   for (const event of fakeInngest.sent()) {
     const key = event.id ?? JSON.stringify(event.data);
-    if (learned.has(key) || event.data.orgId !== orgId) continue;
-    if (event.name === "discovery/item.removed") {
-      learned.add(key);
+    if (followed.has(key) || event.data.orgId !== orgId) continue;
+    if (REMOVED.has(event.name)) {
+      followed.add(key);
       await deleteRemovedItem(systemCtx(orgId), removedItemSchema.parse(event.data));
-    } else if (event.name === "discovery/item.changed") {
-      learned.add(key);
+    } else if (CHANGED.has(event.name)) {
+      followed.add(key);
       await rereadAccess(systemCtx(orgId), changedItemSchema.parse(event.data));
     }
   }
@@ -79,6 +84,7 @@ export async function withCredits(orgId: string): Promise<void> {
 const LABELS = {
   email: ["business", "newsletter", "marketing", "notification", "personal"],
   document: ["business", "personal", "template", "other"],
+  invite: ["business", "personal", "other"],
 };
 
 /**
@@ -130,6 +136,16 @@ export function scriptLearning(
   vectors?: number[][],
 ) {
   classifiedAs("business");
+  scriptExtraction(extraction, kept, vectors);
+}
+
+/** scriptLearning for a business invite. */
+export function scriptInviteLearning(
+  extraction: ScriptedExtraction,
+  kept = extraction.facts.length,
+  vectors?: number[][],
+) {
+  classifiedAs("business", "invite");
   scriptExtraction(extraction, kept, vectors);
 }
 

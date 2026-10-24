@@ -45,11 +45,26 @@ export const referenceSchema = specObject({
 export type Reference = z.infer<typeof referenceSchema>;
 
 const literal = z.union([z.string(), z.number(), z.boolean(), z.null()]);
-const inputValue = z.union([
-  literal,
-  referenceSchema,
-  z.array(z.union([literal, referenceSchema])),
-]);
+
+/**
+ * A tool step's input value: a literal, a reference, or a list or record of input values, so an
+ * action that takes an app's own request objects (Docs' batchUpdate requests) can read a value
+ * from a step above anywhere inside them. A record whose key is `from` is a reference, never
+ * data.
+ */
+export type InputValue = Literal | Reference | InputValue[] | { [key: string]: InputValue };
+type Literal = z.infer<typeof literal>;
+
+const inputValue: z.ZodType<InputValue> = z.lazy(() =>
+  z.union([
+    literal,
+    referenceSchema,
+    z.array(inputValue),
+    z
+      .record(z.string(), inputValue)
+      .refine((record) => !("from" in record), "Write a reference as `{ from: <step>.<field> }`."),
+  ]),
+);
 
 export const jsonSchemaTypes = [
   "object",
@@ -157,9 +172,17 @@ export const draftStep = specObject({
 /**
  * Where a person reviews what waits: `gmail_drafts`, the Gmail drafts the draft steps above it
  * made; `held_send`, the requests of the custom writes above it, which Mycel holds until a person
- * approves them (ADR-0020).
+ * approves them (ADR-0020); `suggested_edits`, the suggested edits the tool steps above it made
+ * in a Doc, which approving accepts and declining rejects (ADR-0017); `calendar_events`, the
+ * events the tool steps above it booked, waiting on the person's calendar with no guests until
+ * approved (ADR-0013).
  */
-export const approvalChannels = ["gmail_drafts", "held_send"] as const;
+export const approvalChannels = [
+  "gmail_drafts",
+  "held_send",
+  "suggested_edits",
+  "calendar_events",
+] as const;
 export type ApprovalChannel = (typeof approvalChannels)[number];
 
 export const approvalStep = specObject({
@@ -298,10 +321,15 @@ export const stepTypes: readonly StepType[] = stepSchema.options.map(
 export const specSettings = {
   id: slug,
   credentials: z.enum(["member", "org"]),
-  trigger: specObject({
-    type: z.literal("gmail.message_received"),
-    labelIds: z.array(z.string().min(1)).min(1).default(["INBOX"]),
-  }),
+  // What starts a run (`triggers.ts`): a new Gmail message with one of the labels, or a new
+  // invite on the connection's calendar.
+  trigger: z.discriminatedUnion("type", [
+    specObject({
+      type: z.literal("gmail.message_received"),
+      labelIds: z.array(z.string().min(1)).min(1).default(["INBOX"]),
+    }),
+    specObject({ type: z.literal("calendar.invite_received") }),
+  ]),
   autonomy: specObject({ rung: z.union([z.literal(0), z.literal(3), z.literal(4)]) }),
   // Accepted and stored, unused until M7.
   budget: specObject({ monthlyCredits: z.number().int().positive().optional() }).optional(),

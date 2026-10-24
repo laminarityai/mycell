@@ -12,6 +12,7 @@ import {
   publish,
   recordedBackoff,
   recordingStepRunner,
+  recordsOf,
 } from "./run-helpers";
 
 beforeEach(resetDatabase);
@@ -220,7 +221,7 @@ describe("the draft step", () => {
 
     await executeRun(system, runId, runner.runStep);
 
-    const kept = JSON.stringify([await getRun(admin, runId), runner.results()]);
+    const kept = [recordsOf(await getRun(admin, runId)), JSON.stringify(runner.results())].join();
     for (const content of [REPLY, "2,400", SUBJECT, BODY, "ada@customer.test"]) {
       expect(kept).not.toContain(content);
     }

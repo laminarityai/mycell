@@ -3,7 +3,7 @@
 // The side panel the graph opens on what the admin clicked: 360px over the graph's right edge,
 // or a bottom sheet on a narrow screen. It edits the step or path in place; every change goes
 // straight to the working spec being edited, and live validation's issues about it are listed.
-import { triggerFacts } from "@/features/spec/triggers";
+import { triggers } from "@/features/spec/triggers";
 import type { GraphSelection } from "./graph-drawing";
 import { PanelShell, type PanelProps } from "./panel-shell";
 import { OtherwiseForm, PathForm, pathPlace } from "./path-form";
@@ -22,16 +22,16 @@ export function SidePanel({ selection, ...props }: PanelProps & { selection: Gra
 
 function Selected({ selection, ...props }: PanelProps & { selection: GraphSelection }) {
   if (selection.kind === "trigger") {
+    const trigger = triggers[props.spec.trigger.type];
     return (
-      <PanelShell
-        title="Trigger"
-        subtitle="When a message arrives in Gmail"
-        onClose={props.onClose}
-      >
-        <p className="text-sm">Change the labels it watches in the settings under the graph.</p>
+      <PanelShell title="Trigger" subtitle={trigger.words} onClose={props.onClose}>
+        <p className="text-sm">
+          {trigger.app === "Gmail"
+            ? "Change the trigger, or the labels it watches, in the settings under the graph."
+            : "An invite someone else sent that the person hasn't answered starts a run. Change the trigger in the settings under the graph."}
+        </p>
         <p className="text-xs text-muted-foreground">
-          Facts a condition may test:{" "}
-          {triggerFacts[props.spec.trigger.type].map((fact) => fact.label).join(", ")}.
+          Facts a condition may test: {trigger.facts.map((fact) => fact.label).join(", ")}.
         </p>
       </PanelShell>
     );

@@ -1,6 +1,7 @@
 // Runtime's public types: runs, their steps and records, and what a dry run returns.
 import type { ActionName } from "@/features/policy/catalog";
-import type { ModelRole, StepType } from "@/features/spec/types";
+import type { GraphTrace } from "@/features/spec/graph";
+import type { ModelRole, Spec, StepType } from "@/features/spec/types";
 import type { Json } from "@/lib/inngest";
 import { z } from "zod";
 
@@ -80,34 +81,79 @@ export type RunStepRecord = {
   modelRole: ModelRole | null;
   modelId: string | null;
   costUsd: number;
+  /** What it cost in credits, at the config's credits-per-dollar ratio. */
+  costCredits: number;
   startedAt: Date;
   finishedAt: Date;
+  /** The step's checks, as the spec lists them, and how each went. */
+  checks: RunStepCheck[];
 };
 
-/** A run of a workflow version on one message, with its steps in order. */
+/** One of a step's checks on its output: `schema`, `minP` (confidence) or `requiredFields`. */
+export type RunStepCheck = {
+  check: "schema" | "minP" | "requiredFields";
+  /** `not_checked`: the step broke, or an earlier check failed, before this one was checked. */
+  status: "passed" | "failed" | "not_checked";
+  /** Why it failed, from check names and field paths only; null unless it failed. */
+  reason: string | null;
+};
+
+/**
+ * A run of a workflow version on one message, with its steps in order, as the caller may see it
+ * (`getRun`). It's shown in full only to its connection's readers (its owner, or any admin for
+ * an org connection); to an admin who isn't one it's redacted: `full` is false, `sourceRef` null
+ * and every step's `output` null, so nothing the run read or handed on is given (ADR-0001).
+ */
 export type RunRecord = {
   id: string;
   workflowId: string;
+  workflowName: string;
   workflowVersionId: string;
+  /** The version that ran, spec and all; null if it's gone. */
+  version: { id: string; number: number; spec: Spec } | null;
   connectionId: string;
   ownerScope: "member" | "org";
   enablementId: string | null;
-  /** The triggering Gmail message's ID. */
-  sourceRef: string;
+  startedBy: RunStartedBy;
+  /** The failed run this one retries; null unless it's a retry. */
+  retryOfRunId: string | null;
+  /** The run that retries this one; null until it's retried. */
+  retriedByRunId: string | null;
+  inbox: RunInbox;
+  /** Shown in full to the caller: its message, and what its steps handed on. */
+  full: boolean;
+  /** The triggering Gmail message's ID; null when redacted. */
+  sourceRef: string | null;
   status: RunStatus;
   /** Why the run failed as a whole; null when it didn't, or failed at its steps. */
   errorCode: RunErrorCode | null;
   costUsd: number;
+  /** What it cost in credits, at the config's credits-per-dollar ratio. */
+  costCredits: number;
   startedAt: Date;
   finishedAt: Date | null;
   steps: RunStepRecord[];
+  /**
+   * The steps it reached and the paths each branch took, for the workflow graph to light up as
+   * it lights a Try it. A path's checks are given only in full: which of them passed says
+   * something of the message.
+   */
+  trace: GraphTrace;
 };
 
 /**
- * What started a run: an admin by hand, a member's enablement, an org workflow's switch, or a
- * person from Ask Mycel (`agent`), on a message they picked, under their enablement.
+ * What started a run: an admin by hand, a member's enablement, an org workflow's switch, a
+ * retry of a failed run by its inbox's reader, or a person from Ask Mycel (`agent`), on a
+ * message they picked, under their enablement.
  */
-export type RunStartedBy = "manual" | "enablement" | "org_switch" | "agent";
+export const runStartedBy = ["manual", "enablement", "org_switch", "retry", "agent"] as const;
+export type RunStartedBy = (typeof runStartedBy)[number];
+
+/**
+ * Whether the caller may retry a run now (`checkRetry`), and why not when they may not: in
+ * words for the run page, the message `retryRun` would refuse with.
+ */
+export type RetryCheck = { allowed: true } | { allowed: false; why: string };
 
 /**
  * A run Ask Mycel may start (`checkRunFromAgent`): the person's own switched-on workflow, the
@@ -152,10 +198,16 @@ export type RunInbox =
 
 /**
  * The message that started a run, for someone who may read its connection: its subject and
- * sender fetched from Gmail for display only, never stored (invariant 8). Both are null when
- * Gmail no longer has it or can't be reached.
+ * sender fetched from Gmail for display only, never stored (invariant 8). Both are null, and so
+ * is the link, when Gmail no longer has it or can't be reached.
  */
-export type RunMessage = { sourceRef: string; subject: string | null; from: string | null };
+export type RunMessage = {
+  sourceRef: string;
+  subject: string | null;
+  from: string | null;
+  /** Its thread in Gmail's web app, opened in the inbox's account. */
+  link: string | null;
+};
 
 /** A step that failed, as a list of runs shows it: codes and words only, so anyone may see it. */
 export type RunFailure = {
@@ -236,15 +288,70 @@ export type RunFilterOptions = {
 export type RunPage = { runs: RunListItem[]; newer: string | null; older: string | null };
 
 /**
+ * What edits suggested in a Doc need for their approval that Docs doesn't show Mycel: the IDs of
+ * the suggestions the step made, which tell them from the person's own (ADR-0017). IDs only,
+ * never the suggested text (invariant 8).
+ */
+export const suggestedEditsDetailsSchema = z.object({
+  kind: z.literal("suggested_edits"),
+  suggestionIds: z.array(z.string().min(1)).min(1),
+});
+export type SuggestedEditsDetails = z.infer<typeof suggestedEditsDetailsSchema>;
+
+/**
+ * What a booked Calendar event needs for its approval that Calendar doesn't hold yet: the guests
+ * to invite and how the event shows once approved. Addresses and settings only, never the
+ * event's title or description (invariant 8).
+ */
+export const calendarEventDetailsSchema = z.object({
+  kind: z.literal("calendar_event"),
+  guests: z.array(z.string().min(1)).min(1),
+  visibility: z.enum(["default", "public", "private", "confidential"]),
+  transparency: z.enum(["opaque", "transparent"]),
+});
+export type CalendarEventDetails = z.infer<typeof calendarEventDetailsSchema>;
+
+/**
+ * What a waiting item's approval needs that its app doesn't show or hold yet, kept on its review,
+ * told apart by its kind: a Doc's suggestions or a meeting's guests and settings.
+ */
+export const pendingDetailsSchema = z.discriminatedUnion("kind", [
+  suggestedEditsDetailsSchema,
+  calendarEventDetailsSchema,
+]);
+export type PendingDetails = z.infer<typeof pendingDetailsSchema>;
+
+/**
  * What one step of a dry run read or would have written, shown to the admin who tried it and
  * never stored (invariant 8): the rows a read-range read, the draft it would have made, the
  * label or row it would have added, the review it would have waited for.
  */
 export type DryRunEffect =
   | { kind: "rows_read"; range: string; rows: string[][] }
+  /** A booking, as it would wait on the calendar until approved (nothing is made). */
+  | {
+      kind: "event";
+      title: string;
+      start: string;
+      end: string;
+      guests: string[];
+      meet: boolean;
+    }
   | { kind: "draft"; to: string; subject: string; text: string }
   | { kind: "label"; label: string }
   | { kind: "row"; range: string; values: (string | number | boolean | null)[] }
+  /** Edits a step would suggest in a Doc: its title, and each request's kind and text. */
+  | { kind: "suggestions"; documentId: string; title: string; requests: string[] }
+  /** A task it would add to the default list: its title, notes as written, and due date. */
+  | { kind: "task"; title: string; notes: string; due: string | null }
+  /** What it would change on a task; null for what it leaves as it is. */
+  | {
+      kind: "task_update";
+      title: string | null;
+      notes: string | null;
+      due: string | null;
+      done: boolean | null;
+    }
   | { kind: "review"; channel: string }
   /** A custom write's request, exactly as it would be sent once approved (nothing is sent). */
   | {

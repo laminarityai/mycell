@@ -1,7 +1,9 @@
 // Discovery's Inngest functions. Thin: each calls server.ts. The backfill runs as the user who
 // connected the source; polling, started by a cron, as the org's system ctx (ADR-0009).
 import "server-only";
+import { cron } from "inngest";
 import { connectionAppsGranted, connectionRecorded } from "@/features/connections/server";
+import { listOrgIds } from "@/features/orgs/server";
 import { systemCtx, type Ctx } from "@/lib/ctx";
 import { inngest, PER_ORG_LIMIT, stepRunner } from "@/lib/inngest";
 import { connectionPollDue } from "./lib/events";
@@ -10,6 +12,8 @@ import {
   markBackfillFailed,
   pollAllConnections,
   pollConnection,
+  renewWatches,
+  sweepSchedule,
 } from "./server";
 
 // Shared by the backfill and the poll (scope "env" keys them across functions): one ingest run
@@ -46,9 +50,13 @@ export const backfillJob = inngest.createFunction(
     backfillConnection(ctxOf(event.data), event.data.connectionId, stepRunner(step)),
 );
 
-/** Every minute, sends one poll event per `active` connection in every org. */
+/**
+ * The sweep (ADR-0026): sends one poll event per connection that's due in every org. An app
+ * with a live watch is due every 15 minutes, one without at each run. It runs every 5 minutes
+ * where Gmail and Drive both have push, and every minute elsewhere (`sweepSchedule`).
+ */
 export const pollCron = inngest.createFunction(
-  { id: "poll-connections", triggers: [{ cron: "* * * * *" }] },
+  { id: "poll-connections", triggers: [{ cron: sweepSchedule() }] },
   async ({ step }) => {
     const due = await step.run("list-connections", () => pollAllConnections());
     if (due.length > 0) {
@@ -75,4 +83,30 @@ export const pollJob = inngest.createFunction(
   },
   async ({ event, step }) =>
     pollConnection(systemCtx(event.data.orgId), event.data.connectionId, stepRunner(step)),
+);
+
+/**
+ * Every night at 04:00 UTC, after the reconciliation, renews each org's watches (ADR-0026),
+ * restarting any that lapsed or never started, one step per org: an org whose step fails is
+ * retried alone, and renewing a watch again does no harm.
+ */
+export const renewWatchesJob = inngest.createFunction(
+  {
+    id: "renew-watches",
+    triggers: [cron("TZ=UTC 0 4 * * *")],
+    // One run at a time: a slow run must not overlap the next.
+    concurrency: [{ limit: 1 }],
+  },
+  async ({ step }) => {
+    const orgIds = await step.run("list-orgs", () => listOrgIds());
+    const total = { renewed: 0, failed: 0 };
+    for (const orgId of orgIds) {
+      const { renewed, failed } = await step.run(`renew-${orgId}`, () =>
+        renewWatches(systemCtx(orgId)),
+      );
+      total.renewed += renewed;
+      total.failed += failed;
+    }
+    return { orgs: orgIds.length, ...total };
+  },
 );

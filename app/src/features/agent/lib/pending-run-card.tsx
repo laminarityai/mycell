@@ -10,7 +10,7 @@ import { DateTime } from "@/components/date-time";
 import { FormError } from "@/components/form-error";
 import { Button } from "@/components/ui/button";
 import type { RunStatus } from "@/features/runtime/types";
-import { runsHref } from "@/features/runtime/ui";
+import { runHref } from "@/features/runtime/ui";
 import { runPendingRunAction } from "../actions";
 import type { PendingRun, ProposeRunResult } from "../types";
 
@@ -21,8 +21,8 @@ const OUTCOMES: Record<RunStatus, string> = {
   escalated: "Finished: it handed the message to a person, on Reviews.",
   cancelled:
     "Stopped before it finished: the workflow was switched off, or your inbox disconnected.",
-  failed: "It failed. The Runs page says at which step.",
-  partly_failed: "Part of it failed. The Runs page says at which step.",
+  failed: "It failed. The run's page says at which step.",
+  partly_failed: "Part of it failed. The run's page says at which step.",
 };
 
 // The conversation's pending runs by ID, as the server last read them.
@@ -100,8 +100,8 @@ function PendingRunCard({ pending }: { pending: PendingRun }) {
         <div className="flex flex-col gap-1 text-sm" role="status">
           <p>{OUTCOMES[pending.run.status]}</p>
           <p className="flex gap-3 text-xs">
-            <Link className="underline" href={runsHref({ workflowId: pending.workflowId })}>
-              See its runs
+            <Link className="underline" href={runHref(pending.run.id)}>
+              See the run
             </Link>
             <Link className="underline" href="/reviews">
               Open Reviews

@@ -6,10 +6,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it } from "vitest";
 import { resetDatabase } from "@/db/testing/reset";
 import { FUNDED_CREDITS, seedTwoOrgs } from "@/db/testing/two-org-fixture";
+import { recordUsage } from "@/features/credits/server";
 import { listReviews } from "@/features/reviews/server";
 import {
   disable,
   enable,
+  pauseForFailures,
   publishWorkflow,
   saveWorkflow,
   switchWorkflowOn,
@@ -164,6 +166,40 @@ describe("startRunFromAgent", () => {
         "Reads is paused: needs your OK for a riskier version. Switch it on again first.",
       ),
     );
+  });
+
+  it("refuses while the workflow is paused for failing, until an admin resumes it", async () => {
+    const { orgA, member, message, workflowId } = await switchedOn();
+    await pauseForFailures(systemCtx(orgA.id), workflowId, []);
+
+    await expect(startRunFromAgent(member.ctx, workflowId, message.id)).rejects.toThrow(
+      new ConflictError(
+        "Reads is paused: failing, an admin will look at it. An admin has to resume it first.",
+      ),
+    );
+    expect(requested()).toEqual([]);
+  });
+
+  it("refuses once the workflow has spent its monthly budget, as fan-out starts nothing", async () => {
+    const { orgA, member, message, workflowId } = await switchedOn(
+      readSpec({ budget: { monthlyCredits: 5 } }),
+    );
+    // A live run of it spent 10 credits this month.
+    await recordUsage(systemCtx(orgA.id), {
+      role: "fast",
+      modelId: "test/fast-default",
+      costUsd: 0.01,
+      outcome: "succeeded",
+      workflowId,
+      runId: "an-earlier-run",
+    });
+
+    await expect(startRunFromAgent(member.ctx, workflowId, message.id)).rejects.toThrow(
+      new ConflictError(
+        "Reads is paused: budget reached. It starts again next month, or once an admin raises or removes its budget.",
+      ),
+    );
+    expect(requested()).toEqual([]);
   });
 
   it("refuses while the company is out of credits, as fan-out starts nothing", async () => {

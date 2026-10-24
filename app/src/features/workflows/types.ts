@@ -193,6 +193,18 @@ export type WorkflowSwitch = {
   needsReconnect: boolean;
 };
 
+/**
+ * The caller's own enablement of a member-credential workflow that may start a run now, with
+ * the latest version that run would run and the connection it's on: what Ask Mycel runs.
+ */
+export type StartableEnablement = {
+  workflowId: string;
+  name: string;
+  versionId: string;
+  enablementId: string;
+  connectionId: string;
+};
+
 /** An enablement is `on`, or `paused` (always with its reason) until its user enables it again. */
 export type EnablementStatus = "on" | "paused";
 

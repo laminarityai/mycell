@@ -4,6 +4,7 @@
 import { chatUIPart } from "@/features/models/server";
 import { AskChat } from "./lib/ask-chat";
 import { ConversationRail } from "./lib/conversation-rail";
+import { PendingRunsProvider } from "./lib/pending-run-card";
 import type { AgentConversation, AgentConversationSummary, AgentUIMessage } from "./types";
 
 export function AskMycel({
@@ -26,13 +27,15 @@ export function AskMycel({
           </p>
         </div>
       ) : (
-        <AskChat
-          // A new conversation gets a fresh chat rather than the last one's state.
-          key={conversation.id}
-          conversationId={conversation.id}
-          initialMessages={toUIMessages(conversation)}
-          citations={conversation.citations}
-        />
+        <PendingRunsProvider pendingRuns={conversation.pendingRuns}>
+          <AskChat
+            // A new conversation gets a fresh chat rather than the last one's state.
+            key={conversation.id}
+            conversationId={conversation.id}
+            initialMessages={toUIMessages(conversation)}
+            citations={conversation.citations}
+          />
+        </PendingRunsProvider>
       )}
     </div>
   );

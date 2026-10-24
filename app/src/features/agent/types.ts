@@ -2,6 +2,7 @@
 // the citations their replies show, and the UI messages the chat page streams.
 import { z } from "zod";
 import { chatPartSchemas, type ChatUIMessage } from "@/features/models/types";
+import type { RunStatus } from "@/features/runtime/types";
 
 /**
  * One part of a stored message: the parts every chat stores (text, one tool call with its
@@ -49,12 +50,35 @@ export type Citation = {
   sources: CitedSource[];
 };
 
+/**
+ * A pending run as the conversation shows it: the workflow `propose_run` offered to run, the
+ * message it would run on, and the run Run started. The message's sender, subject and date are
+ * fetched from Gmail for display only, never stored (invariant 8); null once Gmail no longer has
+ * it. `run` is null until the person presses Run.
+ */
+export type PendingRun = {
+  id: string;
+  workflowId: string;
+  workflowName: string;
+  message: { from: string; subject: string; receivedAt: Date } | null;
+  run: { id: string; status: RunStatus } | null;
+  createdAt: Date;
+};
+
+/** What `propose_run` keeps, and tells the page: the pending run it recorded, or why not. */
+export type ProposeRunResult = { proposed: true; pendingRunId: string } | ProposeRunRefusal;
+
+/** Why `propose_run` recorded nothing, in plain words the person and the model both read. */
+export type ProposeRunRefusal = { proposed: false; why: string };
+
 export type AgentConversation = AgentConversationSummary & {
   createdAt: Date;
   /** Oldest first. */
   messages: AgentMessage[];
   /** The facts its replies read that the person can still see. */
   citations: Citation[];
+  /** The runs its replies offered, oldest first. */
+  pendingRuns: PendingRun[];
 };
 
 /** The chat page's messages: the AI SDK's UI messages, with notices. */

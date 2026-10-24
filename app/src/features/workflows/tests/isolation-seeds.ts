@@ -5,6 +5,7 @@ import { FUNDED_CREDITS, type TwoOrgs } from "@/db/testing/two-org-fixture";
 import { grantCredits } from "@/features/credits/server";
 import { listTags } from "@/features/tags/server";
 import { systemCtx } from "@/lib/ctx";
+import { NotFoundError } from "@/lib/errors";
 import { connectGmail, connectMailbox } from "@/testing/connect-helpers";
 import { publishTo, tagUsers } from "@/testing/visibility-helpers";
 import * as server from "../server";
@@ -52,4 +53,26 @@ export async function versionsOfOrgBUnread(orgs: TwoOrgs) {
   }
   const own = await server.versionsById(orgs.orgB.member.ctx, [b.version.id]);
   expect([...own.keys()]).toEqual([b.version.id]);
+}
+
+// findWorkflowBySpecId's isolation case: org B's workflow has the spec ID "pricing-replies";
+// org A has none.
+export async function specIdOfOrgBUnfound(orgs: TwoOrgs) {
+  await seedOrgBWorkflow(orgs);
+
+  expect(await server.findWorkflowBySpecId(orgs.orgA.admin.ctx, "pricing-replies")).toBeNull();
+}
+
+// startableEnablement's isolation case: org B's admin's enablement is no one's in org A, and
+// org B's admin gets it.
+export async function startableEnablementOfOrgBUnread(orgs: TwoOrgs) {
+  const b = await switchedOnInOrgB(orgs);
+
+  for (const ctx of [orgs.orgA.admin.ctx, orgs.orgA.member.ctx]) {
+    await expect(server.startableEnablement(ctx, b.workflowId)).rejects.toThrow(NotFoundError);
+  }
+  expect(await server.startableEnablement(orgs.orgB.admin.ctx, b.workflowId)).toMatchObject({
+    workflowId: b.workflowId,
+    connectionId: b.connectionId,
+  });
 }

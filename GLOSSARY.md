@@ -206,6 +206,10 @@ _Avoid_: Feature request
 Each person's own private chat with Mycel, labelled "Ask Mycel". It answers from what that person can see in memory and in their own mail, remembers what they tell it, and acts only by running their own workflows, whose actions still wait as reviews.
 _Avoid_: Assistant, copilot, bot, Ask Mycel (the label people see, not the term)
 
+**Pending run**:
+A run the agent offered: one of the person's own switched-on workflows on a message in their own mail, waiting for them to press Run. Nothing starts until they do, and the run's drafts then wait on their Reviews page like any run's.
+_Avoid_: Proposal (the builder chat's), queued run
+
 **Builder chat**:
 The admin-only chat that turns descriptions and suggestions into proposed spec changes. It isn't an agent: an agent is one person's own, and builder conversations are shared among admins. It reads only company-wide memory, since its conversations are shared among admins.
 _Avoid_: Copilot, assistant

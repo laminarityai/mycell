@@ -2,6 +2,7 @@
 // message content or generated text (invariant 8). Both cascade from their connection
 // (invariant 3).
 import "server-only";
+import { sql } from "drizzle-orm";
 import {
   doublePrecision,
   foreignKey,
@@ -11,6 +12,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { zodJsonb } from "@/db/columns";
@@ -38,13 +40,14 @@ export const runs = pgTable(
     ownerScope: text("owner_scope", { enum: ["member", "org"] }).notNull(),
     workflowId: text("workflow_id").notNull(),
     workflowVersionId: text("workflow_version_id").notNull(),
-    // What started it: an admin by hand, a member workflow's enablement, or an org workflow's
-    // switch. A triggered run goes on only while what started it is still on.
-    startedBy: text("started_by", { enum: ["manual", "enablement", "org_switch"] })
+    // What started it: an admin by hand, a member workflow's enablement, an org workflow's
+    // switch, or a person from Ask Mycel (`agent`), under their enablement. A triggered or agent
+    // run goes on only while what started it is still on.
+    startedBy: text("started_by", { enum: ["manual", "enablement", "org_switch", "agent"] })
       .notNull()
       .default("manual"),
-    // The enablement that started it. Null for an org workflow or a manual run, and once the
-    // enablement is switched off.
+    // The enablement that started it, or that an agent run runs under. Null for an org workflow
+    // or a manual run, and once the enablement is switched off.
     enablementId: text("enablement_id"),
     // The triggering Gmail message's ID.
     sourceRef: text("source_ref").notNull(),
@@ -62,6 +65,10 @@ export const runs = pgTable(
   (table) => [
     unique("runs_org_id_id_unique").on(table.orgId, table.id),
     unique("runs_org_id_trigger_key_unique").on(table.orgId, table.triggerKey),
+    // One agent run of a workflow on a message at a time, so a double click drafts one reply.
+    uniqueIndex("runs_agent_running_unique")
+      .on(table.orgId, table.workflowId, table.connectionId, table.sourceRef)
+      .where(sql`${table.startedBy} = 'agent' and ${table.status} = 'running'`),
     index("runs_org_id_workflow_id_idx").on(table.orgId, table.workflowId),
     // The Runs page's keyset paging: newest first, by start time and then ID.
     index("runs_org_id_started_at_id_idx").on(table.orgId, table.startedAt.desc(), table.id.desc()),

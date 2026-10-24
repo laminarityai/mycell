@@ -31,6 +31,9 @@ export { checkWorkflowSpec } from "./lib/validation";
 // fan-out).
 export { listSwitchedOn } from "./lib/switches";
 export { listStartable } from "./lib/startable";
+// For a person running one of their own workflows by name (Ask Mycel): their enablement, if a run
+// may start now, refused in words otherwise.
+export { startableEnablement } from "./lib/startable-enablement";
 // For any role: workflows' names, to show beside what another feature lets the caller see,
 // their current versions' IDs, to count by, and versions by ID, to describe a run's steps by.
 export { currentVersionIds, versionsById, workflowNames } from "./lib/names";

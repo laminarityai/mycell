@@ -199,6 +199,9 @@ export const facts = pgTable(
     // M9), seen only by its teller (`told_by_user_id`), with no source records.
     origin: text("origin", { enum: ["source", "told_by"] }).notNull(),
     toldByUserId: text("told_by_user_id"),
+    // When its teller deleted a told fact: no read sees it from then, and it's deleted for good
+    // once the undo window (TOLD_UNDO_MINUTES) has passed.
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
     validFrom: timestamp("valid_from", { withTimezone: true }),
     validUntil: timestamp("valid_until", { withTimezone: true }),
     recordedAt: timestamp("recorded_at", { withTimezone: true }).defaultNow().notNull(),
@@ -247,6 +250,10 @@ export const facts = pgTable(
     }).onDelete("cascade"),
     // A teller's own facts: their timelines, and the list of what they told Mycel.
     index("facts_org_id_told_by_user_id_idx").on(table.orgId, table.toldByUserId),
+    // The deleted told facts, which their purge finds without reading every fact.
+    index("facts_deleted_at_idx")
+      .on(table.orgId, table.deletedAt)
+      .where(sql`${table.deletedAt} is not null`),
   ],
 );
 

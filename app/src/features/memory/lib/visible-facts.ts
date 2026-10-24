@@ -22,9 +22,10 @@ export type SeenFact<F = FactRow> = { fact: F; sources: FactSource[]; outsideOnl
 
 /**
  * The facts among `rows` the viewer can see, in the order given: those with a source they can
- * see, and those they told Mycel themselves, which have no sources and count as from inside.
+ * see, and those they told Mycel themselves and haven't deleted, which have no sources and count
+ * as from inside.
  */
-export async function seenFacts<F extends Pick<FactRow, "id" | "toldByUserId">>(
+export async function seenFacts<F extends Pick<FactRow, "id" | "toldByUserId" | "deletedAt">>(
   ctx: Ctx,
   reading: Reading,
   rows: F[],
@@ -59,7 +60,10 @@ export async function seenFacts<F extends Pick<FactRow, "id" | "toldByUserId">>(
 
   return rows.flatMap((fact) => {
     if (fact.toldByUserId !== null) {
-      const own = reading.viewer.userId !== null && fact.toldByUserId === reading.viewer.userId;
+      const own =
+        reading.viewer.userId !== null &&
+        fact.toldByUserId === reading.viewer.userId &&
+        fact.deletedAt === null;
       return own ? [{ fact, sources: [], outsideOnly: false }] : [];
     }
     const linked = new Set(

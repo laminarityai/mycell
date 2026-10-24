@@ -220,6 +220,42 @@ export type ToldFact = {
 export type TellOutcome = { saved: true; fact: ToldFact } | { saved: false; reason: TellRefusal };
 
 /**
+ * How long a deleted told fact can be brought back ("Undo"). It's out of every read at once,
+ * and deleted for good once this has passed.
+ */
+export const TOLD_UNDO_MINUTES = 10;
+
+/**
+ * Which of their told facts a person lists: those with every word of `words` in what they said,
+ * the name of who or what it's about, or its address or domain; with `includeOlder`, the notes
+ * their newer ones replaced too, as rows of their own.
+ */
+export const toldFactsFilterSchema = z.object({
+  words: z.string().max(200).optional(),
+  includeOlder: z.boolean().optional(),
+});
+export type ToldFactsFilter = z.input<typeof toldFactsFilterSchema>;
+
+/** One row of "What I've told Mycel": a told fact, and who or what it's about. */
+export type ToldNote = {
+  id: string;
+  statement: string;
+  toldAt: Date;
+  /** Its subject, with its email address or domain when it has one. */
+  about: { id: string; kind: ObjectKind; name: string; key: string | null };
+  /** For a current note: the older note it replaced, and how many before that one. */
+  replaced: { statement: string; earlier: number } | null;
+  /** For an older note: when a newer note of theirs replaced it. Null for a current one. */
+  replacedAt: Date | null;
+};
+
+/** A person's told facts as the filter picks them, newest first, and how many are current. */
+export type ToldNotes = { notes: ToldNote[]; total: number };
+
+/** A told fact just deleted, which can be brought back until `undoUntil`. */
+export type DeletedToldFact = { id: string; statement: string; undoUntil: Date };
+
+/**
  * A fact a newer one replaced, as one reader sees it: `supersededBy` is the newer fact they can
  * see that replaced it, and `supersededAt` when memory recorded that.
  */
@@ -410,7 +446,7 @@ export const ACCESS_LOG_READER_KINDS = [
 export type AccessLogReaderKind = (typeof ACCESS_LOG_READER_KINDS)[number];
 
 /** The reads the access log records. */
-export const MEMORY_READ_OPERATIONS = ["search", "read_object"] as const;
+export const MEMORY_READ_OPERATIONS = ["search", "read_object", "list_told"] as const;
 export type MemoryReadOperation = (typeof MEMORY_READ_OPERATIONS)[number];
 
 /** How long the access log keeps an entry (ADR-0024 asks for at least 90 days). */

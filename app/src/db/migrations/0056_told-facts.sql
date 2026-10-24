@@ -1,0 +1,3 @@
+ALTER TABLE "facts" ADD CONSTRAINT "facts_told_by_member_fk" FOREIGN KEY ("org_id","told_by_user_id") REFERENCES "public"."member"("organization_id","user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "facts_org_id_told_by_user_id_idx" ON "facts" USING btree ("org_id","told_by_user_id");--> statement-breakpoint
+ALTER TABLE "facts" ADD CONSTRAINT "facts_told_by_user_when_told" CHECK (("facts"."origin" = 'told_by') = ("facts"."told_by_user_id" is not null));

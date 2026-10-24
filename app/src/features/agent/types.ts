@@ -3,6 +3,19 @@
 import type { UIMessage } from "ai";
 import { z } from "zod";
 import { chatPartSchemas, type Notice } from "@/features/models/types";
+import type { ReviewKind } from "@/features/reviews/types";
+
+/** Where "What I've told Mycel" is: linked from the chat's header and each saved note. */
+export const TOLD_FACTS_PATH = "/ask/told";
+
+/** The told-facts page's filter, as its address holds it (`?q=…&older=1`). */
+export const toldFactsSearchSchema = z.object({
+  q: z.string().max(200).catch(""),
+  older: z
+    .unknown()
+    .transform((value) => value === "1")
+    .catch(false),
+});
 
 /**
  * One part of a stored message: the parts every chat stores (text, one tool call with its
@@ -50,6 +63,36 @@ export type CitedSource = {
   yours: boolean;
 };
 
+/** Text split around the words a search matched, in order, for highlighting. */
+export type MarkedText = { text: string; match: boolean }[];
+
+/** One of the person's conversations a search found, as the rail shows it. */
+export type ConversationHit = AgentConversationSummary & {
+  /** The whole title, split around the words that matched; null when the title didn't match. */
+  titleMatch: MarkedText | null;
+  /**
+   * A stretch of its best-matching message, the person's or Mycel's, split the same way; null
+   * when only the title matched.
+   */
+  snippet: MarkedText | null;
+};
+
+/** What the rail lists: the person's conversations, or the conversations their search found. */
+export type RailList =
+  | { query: null; conversations: AgentConversationSummary[] }
+  | { query: string; hits: ConversationHit[] };
+
+// A query parameter's one value: the first of several, trimmed, and none for a blank one.
+const queryValue = (value: unknown) => {
+  const first: unknown = Array.isArray(value) ? value[0] : value;
+  return typeof first === "string" && first.trim() !== "" ? first.trim() : undefined;
+};
+
+/** Ask Mycel's address query: `q`, the rail's search, when there is one. */
+export const askQuerySchema = z.object({
+  q: z.preprocess(queryValue, z.string().optional()).catch(undefined),
+});
+
 /** A fact a reply read, with its sources and markers in the person's view, never its words. */
 export type Citation = {
   factId: string;
@@ -57,7 +100,43 @@ export type Citation = {
   disputed: boolean;
   /** Only someone outside the company states it, as far as the person's sources show. */
   outsideOnly: boolean;
+  /** The person told Mycel this ("remember this"): it has no sources, and only they see it. */
+  told: boolean;
   sources: CitedSource[];
+};
+
+/** A message find_messages found, its headers fetched again from Gmail to show, never stored. */
+export type FoundMessage = {
+  connectionId: string;
+  sourceRef: string;
+  from: string;
+  subject: string;
+  receivedAt: Date;
+  /** The message in the person's own Gmail. */
+  href: string;
+};
+
+/** A review list_reviews listed, as it stands now. */
+export type FoundReview = {
+  id: string;
+  workflowName: string;
+  kind: ReviewKind;
+  createdAt: Date;
+  href: string;
+};
+
+/** A workflow list_workflows listed, as it stands now: why it's paused, or null while on. */
+export type FoundWorkflow = { id: string; name: string; paused: string | null };
+
+/**
+ * What the conversation's tools found in the person's mail and work, read again in their view
+ * now: only what's still there (a message still in their mail, a review still waiting for
+ * them, a workflow still switched on).
+ */
+export type FoundItems = {
+  messages: FoundMessage[];
+  reviews: FoundReview[];
+  workflows: FoundWorkflow[];
 };
 
 export type AgentConversation = AgentConversationSummary & {
@@ -66,6 +145,7 @@ export type AgentConversation = AgentConversationSummary & {
   messages: AgentMessage[];
   /** The facts its replies read that the person can still see. */
   citations: Citation[];
+  found: FoundItems;
 };
 
 /** A conversation nobody has used for this many days is deleted, with its messages (spec #154). */

@@ -14,16 +14,20 @@ import { backfillConnection, pollConnection } from "@/features/discovery/server"
 import {
   applyRetention,
   deleteRemovedItem,
+  deleteToldFact,
   forgetPerson,
+  purgeDeletedToldFacts,
   readObject,
   setRetentionWindow,
   startMemory,
 } from "@/features/memory/server";
+import { TOLD_UNDO_MINUTES } from "@/features/memory/types";
 import { removeUser } from "@/features/orgs/server";
 import { systemCtx, type Ctx } from "@/lib/ctx";
+import { setNow } from "@/lib/time";
 import { connectMailbox, daysAgo } from "@/testing/connect-helpers";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
-import { learnStoredItems, scriptLearning } from "@/testing/memory-learning";
+import { learnStoredItems, scriptLearning, scriptTelling } from "@/testing/memory-learning";
 import { fundOrg, readTurn } from "@/testing/streamed-turn";
 import { getConversation, listConversations, startConversation, streamTurn } from "../server";
 import { AskMycel } from "../ui";
@@ -35,6 +39,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => undefined
 beforeEach(resetDatabase);
 
 const REMOVED = [{ type: "removed" }];
+const TOLD_NOTE = "Dana Ruiz prefers a call to an email.";
 
 /** One turn: the agent reads what memory knows about `email`, then answers `answer`. */
 async function askAbout(ctx: Ctx, conversationId: string, email: string, answer: string) {
@@ -239,6 +244,30 @@ describe("deleting a fact a reply read", () => {
     expect((await partsOf(admin.ctx, id)).at(-1)).toEqual(REMOVED);
     expect(await tablesHolding("MARKER-185-D")).toEqual([]);
   });
+
+  it("removes the reply that saved a told fact once the person's delete can't be undone", async () => {
+    const { orgA } = await setupMemory();
+    const member = orgA.member.ctx;
+    const { id } = await startConversation(member);
+    scriptTelling();
+    fakeAiGateway.reply({
+      toolCalls: [{ name: "remember", input: { email: DANA, statement: TOLD_NOTE } }],
+    });
+    fakeAiGateway.reply({ text: "MARKER-185-T: saved your note about Dana." });
+    await readTurn(await streamTurn(member, id, `Remember that ${TOLD_NOTE}`));
+    const saved = (await partsOf(member, id)).at(-1)?.find((part) => part.type === "tool")
+      ?.output as { factIds: string[] };
+
+    await deleteToldFact(member, saved.factIds[0] ?? "");
+    // Within the undo window the note can come back, and so does the reply with it.
+    expect(await tablesHolding("MARKER-185-T")).toEqual(["agent_messages"]);
+
+    setNow(new Date(Date.now() + (TOLD_UNDO_MINUTES + 1) * 60_000));
+    await purgeDeletedToldFacts(systemCtx(orgA.id));
+
+    expect((await partsOf(member, id)).at(-1)).toEqual(REMOVED);
+    expect(await tablesHolding("MARKER-185-T")).toEqual([]);
+  });
 });
 
 describe("a removed reply", () => {
@@ -250,7 +279,7 @@ describe("a removed reply", () => {
 
     const page = renderToStaticMarkup(
       createElement(AskMycel, {
-        conversations: await listConversations(member),
+        rail: { query: null, conversations: await listConversations(member) },
         conversation: await getConversation(member, id),
       }),
     );

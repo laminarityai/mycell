@@ -47,6 +47,18 @@ export const personForgotten = eventType("memory/person.forgotten", {
   schema: z.object({ orgId: z.string().min(1), address: z.string().min(1) }),
 });
 
+/**
+ * A person deleted a told fact: once its undo window ends (`purgeAt`), the org's deleted told
+ * facts past their window are deleted for good.
+ */
+export const toldFactDeleted = eventType("memory/told-fact.deleted", {
+  schema: z.object({ orgId: z.string().min(1), purgeAt: z.iso.datetime() }),
+});
+
+export async function sendToldFactDeleted(orgId: string, purgeAt: Date): Promise<void> {
+  await inngest.send(toldFactDeleted.create({ orgId, purgeAt: purgeAt.toISOString() }));
+}
+
 /** A night's retention is due for the org: what's past its window goes. */
 export const retentionDue = eventType("memory/retention.due", { schema: org });
 

@@ -6,7 +6,7 @@ import { tablesHolding } from "@/db/testing/content-scan";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs, seedUser, type FixtureOrg } from "@/db/testing/two-org-fixture";
 import { backfillConnection } from "@/features/discovery/server";
-import { listAccessLog, markCompanyWideList } from "@/features/memory/server";
+import { listAccessLog, markCompanyWideList, tellFact } from "@/features/memory/server";
 import { enable } from "@/features/workflows/server";
 import { systemCtx, type Ctx } from "@/lib/ctx";
 import { connectGoogle, connectMailbox, daysAgo } from "@/testing/connect-helpers";
@@ -15,6 +15,7 @@ import type { FakeMessageInput } from "@/testing/fake-gmail";
 import {
   learnStoredItems,
   scriptLearning,
+  scriptTelling,
   withCredits,
   type ScriptedExtraction,
 } from "@/testing/memory-learning";
@@ -28,6 +29,9 @@ const ROLE = "Dana Ruiz leads procurement at Acme.";
 const DEMO = "Dana Ruiz asked for a demo of the oak range.";
 const OFFICES = "Acme has offices in Leeds and York.";
 const REPLY = "Thanks Dana, happy to help with Acme's order.";
+// Notes people told Mycel about Dana: each is its teller's own.
+const MEMBER_NOTE = "Dana Ruiz prefers a call to an email.";
+const COLLEAGUE_NOTE = "Dana Ruiz is negotiating a discount.";
 
 const dana = { ref: "dana", kind: "person" as const, name: "Dana Ruiz", email: DANA };
 const acme = { ref: "acme", kind: "company" as const, name: "Acme", domain: "acme.example" };
@@ -121,6 +125,14 @@ describe("memory.lookup in a member-credential run", () => {
       "Could we see a demo of the oak range?",
       learnings.demo,
     );
+    // The member's own note about Dana, and Lee's.
+    for (const [ctx, statement] of [
+      [member.ctx, MEMBER_NOTE],
+      [lee.ctx, COLLEAGUE_NOTE],
+    ] as const) {
+      scriptTelling();
+      await tellFact(ctx, { about: { email: DANA }, statement });
+    }
     await tagUsers(admin.ctx, "sales", [member]);
     const spec = lookupSpec("member", { about: "sender" });
     const { workflowId } = await publishTo(admin.ctx, "Customer replies", spec, ["sales"]);
@@ -139,13 +151,15 @@ describe("memory.lookup in a member-credential run", () => {
 
     expect(draftPrompt()).toContain(ROLE);
     expect(draftPrompt()).not.toContain(DEMO);
+    expect(draftPrompt()).toContain(MEMBER_NOTE);
+    expect(draftPrompt()).not.toContain(COLLEAGUE_NOTE);
     // The facts passed to the draft step, but the run's records keep none of them.
     expect(await tablesHolding(ROLE)).not.toContain("run_steps");
     const [read] = await listAccessLog(admin.ctx);
     expect(read).toMatchObject({
       operation: "search",
       reader: { kind: "workflow_run", userId: member.id, runId, workflowId },
-      factCount: 1,
+      factCount: 2,
     });
   });
 });
@@ -173,6 +187,9 @@ describe("memory.lookup in an org-credential run", () => {
       "Could we see a demo of the oak range?",
       learnings.demo,
     );
+    // The admin's own note: an org-credential run is no one, so it can't see it either.
+    scriptTelling();
+    await tellFact(admin.ctx, { about: { email: DANA }, statement: MEMBER_NOTE });
     const { workflowId } = await publishTo(
       admin.ctx,
       "Support replies",
@@ -186,6 +203,7 @@ describe("memory.lookup in an org-credential run", () => {
 
     expect(draftPrompt()).toContain(ROLE);
     expect(draftPrompt()).not.toContain(DEMO);
+    expect(draftPrompt()).not.toContain(MEMBER_NOTE);
     const [read] = await listAccessLog(admin.ctx);
     expect(read).toMatchObject({
       reader: { kind: "workflow_run", userId: null, runId, workflowId },

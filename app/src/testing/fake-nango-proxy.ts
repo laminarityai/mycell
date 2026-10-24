@@ -3,7 +3,7 @@
 // Like Nango, it retries the source's 429s as the request's Retries header asks, and forwards a
 // write's JSON body to the source as it is.
 import { http, HttpResponse } from "msw";
-import type { FakeConnection } from "./fake-nango";
+import type { FakeConnection, ProxiedRequest } from "./fake-nango";
 import { authorised, NANGO_API as API, proxyRefusal, unauthorised } from "./fake-nango-http";
 import {
   INTEGRATION_HOSTS,
@@ -15,7 +15,7 @@ import {
 /** What the proxy needs from the fake Nango: its connections, hook and rate limiting. */
 export type ProxyState = {
   connection(connectionId: string): FakeConnection | undefined;
-  beforeProxy(path: string): void | Promise<void>;
+  beforeProxy(path: string, request: ProxiedRequest): void | Promise<void>;
   // Takes one of the 429s a test asked for, if any are left.
   takeRateLimit(): boolean;
   // Takes one of the failed writes a test asked for, if any are left.
@@ -36,8 +36,9 @@ async function proxy(state: ProxyState, request: Request, method: ProxyMethod) {
   if (!authorised(request)) return unauthorised();
   const url = new URL(request.url);
   const path = url.pathname.slice("/proxy".length);
-  await state.beforeProxy(path);
-  const connection = state.connection(request.headers.get("Connection-Id") ?? "");
+  const connectionId = request.headers.get("Connection-Id") ?? "";
+  await state.beforeProxy(path, { query: url.searchParams, connectionId });
+  const connection = state.connection(connectionId);
   if (connection?.integration !== request.headers.get("Provider-Config-Key")) {
     return proxyRefusal("no-connection");
   }

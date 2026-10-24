@@ -153,6 +153,31 @@ export const isolationCases = defineIsolationCases(server, {
     ).toHaveLength(1);
   },
 
+  searchMessageHeaders: async (orgs) => {
+    const orgB = await seedOrgBRun(orgs);
+
+    for (const ctx of [orgs.orgA.admin.ctx, orgs.orgA.member.ctx]) {
+      await expect(
+        server.searchMessageHeaders(ctx, orgB.connectionId, { limit: 5 }),
+      ).rejects.toThrow(NotFoundError);
+    }
+    expect(
+      await server.searchMessageHeaders(orgs.orgB.admin.ctx, orgB.connectionId, { limit: 5 }),
+    ).toHaveLength(1);
+  },
+
+  readMessageHeaders: async (orgs) => {
+    const orgB = await seedOrgBRun(orgs);
+    const refs = (await server.searchMessages(orgs.orgB.admin.ctx, orgB.connectionId, "", 1)).map(
+      (ref) => ({ connectionId: orgB.connectionId, sourceRef: ref.id }),
+    );
+
+    for (const ctx of [orgs.orgA.admin.ctx, orgs.orgA.member.ctx]) {
+      expect(await server.readMessageHeaders(ctx, refs)).toEqual([]);
+    }
+    expect(await server.readMessageHeaders(orgs.orgB.admin.ctx, refs)).toHaveLength(1);
+  },
+
   readMessage: async (orgs) => {
     const orgB = await seedOrgBRun(orgs);
     const refs = await server.searchMessages(orgs.orgB.admin.ctx, orgB.connectionId, "", 1);

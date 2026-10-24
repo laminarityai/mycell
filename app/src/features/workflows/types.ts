@@ -204,6 +204,18 @@ export type WorkflowSwitch = {
 };
 
 /**
+ * The caller's own enablement of a member-credential workflow that may start a run now, with
+ * the latest version that run would run and the connection it's on: what Ask Mycel runs.
+ */
+export type StartableEnablement = {
+  workflowId: string;
+  name: string;
+  versionId: string;
+  enablementId: string;
+  connectionId: string;
+};
+
+/**
  * What the workflow page's Health tab checks (M7): whether it would run, what stops it, the
  * company's balance, whether its runs' failures paused it (M8), and what its live runs spent
  * this calendar month (UTC) against its latest version's budget.

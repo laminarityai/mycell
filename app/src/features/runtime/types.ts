@@ -142,10 +142,11 @@ export type RunRecord = {
 };
 
 /**
- * What started a run: an admin by hand, a member's enablement, an org workflow's switch, or a
- * retry of a failed run by its inbox's reader.
+ * What started a run: an admin by hand, a member's enablement, an org workflow's switch, a
+ * retry of a failed run by its inbox's reader, or a person from Ask Mycel (`agent`), on a
+ * message they picked, under their enablement.
  */
-export const runStartedBy = ["manual", "enablement", "org_switch", "retry"] as const;
+export const runStartedBy = ["manual", "enablement", "org_switch", "retry", "agent"] as const;
 export type RunStartedBy = (typeof runStartedBy)[number];
 
 /**
@@ -153,6 +154,31 @@ export type RunStartedBy = (typeof runStartedBy)[number];
  * words for the run page, the message `retryRun` would refuse with.
  */
 export type RetryCheck = { allowed: true } | { allowed: false; why: string };
+
+/**
+ * A run Ask Mycel may start (`checkRunFromAgent`): the person's own switched-on workflow, the
+ * inbox it runs on (theirs) and the message in it.
+ */
+export type AgentRunStart = {
+  workflowId: string;
+  workflowName: string;
+  connectionId: string;
+  sourceRef: string;
+};
+
+/** One run Ask Mycel offered: the message it's on, and the run it started, if one did. */
+export type AgentRunOffer = { connectionId: string; sourceRef: string; runId: string | null };
+
+/**
+ * What Ask Mycel shows of a run it offered (`agentRunDetails`): the message's sender, subject and
+ * date, fetched from Gmail for display only and never stored (invariant 8), and the run, once
+ * one started. `message` is null when Gmail no longer has it or the inbox isn't the caller's;
+ * `run` is null before it started, or when the caller may not read it.
+ */
+export type AgentRunDetail = {
+  message: { from: string; subject: string; receivedAt: Date } | null;
+  run: { id: string; status: RunStatus } | null;
+};
 
 /** Which runs `listRuns` lists: each filter left out lets every value through. */
 export type RunFilters = { workflowId?: string; status?: RunStatus; connectionId?: string };

@@ -30,4 +30,9 @@ export const toolPrompts = definePrompts(toolsFile, {
   listReviews: [],
   listWorkflows: [],
   listUnavailable: [],
+  proposeRun: [],
+  proposeRunWorkflowId: [],
+  proposeRunMessageId: [],
+  runProposed: [],
+  runRefused: [],
 });

@@ -59,3 +59,18 @@ listWorkflows: |-
 # When the injection screen isn't configured, or failed, for the reviews and workflows lists.
 listUnavailable: |-
   This list is unavailable right now: Mycel can't check what it reads for hidden instructions, so it read nothing. Tell the person to look on the Reviews or Workflows page instead.
+
+# propose_run (agent/lib/pending-runs.ts): offering to run one of the person's workflows on one
+# of their messages. Nothing runs until the person presses Run.
+proposeRun: |-
+  Offer to run one of this person's own switched-on workflows on one message in their own mail, such as an email the workflow's trigger missed. It runs nothing: it shows the person a card with the workflow and the message's sender, subject and date, and a Run button. Only the person can start the run, by pressing Run, and whatever the run drafts then waits on their Reviews page for their approval.
+proposeRunWorkflowId: |-
+  The workflow's id.
+proposeRunMessageId: |-
+  The Gmail message's id.
+# Beside a pending run propose_run recorded.
+runProposed: |-
+  The person now sees a card with a Run button. Nothing has run: tell them to press Run if it's the message they mean, and that what it drafts will wait on their Reviews page. Don't say it ran.
+# Beside a refusal, whose reason is in `why`.
+runRefused: |-
+  Nothing was offered. Tell the person why, in the words of `why`.

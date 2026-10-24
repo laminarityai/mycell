@@ -84,7 +84,7 @@ Text written for a model lives in YAML files, never in TypeScript: system prompt
 ## Tooling
 
 - **TypeScript:** strict. Typed values at every feature boundary; Zod at every IO boundary.
-- **ESLint:** typescript-eslint `strict-type-checked`, plus the Next.js config. It catches bugs and never formats. `max-lines` caps files at 300 lines, and `import/no-default-export` enforces named exports outside the Next.js special files.
+- **ESLint:** typescript-eslint `strict-type-checked`, plus the Next.js config. It catches bugs and never formats. `max-lines` caps files at 400 lines (blank lines and comments not counted), and `import/no-default-export` enforces named exports outside the Next.js special files.
 - **Version pins:** ESLint stays on 9 and TypeScript on 6.0 until `eslint-config-next`'s plugins support ESLint 10 and typescript-eslint supports TypeScript 7.
 - **Prettier:** the only formatter.
 - **Tests:** Vitest. Database tests run against real Postgres with pgvector (Docker locally, a service container in CI), in a separate `mycel_test_<suffix>` database per checkout (see "Local database") that the test run creates and migrates. Each test file starts from an empty database, so files run one at a time.

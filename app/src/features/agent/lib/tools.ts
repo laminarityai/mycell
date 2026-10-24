@@ -10,6 +10,7 @@ import {
 } from "@/features/models/server";
 import { findMessagesTool } from "./mail-tools";
 import { readObjectTool, searchMemoryTool } from "./memory-tools";
+import { proposeRunTool } from "./pending-runs";
 import { rememberTool } from "./remember-tool";
 import { listReviewsTool, listWorkflowsTool } from "./work-tools";
 
@@ -31,4 +32,5 @@ export const agentTools: ChatTools<AgentTurn> = {
   find_messages: agentTool(findMessagesTool),
   list_reviews: agentTool(listReviewsTool),
   list_workflows: agentTool(listWorkflowsTool),
+  propose_run: agentTool(proposeRunTool),
 };

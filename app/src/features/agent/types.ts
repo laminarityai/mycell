@@ -4,6 +4,7 @@ import type { UIMessage } from "ai";
 import { z } from "zod";
 import { chatPartSchemas, type Notice } from "@/features/models/types";
 import type { ReviewKind } from "@/features/reviews/types";
+import type { RunStatus } from "@/features/runtime/types";
 
 /** Where "What I've told Mycel" is: linked from the chat's header and each saved note. */
 export const TOLD_FACTS_PATH = "/ask/told";
@@ -139,6 +140,27 @@ export type FoundItems = {
   workflows: FoundWorkflow[];
 };
 
+/**
+ * A pending run as the conversation shows it: the workflow `propose_run` offered to run, the
+ * message it would run on, and the run Run started. The message's sender, subject and date are
+ * fetched from Gmail for display only, never stored (invariant 8); null once Gmail no longer has
+ * it. `run` is null until the person presses Run.
+ */
+export type PendingRun = {
+  id: string;
+  workflowId: string;
+  workflowName: string;
+  message: { from: string; subject: string; receivedAt: Date } | null;
+  run: { id: string; status: RunStatus } | null;
+  createdAt: Date;
+};
+
+/** What `propose_run` keeps, and tells the page: the pending run it recorded, or why not. */
+export type ProposeRunResult = { proposed: true; pendingRunId: string } | ProposeRunRefusal;
+
+/** Why `propose_run` recorded nothing, in plain words the person and the model both read. */
+export type ProposeRunRefusal = { proposed: false; why: string };
+
 export type AgentConversation = AgentConversationSummary & {
   createdAt: Date;
   /** Oldest first. */
@@ -146,6 +168,8 @@ export type AgentConversation = AgentConversationSummary & {
   /** The facts its replies read that the person can still see. */
   citations: Citation[];
   found: FoundItems;
+  /** The runs its replies offered, oldest first. */
+  pendingRuns: PendingRun[];
 };
 
 /** A conversation nobody has used for this many days is deleted, with its messages (spec #154). */

@@ -13,8 +13,9 @@ import { DateTime } from "@/components/date-time";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import type { AgentUIMessage, Citation, CitedSource, FoundItems } from "../types";
+import type { AgentUIMessage, Citation, CitedSource, FoundItems, ProposeRunResult } from "../types";
 import { numberSources, segments } from "./footnotes";
+import { ProposeRunPart } from "./pending-run-card";
 import { RememberedFact } from "./remembered-fact";
 import { ToolPart } from "./tool-parts";
 
@@ -247,6 +248,10 @@ function ReplyPart({
   if (part.type !== "dynamic-tool" && !part.type.startsWith("tool-")) return null;
   if (!("state" in part)) return null;
   const name = part.type === "dynamic-tool" ? part.toolName : part.type.slice("tool-".length);
+  if (name === "propose_run" && part.state !== "output-error") {
+    const output = part.state === "output-available" ? part.output : undefined;
+    return <ProposeRunPart output={output as ProposeRunResult | undefined} />;
+  }
   if (name === "remember" && part.state === "output-available") {
     return <RememberedFact output={part.output} />;
   }

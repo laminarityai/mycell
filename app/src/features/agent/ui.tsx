@@ -8,6 +8,7 @@ import type { ToldNotes } from "@/features/memory/types";
 import { chatUIPart } from "@/features/models/server";
 import { AskChat } from "./lib/ask-chat";
 import { ConversationRail } from "./lib/conversation-rail";
+import { PendingRunsProvider } from "./lib/pending-run-card";
 import { ToldFilter } from "./lib/told-filter";
 import { ToldTable } from "./lib/told-table";
 
@@ -41,14 +42,16 @@ export function AskMycel({
           </p>
         </div>
       ) : (
-        <AskChat
-          // A new conversation gets a fresh chat rather than the last one's state.
-          key={conversation.id}
-          conversationId={conversation.id}
-          initialMessages={toUIMessages(conversation)}
-          citations={conversation.citations}
-          found={conversation.found}
-        />
+        <PendingRunsProvider pendingRuns={conversation.pendingRuns}>
+          <AskChat
+            // A new conversation gets a fresh chat rather than the last one's state.
+            key={conversation.id}
+            conversationId={conversation.id}
+            initialMessages={toUIMessages(conversation)}
+            citations={conversation.citations}
+            found={conversation.found}
+          />
+        </PendingRunsProvider>
       )}
     </div>
   );

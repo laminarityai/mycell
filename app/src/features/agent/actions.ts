@@ -7,7 +7,7 @@ import { deleteToldFact, restoreToldFact } from "@/features/memory/server";
 import type { DeletedToldFact } from "@/features/memory/types";
 import { runFormAction, runValueAction } from "@/features/orgs/form-action";
 import type { ActionResult } from "@/lib/errors";
-import { deleteConversation, startConversation } from "./server";
+import { deleteConversation, runPendingRun, startConversation } from "./server";
 
 /** Starts a conversation (or reuses the person's empty one) and opens it. */
 export async function startConversationAction(
@@ -54,4 +54,24 @@ export async function deleteToldFactAction(
 /** Brings back the told fact the person just deleted. */
 export async function restoreToldFactAction(factId: unknown): Promise<ActionResult> {
   return runValueAction(factId, toldFactId, restoreToldFact, { after: refresh });
+}
+
+const pendingRunInput = z.object({ pendingRunId: z.string().min(1) });
+
+/**
+ * Run, on a run the agent offered: starts it on the person's own inbox, checked again first, and
+ * shows how it's going. Pressed twice, it starts nothing more.
+ */
+export async function runPendingRunAction(
+  _previous: ActionResult,
+  form: FormData,
+): Promise<ActionResult> {
+  return runFormAction(
+    form,
+    pendingRunInput,
+    async (ctx, { pendingRunId }) => {
+      await runPendingRun(ctx, pendingRunId);
+    },
+    { after: refresh },
+  );
 }

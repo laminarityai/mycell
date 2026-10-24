@@ -4,7 +4,8 @@
 // with only the IDs of what they read, never fact text or fetched content (invariant 8). A
 // message's keyword index, for searching conversations, is made of its text parts alone. Each
 // reply records what it drew on, the connections and the facts, in rows that cascade with them,
-// and a trigger replaces the reply with a tombstone when one goes (invariant 3).
+// and a trigger replaces the reply with a tombstone when one goes (invariant 3). A pending run is
+// a run the agent offered, waiting for the person to press Run.
 import "server-only";
 import { sql } from "drizzle-orm";
 import {
@@ -20,8 +21,10 @@ import {
 import { z } from "zod";
 import { member } from "@/db/auth-schema";
 import { tsvector, zodJsonb } from "@/db/columns";
+// A pending run goes with the inbox its message is in, and with its workflow.
 import { connections } from "@/features/connections/lib/schema";
 import { facts } from "@/features/memory/lib/schema";
+import { workflows } from "@/features/workflows/lib/schema";
 import { storedPartSchema } from "../types";
 
 export const agentConversations = pgTable(
@@ -137,6 +140,53 @@ export const agentMessageFacts = pgTable(
       name: "agent_message_facts_fact_fk",
       columns: [table.orgId, table.factId],
       foreignColumns: [facts.orgId, facts.id],
+    }).onDelete("cascade"),
+  ],
+);
+
+/**
+ * A pending run: a run of one of the person's own switched-on workflows on a message in their
+ * own mail, which `propose_run` offered in a conversation and which waits for them to press Run.
+ * It keeps the message's source ref only, never its sender or subject (invariant 8): the page
+ * fetches those from Gmail. `run_id` is the run Run started; null while it waits. It goes with
+ * its conversation, its workflow and the inbox the message is in (invariant 3).
+ */
+export const agentPendingRuns = pgTable(
+  "agent_pending_runs",
+  {
+    id: text("id").primaryKey(),
+    orgId: text("org_id").notNull(),
+    conversationId: text("conversation_id").notNull(),
+    workflowId: text("workflow_id").notNull(),
+    // The person's own member connection, which the message is in and the run runs on.
+    connectionId: text("connection_id").notNull(),
+    ownerScope: text("owner_scope", { enum: ["member"] })
+      .notNull()
+      .default("member"),
+    // The message's Gmail ID.
+    sourceRef: text("source_ref").notNull(),
+    // No foreign key: a run goes only with its connection or workflow, which take this row too.
+    runId: text("run_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("agent_pending_runs_org_id_conversation_id_idx").on(table.orgId, table.conversationId),
+    foreignKey({
+      name: "agent_pending_runs_conversation_fk",
+      columns: [table.orgId, table.conversationId],
+      foreignColumns: [agentConversations.orgId, agentConversations.id],
+    }).onDelete("cascade"),
+    index("agent_pending_runs_org_id_workflow_id_idx").on(table.orgId, table.workflowId),
+    foreignKey({
+      name: "agent_pending_runs_workflow_fk",
+      columns: [table.orgId, table.workflowId],
+      foreignColumns: [workflows.orgId, workflows.id],
+    }).onDelete("cascade"),
+    index("agent_pending_runs_org_id_connection_id_idx").on(table.orgId, table.connectionId),
+    foreignKey({
+      name: "agent_pending_runs_connection_fk",
+      columns: [table.orgId, table.connectionId],
+      foreignColumns: [connections.orgId, connections.id],
     }).onDelete("cascade"),
   ],
 );

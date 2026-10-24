@@ -6,7 +6,7 @@ import { forOrg } from "@/db/for-org";
 import { listOrgIds } from "@/features/orgs/server";
 import { systemCtx } from "@/lib/ctx";
 import { NangoRequestError } from "@/lib/errors";
-import { DAY_MS } from "@/lib/time";
+import { DAY_MS, now as clockNow } from "@/lib/time";
 import type { NangoConnectionRef, ReconciliationSummary } from "../types";
 import { ATTEMPT_TAGS } from "./connect";
 import {
@@ -32,7 +32,7 @@ const keyOf = (ref: NangoConnectionRef) => `${ref.integration}/${ref.nangoConnec
  * Nango connections Mycel has no connection for are deleted at Nango, unless a connect attempt
  * younger than a day may still record them. `now` is when the run happens (tests move it).
  */
-export async function reconcileConnections(now = new Date()): Promise<ReconciliationSummary> {
+export async function reconcileConnections(now = clockNow()): Promise<ReconciliationSummary> {
   // Ours first, then Nango's. A connection Nango lists that we didn't read was made after our
   // read, so its attempt was still pending then: each org's attempts are read before its rows,
   // and recording a connection inserts its row before settling its attempt.

@@ -6,6 +6,7 @@
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { InvariantError } from "@/lib/errors";
+import { now } from "@/lib/time";
 import type { Watcher } from "../connector";
 import { drivePushConfig } from "../push-config";
 import { channelSchema } from "./api";
@@ -25,7 +26,7 @@ export const driveWatcher: Watcher = {
       type: "web_hook",
       address: push.address,
       token: channelToken(push.secret, { orgId, connectionId }),
-      expiration: Date.now() + CHANNEL_LIFETIME_MS,
+      expiration: now().getTime() + CHANNEL_LIFETIME_MS,
     };
     const query = new URLSearchParams({ pageToken: cursor });
     const path = `/drive/v3/changes/watch?${query.toString()}`;

@@ -17,6 +17,7 @@ import { and, eq, gte, inArray, isNull, lt, ne } from "drizzle-orm";
 import { forOrg, type OrgScopedDb } from "@/db/for-org";
 import type { SourceClient } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
+import { now as clockNow } from "@/lib/time";
 import type { MemoryApp } from "../types";
 import { calendarVersion } from "./calendar";
 import { driveVersion } from "./drive";
@@ -169,7 +170,7 @@ export async function storeLearned(
 
 // The new source record's ID, or null when the item was stored already (a retried step).
 async function insertRecord(tx: OrgScopedDb, { connection, app, item }: Source) {
-  const now = new Date();
+  const now = clockNow();
   const record = (
     await tx.insert(
       sourceRecords,

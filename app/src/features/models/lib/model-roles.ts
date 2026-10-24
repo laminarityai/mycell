@@ -6,6 +6,7 @@ import { env, modelIdSchema } from "@/env";
 import type { ModelRole } from "@/features/spec/types";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { ValidationError } from "@/lib/errors";
+import { now } from "@/lib/time";
 import { modelRoles } from "./schema";
 
 const DEFAULT_MODELS: Record<ModelRole, string> = {
@@ -35,7 +36,7 @@ export async function setModelRole(ctx: Ctx, role: ModelRole, modelId: string): 
 
   const db = forOrg(ctx);
   const where = eq(modelRoles.role, role);
-  const set = { modelId: parsed.data, updatedAt: new Date() };
+  const set = { modelId: parsed.data, updatedAt: now() };
   if ((await db.update(modelRoles, set, where)).length > 0) return;
   const inserted = await db.insert(modelRoles, { role, ...set }, { onConflictDoNothing: true });
   // Another write inserted the row first: this one still wins, as the latest.

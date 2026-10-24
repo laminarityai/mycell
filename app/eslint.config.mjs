@@ -113,8 +113,9 @@ const roleChecks = [
   },
 ];
 
-// Every model call is metered (invariant 7): only the models feature's calls, and the builder
-// chat's turn and tools, which stream through openMeteredStream, use the AI SDK's model calls.
+// Every model call is metered (invariant 7): only the models feature's calls, among them the
+// chat turn and its tools, which stream through openMeteredStream, use the AI SDK's model calls.
+// A chat (the builder's) runs its turns through models' streamChatTurn and chatTool.
 const modelCalls = {
   name: "ai",
   importNames: [
@@ -132,8 +133,7 @@ const modelCalls = {
     "Call models through @/features/models/server: it checks credits first and records the usage (invariant 7).",
 };
 const MODEL_CALLERS = [
-  "src/features/models/lib/{call-model,classify,embed,gateway,metered-stream}.ts",
-  "src/features/builder/lib/{turn,tools}.ts",
+  "src/features/models/lib/{call-model,chat-tools,chat-turn,classify,embed,gateway}.ts",
   // Its tests drive the SDK against the fake AI Gateway, as its calls do.
   "src/features/models/tests/**",
 ];

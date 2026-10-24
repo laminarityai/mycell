@@ -174,7 +174,9 @@ describe("the Credits page", () => {
     for (let n = 1; n < 20; n += 1) await add(n);
     const twenty = await countQueries(() => loadCreditsPage(admin, new Date()));
 
-    expect(one.queries).toBe(7);
+    // The summary's 2, the runway's 2, the latest entries, the workflows and their latest
+    // versions, and which reached their budget: the pause's own query.
+    expect(one.queries).toBe(8);
     expect(twenty.queries).toBe(one.queries);
   });
 });

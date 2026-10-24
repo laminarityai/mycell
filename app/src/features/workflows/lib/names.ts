@@ -1,10 +1,12 @@
-// Workflows' names and current versions, for any role: what another feature shows beside, or
-// counts by, something it already let the caller see, such as a review on the Reviews page.
+// Workflows' names, versions and current versions, for any role: what another feature shows
+// beside, or counts by, something it already let the caller see, such as a review on the
+// Reviews page or a run on the Runs page.
 import { inArray } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import type { Ctx } from "@/lib/ctx";
-import { latestVersions } from "./latest-versions";
-import { workflows } from "./schema";
+import type { WorkflowVersion } from "../types";
+import { latestVersions, version } from "./latest-versions";
+import { workflows, workflowVersions } from "./schema";
 
 /**
  * The names of the workflows with these IDs in the caller's org, by ID. An ID from another org,
@@ -15,6 +17,24 @@ export async function workflowNames(ctx: Ctx, workflowIds: string[]): Promise<Ma
   if (ids.length === 0) return new Map();
   const rows = await forOrg(ctx).select(workflows, { where: inArray(workflows.id, ids) });
   return new Map(rows.map((row) => [row.id, row.name]));
+}
+
+/**
+ * The versions with these IDs in the caller's org, by ID, specs and all, in one query. For what
+ * another feature already let the caller see, such as which path a run's step was on. An ID from
+ * another org, or of no version, has no entry.
+ */
+export async function versionsById(
+  ctx: Ctx,
+  versionIds: string[],
+): Promise<Map<string, WorkflowVersion>> {
+  const ids = [...new Set(versionIds)];
+  if (ids.length === 0) return new Map();
+  const rows = await forOrg(ctx).select(workflowVersions, {
+    where: inArray(workflowVersions.id, ids),
+    orderBy: [workflowVersions.workflowId, workflowVersions.number],
+  });
+  return new Map(rows.map((row) => [row.id, version(row)]));
 }
 
 /**

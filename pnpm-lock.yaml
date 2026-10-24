@@ -62,6 +62,9 @@ importers:
       inngest:
         specifier: 4.25.0
         version: 4.25.0(@opentelemetry/core@2.12.0(@opentelemetry/api@1.9.1))(express@5.3.0)(hono@4.13.13)(next@16.4.2(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@playwright/test@1.64.1)(@types/node@24.19.2)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)(typescript@6.0.3)(zod@4.6.7)
+      jose:
+        specifier: 6.2.12
+        version: 6.2.12
       lucide-react:
         specifier: ^1.59.0
         version: 1.59.0(@types/react@19.3.0)(react@19.3.0)

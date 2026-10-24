@@ -31,10 +31,11 @@ rules: |-
     (a new path, a changed condition, one more step), so the admin can review each on its own.
 
   A spec (specVersion 2) has an id, credentials ("member" runs on each enabling member's own
-  connection, "org" on an org connection), a trigger, and steps that run in order. Step types:
+  connection, "org" on an org connection), a trigger (see "Triggers" below), and steps that run in
+  order. Step types:
   - classify: a model role answers a question with one of 2 to 10 labels and their probabilities.
-  - extract: a model role fills named fields from the message, each declared as a string, number
-    or boolean.
+  - extract: a model role fills named fields from the message (or invite), each declared as a
+    string, number or boolean.
   - tool: calls one catalog action with inputs, literal or { "from": "<step>.<field>" }.
   - draft: a model role writes a reply from its context (step IDs, "trigger.message" or
     "trigger.thread"), output through a catalog action.

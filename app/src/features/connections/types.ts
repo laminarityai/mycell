@@ -63,16 +63,6 @@ export const GOOGLE_APP_SCOPES: Record<GoogleApp, string> = {
   tasks: googleScope("tasks"),
 };
 
-/** How the UI names each Google app. */
-export const GOOGLE_APP_NAMES: Record<GoogleApp, string> = {
-  gmail: "Gmail",
-  drive: "Drive",
-  sheets: "Sheets",
-  calendar: "Calendar",
-  docs: "Docs",
-  tasks: "Tasks",
-};
-
 /** The apps discovery ingests from. Each has its own backfill, cursor and poll. */
 export const ingestedAppSchema = z.enum(["gmail", "drive"]);
 export type IngestedApp = z.infer<typeof ingestedAppSchema>;
@@ -181,6 +171,20 @@ export type IngestStateUpdate = {
 /** The user who made a connection, or `removed` once they're no longer a user of the org. */
 export type ConnectionOwner =
   { userId: string; removed: false; name: string } | { userId: string; removed: true };
+
+/**
+ * Whose a connection is, as a list of what ran on it names it (the Runs page): its owner, and
+ * whether the caller may read what it reaches (its owner for a member connection, any admin for
+ * an org connection). Its account address only when they may: another member's connection is
+ * its owner's name alone (ADR-0001).
+ */
+export type ConnectionOwnership = {
+  id: string;
+  kind: ConnectionKind;
+  readable: boolean;
+  accountEmail: string | null;
+  owner: ConnectionOwner;
+};
 
 /** An org connection as admins see it. It outlives its owner, so the owner may be removed. */
 export type OrgConnectionSummary = ConnectionSummary & { owner: ConnectionOwner };

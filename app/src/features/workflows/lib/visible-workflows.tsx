@@ -1,6 +1,15 @@
 // The Workflows page as a member sees it: each workflow published to one of their tags, what it
-// does and needs, whether it's on, and the switch for one that runs on their own account.
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+// does and the apps it uses, whether it's on, and the switch for one that runs on their own
+// account.
+import { AppMarks } from "@/components/app-mark";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { ReconnectButton } from "@/features/connections/ui";
 import type { VisibleWorkflow, WorkflowSwitch } from "../types";
 import { EnableSwitch } from "./enable-switch";
@@ -31,16 +40,13 @@ function VisibleWorkflowCard({ workflow }: { workflow: VisibleWorkflow }) {
     <Card aria-label={workflow.name}>
       <CardHeader>
         <CardTitle>{workflow.name}</CardTitle>
-        <CardDescription>
-          {workflow.credentials === "org"
-            ? "Runs on a shared inbox, managed by admins."
-            : "Runs on your own Google account."}
-        </CardDescription>
+        <CardDescription>{runsOn(workflow)}</CardDescription>
+        <CardAction>
+          <AppMarks apps={workflow.requiredApps} sharedInbox={workflow.sharedInbox} />
+        </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-3 text-sm">
         <dl className="grid grid-cols-[max-content_1fr] items-center gap-x-4 gap-y-2">
-          <dt className="text-muted-foreground">Needs</dt>
-          <dd>{workflow.requiredApps.join(", ")}</dd>
           <dt className="text-muted-foreground">Risk level</dt>
           <dd>
             <RiskBadge risk={workflow.maxRisk} />
@@ -64,6 +70,13 @@ function VisibleWorkflowCard({ workflow }: { workflow: VisibleWorkflow }) {
       </CardContent>
     </Card>
   );
+}
+
+function runsOn(workflow: VisibleWorkflow): string {
+  if (workflow.credentials === "member") return "Runs on your own Google account.";
+  return workflow.sharedInbox === null
+    ? "Runs on a shared inbox, managed by admins."
+    : `Runs on the shared inbox ${workflow.sharedInbox}, managed by admins.`;
 }
 
 // Google stopped accepting the member's connection: their switch is kept, but nothing runs on

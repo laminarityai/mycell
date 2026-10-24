@@ -1,5 +1,5 @@
 // The model and control steps: classify, extract, branch and escalate. A model step fetches
-// the triggering message inside itself and holds its text in memory only (invariant 8).
+// the triggering message or invite inside itself and holds its text in memory only (invariant 8).
 import { z } from "zod";
 import { callModel, classify } from "@/features/models/server";
 import { checkWords } from "@/features/policy/condition-fields";
@@ -8,10 +8,9 @@ import { ItemGoneError } from "@/lib/errors";
 import type { Json } from "@/lib/inngest";
 import { chooseEveryMatch, chooseFirstMatch } from "./conditions";
 import { escalationAdapter } from "./escalation-adapter";
-import { messageText } from "./gmail";
 import { stepPrompts } from "./prompts";
 import type { StepContext, StepExecution } from "./step-context";
-import { withTriggerFacts } from "./trigger-facts";
+import { triggerText, withTriggerFacts } from "./trigger-facts";
 
 type StepOf<T extends Step["type"]> = Extract<Step, { type: T }>;
 
@@ -19,8 +18,8 @@ export async function classifyStep(
   step: StepOf<"classify">,
   context: StepContext,
 ): Promise<StepExecution> {
-  const { ctx, run } = context;
-  const state = await messageText(ctx, run.connectionId, run.sourceRef);
+  const { ctx } = context;
+  const state = await triggerText(context);
   const result = await classify(ctx, {
     question: stepPrompts.classifyQuestion({ question: step.question }),
     labels: step.labels,
@@ -43,15 +42,15 @@ export async function classifyStep(
 const FIELD_TYPES = { string: z.string(), number: z.number(), boolean: z.boolean() };
 
 /**
- * Fills the step's fields from the message. The values pass to later steps through the step
+ * Fills the step's fields from the message or invite. The values pass to later steps through the step
  * state; the record keeps only which fields were filled (ADR-0012).
  */
 export async function extractStep(
   step: StepOf<"extract">,
   context: StepContext,
 ): Promise<StepExecution> {
-  const { ctx, run } = context;
-  const text = await messageText(ctx, run.connectionId, run.sourceRef);
+  const { ctx } = context;
+  const text = await triggerText(context);
   const schema = z.object(
     Object.fromEntries(
       Object.entries(step.fields).map(([name, field]) => [

@@ -1,6 +1,7 @@
 // The app shell's sidebar: every item, the group it sits in, and who sees it. Pure, so the
 // sidebar (a client component), the error page and the tests all read the same list.
 import {
+  Activity,
   Bell,
   Bot,
   Brain,
@@ -22,6 +23,7 @@ export type NavKey =
   | "reviews"
   | "workflows"
   | "alerts"
+  | "runs"
   | "builder"
   | "credits"
   | "custom-actions"
@@ -63,6 +65,7 @@ const NAV_GROUPS: NavGroup[] = [
         counts: { label: "waiting", tone: "default" },
       },
       { key: "workflows", label: "Workflows", href: "/workflows", icon: Workflow, admin: false },
+      { key: "runs", label: "Runs", href: "/runs", icon: Activity, admin: false },
     ],
   },
   {

@@ -1,7 +1,16 @@
 // The credit ledger (ADR-0010): one row per grant or model call. The balance is the sum of
 // `amount`. Usage rows stay when a workflow, run or connection goes: they are the org's bill.
 import "server-only";
-import { boolean, index, numeric, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  foreignKey,
+  index,
+  numeric,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 import { modelRoleSchema, type ModelRole } from "@/features/spec/types";
 import { CREDIT_PURPOSES } from "../types";
 
@@ -18,8 +27,9 @@ export const creditLedger = pgTable(
     role: text("role", { enum: modelRoleSchema.options as [ModelRole, ...ModelRole[]] }),
     modelId: text("model_id"),
     outcome: text("outcome", { enum: ["succeeded", "failed"] }),
-    // The gateway's reported cost in US dollars; 0 for a failed call, whose cost the gateway
-    // only reports later under its generation ID (reconciled in M7).
+    // The gateway's reported cost in US dollars; 0 for a failed call whose answer reported none.
+    // The gateway may still have billed it: what it billed is looked up later under its
+    // generation ID and recorded as a correction (`corrects_id`).
     costUsd: numeric("cost_usd", { mode: "number" }),
     generationId: text("generation_id"),
     // What the call was for, when a workflow run made it. No foreign keys: usage outlives both.
@@ -32,6 +42,9 @@ export const creditLedger = pgTable(
     purpose: text("purpose", { enum: CREDIT_PURPOSES }),
     // Grants only: what our team granted it for ("October allowance"), shown on the Credits page.
     note: text("note"),
+    // A correction: the failed call's usage entry whose billed cost this entry records, with the
+    // same attribution. At most one per failed call, however often its lookup is retried.
+    correctsId: text("corrects_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
@@ -42,5 +55,17 @@ export const creditLedger = pgTable(
       table.purpose,
       table.createdAt,
     ),
+    // A workflow's budget adds up its runs' spending this month, at every fan-out.
+    index("credit_ledger_org_id_workflow_id_created_at_idx").on(
+      table.orgId,
+      table.workflowId,
+      table.createdAt,
+    ),
+    uniqueIndex("credit_ledger_corrects_id_unique").on(table.correctsId),
+    foreignKey({
+      name: "credit_ledger_corrects_id_fk",
+      columns: [table.correctsId],
+      foreignColumns: [table.id],
+    }),
   ],
 );

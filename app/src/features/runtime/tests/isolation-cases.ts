@@ -1,6 +1,6 @@
 import { expect } from "vitest";
 import { defineIsolationCases } from "@/db/testing/isolation";
-import type { TwoOrgs } from "@/db/testing/two-org-fixture";
+import { FUNDED_CREDITS, type TwoOrgs } from "@/db/testing/two-org-fixture";
 import { grantCredits } from "@/features/credits/server";
 import { enable, switchWorkflowOn } from "@/features/workflows/server";
 import { systemCtx } from "@/lib/ctx";
@@ -23,6 +23,14 @@ async function seedOrgBRun({ orgB }: TwoOrgs) {
     inbox.messages[0].id,
   );
   return { connectionId: inbox.connectionId, workflowId, runId };
+}
+
+// Org B's run failed (its job crashed), and org B has credits to retry it.
+async function failedOrgBRun(orgs: TwoOrgs) {
+  const seeded = await seedOrgBRun(orgs);
+  await grantCredits(systemCtx(orgs.orgB.id), FUNDED_CREDITS);
+  await server.failCrashedRun(systemCtx(orgs.orgB.id), seeded.runId);
+  return seeded;
 }
 
 export const isolationCases = defineIsolationCases(server, {
@@ -81,6 +89,14 @@ export const isolationCases = defineIsolationCases(server, {
       expect(await server.listRunFilters(ctx)).toEqual({ workflows: [], connections: [] });
     }
     expect((await server.listRunFilters(orgs.orgB.admin.ctx)).workflows).toHaveLength(1);
+  },
+
+  pausingRuns: async (orgs) => {
+    const { runId } = await seedOrgBRun(orgs);
+    await server.failCrashedRun(systemCtx(orgs.orgB.id), runId);
+
+    expect(await server.pausingRuns(orgs.orgA.admin.ctx, [runId])).toEqual([]);
+    expect(await server.pausingRuns(orgs.orgB.admin.ctx, [runId])).toHaveLength(1);
   },
 
   startTriggeredRuns: async (orgs) => {
@@ -156,6 +172,24 @@ export const isolationCases = defineIsolationCases(server, {
     await expect(
       server.dryRun(admin, threadSpec(), { connectionId: orgB.connectionId, sourceRef }),
     ).rejects.toThrow(NotFoundError);
+  },
+
+  retryRun: async (orgs) => {
+    const { runId } = await failedOrgBRun(orgs);
+
+    for (const ctx of [orgs.orgA.admin.ctx, orgs.orgA.member.ctx]) {
+      await expect(server.retryRun(ctx, runId)).rejects.toThrow(NotFoundError);
+    }
+    expect((await server.listRuns(orgs.orgB.admin.ctx, {})).runs).toHaveLength(1);
+  },
+
+  checkRetry: async (orgs) => {
+    const { runId } = await failedOrgBRun(orgs);
+
+    for (const ctx of [orgs.orgA.admin.ctx, orgs.orgA.member.ctx]) {
+      await expect(server.checkRetry(ctx, runId)).rejects.toThrow(NotFoundError);
+    }
+    expect(await server.checkRetry(orgs.orgB.admin.ctx, runId)).toEqual({ allowed: true });
   },
 
   recentMessages: async (orgs) => {

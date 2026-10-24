@@ -36,9 +36,13 @@ export type ProxiedSource = {
   // How the API answers a write (POST, PUT, PATCH or DELETE), and the scopes that let a token write;
   // none for a read-only API.
   write?: { scopes: readonly string[]; respond: RespondToWrite };
+  // POSTs that change nothing in the account, which any scope that reads allows (Gmail's
+  // users.watch). The write's `respond` answers them.
+  readingPosts?: readonly string[];
   rateLimited: () => Response;
 };
 
+const GMAIL_WATCH = "/gmail/v1/users/me/watch";
 const GMAIL_READONLY = "https://www.googleapis.com/auth/gmail.readonly";
 const GMAIL_COMPOSE = "https://www.googleapis.com/auth/gmail.compose";
 const DRIVE_READONLY = GOOGLE_APP_SCOPES.drive;
@@ -65,9 +69,15 @@ export const PROXIED_SOURCES: ProxiedSource[] = [
       scopes: [GOOGLE_APP_SCOPES.gmail, GMAIL_COMPOSE, "https://mail.google.com/"],
       respond: (connection, path, _params, body, method) => {
         if (method === "PATCH") throw new Error("The fake Gmail takes no PATCHes");
+        if (path === GMAIL_WATCH) {
+          const { mailbox } = connection;
+          return mailbox.watches.answer(mailbox.profile().historyId, body);
+        }
         return gmailWrite(connection.mailbox, path, body, method);
       },
     },
+    // users.watch takes any Gmail scope, gmail.readonly included.
+    readingPosts: [GMAIL_WATCH],
     rateLimited: () => gmailError(429, "RESOURCE_EXHAUSTED"),
   },
   {
@@ -150,12 +160,15 @@ export function proxiedSource(host: string, path: string): ProxiedSource | undef
 export function refusal(
   source: ProxiedSource | undefined,
   connection: FakeConnection,
-  method: ProxyMethod = "GET",
+  method: ProxyMethod,
+  path: string,
 ) {
   if (source === undefined) {
     return HttpResponse.json({ error: { code: 404, message: "Not Found" } }, { status: 404 });
   }
-  const accepted = method === "GET" ? source.scopes : (source.write?.scopes ?? []);
+  const reads =
+    method === "GET" || (method === "POST" && source.readingPosts?.includes(path) === true);
+  const accepted = reads ? source.scopes : (source.write?.scopes ?? []);
   if (!accepted.some((scope) => connection.scopes.includes(scope))) {
     const message = "Request had insufficient authentication scopes.";
     return HttpResponse.json(

@@ -7,6 +7,7 @@ import type { SpecDraft } from "@/features/spec/draft";
 import { defaultTrigger, triggers, triggerTypes } from "@/features/spec/triggers";
 import type { SpecIssue } from "@/features/spec/types";
 import { issuesAt, ListField, NumberField, record, SelectField, TextField } from "./spec-fields";
+import { BUDGET_FIELD_ID, BUDGET_HELP } from "./budget-help";
 
 const CREDENTIALS = [
   { value: "member", label: "Each admin's own Google connection" },
@@ -92,6 +93,8 @@ export function SpecSettings({
         value={budget.monthlyCredits}
         min={1}
         step={1}
+        id={BUDGET_FIELD_ID}
+        help={BUDGET_HELP}
         invalid={invalid("budget")}
         onChange={(monthlyCredits) => {
           onChange({ budget: monthlyCredits === undefined ? undefined : { monthlyCredits } });

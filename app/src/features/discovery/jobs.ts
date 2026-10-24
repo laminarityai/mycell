@@ -1,7 +1,9 @@
 // Discovery's Inngest functions. Thin: each calls server.ts. The backfill runs as the user who
 // connected the source; polling, started by a cron, as the org's system ctx (ADR-0009).
 import "server-only";
+import { cron } from "inngest";
 import { connectionAppsGranted, connectionRecorded } from "@/features/connections/server";
+import { listOrgIds } from "@/features/orgs/server";
 import { systemCtx, type Ctx } from "@/lib/ctx";
 import { inngest, PER_ORG_LIMIT, stepRunner } from "@/lib/inngest";
 import { connectionPollDue } from "./lib/events";
@@ -10,6 +12,7 @@ import {
   markBackfillFailed,
   pollAllConnections,
   pollConnection,
+  renewWatches,
 } from "./server";
 
 // Shared by the backfill and the poll (scope "env" keys them across functions): one ingest run
@@ -75,4 +78,30 @@ export const pollJob = inngest.createFunction(
   },
   async ({ event, step }) =>
     pollConnection(systemCtx(event.data.orgId), event.data.connectionId, stepRunner(step)),
+);
+
+/**
+ * Every night at 04:00 UTC, after the reconciliation, renews each org's watches (ADR-0026),
+ * restarting any that lapsed or never started, one step per org: an org whose step fails is
+ * retried alone, and renewing a watch again does no harm.
+ */
+export const renewWatchesJob = inngest.createFunction(
+  {
+    id: "renew-watches",
+    triggers: [cron("TZ=UTC 0 4 * * *")],
+    // One run at a time: a slow run must not overlap the next.
+    concurrency: [{ limit: 1 }],
+  },
+  async ({ step }) => {
+    const orgIds = await step.run("list-orgs", () => listOrgIds());
+    const total = { renewed: 0, failed: 0 };
+    for (const orgId of orgIds) {
+      const { renewed, failed } = await step.run(`renew-${orgId}`, () =>
+        renewWatches(systemCtx(orgId)),
+      );
+      total.renewed += renewed;
+      total.failed += failed;
+    }
+    return { orgs: orgIds.length, ...total };
+  },
 );

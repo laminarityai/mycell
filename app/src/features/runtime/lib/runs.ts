@@ -1,5 +1,5 @@
 // Run records: starting a run by hand, and reading a run's rows back. The manual start is
-// admin-only; the interpreter writes as the system ctx (interpreter.ts). What a person may read
+// admin-only (a retry is retries.ts's); the interpreter writes as the system ctx (interpreter.ts). What a person may read
 // of a run is run-details.ts's and run-list.ts's business.
 import { randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
@@ -58,6 +58,11 @@ export async function startRun(
 
 export async function findRun(ctx: Ctx, runId: string): Promise<Run | undefined> {
   return (await forOrg(ctx).select(runs, { where: eq(runs.id, runId), limit: 1 })).at(0);
+}
+
+/** The run that retries this one, if it was retried. */
+export async function findRetry(ctx: Ctx, runId: string): Promise<Run | undefined> {
+  return (await forOrg(ctx).select(runs, { where: eq(runs.retryOfRunId, runId), limit: 1 })).at(0);
 }
 
 /** The run's recorded steps, in spec order. */

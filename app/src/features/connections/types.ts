@@ -118,6 +118,9 @@ export type AppIngestState = {
   cursor: string | null;
   backfilledItems: number;
   lastPolledAt: Date | null;
+  // When the app's watch runs out (ADR-0026): null when none was started, and in the past once
+  // it lapsed.
+  watchExpiresAt: Date | null;
 };
 
 /**
@@ -166,6 +169,7 @@ export type IngestStateUpdate = {
   backfilledItems?: number;
   cursor?: string;
   lastPolledAt?: Date;
+  watchExpiresAt?: Date;
 };
 
 /** The user who made a connection, or `removed` once they're no longer a user of the org. */
@@ -201,6 +205,19 @@ export type MemberConnectionMetadata = {
   status: ConnectionSummary["status"];
   owner: ConnectionOwner;
   createdAt: Date;
+};
+
+/**
+ * A connection waiting on whoever may reconnect it (its owner, or any admin for an org
+ * connection): `needs_reauth` when its app stopped accepting Mycel's access, `failed` when a
+ * backfill gave up. Reconnecting fixes either.
+ */
+export type ConnectionToFix = {
+  id: string;
+  source: Source;
+  kind: ConnectionKind;
+  accountEmail: string;
+  status: Extract<ConnectionStatus, "needs_reauth" | "failed">;
 };
 
 /** A connect attempt that hasn't become a connection: still waiting, or refused and why. */

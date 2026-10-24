@@ -164,6 +164,10 @@ _Avoid_: Model, model tier
 The state of a workflow or enablement that will not run, always shown together with its reason.
 _Avoid_: Disabled, suspended, stopped
 
+**Alert**:
+A notice in Mycel telling admins something needs them, such as a workflow paused for failing or credits running out. It goes away by itself once the cause is fixed.
+_Avoid_: Notification, warning, email
+
 **Archived**:
 A workflow an admin has stopped everywhere and hidden from members. Its enablements and org switch are kept, so restoring it brings them back as they were. It isn't paused: nothing about it waits on anyone else.
 _Avoid_: Deleted, retired

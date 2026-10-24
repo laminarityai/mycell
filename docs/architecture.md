@@ -320,6 +320,7 @@ Nothing looks an action up in the catalog directly. An org's **action set** (`po
 ## Credits (`features/credits`)
 
 - Every org has a credit balance. All model calls, discovery jobs, and evals debit the ledger.
+- **Pricing** (#167, `docs/credit-pricing.md`): 1 credit is 1 cent of what the AI Gateway charges us, with no margin until M10 (`CREDITS_PER_USD=100`). Each role's estimate is its default model's gateway price for an upper-typical call at that role's usual size, at least 1 credit.
 - When the org balance is exhausted, **hard stop**: every workflow is paused, out of credits (see "Pausing"). Mycel sends no email in v1 (ADR-0010): admins get an alert in the app and a banner across every page (see **Failures and observability**).
 - **Out of credits (M7)** means the balance is at or below zero (`isOutOfCredits(ctx)`), read from the ledger whenever it's needed: at fan-out and when a page shows a switch. Nothing is written when it starts or ends, so a grant lifts it at once, with no job. A run already under way still checks credits before each model call and ends "out of credits" as before; the builder chat and Try it keep refusing on their own pre-flight check.
 - Admins can set **per-workflow monthly budgets** (the spec's `budget.monthlyCredits`). **Budget reached (M7)** means the workflow's live run usage this calendar month (UTC) is at or above its latest version's budget: usage entries with its `workflow_id` and a `run_id`, not `dry_run`, so Try it and builder turns never count. It's read from the ledger like out of credits (`budgetsReached(ctx, budgets)`, for any role, since it says only what members are shown, and `spentThisMonthByWorkflow(ctx, workflowIds)`, admins and jobs only, for the Health tab), one query however many workflows, over an index on `(org_id, workflow_id, created_at)`. A new month, or a published version with a higher budget or none, lifts it with no job. A run already under way isn't stopped, so the run that crosses the budget finishes and may overshoot it by its own cost.
@@ -433,5 +434,5 @@ The always-on coding rules are in `AGENTS.md`. The detail (feature-directory sha
 ## Open questions
 
 - Concrete model IDs per role (Jev is available on the AI Gateway; see the research file for pricing).
-- Credit pricing and the free/included allowance.
+- The margin over gateway cost and the free/included allowance: revisit at M10 (`docs/credit-pricing.md`).
 - Admin-level data access (Reports API, domain-wide delegation): out of v1, revisit at M10 (ADR-0008). Memory's visibility rests on each app's access lists instead (ADR-0023).

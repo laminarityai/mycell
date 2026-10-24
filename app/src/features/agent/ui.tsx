@@ -104,6 +104,8 @@ function toUIMessages(conversation: AgentConversation): AgentUIMessage[] {
   return conversation.messages.map((message) => ({
     id: message.id,
     role: message.role,
-    parts: message.parts.map(chatUIPart),
+    parts: message.parts.map((part) =>
+      part.type === "removed" ? { type: "data-removed", data: {} } : chatUIPart(part),
+    ),
   }));
 }

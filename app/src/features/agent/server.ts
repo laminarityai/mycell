@@ -1,6 +1,7 @@
 // The agent feature (M9): each person's own private chat with Mycel, "Ask Mycel". Every function
 // needs the ctx's user to own the conversation, with no admin or system exception: anyone else
-// gets NotFoundError, and the system ctx ForbiddenError. Nothing imports this feature.
+// gets NotFoundError, and the system ctx ForbiddenError, except the nightly deletion of idle
+// conversations, which is the system ctx's alone. Nothing imports this feature.
 import "server-only";
 import type { Ctx } from "@/lib/ctx";
 import type { AgentConversation, RailList } from "./types";
@@ -11,6 +12,9 @@ import { searchConversations } from "./lib/search";
 
 export { deleteConversation, listConversations, startConversation } from "./lib/conversations";
 export { searchConversations } from "./lib/search";
+// Called only by the nightly job (and tests), as the org's system ctx: conversations idle for
+// 90 days go, with their messages.
+export { deleteIdleConversations } from "./lib/conversations";
 // Called by the streaming route: Mycel's reply as a UI message stream.
 export { streamTurn } from "./lib/turn";
 

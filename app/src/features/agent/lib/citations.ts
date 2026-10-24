@@ -16,8 +16,8 @@ import type { AgentMessage, Citation, CitedSource } from "../types";
 // What a memory tool stores of its result (`memory-tools.ts`): the fact IDs are what's cited.
 const readIds = z.object({ factIds: z.array(z.string()) });
 
-/** The IDs of every fact the conversation's tools read, in the order they read them. */
-export function readFactIds(messages: AgentMessage[]): string[] {
+/** The IDs of every fact the messages' tools read, in the order they read them. */
+export function readFactIds(messages: Pick<AgentMessage, "parts">[]): string[] {
   const ids = messages.flatMap((message) =>
     message.parts.flatMap((part) => {
       if (part.type !== "tool" || part.isError) return [];

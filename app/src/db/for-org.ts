@@ -63,12 +63,36 @@ export type GroupCount<G> = GroupValues<G> & { count: number };
 /** One group `sumBy` found: its value of each group column, and the total of its rows. */
 export type GroupSum<G> = GroupValues<G> & { total: number };
 
-export type SelectOptions<K extends string = string> = {
+/** Values a select computes per row, by name: each SQL's type is its value's. */
+export type ComputedFields = Record<string, SQL>;
+
+/**
+ * A select's row: the named columns, and the computed values under their names. `E` is never
+ * when nothing is computed.
+ */
+export type SelectedRow<
+  T extends TenantTable,
+  K extends ColumnName<T>,
+  E extends ComputedFields,
+> = [E] extends [never]
+  ? Pick<InferSelectModel<T>, K>
+  : Flat<Pick<InferSelectModel<T>, K> & { [N in keyof E]: E[N] extends SQL<infer V> ? V : never }>;
+
+// An intersection's properties as one object type.
+type Flat<X> = { [N in keyof X]: X[N] };
+
+export type SelectOptions<K extends string = string, E extends ComputedFields = ComputedFields> = {
   /**
    * Only these columns, by their names on the table: the rows hold just them. Read what a
    * caller uses, not a whole row it only counts or maps (a fact's embedding, a spec).
    */
   columns?: readonly K[];
+  /**
+   * Values computed per row by SQL, beside the columns, under these names (a search's
+   * highlighted snippet). SQL reaching another tenant table does so in a subquery, which must
+   * match that table's `org_id` to this row's, as a `where` reaching one does.
+   */
+  computed?: E;
   where?: SQL;
   orderBy?: (PgColumn | SQL)[];
   limit?: number;
@@ -86,10 +110,15 @@ export type InsertOptions = {
 };
 
 export type OrgScopedDb = {
-  select<T extends TenantTable, K extends ColumnName<T> = ColumnName<T>>(
+  select<
+    T extends TenantTable,
+    K extends ColumnName<T> = ColumnName<T>,
+    E extends ComputedFields = never,
+  >(
     table: T,
-    options?: SelectOptions<K>,
-  ): Promise<Pick<InferSelectModel<T>, K>[]>;
+    options?: SelectOptions<K, E>,
+    // Computed values come from `computed` alone, never from what the caller expects back.
+  ): Promise<SelectedRow<T, K, NoInfer<E>>[]>;
   /** How many of the org's rows match `where`, counted in the database. */
   count(table: TenantTable, where?: SQL): Promise<number>;
   /** The total of `column` over the org's rows matching `where`; 0 when none do. */
@@ -152,7 +181,11 @@ function scoped(ctx: Ctx, db: Executor): OrgScopedDb {
   return {
     async select(table, options = {}) {
       const source: PgTable = table;
-      const fields = options.columns === undefined ? undefined : named(table, options.columns);
+      const columns =
+        options.columns === undefined && options.computed === undefined
+          ? undefined
+          : named(table, options.columns ?? Object.keys(getTableColumns(table)));
+      const fields = columns === undefined ? undefined : { ...columns, ...options.computed };
       const query = (
         options.distinctOn === undefined
           ? fields === undefined

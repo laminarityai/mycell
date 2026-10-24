@@ -77,7 +77,7 @@ export async function setupMemory() {
   );
   const spring = "We order oak chairs every spring";
   const sales = `sales@${orgA.workspaceDomain}`;
-  await learnFrom(
+  const salesBox = await learnFrom(
     orgA,
     admin.ctx,
     sales,
@@ -85,7 +85,7 @@ export async function setupMemory() {
     learned(ORDERS, spring),
     "org",
   );
-  return { ...orgs, adminBox, memberBox };
+  return { ...orgs, adminBox, memberBox, salesBox };
 }
 
 /** Everything sent to the model from request `from` on: a turn's every step together. */

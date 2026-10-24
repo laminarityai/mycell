@@ -3,7 +3,9 @@
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { runFormAction } from "@/features/orgs/form-action";
+import { deleteToldFact, restoreToldFact } from "@/features/memory/server";
+import type { DeletedToldFact } from "@/features/memory/types";
+import { runFormAction, runValueAction } from "@/features/orgs/form-action";
 import type { ActionResult } from "@/lib/errors";
 import { deleteConversation, runPendingRun, startConversation } from "./server";
 
@@ -30,6 +32,28 @@ export async function deleteConversationAction(
     (ctx, { conversationId }) => deleteConversation(ctx, conversationId),
     { after: () => redirect("/ask") },
   );
+}
+
+const toldFactId = z.string().min(1);
+
+/**
+ * Deletes one of the person's told facts ("What I've told Mycel"): Mycel stops using it at
+ * once, and the page offers Undo until the window ends.
+ */
+export async function deleteToldFactAction(
+  factId: unknown,
+): Promise<{ deleted: DeletedToldFact } | ActionResult> {
+  return runValueAction(factId, toldFactId, deleteToldFact, {
+    after: (deleted) => {
+      refresh();
+      return { deleted };
+    },
+  });
+}
+
+/** Brings back the told fact the person just deleted. */
+export async function restoreToldFactAction(factId: unknown): Promise<ActionResult> {
+  return runValueAction(factId, toldFactId, restoreToldFact, { after: refresh });
 }
 
 const pendingRunInput = z.object({ pendingRunId: z.string().min(1) });

@@ -24,6 +24,14 @@ export { summarizeObject } from "./lib/summarize";
 // Where facts a reader already read came from, for Ask Mycel's footnotes: their sources and
 // markers in the reader's view, never what they say, so not logged again.
 export { citeFacts } from "./lib/cite";
+// "Remember this" (M9): a person tells Mycel a fact, screened, filed by one metered `fast` call
+// and embedded, all charged to the agent, and seen by them alone. Refuses the do-not-learn list
+// and what isn't a work fact.
+export { tellFact } from "./lib/tell";
+// "What I've told Mycel": a person's own told facts, listed (logged as their read), deleted at
+// once from every read, and brought back within the undo window. Anyone else gets
+// NotFoundError. The org's system ctx deletes for good those past their window.
+export { deleteToldFact, listToldFacts, purgeDeletedToldFacts, restoreToldFact } from "./lib/told";
 // The access log: admins see the company's, members the reads of facts from their own sources.
 // Pruned nightly, as the org's system ctx.
 export { listAccessLog, pruneAccessLog } from "./lib/access-log";

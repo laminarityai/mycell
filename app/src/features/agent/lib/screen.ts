@@ -7,8 +7,14 @@
 import { screenForInjection } from "@/features/models/server";
 import { InjectionScreenError } from "@/features/models/types";
 import type { Ctx } from "@/lib/ctx";
+import { toolPrompts } from "./prompts";
 
 export type Screened<T> = { ok: true; kept: T[]; dropped: number } | { ok: false };
+
+/** What a tool tells the model beside its result when the screen dropped items. */
+export function noteFor(screenedOut: number): { note?: string } {
+  return screenedOut === 0 ? {} : { note: toolPrompts.screenedOut({ count: String(screenedOut) }) };
+}
 
 const AGENT = { purpose: "agent" } as const;
 

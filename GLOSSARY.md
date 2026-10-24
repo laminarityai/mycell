@@ -267,8 +267,12 @@ _Avoid_: Limit, quota
 ### Memory
 
 **Fact**:
-A short statement about an object that a source states or a person told Mycel, linked to the sources it came from.
+A short statement about an object that a source states, linked to the sources it came from, or that a person told Mycel (a told fact).
 _Avoid_: Memory (for a single item), note, insight, inference
+
+**Told fact**:
+A fact a person told Mycel through their agent ("remember this"). It has no sources, and only that person sees it, in their answers and their own workflows. Their newer told fact on the same point replaces their older one, kept as history. It goes when they leave the company, or when an admin forgets the person it's about.
+_Avoid_: Note, annotation, comment
 
 **Source record**:
 Mycel's record of one item memory learned from, such as an email, a version of a Drive doc or a version of a Calendar invite, as one connection holds it, with the item's access list and a pointer to re-fetch it, never its content.

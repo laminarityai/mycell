@@ -1,5 +1,5 @@
-# Ask Mycel's tools: what the model is told each does (agent/lib/memory-tools.ts), and what they
-# tell it beside their results.
+# Ask Mycel's tools: what the model is told each does (agent/lib/memory-tools.ts, mail-tools.ts
+# and work-tools.ts), and what they tell it beside their results.
 
 searchMemory: |-
   Search the company's memory, as this person can see it, for facts about people, companies, deals, projects and documents. Returns the facts found, best match first, each with its id (cite it as [fact:ID]), the object it's about and its markers, and the objects they're about.
@@ -17,6 +17,48 @@ screenedOut: |-
 # read_object named nothing.
 nameAnObject: |-
   Name the object by its objectId, an email address or a domain.
+
+# remember (agent/lib/remember-tool.ts): saving a fact the person tells Mycel.
+remember: |-
+  Save a fact the person asks you to remember about a person, company, deal, project or document, for them alone: only they will see it, in their answers and their own workflows. Name what it's about by the objectId a search returned, or by a person's email address or a company's domain (with its name when memory doesn't know it yet). Use it only when the person asks you to remember something, with their statement in their own words. Only facts about work are kept, never opinions or judgements.
+rememberStatement: |-
+  The fact, as one short sentence that names its subject and stands alone, in the person's words.
+rememberName: |-
+  The person's or company's name, when memory doesn't know them yet.
+# A fact was saved: the tool's `confirmation` says what, about whom, and who can see it.
+remembered: |-
+  Saved. Tell the person exactly what confirmation says.
+# Nothing was saved: the tool's `message` says why.
+notRemembered: |-
+  Nothing was saved. Tell the person plainly why, as message says, and don't try to save it another way.
+# remember named nothing it's about.
+nameWhatToRemember: |-
+  Say what the fact is about: an objectId, an email address or a domain.
+
+findMessages: |-
+  Find messages in this person's own mail by sender, subject and date. Returns the newest matches, each with its id, its sender, its subject and when it arrived: never what a message says. Give at least one of from, subject, since and until to narrow it; with none, it returns the newest messages.
+findMessagesFrom: |-
+  Words of the sender's name or email address, such as dana@acme.com or acme.com.
+findMessagesSubject: |-
+  Words in the subject.
+findMessagesSince: |-
+  The first day to search from, as YYYY-MM-DD (UTC).
+findMessagesUntil: |-
+  The last day to search, as YYYY-MM-DD (UTC).
+# find_messages, when the person has no Google connection of their own allowed Gmail.
+noMailConnection: |-
+  Message search needs this person's own Google connection, and they haven't connected Google (or haven't allowed Gmail). Tell them to Connect Google on the Connections page to search their mail. Memory still works: keep answering from it.
+# When the injection screen isn't configured, or failed: nothing found was handed on.
+mailUnavailable: |-
+  Message search is unavailable right now: Mycel can't check what it reads for hidden instructions, so it read nothing. Tell the person you can't search their mail at the moment.
+
+listReviews: |-
+  List the reviews waiting for this person: each with the workflow it's from, its kind (approval, escalation, held_send, suggested_edits or calendar_event) and how long it has waited. The page shows each one with a link to it. Approving, editing and declining happen only on the Reviews page: you can't do them.
+listWorkflows: |-
+  List the workflows this person has switched on for their own inbox, each with whether it's running or paused, and why when it's paused.
+# When the injection screen isn't configured, or failed, for the reviews and workflows lists.
+listUnavailable: |-
+  This list is unavailable right now: Mycel can't check what it reads for hidden instructions, so it read nothing. Tell the person to look on the Reviews or Workflows page instead.
 
 # propose_run (agent/lib/pending-runs.ts): offering to run one of the person's workflows on one
 # of their messages. Nothing runs until the person presses Run.

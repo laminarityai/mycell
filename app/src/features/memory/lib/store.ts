@@ -9,17 +9,21 @@
 // A Drive file changes: each version is its own source record, and a copy teaches the same facts
 // only at the same version, whose `source_ref` (`<file ID>@<modified time>`) every connection
 // shares. A connection keeps only the latest version it learned from: once a newer one is
-// decided, its older versions' records go, and with them the facts only they supported.
+// decided, its older versions' records go, and with them the facts only they supported. A
+// Calendar invite changes the same way, versioned by its sequence (`<event ID>@<sequence>`): a
+// copy on another calendar teaches the same facts only at the same sequence.
 import { randomUUID } from "node:crypto";
 import { and, eq, gte, inArray, isNull, lt, ne } from "drizzle-orm";
 import { forOrg, type OrgScopedDb } from "@/db/for-org";
 import type { SourceClient } from "@/features/connections/types";
 import type { Ctx } from "@/lib/ctx";
+import { now as clockNow } from "@/lib/time";
 import type { MemoryApp } from "../types";
+import { calendarVersion } from "./calendar";
 import { driveVersion } from "./drive";
 import type { ExtractedFact, ExtractedObject } from "./extract";
 import type { Matches } from "./match";
-import type { SourceItem } from "./source-item";
+import { accessRows, type SourceItem } from "./source-item";
 import { placeInTimelines } from "./supersede";
 import { companyWideOf } from "./visibility";
 import {
@@ -56,23 +60,27 @@ export async function isKnown(ctx: Ctx, connectionId: string, app: MemoryApp, so
 }
 
 /**
- * Deletes the connection's records of the item's older versions (a Drive file's), once a newer
- * one is decided: the facts only they supported go with them (migration 0026's triggers).
- * Nothing for an email, which never changes.
+ * Deletes the connection's records of the item's older versions (a Drive file's, a Calendar
+ * invite's), once a newer one is decided: the facts only they supported go with them (migration
+ * 0026's triggers). Nothing for an email, which never changes.
  */
 export async function retireOlderVersions(ctx: Ctx, source: Source): Promise<void> {
   await retire(forOrg(ctx), source);
 }
 
 async function retire(db: OrgScopedDb, { connection, app, item }: Source): Promise<void> {
-  if (app !== "drive") return;
+  if (app === "gmail") return;
   await db.delete(
     sourceRecords,
     and(
       eq(sourceRecords.connectionId, connection.id),
       eq(sourceRecords.app, app),
       eq(sourceRecords.itemKey, item.itemKey),
-      lt(sourceRecords.occurredAt, item.occurredAt),
+      // A Drive version arriving late is `known`, so only older ones go. An invite's older
+      // version never is: learning reads the event as it is now, and skips one changed since.
+      app === "drive"
+        ? lt(sourceRecords.occurredAt, item.occurredAt)
+        : ne(sourceRecords.sourceRef, item.sourceRef),
     ),
   );
 }
@@ -83,15 +91,17 @@ async function retire(db: OrgScopedDb, { connection, app, item }: Source): Promi
  */
 export async function storeCopy(ctx: Ctx, source: Source): Promise<Stored | null> {
   const db = forOrg(ctx);
-  const copies = await db.select(sourceRecords, {
-    where: and(
-      eq(sourceRecords.itemKey, source.item.itemKey),
-      eq(sourceRecords.app, source.app),
-      ne(sourceRecords.connectionId, source.connection.id),
-      // The same version of a Drive file.
-      source.app === "drive" ? eq(sourceRecords.sourceRef, source.item.sourceRef) : undefined,
-    ),
-  });
+  const copies = (
+    await db.select(sourceRecords, {
+      where: and(
+        eq(sourceRecords.itemKey, source.item.itemKey),
+        eq(sourceRecords.app, source.app),
+        ne(sourceRecords.connectionId, source.connection.id),
+        // The same version of a Drive file.
+        source.app === "drive" ? eq(sourceRecords.sourceRef, source.item.sourceRef) : undefined,
+      ),
+    })
+  ).filter((copy) => source.app !== "calendar" || sameSequence(copy.sourceRef, source.item));
   if (copies.length === 0) return null;
   const links = await db.select(factSources, {
     where: inArray(
@@ -160,7 +170,7 @@ export async function storeLearned(
 
 // The new source record's ID, or null when the item was stored already (a retried step).
 async function insertRecord(tx: OrgScopedDb, { connection, app, item }: Source) {
-  const now = new Date();
+  const now = clockNow();
   const record = (
     await tx.insert(
       sourceRecords,
@@ -180,22 +190,14 @@ async function insertRecord(tx: OrgScopedDb, { connection, app, item }: Source) 
     )
   ).at(0);
   if (record === undefined) return null;
-  const confirmed = new Set(item.access.map((entry) => `${entry.kind}:${entry.value}`));
-  // The addresses its sender wrote that Mycel didn't see reach anyone: for exclusions only.
-  const unconfirmed = item.addresses
-    .filter((value) => !confirmed.has(`address:${value}`))
-    .map((value) => ({ kind: "address" as const, value, confirmed: false }));
+  // The addresses its sender wrote that Mycel didn't see reach anyone are kept unconfirmed.
   await tx.insert(
     accessListEntries,
-    [...item.access.map((entry) => ({ ...entry, confirmed: true })), ...unconfirmed].map(
-      ({ kind, value, confirmed }) => ({
-        connectionId: connection.id,
-        sourceRecordId: record.id,
-        kind,
-        value,
-        confirmed,
-      }),
-    ),
+    accessRows(item).map((row) => ({
+      connectionId: connection.id,
+      sourceRecordId: record.id,
+      ...row,
+    })),
     { onConflictDoNothing: true },
   );
   return record.id;
@@ -264,6 +266,12 @@ async function storeFact(
     embedding: fact.embedding,
   });
   return { id, added: true };
+}
+
+// Whether a Calendar copy is at the item's version: each calendar has its own event ID for an
+// invite from outside Google, but every copy of a version has its sequence.
+function sameSequence(sourceRef: string, item: SourceItem): boolean {
+  return calendarVersion(sourceRef).sequence === calendarVersion(item.sourceRef).sequence;
 }
 
 function objectCount(rows: { subjectId: string; objectId: string | null }[]): number {

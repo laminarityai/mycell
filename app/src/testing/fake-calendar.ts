@@ -1,54 +1,23 @@
 // A fake Google Calendar, served through the fake Nango's proxy: the account's primary calendar,
 // answering the Calendar API v3 calls Mycel makes (events.list, with sync tokens, and
-// events.get) in the shapes Google documents, from events a test seeds. Like Google, a sync
+// events.get; the writes are in `fake-calendar-writes.ts`) in the shapes Google documents, from
+// events a test seeds or Mycel makes. Like Google, a sync
 // token lists only what changed since it was handed out, deletions included as `cancelled`; it
 // answers 410 once a test expires the tokens; and it answers 400 to a sync token combined with
 // a filter, or to a request whose other parameters differ from the request that made the token
-// (https://developers.google.com/workspace/calendar/api/guides/sync).
+// (https://developers.google.com/workspace/calendar/api/guides/sync). Like Google, an event's
+// `sequence` goes up when its organizer changes what it says (its title or description),
+// and not when a guest answers; and the same event on several calendars (`receive`) shares its
+// ID and iCalUID.
 import { randomBytes } from "node:crypto";
 import { HttpResponse } from "msw";
+import {
+  CalendarWrites,
+  type Attendee,
+  type CalendarEventResource,
+  type FakeInviteInput,
+} from "./fake-calendar-events";
 import { parseFields, project } from "./fake-drive-fields";
-
-/** An invite to seed: an event someone else organised, with the account among its guests. */
-export type FakeInviteInput = {
-  title: string;
-  organizer: string;
-  // When it was made: when it reached the calendar. Now, by default.
-  at?: Date;
-  description?: string;
-  start?: Date;
-  // Other guests besides the account.
-  guests?: string[];
-  eventType?: CalendarEventResource["eventType"];
-  attendeesOmitted?: boolean;
-};
-
-type Attendee = {
-  email: string;
-  self?: boolean;
-  organizer?: boolean;
-  responseStatus: "needsAction" | "declined" | "tentative" | "accepted";
-};
-
-/** An events resource, with the fields Mycel's requests can name. */
-export type CalendarEventResource = {
-  kind: "calendar#event";
-  id: string;
-  status: "confirmed" | "tentative" | "cancelled";
-  created: string;
-  updated: string;
-  summary: string;
-  description?: string;
-  start: { dateTime: string };
-  end: { dateTime: string };
-  organizer: { email: string; self?: boolean };
-  creator: { email: string; self?: boolean };
-  attendees?: Attendee[];
-  attendeesOmitted?: boolean;
-  eventType: "default" | "fromGmail" | "focusTime" | "outOfOffice" | "workingLocation";
-  htmlLink: string;
-  iCalUID: string;
-};
 
 // Query parameters a sync token can't be combined with, as Google lists them.
 const NOT_WITH_SYNC_TOKEN = [
@@ -80,6 +49,8 @@ export class FakeCalendar {
   readonly listRequests: URLSearchParams[] = [];
   /** The sync token handed out last, if any. */
   lastSyncToken: string | undefined;
+  /** Every write made (events.insert, patch, update, delete), and who each one emailed. */
+  readonly writes = new CalendarWrites();
 
   constructor(readonly emailAddress: string) {}
 
@@ -94,8 +65,10 @@ export class FakeCalendar {
       status: "confirmed",
       created: at,
       updated: at,
+      sequence: 0,
       summary: input.title,
       ...(input.description === undefined ? {} : { description: input.description }),
+      ...(input.location === undefined ? {} : { location: input.location }),
       start: { dateTime: start.toISOString() },
       end: { dateTime: new Date(start.getTime() + 30 * 60 * 1000).toISOString() },
       organizer: { email: input.organizer },
@@ -117,22 +90,74 @@ export class FakeCalendar {
     return event;
   }
 
-  /** The account makes an event itself, inviting `guests`. */
-  organize(input: { title: string; guests: string[]; at?: Date }): CalendarEventResource {
+  /** The account makes an event itself, inviting `guests` (none: an event of its own). */
+  organize(
+    input: Omit<FakeInviteInput, "organizer" | "guests" | "attendeesOmitted"> & {
+      guests: string[];
+    },
+  ): CalendarEventResource {
     const event = this.invite({ ...input, organizer: this.emailAddress });
     event.organizer = { email: this.emailAddress, self: true };
     event.creator = { email: this.emailAddress, self: true };
-    event.attendees = [
-      { email: this.emailAddress, self: true, organizer: true, responseStatus: "accepted" },
-      ...input.guests.map((email) => ({ email, responseStatus: "needsAction" as const })),
-    ];
+    event.attendees =
+      input.guests.length === 0
+        ? undefined
+        : [
+            { email: this.emailAddress, self: true, organizer: true, responseStatus: "accepted" },
+            ...input.guests.map((email) => ({ email, responseStatus: "needsAction" as const })),
+          ];
+    if (event.attendees === undefined) delete event.attendees;
     return event;
   }
 
-  /** The organizer changes the event (its title, say), so it's listed as changed again. */
-  edit(id: string, changes: { title?: string }): void {
+  /**
+   * The same event, as Google puts it on this account's calendar too: another calendar's event
+   * that names this account as a guest (or organizer). Same ID and iCalUID; `self` marks this
+   * account's own entries.
+   */
+  receive(event: CalendarEventResource): CalendarEventResource {
+    const mine = (email: string) => email.toLowerCase() === this.emailAddress.toLowerCase();
+    const copy: CalendarEventResource = {
+      ...structuredClone(event),
+      organizer: { email: event.organizer.email, self: mine(event.organizer.email) || undefined },
+      creator: { email: event.creator.email, self: mine(event.creator.email) || undefined },
+      attendees: event.attendees?.map((guest) => ({
+        ...guest,
+        self: mine(guest.email) || undefined,
+      })),
+    };
+    this.save(copy);
+    return copy;
+  }
+
+  /**
+   * The organizer changes what the event says (its title or description): listed as changed
+   * again, at a new sequence.
+   */
+  edit(id: string, changes: { title?: string; description?: string }): void {
     const event = this.event(id);
     if (changes.title !== undefined) event.summary = changes.title;
+    if (changes.description !== undefined) event.description = changes.description;
+    event.sequence += 1;
+    event.updated = new Date().toISOString();
+    this.save(event);
+  }
+
+  /**
+   * The organizer changes who's invited, leaving what the event says as it was: listed as
+   * changed again, at the same sequence.
+   */
+  setGuests(id: string, guests: string[]): void {
+    const event = this.event(id);
+    const kept = (event.attendees ?? []).filter(
+      (attendee) => attendee.organizer === true || attendee.self === true,
+    );
+    event.attendees = [
+      ...kept,
+      ...guests
+        .filter((email) => !kept.some((attendee) => attendee.email === email))
+        .map((email) => ({ email, responseStatus: "needsAction" as const })),
+    ];
     event.updated = new Date().toISOString();
     this.save(event);
   }
@@ -164,6 +189,36 @@ export class FakeCalendar {
     const event = this.events.get(id);
     if (event === undefined) throw new Error(`The fake Calendar has no event ${id}`);
     return event;
+  }
+
+  /** The event, a cancelled one included, or undefined when the calendar never had it. */
+  find(id: string): CalendarEventResource | undefined {
+    return this.events.get(id);
+  }
+
+  /** Every event Mycel or the account made on the calendar that isn't cancelled. */
+  organized(): CalendarEventResource[] {
+    return [...this.events.values()].filter(
+      (event) => event.organizer.self === true && event.status !== "cancelled",
+    );
+  }
+
+  /** The account deletes the event in Calendar: it stays, `cancelled`, as Google keeps it. */
+  delete(id: string): void {
+    this.cancel(id);
+  }
+
+  /** The account adds guests to the event in Calendar itself, as invited people. */
+  addGuests(id: string, emails: string[]): void {
+    const event = this.event(id);
+    event.attendees = [
+      ...(event.attendees ?? [
+        { email: this.emailAddress, self: true, organizer: true, responseStatus: "accepted" },
+      ]),
+      ...emails.map((email) => ({ email, responseStatus: "needsAction" as const })),
+    ];
+    event.updated = new Date().toISOString();
+    this.save(event);
   }
 
   /** events.list on the primary calendar: everything, or what changed since a sync token. */
@@ -256,7 +311,8 @@ export class FakeCalendar {
     return event;
   }
 
-  private save(event: CalendarEventResource): void {
+  /** Stores the event as changed now, so a sync token lists it. */
+  save(event: CalendarEventResource): void {
     this.change += 1;
     this.events.set(event.id, event);
     this.changedAt.set(event.id, this.change);
@@ -288,12 +344,12 @@ function mismatch(): ListError {
 }
 
 // Calendar's event IDs: base32hex, lowercase.
-function eventId(): string {
+export function eventId(): string {
   const digits = "0123456789abcdefghijklmnopqrstuv";
   return [...randomBytes(20)].map((byte) => digits[byte % 32]).join("");
 }
 
-const PRIMARY_EVENTS = "/calendar/v3/calendars/primary/events";
+export const PRIMARY_EVENTS = "/calendar/v3/calendars/primary/events";
 
 // The Calendar API behind the proxy, answering from the connection's calendar.
 export function calendarResponse(calendar: FakeCalendar, path: string, params: URLSearchParams) {

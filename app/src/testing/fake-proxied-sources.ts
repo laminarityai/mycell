@@ -1,17 +1,21 @@
 // The APIs the fake Nango's proxy serves, each by its host and path prefix, answering from the
-// connection's own fake: Google's (its Gmail mailbox, its Drive, its spreadsheets or its
-// calendar), and the registered app Microsoft 365, through Microsoft Graph. Like Google, an API
-// answers 403 to a connection whose token holds none of the scopes it accepts (for a write, none
-// of the scopes its writes accept), and a host answers 404 for a path it doesn't serve.
+// connection's own fake: Google's (its Gmail mailbox, its Drive, its spreadsheets, its calendar,
+// its documents or its task lists), and the registered app Microsoft 365, through Microsoft Graph.
+// Like Google, an API answers 403 to a connection whose token holds none of the scopes it accepts
+// (for a write, none of the scopes its writes accept), and a host answers 404 for a path it
+// doesn't serve.
 import { HttpResponse } from "msw";
 import { REGISTERED_APPS } from "@/features/connections/registered-apps";
 import { GOOGLE_APP_SCOPES } from "@/features/connections/types";
 import { calendarError, calendarResponse } from "./fake-calendar";
-import { driveError, driveResponse } from "./fake-drive";
+import { calendarWriteResponse } from "./fake-calendar-writes";
+import { docsError } from "./fake-docs";
+import { DRIVE_STOP, DRIVE_WATCH, driveError, driveResponse, driveWrite } from "./fake-drive";
 import { gmailError, gmailResponse, gmailWrite } from "./fake-gmail";
 import type { FakeConnection } from "./fake-nango";
 import { graphError } from "./fake-microsoft";
 import { sheetsError } from "./fake-sheets";
+import { tasksError } from "./fake-tasks";
 
 type Respond = (connection: FakeConnection, path: string, params: URLSearchParams) => Response;
 
@@ -36,18 +40,31 @@ export type ProxiedSource = {
   // How the API answers a write (POST, PUT, PATCH or DELETE), and the scopes that let a token write;
   // none for a read-only API.
   write?: { scopes: readonly string[]; respond: RespondToWrite };
+  // POSTs that change nothing in the account, which any scope that reads allows (Gmail's
+  // users.watch, Drive's changes.watch and channels.stop). The write's `respond` answers them.
+  readingPosts?: readonly string[];
   rateLimited: () => Response;
 };
 
+const GMAIL_WATCH = "/gmail/v1/users/me/watch";
 const GMAIL_READONLY = "https://www.googleapis.com/auth/gmail.readonly";
 const GMAIL_COMPOSE = "https://www.googleapis.com/auth/gmail.compose";
 const DRIVE_READONLY = GOOGLE_APP_SCOPES.drive;
 const DRIVE = "https://www.googleapis.com/auth/drive";
 const DRIVE_FILE = "https://www.googleapis.com/auth/drive.file";
+const DOCUMENTS_READONLY = "https://www.googleapis.com/auth/documents.readonly";
 const SPREADSHEETS_READONLY = "https://www.googleapis.com/auth/spreadsheets.readonly";
 const CALENDAR_READS = ["calendar", "calendar.readonly", "calendar.events.readonly"].map(
   (name) => `https://www.googleapis.com/auth/${name}`,
 );
+// The scopes events.insert, patch, update and delete take, as Google lists them.
+const CALENDAR_WRITES = [
+  "calendar",
+  "calendar.events",
+  "calendar.events.owned",
+  "calendar.app.created",
+].map((name) => `https://www.googleapis.com/auth/${name}`);
+const TASKS_READONLY = "https://www.googleapis.com/auth/tasks.readonly";
 // Which Graph resources need which scope isn't modelled: any token that can sign in reads, and
 // any that can write something writes.
 const GRAPH_WRITE_SCOPES = REGISTERED_APPS.microsoft.scopes.filter((scope) =>
@@ -65,9 +82,15 @@ export const PROXIED_SOURCES: ProxiedSource[] = [
       scopes: [GOOGLE_APP_SCOPES.gmail, GMAIL_COMPOSE, "https://mail.google.com/"],
       respond: (connection, path, _params, body, method) => {
         if (method === "PATCH") throw new Error("The fake Gmail takes no PATCHes");
+        if (path === GMAIL_WATCH) {
+          const { mailbox } = connection;
+          return mailbox.watches.answer(mailbox.profile().historyId, body);
+        }
         return gmailWrite(connection.mailbox, path, body, method);
       },
     },
+    // users.watch takes any Gmail scope, gmail.readonly included.
+    readingPosts: [GMAIL_WATCH],
     rateLimited: () => gmailError(429, "RESOURCE_EXHAUSTED"),
   },
   {
@@ -75,14 +98,28 @@ export const PROXIED_SOURCES: ProxiedSource[] = [
     prefix: "/drive/v3",
     scopes: [DRIVE_READONLY, DRIVE],
     respond: (connection, path, params) => driveResponse(connection.drive, path, params),
+    write: {
+      // Mycel writes nothing to Drive; changes.watch and channels.stop take any Drive scope.
+      scopes: [DRIVE],
+      respond: (connection, path, params, body, method) => {
+        if (method !== "POST") throw new Error(`The fake Drive takes no ${method}s`);
+        return driveWrite(connection.drive, path, params, body);
+      },
+    },
+    readingPosts: [DRIVE_WATCH, DRIVE_STOP],
     rateLimited: () => driveError(429),
   },
   {
     host: "https://www.googleapis.com",
     prefix: "/calendar/v3",
-    // Reading events takes any Calendar scope.
+    // Reading events takes any Calendar scope; writing them a read-write one.
     scopes: [GOOGLE_APP_SCOPES.calendar, ...CALENDAR_READS],
     respond: (connection, path, params) => calendarResponse(connection.calendar, path, params),
+    write: {
+      scopes: CALENDAR_WRITES,
+      respond: (connection, path, params, body, method) =>
+        calendarWriteResponse(connection.calendar, path, params, body, method),
+    },
     rateLimited: () => calendarError(429, "rateLimitExceeded", "Rate Limit Exceeded"),
   },
   {
@@ -99,6 +136,34 @@ export const PROXIED_SOURCES: ProxiedSource[] = [
       },
     },
     rateLimited: () => sheetsError(429, "RESOURCE_EXHAUSTED"),
+  },
+  {
+    host: "https://docs.googleapis.com",
+    prefix: "/v1/documents",
+    // documents.get takes any Docs or Drive scope; batchUpdate a read-write one.
+    scopes: [GOOGLE_APP_SCOPES.docs, DOCUMENTS_READONLY, DRIVE, DRIVE_READONLY, DRIVE_FILE],
+    respond: (connection, path, params) => connection.docs.respond(path, params),
+    write: {
+      scopes: [GOOGLE_APP_SCOPES.docs, DRIVE, DRIVE_FILE],
+      respond: (connection, path, _params, body, method) => {
+        if (method !== "POST") throw new Error(`The fake Docs takes no ${method}s`);
+        return connection.docs.write(path, body);
+      },
+    },
+    rateLimited: () => docsError(429, "RESOURCE_EXHAUSTED"),
+  },
+  {
+    host: "https://tasks.googleapis.com",
+    prefix: "/tasks/v1",
+    // Listing and reading take either Tasks scope; insert and patch the read-write one.
+    scopes: [GOOGLE_APP_SCOPES.tasks, TASKS_READONLY],
+    respond: (connection, path, params) => connection.tasks.respond(path, params),
+    write: {
+      scopes: [GOOGLE_APP_SCOPES.tasks],
+      respond: (connection, path, params, body, method) =>
+        connection.tasks.write(path, params, body, method),
+    },
+    rateLimited: () => tasksError(429, "rateLimitExceeded", "Rate Limit Exceeded"),
   },
   {
     host: "https://graph.microsoft.com",
@@ -150,12 +215,15 @@ export function proxiedSource(host: string, path: string): ProxiedSource | undef
 export function refusal(
   source: ProxiedSource | undefined,
   connection: FakeConnection,
-  method: ProxyMethod = "GET",
+  method: ProxyMethod,
+  path: string,
 ) {
   if (source === undefined) {
     return HttpResponse.json({ error: { code: 404, message: "Not Found" } }, { status: 404 });
   }
-  const accepted = method === "GET" ? source.scopes : (source.write?.scopes ?? []);
+  const reads =
+    method === "GET" || (method === "POST" && source.readingPosts?.includes(path) === true);
+  const accepted = reads ? source.scopes : (source.write?.scopes ?? []);
   if (!accepted.some((scope) => connection.scopes.includes(scope))) {
     const message = "Request had insufficient authentication scopes.";
     return HttpResponse.json(

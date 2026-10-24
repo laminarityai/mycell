@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import { branchIssues } from "./branch-issues";
+import { referencesIn } from "./input-values";
 import { eachStep } from "./tree";
 import { triggers } from "./triggers";
 import {
@@ -106,20 +107,16 @@ function structuralIssues(spec: Spec): SpecIssue[] {
     }
     if (step.type === "tool") {
       for (const [name, value] of Object.entries(step.input)) {
-        const values = Array.isArray(value) ? value : [value];
-        values.forEach((item, i) => {
-          if (item === null || typeof item !== "object") return;
-          const [source = ""] = item.from.split(".");
-          const path = Array.isArray(value)
-            ? at("input", name, i, "from")
-            : at("input", name, "from");
+        for (const { reference, path: below } of referencesIn(value)) {
+          const [source = ""] = reference.from.split(".");
+          const path = at("input", name, ...below, "from");
           if (source !== "trigger") {
             refersBack(source, path);
-          } else if (!trigger.fields.some((field) => item.from === `trigger.${field}`)) {
+          } else if (!trigger.fields.some((field) => reference.from === `trigger.${field}`)) {
             const fields = trigger.fields.map((field) => `trigger.${field}`);
-            issues.push({ path, message: triggerMiss(item.from, fields) });
+            issues.push({ path, message: triggerMiss(reference.from, fields) });
           }
-        });
+        }
       }
     }
 

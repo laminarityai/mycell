@@ -4,6 +4,7 @@
 import { and, asc, eq, gte, lt, sql } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { type Ctx, requireRole } from "@/lib/ctx";
+import { now as clockNow } from "@/lib/time";
 import {
   DAY_MS,
   daysOf,
@@ -139,7 +140,7 @@ export async function getLedgerStart(ctx: Ctx): Promise<Date | null> {
  */
 export async function getRunway(ctx: Ctx): Promise<Runway> {
   requireRole(ctx, "admin", "system");
-  const now = Date.now();
+  const now = clockNow().getTime();
   const [balance, used] = await Promise.all([
     getBalance(ctx),
     forOrg(ctx).sum(

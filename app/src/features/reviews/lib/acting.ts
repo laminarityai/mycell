@@ -8,9 +8,11 @@ import { and, eq } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { delegatedCtx } from "@/features/connections/delegation";
 import {
+  calendarEventAdapter,
   escalationAdapter,
   gmailDraftAdapter,
   heldSendAdapter,
+  suggestedEditsAdapter,
   type ItemState,
   type PendingFormAdapter,
   type PendingItem,
@@ -24,7 +26,7 @@ import {
   SendUnconfirmedError,
   ValidationError,
 } from "@/lib/errors";
-import { DAY_MS } from "@/lib/time";
+import { DAY_MS, now as clockNow } from "@/lib/time";
 import {
   REVIEW_EXPIRY_DAYS,
   reviewActions,
@@ -42,6 +44,8 @@ const pendingForms: PendingForms = {
   approval: gmailDraftAdapter,
   escalation: escalationAdapter,
   held_send: heldSendAdapter,
+  suggested_edits: suggestedEditsAdapter,
+  calendar_event: calendarEventAdapter,
 };
 
 /**
@@ -98,7 +102,7 @@ export async function checkWaitingReviews(
   adapters: PendingForms = pendingForms,
 ): Promise<void> {
   requireSystem(ctx);
-  const now = Date.now();
+  const now = clockNow().getTime();
   const waiting = await forOrg(ctx).select(reviews, { where: eq(reviews.status, "waiting") });
   for (const row of waiting) {
     try {
@@ -247,7 +251,7 @@ const ACTION_WORDS: Record<ReviewAction, string> = {
 async function endUnconfirmed(ctx: Ctx, row: ReviewRow, ending: Ending) {
   await forOrg(ctx).update(
     reviews,
-    { status: "unconfirmed", endedAt: new Date() },
+    { status: "unconfirmed", endedAt: clockNow() },
     and(eq(reviews.id, row.id), eq(reviews.status, ending)),
   );
 }
@@ -256,7 +260,7 @@ async function undoClaim(ctx: Ctx, row: ReviewRow, ending: Ending, gone: boolean
   await forOrg(ctx).update(
     reviews,
     gone
-      ? { status: "gone", endedByUserId: null, endedAt: new Date() }
+      ? { status: "gone", endedByUserId: null, endedAt: clockNow() }
       : { status: "waiting", endedByUserId: null, endedAt: null },
     and(eq(reviews.id, row.id), eq(reviews.status, ending)),
   );

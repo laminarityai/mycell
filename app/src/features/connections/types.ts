@@ -118,6 +118,13 @@ export type AppIngestState = {
   cursor: string | null;
   backfilledItems: number;
   lastPolledAt: Date | null;
+  // When the app's watch runs out (ADR-0026): null when none was started, and in the past once
+  // it lapsed.
+  watchExpiresAt: Date | null;
+  // The channel the watch opened, when it's a web-hook channel (Drive's): its ID and resource
+  // ID, which stopping it needs. Null for a watch that isn't one (Gmail's), or none.
+  watchChannelId: string | null;
+  watchResourceId: string | null;
 };
 
 /**
@@ -166,6 +173,9 @@ export type IngestStateUpdate = {
   backfilledItems?: number;
   cursor?: string;
   lastPolledAt?: Date;
+  watchExpiresAt?: Date;
+  watchChannelId?: string;
+  watchResourceId?: string;
 };
 
 /** The user who made a connection, or `removed` once they're no longer a user of the org. */

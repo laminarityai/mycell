@@ -14,6 +14,7 @@ import type { ReviewSharing } from "@/features/workflows/types";
 import { reviewSharing, workflowNames } from "@/features/workflows/server";
 import { type Ctx, isAdmin, isSystem, requireSystem } from "@/lib/ctx";
 import { InvariantError, NotFoundError } from "@/lib/errors";
+import { now } from "@/lib/time";
 import type { HandOff, NewReview, Review, ReviewSummary } from "../types";
 import { reviews } from "./schema";
 
@@ -149,6 +150,7 @@ export function itemOf(row: ReviewRow): PendingItem {
     threadRef: row.threadRef,
     sourceRef: row.sourceRef,
     createdAt: row.createdAt,
+    details: row.details,
   };
 }
 
@@ -161,7 +163,7 @@ export async function endReview(
 ): Promise<ReviewRow | undefined> {
   const ended = await forOrg(ctx).update(
     reviews,
-    { status, endedByUserId, endedAt: new Date() },
+    { status, endedByUserId, endedAt: now() },
     and(eq(reviews.id, reviewId), eq(reviews.status, "waiting")),
   );
   return ended.at(0);

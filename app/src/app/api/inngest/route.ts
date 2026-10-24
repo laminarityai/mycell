@@ -1,6 +1,6 @@
 import { serve } from "inngest/next";
 import { reconcileJob } from "@/features/connections/jobs";
-import { backfillJob, pollCron, pollJob } from "@/features/discovery/jobs";
+import { backfillJob, pollCron, pollJob, renewWatchesJob } from "@/features/discovery/jobs";
 import {
   applyRetentionJob,
   deleteRemovedItemJob,
@@ -10,7 +10,7 @@ import {
   newMonthCron,
   pruneAccessLogJob,
   rereadAccessJob,
-  rereadDriveAccessJob,
+  rereadAllAccessJob,
   resumeOnCreditsJob,
   resumePostponedJob,
   retentionCron,
@@ -35,6 +35,7 @@ export const { GET, POST, PUT } = serve({
     backfillJob,
     pollCron,
     pollJob,
+    renewWatchesJob,
     reconcileJob,
     fanOutMessageJob,
     calendarPollCron,
@@ -56,7 +57,7 @@ export const { GET, POST, PUT } = serve({
     pruneAccessLogJob,
     deleteRemovedItemJob,
     rereadAccessJob,
-    rereadDriveAccessJob,
+    rereadAllAccessJob,
     forgetPersonAgainJob,
     retentionCron,
     applyRetentionJob,

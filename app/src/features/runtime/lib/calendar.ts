@@ -1,13 +1,11 @@
-// Reading a connection's primary calendar through the Nango proxy, for the Calendar trigger:
-// listing what changed since a sync token, and reading one invite live, for a step to test its
-// facts or a model to read it. What's read is held in memory only (invariant 8).
+// Reading a connection's primary calendar through the Nango proxy, for the Calendar trigger and
+// memory: listing what changed since a sync token, and reading one invite live, for a step to
+// test its facts or a model to read it. What's read is held in memory only (invariant 8).
 import { z } from "zod";
+import { CALENDAR_EVENTS } from "@/features/connections/calendar";
 import { proxyGet } from "@/features/connections/server";
 import type { Ctx } from "@/lib/ctx";
 import { RunStepError } from "./failures";
-
-/** The connection's primary calendar's events (Calendar API v3). */
-export const CALENDAR_EVENTS = "/calendar/v3/calendars/primary/events";
 
 /**
  * What every list request asks, the first included: Google refuses a sync token whose request
@@ -17,8 +15,8 @@ export const CALENDAR_EVENTS = "/calendar/v3/calendars/primary/events";
 const LIST_PARAMS = {
   maxResults: "250",
   fields:
-    "nextPageToken,nextSyncToken,items(id,status,created,eventType,attendeesOmitted," +
-    "organizer(self),attendees(self,responseStatus))",
+    "nextPageToken,nextSyncToken,items(id,status,created,updated,sequence,eventType," +
+    "attendeesOmitted,organizer(self),attendees(self,responseStatus))",
 };
 
 const listedEvent = z.object({
@@ -26,6 +24,8 @@ const listedEvent = z.object({
   status: z.string().optional(),
   // A deletion listed to a sync token carries little more than its ID.
   created: z.string().optional(),
+  updated: z.string().optional(),
+  sequence: z.number().int().nonnegative().optional(),
   eventType: z.string().optional(),
   attendeesOmitted: z.boolean().optional(),
   organizer: z.object({ self: z.boolean().optional() }).optional(),
@@ -41,9 +41,15 @@ const eventsPage = z.object({
   nextSyncToken: z.string().optional(),
 });
 
-/** One page of a listing: the new invites on it, and where the listing goes on or resumes. */
+/**
+ * One page of a listing: the new invites on it, the events memory follows (`changed`: made or
+ * changed, at the sequence they're at; `removed`: cancelled or deleted, by ID), and where the
+ * listing goes on or resumes.
+ */
 export type CalendarPage = {
   invites: { eventId: string; createdAt: string }[];
+  changed: { eventId: string; sequence: number; updatedAt: string }[];
+  removed: string[];
   nextPageToken: string | null;
   nextSyncToken: string | null;
 };
@@ -69,6 +75,12 @@ export async function listCalendarPage(
         ? [{ eventId: event.id, createdAt: event.created }]
         : [],
     ),
+    changed: page.items.flatMap((event) =>
+      isFollowed(event) && event.status !== "cancelled" && event.updated !== undefined
+        ? [{ eventId: event.id, sequence: event.sequence ?? 0, updatedAt: event.updated }]
+        : [],
+    ),
+    removed: page.items.flatMap((event) => (event.status === "cancelled" ? [event.id] : [])),
     nextPageToken: page.nextPageToken ?? null,
     nextSyncToken: page.nextSyncToken ?? null,
   };
@@ -85,6 +97,15 @@ function isNewInvite(event: ListedEvent): boolean {
   return (event.attendees ?? []).some(
     (guest) => guest.self === true && guest.responseStatus === "needsAction",
   );
+}
+
+/**
+ * An event memory follows: an ordinary one (not one Gmail added from an email, which memory
+ * learns from the email itself, nor focus time, out of office or a working location). A
+ * deletion, listed with little more than its ID, says nothing of its type, and is followed too.
+ */
+function isFollowed(event: ListedEvent): boolean {
+  return event.eventType === undefined || event.eventType === "default";
 }
 
 const inviteSchema = z.object({

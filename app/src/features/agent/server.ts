@@ -6,22 +6,25 @@ import type { Ctx } from "@/lib/ctx";
 import type { AgentConversation } from "./types";
 import { citationsOf } from "./lib/citations";
 import { findConversation, messagesOf, summary } from "./lib/conversations";
+import { foundIn } from "./lib/found";
 
 export { deleteConversation, listConversations, startConversation } from "./lib/conversations";
 // Called by the streaming route: Mycel's reply as a UI message stream.
 export { streamTurn } from "./lib/turn";
 
-/** One of the person's conversations, with its messages and the citations its replies show. */
+/**
+ * One of the person's conversations, with its messages, the citations its replies show, and
+ * the messages, reviews and workflows its tools found, read again.
+ */
 export async function getConversation(
   ctx: Ctx,
   conversationId: string,
 ): Promise<AgentConversation> {
   const row = await findConversation(ctx, conversationId);
   const messages = await messagesOf(ctx, row.id);
-  return {
-    ...summary(row),
-    createdAt: row.createdAt,
-    messages,
-    citations: await citationsOf(ctx, messages),
-  };
+  const [citations, found] = await Promise.all([
+    citationsOf(ctx, messages),
+    foundIn(ctx, messages),
+  ]);
+  return { ...summary(row), createdAt: row.createdAt, messages, citations, found };
 }

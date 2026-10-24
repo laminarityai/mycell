@@ -406,6 +406,33 @@ export type RecentMessages = {
   unavailable: boolean;
 };
 
+/**
+ * A search of one mailbox by its messages' headers: a sender and a subject, each matched as
+ * words, and when it arrived (from `after`, until before `before`). Nothing given finds the
+ * newest messages.
+ */
+export type MessageSearch = {
+  from?: string;
+  subject?: string;
+  after?: Date;
+  before?: Date;
+  limit: number;
+};
+
+/** Where a message is: its connection and its Gmail ID. */
+export type MessageRef = { connectionId: string; sourceRef: string };
+
+/**
+ * A message's sender and subject, as its headers give them, and when Gmail received it, with
+ * the account whose mailbox holds it. Fetched to show or hand a model, never stored.
+ */
+export type MessageHeaders = MessageRef & {
+  accountEmail: string;
+  from: string;
+  subject: string;
+  receivedAt: Date;
+};
+
 /** Whether runtime can execute each catalog action and step type yet. */
 export type ExecutorCoverage = {
   actions: Record<ActionName, "ready" | "pending">;

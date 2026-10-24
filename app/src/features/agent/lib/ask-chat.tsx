@@ -13,17 +13,13 @@ import { DateTime } from "@/components/date-time";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import type { AgentUIMessage, Citation, CitedSource } from "../types";
+import type { AgentUIMessage, Citation, CitedSource, FoundItems } from "../types";
 import { numberSources, segments } from "./footnotes";
+import { ToolPart } from "./tool-parts";
 
 /** Ask Mycel's AI disclosure (EU AI Act Art. 50), above every conversation. */
 const DISCLOSURE =
   "You're talking to Mycel, an AI. It answers only from what you can see in memory, and it can be wrong, so check its sources. Being an admin doesn't let it see more. Only you can see this conversation.";
-
-const TOOL_LABELS: Record<string, string> = {
-  search_memory: "Searched memory",
-  read_object: "Read memory",
-};
 
 /** What a cited source is, and where the person's copy of it lives. */
 const SOURCE_NAMES: Record<CitedSource["kind"], string> = {
@@ -39,18 +35,27 @@ const SOURCE_PLACES: Record<CitedSource["kind"], string> = {
 
 type Part = AgentUIMessage["parts"][number];
 
+/** What the server last read for the replies: their cited facts, and what their tools found. */
+type Shown = { cited: Map<string, Citation>; found: FoundItems };
+
 export function AskChat({
   conversationId,
   initialMessages,
   citations,
+  found,
 }: {
   conversationId: string;
   initialMessages: AgentUIMessage[];
   /** The facts the conversation's replies read, as the server last read them. */
   citations: Citation[];
+  /** The messages, reviews and workflows its tools found, as the server last read them. */
+  found: FoundItems;
 }) {
   const router = useRouter();
-  const cited = useMemo(() => new Map(citations.map((c) => [c.factId, c])), [citations]);
+  const shown = useMemo(
+    (): Shown => ({ cited: new Map(citations.map((c) => [c.factId, c])), found }),
+    [citations, found],
+  );
   const [input, setInput] = useState("");
   const { messages, sendMessage, status, error } = useChat<AgentUIMessage>({
     id: conversationId,
@@ -108,7 +113,7 @@ export function AskChat({
                   >
                     <Sparkles className="size-3.5" />
                   </span>
-                  <Reply message={message} cited={cited} />
+                  <Reply message={message} shown={shown} />
                 </li>
               ),
             )}
@@ -157,7 +162,8 @@ export function AskChat({
 }
 
 /** Mycel's reply: its parts in order, then the numbered sources its footnotes point to. */
-function Reply({ message, cited }: { message: AgentUIMessage; cited: Map<string, Citation> }) {
+function Reply({ message, shown }: { message: AgentUIMessage; shown: Shown }) {
+  const { cited } = shown;
   const texts = message.parts.flatMap((part) => (part.type === "text" ? [part.text] : []));
   const { sources, numbers } = numberSources(texts, cited);
   const scope = message.id;
@@ -165,7 +171,7 @@ function Reply({ message, cited }: { message: AgentUIMessage; cited: Map<string,
     <div className="flex min-w-0 flex-1 flex-col gap-2">
       <span className="text-xs font-medium text-muted-foreground">Mycel</span>
       {message.parts.map((part, index) => (
-        <ReplyPart key={index} part={part} scope={scope} numbers={numbers} cited={cited} />
+        <ReplyPart key={index} part={part} scope={scope} numbers={numbers} shown={shown} />
       ))}
       {sources.length === 0 ? null : (
         <ol
@@ -198,13 +204,14 @@ function ReplyPart({
   part,
   scope,
   numbers,
-  cited,
+  shown,
 }: {
   part: Part;
   scope: string;
   numbers: Map<string, number[]>;
-  cited: Map<string, Citation>;
+  shown: Shown;
 }) {
+  const { cited, found } = shown;
   if (part.type === "text") {
     return (
       <p className="leading-relaxed whitespace-pre-wrap">
@@ -233,26 +240,13 @@ function ReplyPart({
   if (part.type !== "dynamic-tool" && !part.type.startsWith("tool-")) return null;
   if (!("state" in part)) return null;
   const name = part.type === "dynamic-tool" ? part.toolName : part.type.slice("tool-".length);
-  const label = TOOL_LABELS[name] ?? name;
-  if (part.state === "output-error") {
-    return <p className="text-xs text-muted-foreground">{label}: it found nothing.</p>;
-  }
-  if (part.state !== "output-available") {
-    return <p className="text-xs text-muted-foreground">{label}…</p>;
-  }
-  const output = part.output as { available?: boolean; screenedOut?: number } | null;
-  if (output?.available === false) {
-    return <p className="text-xs text-muted-foreground">Memory was unavailable.</p>;
-  }
-  const left = output?.screenedOut ?? 0;
-  return (
-    <p className="text-xs text-muted-foreground">
-      {label}
-      {left === 0
-        ? null
-        : `. Left out ${String(left)} ${left === 1 ? "item" : "items"} that looked like instructions aimed at Mycel.`}
-    </p>
-  );
+  const call =
+    part.state === "output-error"
+      ? { name, state: "failed" as const }
+      : part.state === "output-available"
+        ? { name, state: "done" as const, output: part.output }
+        : { name, state: "pending" as const };
+  return <ToolPart call={call} found={found} />;
 }
 
 /** A fact's footnote numbers, with its markers. */

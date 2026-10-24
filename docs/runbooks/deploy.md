@@ -396,11 +396,17 @@ The answer says `"filterMatchState": "MATCH_FOUND"`. The federation itself can o
    | `MODEL_FAST`                     | as in `app/.env.example`                             |
    | `MODEL_SMART`                    | as in `app/.env.example`                             |
    | `MODEL_JUDGE`                    | as in `app/.env.example`                             |
+   | `CREDITS_PER_USD`                | `100`: 1 credit is 1 cent (`docs/credit-pricing.md`) |
+   | `CREDIT_ESTIMATE_CLASSIFY`       | as in `app/.env.example`                             |
+   | `CREDIT_ESTIMATE_FAST`           | as in `app/.env.example`                             |
+   | `CREDIT_ESTIMATE_SMART`          | as in `app/.env.example`                             |
+   | `CREDIT_ESTIMATE_JUDGE`          | as in `app/.env.example`                             |
+   | `CREDIT_ESTIMATE_EMBED`          | as in `app/.env.example`                             |
 
    Leave these unset:
    - `INNGEST_DEV`: unset means Inngest Cloud.
    - `NANGO_API_URL` and `AI_GATEWAY_BASE_URL`: only the e2e tests set them.
-   - `CREDITS_PER_USD`, the `CREDIT_ESTIMATE_*` variables, `MODEL_EMBED`, `MODEL_DECISION_PREFIXES` (Jev and Laya) and `KMS_ALIAS_PREFIX` (`mycel`): they have defaults. Change `MODEL_EMBED` only together with the stored vectors, which must keep one size.
+   - `MODEL_EMBED`, `MODEL_DECISION_PREFIXES` (Jev and Laya) and `KMS_ALIAS_PREFIX` (`mycel`): they have defaults. Change `MODEL_EMBED` only together with the stored vectors, which must keep one size.
    - `KMS_ENDPOINT`: only LocalStack needs it.
 
    Vercel sets `NODE_ENV` itself.
@@ -411,7 +417,7 @@ The answer says `"filterMatchState": "MATCH_FOUND"`. The federation itself can o
    vercel env add DATABASE_URL production --sensitive
    ```
 
-2. **Check** before deploying: `vercel env ls production` lists all 21 variables in the table.
+2. **Check** before deploying: `vercel env ls production` lists all 27 variables in the table.
 3. **Deployments → the failed first deployment → Redeploy.** Vercel applies variables only to new deployments. If the build stops in `env.ts`, the error names the missing variable.
 
 ## 10. Wire it together and check
@@ -431,10 +437,10 @@ The answer says `"filterMatchState": "MATCH_FOUND"`. The federation itself can o
 
    ```sh
    psql '<direct string>' -c 'select id, workspace_domain from organization;'
-   DATABASE_URL='<direct string>' pnpm credits:grant <orgId> 50000
+   DATABASE_URL='<direct string>' pnpm credits:grant <orgId> 5000
    ```
 
-   At the default `CREDITS_PER_USD=1000`, 50,000 credits is $50 of gateway cost.
+   At `CREDITS_PER_USD=100`, 5,000 credits is $50 of gateway cost.
 
 Smoke test, with Inngest's **Runs** open beside the app:
 

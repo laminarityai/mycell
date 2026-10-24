@@ -6,13 +6,8 @@ import { systemCtx } from "@/lib/ctx";
 import type { FakeMessageInput } from "@/testing/fake-gmail";
 import { fakeNango } from "@/testing/fake-nango";
 import { executeRun, getRun, startRun } from "../server";
-import {
-  connectInbox,
-  pricingQuestion,
-  publish,
-  recordingStepRunner,
-  recordsOf,
-} from "./run-helpers";
+import { connectInbox, pricingQuestion, publish, recordsOf } from "./run-helpers";
+import { recordingStepRunner } from "@/testing/recording-step-runner";
 
 beforeEach(resetDatabase);
 

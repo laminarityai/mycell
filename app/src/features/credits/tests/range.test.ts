@@ -162,7 +162,7 @@ describe("reading the range from the address", () => {
 function daysSpending(from: string, to: string, spent = (i: number) => i + 1): DailySpending[] {
   return daysOf({ from: utc(from), to: utc(to) }).map((at, i) => ({
     day: at,
-    byKind: { workflow: spent(i), memory: 1, builder: 0, try_it: 0 },
+    byKind: { workflow: spent(i), memory: 1, builder: 0, agent: 0, try_it: 0 },
     spent: spent(i) + 1,
     granted: 0,
   }));
@@ -191,7 +191,13 @@ describe("bucketing spending by the range's length", () => {
     expect(buckets.reduce((sum, b) => sum + b.spent, 0)).toBe(
       days.reduce((sum, d) => sum + d.spent, 0),
     );
-    expect(buckets[0]?.byKind).toEqual({ workflow: 28, memory: 7, builder: 0, try_it: 0 });
+    expect(buckets[0]?.byKind).toEqual({
+      workflow: 28,
+      memory: 7,
+      builder: 0,
+      agent: 0,
+      try_it: 0,
+    });
   });
 
   it("splits months on the 1st, the first and last ones partial", () => {

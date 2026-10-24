@@ -10,6 +10,7 @@ import {
   itemQueued,
   personForgotten,
   postponedDue,
+  toldFactDeleted,
 } from "@/features/memory/events";
 import { failedCallRecorded } from "@/features/models/events";
 import { runRequested } from "@/features/runtime/events";
@@ -28,6 +29,7 @@ const CARRIED: readonly CarriedEvent[] = [
   postponedDue,
   exclusionAdded,
   personForgotten,
+  toldFactDeleted,
   itemQueued,
   failedCallRecorded,
   creditsGranted,

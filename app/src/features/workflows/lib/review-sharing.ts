@@ -13,18 +13,20 @@ import { tagIdsOf } from "./visibility";
  * names of the tags its latest version is published to that the caller may know (a member's
  * own among them; every one for an admin), and whether that version lets a review be handed
  * on. Any role may ask: it says nothing about a workflow but these answers. A workflow never
- * published, or not in the org, has no entry.
+ * published, or not in the org, has no entry. `asPerson` answers for an admin as for a member
+ * with their tags (Ask Mycel's list of the reviews waiting for them).
  */
 export async function reviewSharing(
   ctx: Ctx,
   workflowIds: readonly string[],
+  { asPerson = false }: { asPerson?: boolean } = {},
 ): Promise<Map<string, ReviewSharing>> {
   const versions = [...(await latestVersions(ctx, [...new Set(workflowIds)])).values()];
   const tagIds = await tagIdsOf(
     ctx,
     versions.map((version) => version.id),
   );
-  const everyone = isAdmin(ctx) || isSystem(ctx);
+  const everyone = !asPerson && (isAdmin(ctx) || isSystem(ctx));
   // The tags the caller may name: every one of these versions' for an admin, else their own.
   const known = everyone
     ? await tagNamesById(ctx, [...tagIds.values()].flat())

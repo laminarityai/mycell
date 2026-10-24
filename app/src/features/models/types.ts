@@ -25,13 +25,14 @@ export type MeteredStream = {
   meterStep(providerMetadata: unknown): void;
   /**
    * Notes the error a failed model step ended with. The failed step reports no cost, but the
-   * gateway may still bill it: when its error carries a generation ID, the call's entry records
+   * gateway may still bill it: when its error carries a generation ID, an entry at 0 records
    * that one, so its billed cost is looked up later.
    */
   meterError(error: unknown): void;
   /**
-   * Records the call's usage: the cost of every step metered so far. Only the first call
-   * records; later ones do nothing, so every way a stream can end may call it.
+   * Records the call's usage: the cost of every step metered so far, in one entry, and a second
+   * entry at 0 for a failed step with a generation ID when earlier steps reported a cost. Only
+   * the first call records; later ones do nothing, so every way a stream can end may call it.
    */
   finish(outcome: "succeeded" | "failed"): Promise<void>;
 };

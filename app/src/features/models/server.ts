@@ -7,7 +7,11 @@ export { callModel, CREDIT_ESTIMATES } from "./lib/call-model";
 export { classify } from "./lib/classify";
 export { embed } from "./lib/embed";
 // Screens fetched text for prompt injection before a model reads it, metered the same way.
-export { estimateScreenCredits, screenForInjection } from "./lib/injection-screen";
+export {
+  estimateScreenCredits,
+  injectionScreenConfigured,
+  screenForInjection,
+} from "./lib/injection-screen";
 export { resolveModel, setModelRole } from "./lib/model-roles";
 // For callers that stream a model themselves: the role's model, behind the credit check, and
 // its one usage entry when the stream ends.

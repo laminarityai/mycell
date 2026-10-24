@@ -93,7 +93,15 @@ test("three failed runs pause a workflow for its members until an admin resumes 
 
   await page.context().clearCookies();
   await signInAs(orgA.admin);
-  await page.goto(workflowPage);
+  // The admin's alerts say so, and their fix leads to the workflow.
+  await page.goto("/workflows");
+  const nav = page.getByRole("navigation", { name: "Main" });
+  await nav.getByRole("link", { name: "Alerts 1 open" }).click();
+  const alert = page.getByRole("row").filter({ hasText: "Paused: failing" });
+  await expect(alert).toContainText("Pricing labels");
+  await expect(alert).toContainText("Once an admin resumes it.");
+  await alert.getByRole("link", { name: "Resume" }).click();
+  await expect(page).toHaveURL(workflowPage);
   // While it's paused, the page opens on its Health tab.
   await expect(page.getByRole("tab", { name: /Health/ })).toHaveAttribute("aria-selected", "true");
   const health = page.getByRole("region", { name: "Health" });
@@ -106,6 +114,9 @@ test("three failed runs pause a workflow for its members until an admin resumes 
   await health.getByRole("button", { name: "Resume" }).click();
   await expect(health).toContainText("Its runs aren't failing");
   await expect(health.getByRole("button", { name: "Resume" })).toHaveCount(0);
+  // Nothing is stored: resuming clears the alert.
+  await nav.getByRole("link", { name: "Alerts", exact: true }).click();
+  await expect(page.getByText("Nothing needs you.")).toBeVisible();
 
   await page.context().clearCookies();
   await signInAs(orgA.member);

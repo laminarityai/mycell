@@ -8,6 +8,7 @@ import { byEmail, DANA, learnInOrgInbox, seedOrgB } from "./isolation-seed";
 import { withCredits } from "./memory-helpers";
 import { retentionIsolationCases } from "./retention-isolation-cases";
 import { settingsIsolationCases } from "./settings-isolation-cases";
+import { toldIsolationCases } from "./told-isolation-cases";
 
 const STAFF = "sam@mycel.example";
 const CONSENT = { staffEmail: STAFF, reason: "Ticket 4411", days: 7 };
@@ -130,6 +131,7 @@ export const isolationCases = defineIsolationCases(server, {
 
   ...settingsIsolationCases,
   ...retentionIsolationCases,
+  ...toldIsolationCases,
 
   summarizeObject: async (orgs) => {
     const { object, snapshot } = await seedOrgB(orgs);
@@ -143,6 +145,18 @@ export const isolationCases = defineIsolationCases(server, {
 
     expect(fakeAiGateway.requests("language")).toHaveLength(calls);
     expect(await snapshot()).toEqual(object);
+  },
+
+  citeFacts: async (orgs) => {
+    const { object } = await seedOrgB(orgs);
+    const { orgA } = orgs;
+    const ids = object.facts.map((fact) => fact.id);
+
+    for (const ctx of [orgA.admin.ctx, orgA.member.ctx, systemCtx(orgA.id)]) {
+      expect(await server.citeFacts(ctx, ids)).toEqual([]);
+    }
+    // Org B's member still cites them.
+    expect((await server.citeFacts(orgs.orgB.member.ctx, ids)).map((fact) => fact.id)).toEqual(ids);
   },
 
   listAccessLog: async (orgs) => {

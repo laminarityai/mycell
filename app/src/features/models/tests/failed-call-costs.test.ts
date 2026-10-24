@@ -1,5 +1,6 @@
 import { streamText } from "ai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { getBalance, grantCredits, listLedger } from "@/features/credits/server";
@@ -11,6 +12,7 @@ import { fakeInngest } from "@/testing/fake-inngest";
 import { callModel, correctFailedCallCost, openMeteredStream } from "../server";
 import { GenerationLookupError, ModelCallError } from "../types";
 import { testPrompts } from "./requests";
+import { askTurn } from "./second-chat";
 
 beforeEach(resetDatabase);
 afterEach(() => {
@@ -224,6 +226,73 @@ describe("a failed call's billed cost", () => {
     expect(await correctFailedCallCost(ctx, String(event?.data.entryId))).toBe("corrected");
     expect(await getBalance(ctx)).toBeCloseTo(90);
     expect(fakeAiGateway.lookups()).toEqual(["gen_step"]);
+  });
+
+  it("is looked up for a stream's failed step alone, apart from its earlier costed steps", async () => {
+    const { orgA, ctx } = await orgWithCredits();
+    const attribution = { workflowId: "wf_1", runId: "run_1" };
+    fakeAiGateway.reply(
+      { toolCalls: [{ name: "look_up", input: { name: "Acme" } }] },
+      { costUsd: 0.01, generationId: "gen_step_1" },
+    );
+    fakeAiGateway.fail("language", {
+      streaming: true,
+      generationId: "gen_step_2",
+      billedUsd: 0.004,
+    });
+
+    await (await askTurn(orgA.member.ctx, "Look up Acme", [], undefined, { attribution })).text();
+
+    const usages = (await listLedger(ctx)).filter((entry) => entry.kind === "usage");
+    expect(usages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ costUsd: 0.01, generationId: "gen_step_1", ...attribution }),
+        expect.objectContaining({
+          costUsd: 0,
+          outcome: "failed",
+          generationId: "gen_step_2",
+          ...attribution,
+        }),
+      ]),
+    );
+    expect(usages).toHaveLength(2);
+    const events = fakeInngest.sent(FAILED_CALL);
+    expect(events).toHaveLength(1);
+    expect(await correctFailedCallCost(ctx, String(events.at(0)?.data.entryId))).toBe("corrected");
+    // 0.01 for the earlier step, 0.004 billed for the failed one, at 1000 credits a dollar.
+    expect(await getBalance(ctx)).toBeCloseTo(86);
+    expect(spentBy(await listLedger(ctx), "wf_1")).toBeCloseTo(14);
+    expect(fakeAiGateway.lookups()).toEqual(["gen_step_2"]);
+  });
+
+  it("leaves one entry for a stream that fails on its first step", async () => {
+    const { orgA, ctx } = await orgWithCredits();
+    fakeAiGateway.fail("language", { streaming: true, generationId: "gen_step_1" });
+
+    await (await askTurn(orgA.member.ctx, "Look up Acme", [])).text();
+
+    expect((await listLedger(ctx)).filter((entry) => entry.kind === "usage")).toEqual([
+      expect.objectContaining({ costUsd: 0, outcome: "failed", generationId: "gen_step_1" }),
+    ]);
+    expect(fakeInngest.sent(FAILED_CALL)).toHaveLength(1);
+  });
+
+  it("isn't looked up for an off-schema answer that reported its cost", async () => {
+    const { ctx } = await orgWithCredits();
+    fakeAiGateway.object({ other: 1 }, { costUsd: 0.003, generationId: "gen_off" });
+    await expect(
+      callModel(ctx, "smart", {
+        prompt: testPrompts.extractTheOrder(),
+        schema: z.object({ name: z.string() }),
+      }),
+    ).rejects.toThrow(ModelCallError);
+    const entry = (await listLedger(ctx, { limit: 1 })).at(0);
+    expect(entry).toMatchObject({ outcome: "failed", costUsd: 0.003, generationId: "gen_off" });
+
+    expect(fakeInngest.sent(FAILED_CALL)).toEqual([]);
+    expect(await correctFailedCallCost(ctx, String(entry?.id))).toBe("nothing_to_correct");
+    expect(await getBalance(ctx)).toBeCloseTo(97);
+    expect(fakeAiGateway.lookups()).toEqual([]);
   });
 
   it("leaves the call's own error when the lookup can't be queued", async () => {

@@ -1,7 +1,8 @@
 // The Inngest events memory sends itself: an admin started it, so it learns what discovery had
 // stored already; an item to learn, queued then or when a postponed item's month comes; an
 // exclusion was added, so what it covers is forgotten; postponed items are due again; a person
-// was forgotten, so they're swept again; a night's retention is due. Those a change sends are
+// was forgotten, so they're swept again; a told fact was deleted, so it's purged when its undo
+// window ends; a night's retention is due. Those a change sends are
 // written to the outbox with it (ADR-0027). Definitions only, no IO: the outbox reads them to
 // check what it sends.
 import { eventType } from "inngest";
@@ -46,6 +47,14 @@ export const postponedDue = eventType("memory/postponed.due", {
  */
 export const personForgotten = eventType("memory/person.forgotten", {
   schema: z.object({ orgId: z.string().min(1), address: z.string().min(1) }),
+});
+
+/**
+ * A person deleted a told fact: once its undo window ends (`purgeAt`), the org's deleted told
+ * facts past their window are deleted for good.
+ */
+export const toldFactDeleted = eventType("memory/told-fact.deleted", {
+  schema: z.object({ orgId: z.string().min(1), purgeAt: z.iso.datetime() }),
 });
 
 /** A night's retention is due for the org: what's past its window goes. */

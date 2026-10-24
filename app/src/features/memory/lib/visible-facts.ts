@@ -14,11 +14,18 @@ import { type Reading, visibleFact, visibleSourceRecords } from "./visibility";
 
 export type FactRow = typeof facts.$inferSelect;
 
-/** A fact the viewer can see, with the sources they can see. */
-export type SeenFact<F = FactRow> = { fact: F; sources: FactSource[] };
+/**
+ * A fact the viewer can see, with the sources they can see, and whether none of those came from
+ * inside the company.
+ */
+export type SeenFact<F = FactRow> = { fact: F; sources: FactSource[]; outsideOnly: boolean };
 
-/** The facts among `rows` the viewer can see, in the order given. */
-export async function seenFacts<F extends { id: string }>(
+/**
+ * The facts among `rows` the viewer can see, in the order given: those with a source they can
+ * see, and those they told Mycel themselves and haven't deleted, which have no sources and count
+ * as from inside.
+ */
+export async function seenFacts<F extends Pick<FactRow, "id" | "toldByUserId" | "deletedAt">>(
   ctx: Ctx,
   reading: Reading,
   rows: F[],
@@ -38,24 +45,40 @@ export async function seenFacts<F extends { id: string }>(
     visible.size === 0
       ? []
       : await db.select(sourceRecords, {
-          columns: ["id", "app", "connectionId", "sourceRef", "occurredAt"],
+          columns: [
+            "id",
+            "app",
+            "connectionId",
+            "sourceRef",
+            "itemKey",
+            "occurredAt",
+            "fromInside",
+          ],
           where: inArray(sourceRecords.id, [...visible]),
           orderBy: [asc(sourceRecords.occurredAt)],
         });
 
   return rows.flatMap((fact) => {
+    if (fact.toldByUserId !== null) {
+      const own =
+        reading.viewer.userId !== null &&
+        fact.toldByUserId === reading.viewer.userId &&
+        fact.deletedAt === null;
+      return own ? [{ fact, sources: [], outsideOnly: false }] : [];
+    }
     const linked = new Set(
       links.filter((link) => link.factId === fact.id).map((link) => link.sourceRecordId),
     );
-    const sources = records
-      .filter((record) => linked.has(record.id))
-      .map(({ app, connectionId, sourceRef, occurredAt }) => ({
-        app,
-        connectionId,
-        sourceRef,
-        occurredAt,
-      }));
-    return sources.length === 0 ? [] : [{ fact, sources }];
+    const seen = records.filter((record) => linked.has(record.id));
+    const sources = seen.map(({ app, connectionId, sourceRef, itemKey, occurredAt }) => ({
+      app,
+      connectionId,
+      sourceRef,
+      itemKey,
+      occurredAt,
+    }));
+    const outsideOnly = !seen.some((record) => record.fromInside);
+    return sources.length === 0 ? [] : [{ fact, sources, outsideOnly }];
   });
 }
 
@@ -177,7 +200,7 @@ export async function describeFacts(
     reading,
     seen.flatMap(({ fact }) => fact.conflictsWithId ?? []),
   );
-  return seen.map(({ fact, sources }) => {
+  return seen.map(({ fact, sources, outsideOnly }) => {
     const other = linked.find((candidate) => candidate.id === fact.objectId);
     return {
       id: fact.id,
@@ -194,12 +217,18 @@ export async function describeFacts(
         fact.conflictsWithId !== null && conflicting.has(fact.conflictsWithId)
           ? fact.conflictsWithId
           : null,
+      outsideOnly,
+      told: fact.toldByUserId !== null,
     };
   });
 }
 
-// Which of the facts `ids` the reader can see.
-async function visibleFacts(ctx: Ctx, reading: Reading, ids: string[]): Promise<Set<string>> {
+/** Which of the facts `ids` the reader can see. */
+export async function visibleFacts(
+  ctx: Ctx,
+  reading: Reading,
+  ids: string[],
+): Promise<Set<string>> {
   if (ids.length === 0) return new Set();
   const rows = await forOrg(ctx).select(facts, {
     columns: ["id"],

@@ -223,7 +223,7 @@ describe("a failed step", () => {
     failure.script?.(sheets);
     const recorder = stepStateRecorder();
 
-    const outcome = await executeRun(system, runId, recorder.runStep, recordedBackoff());
+    const outcome = await executeRun(system, runId, recorder.runStep, recordedBackoff().sleep);
 
     expect(outcome).toEqual({ status: "failed" });
     const run = await getRun(admin, runId);

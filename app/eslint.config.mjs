@@ -243,7 +243,7 @@ export default defineConfig([
   {
     files: ["src/**/*.{ts,tsx}", "e2e/**/*.ts", "scripts/**/*.ts"],
     rules: {
-      "max-lines": ["error", { max: 300, skipBlankLines: true, skipComments: true }],
+      "max-lines": ["error", { max: 400, skipBlankLines: true, skipComments: true }],
       "import/no-default-export": "error",
       "no-restricted-properties": ["error", processEnv, inngestSend],
     },

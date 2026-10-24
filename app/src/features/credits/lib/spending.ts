@@ -20,14 +20,21 @@ import {
 import { getBalance, inRange } from "./ledger";
 import { creditLedger } from "./schema";
 
-// An entry's UTC day, as "2026-10-23": what a range's spending is grouped by.
-const utcDay = sql<string>`to_char(${creditLedger.createdAt} at time zone 'UTC', 'YYYY-MM-DD')`;
+// An entry's UTC day, as "2026-10-23": what a range's spending, and a month's spending against
+// a budget, is grouped by.
+export const utcDay = sql<string>`to_char(${creditLedger.createdAt} at time zone 'UTC', 'YYYY-MM-DD')`;
 
 // Whether a run made the usage. Grouped by this rather than by run, so a busy workflow's month
 // is still a group a day.
 const madeByRun = sql<boolean>`${creditLedger.runId} is not null`;
 
-const noSpending = (): SpendingByKind => ({ workflow: 0, memory: 0, builder: 0, try_it: 0 });
+const noSpending = (): SpendingByKind => ({
+  workflow: 0,
+  memory: 0,
+  builder: 0,
+  agent: 0,
+  try_it: 0,
+});
 
 const dayKey = (day: Date) => day.toISOString().slice(0, 10);
 

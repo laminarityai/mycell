@@ -33,15 +33,22 @@ export type NormalizedEvent = {
 /** One page of a backfill, and the token for the next one (null on the last page). */
 export type BackfillPage = { events: NormalizedEvent[]; nextPageToken: string | null };
 
-/** What a poll found since a cursor, and where the next poll starts. */
-export type PollResult =
+/** One page of what changed since a poll's cursor. */
+export type PollPage =
   | {
+      // The items found on the page, normalized, to store at once (Drive's files).
       events: NormalizedEvent[];
-      // The items gone from the account since the cursor, in the order they went: Gmail
-      // messages deleted or trashed (by message ID), Drive files deleted, trashed or no longer
-      // shared with it (by file ID).
+      // The items added that must each be read to be normalized (Gmail's messages), by ID.
+      added: string[];
+      // The items gone from the account, in the order they went: Gmail messages deleted or
+      // trashed (by message ID), Drive files deleted, trashed or no longer shared with it (by
+      // file ID).
       removed: string[];
-      nextCursor: string;
+      // The next page, null after the last.
+      nextPageToken: string | null;
+      // Where the next poll starts, when the page says: Gmail's every page says (the first
+      // page's is kept), Drive's last page only.
+      nextCursor: string | null;
     }
   // The source no longer knows the cursor (it expired): backfill from the last stored event.
   | { cursorExpired: true };
@@ -51,8 +58,16 @@ export type Connector = {
   readStartCursor(client: SourceClient): Promise<string>;
   /** One page of the items that occurred since `since`, starting at `pageToken`. */
   backfillPage(client: SourceClient, since: Date, pageToken: string | null): Promise<BackfillPage>;
-  /** Everything new, and every item removed, since `cursor`. */
-  poll(client: SourceClient, cursor: string): Promise<PollResult>;
+  /**
+   * One page of everything new, and every item removed, since `cursor`, from `pageToken` (null
+   * for the first page). A poll reads one page per step.
+   */
+  pollPage(client: SourceClient, cursor: string, pageToken: string | null): Promise<PollPage>;
+  /**
+   * Reads and normalizes items a poll's pages listed as added, leaving out any gone since or not
+   * ingested. Only a connector whose pages list items by ID (Gmail's) has it.
+   */
+  readAdded?(client: SourceClient, ids: string[]): Promise<NormalizedEvent[]>;
   /** The app's watch (ADR-0026), if it can tell Mycel when something changes. */
   watch?: Watcher;
 };

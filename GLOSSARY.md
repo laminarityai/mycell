@@ -106,7 +106,7 @@ _Avoid_: Level, tier, autonomy level
 
 **Workflow**:
 An automation an admin creates and publishes to tags, defined by a spec.
-_Avoid_: Automation, agent, bot, flow
+_Avoid_: Automation, agent (each person's chat with Mycel), bot, flow
 
 **Spec**:
 The declarative definition of a workflow: its trigger, steps, credentials, budget, and rung.
@@ -235,11 +235,15 @@ Code the builder chat drafts when a custom action can't do the job, sent to our 
 _Avoid_: Feature request
 
 **Agent**:
-Each person's own private chat with Mycel. It answers from what that person can see in memory and in their own mail, remembers what they tell it, and acts only by running their own workflows, whose actions still wait as reviews.
-_Avoid_: Assistant, copilot, bot
+Each person's own private chat with Mycel, labelled "Ask Mycel". It answers from what that person can see in memory and in their own mail, remembers what they tell it, and acts only by running their own workflows, whose actions still wait as reviews.
+_Avoid_: Assistant, copilot, bot, Ask Mycel (the label people see, not the term)
+
+**Pending run**:
+A run the agent offered: one of the person's own switched-on workflows on a message in their own mail, waiting for them to press Run. Nothing starts until they do, and the run's drafts then wait on their Reviews page like any run's.
+_Avoid_: Proposal (the builder chat's), queued run
 
 **Builder chat**:
-The admin-only agent that turns descriptions and suggestions into proposed spec changes. It reads only company-wide memory, since its conversations are shared among admins.
+The admin-only chat that turns descriptions and suggestions into proposed spec changes. It isn't an agent: an agent is one person's own, and builder conversations are shared among admins. It reads only company-wide memory, since its conversations are shared among admins.
 _Avoid_: Copilot, assistant
 
 **Builder conversation**:
@@ -267,8 +271,12 @@ _Avoid_: Limit, quota
 ### Memory
 
 **Fact**:
-A short statement about an object that a source states or a person told Mycel, linked to the sources it came from.
+A short statement about an object that a source states, linked to the sources it came from, or that a person told Mycel (a told fact).
 _Avoid_: Memory (for a single item), note, insight, inference
+
+**Told fact**:
+A fact a person told Mycel through their agent ("remember this"). It has no sources, and only that person sees it, in their answers and their own workflows. Their newer told fact on the same point replaces their older one, kept as history. It goes when they leave the company, or when an admin forgets the person it's about.
+_Avoid_: Note, annotation, comment
 
 **Source record**:
 Mycel's record of one item memory learned from, such as an email, a version of a Drive doc or a version of a Calendar invite, as one connection holds it, with the item's access list and a pointer to re-fetch it, never its content.

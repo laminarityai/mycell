@@ -145,6 +145,18 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await snapshot()).toEqual(object);
   },
 
+  citeFacts: async (orgs) => {
+    const { object } = await seedOrgB(orgs);
+    const { orgA } = orgs;
+    const ids = object.facts.map((fact) => fact.id);
+
+    for (const ctx of [orgA.admin.ctx, orgA.member.ctx, systemCtx(orgA.id)]) {
+      expect(await server.citeFacts(ctx, ids)).toEqual([]);
+    }
+    // Org B's member still cites them.
+    expect((await server.citeFacts(orgs.orgB.member.ctx, ids)).map((fact) => fact.id)).toEqual(ids);
+  },
+
   listAccessLog: async (orgs) => {
     const { orgA, orgB } = orgs;
     await seedOrgB(orgs);

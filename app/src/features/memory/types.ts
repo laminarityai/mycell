@@ -112,6 +112,9 @@ export type FactSource = {
   app: MemoryApp;
   connectionId: string;
   sourceRef: string;
+  // What every copy of the item shares (an email's Message-ID, a Drive file's ID), so a copy in a
+  // colleague's mailbox can be linked by the item rather than by that mailbox's own ID.
+  itemKey: string;
   occurredAt: Date;
 };
 
@@ -132,7 +135,16 @@ export type MemoryFact = {
   // For a fact stated only from outside the company: the fact from inside, or company-wide,
   // that it contradicts and couldn't replace, so both are current. Only one the reader can see.
   conflictsWith: string | null;
+  // Stated only from outside the company, as far as the reader's sources show: none of the
+  // sources they can see came from inside (a mailbox's own sent mail, a colleague's doc).
+  outsideOnly: boolean;
 };
+
+/**
+ * Where a fact a reader already read came from, to cite it again (Ask Mycel's footnotes): its
+ * sources the reader can see and its markers, never what it says.
+ */
+export type FactCitation = Pick<MemoryFact, "id" | "sources" | "conflictsWith" | "outsideOnly">;
 
 /**
  * A fact a newer one replaced, as one reader sees it: `supersededBy` is the newer fact they can
@@ -298,12 +310,15 @@ export type ObjectSummary = { object: FoundObject; summary: string; factCount: n
 /**
  * Who or what is reading memory, which every read logs (ADR-0024). The ctx says whose view it
  * reads in; this says on whose behalf: the person acting directly (the default), the builder
- * chat for the admin using it, or a workflow run, as its enablement's member (member
- * credentials) or company-wide only (org credentials, the system ctx).
+ * chat for the admin using it, the person's own agent (Ask Mycel), or a workflow run, as its
+ * enablement's member (member credentials) or company-wide only (org credentials, the system
+ * ctx).
  */
 export const memoryReaderSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("person") }),
   z.object({ kind: z.literal("builder") }),
+  // A person's own agent, Ask Mycel (M9), reading in their view for them.
+  z.object({ kind: z.literal("agent") }),
   z.object({
     kind: z.literal("workflow_run"),
     runId: z.string().min(1),
@@ -316,6 +331,7 @@ export type MemoryReader = z.infer<typeof memoryReaderSchema>;
 export const ACCESS_LOG_READER_KINDS = [
   "person",
   "builder",
+  "agent",
   "workflow_run",
   "staff",
   "system",

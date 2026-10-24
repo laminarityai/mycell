@@ -170,6 +170,7 @@ describe("spendingKindOf", () => {
       await recordUsage(ctx, { ...call, costUsd: 0.001, purpose: "builder" }),
       await recordUsage(ctx, { ...call, costUsd: 0.001, purpose: "memory" }),
       await recordUsage(ctx, { ...call, costUsd: 0.001, purpose: "memory_summary" }),
+      await recordUsage(ctx, { ...call, costUsd: 0.001, purpose: "agent" }),
     ];
 
     // A person's summaries are memory's here, though memory's budget adds up only learning.
@@ -179,6 +180,7 @@ describe("spendingKindOf", () => {
       "builder",
       "memory",
       "memory",
+      "agent",
     ]);
     expect(spendingKindOf(grant)).toBeNull();
   });

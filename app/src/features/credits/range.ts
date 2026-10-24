@@ -126,7 +126,7 @@ export function spendingBuckets(days: DailySpending[]): SpendingBucket[] {
         from: day.day,
         first: i,
         days: 0,
-        byKind: { workflow: 0, memory: 0, builder: 0, try_it: 0 },
+        byKind: { workflow: 0, memory: 0, builder: 0, agent: 0, try_it: 0 },
         spent: 0,
       };
       buckets.push(bucket);

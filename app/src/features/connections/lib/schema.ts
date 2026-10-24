@@ -71,6 +71,9 @@ export const ingestStates = pgTable(
     cursor: text("cursor"),
     // When polling last finished for the app. Null until the first poll.
     lastPolledAt: timestamp("last_polled_at", { withTimezone: true }),
+    // When the app's watch on the account runs out (ADR-0026), as the app answered the last
+    // watch or renewal. Null until a watch starts; it stays as it was when a renewal fails.
+    watchExpiresAt: timestamp("watch_expires_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [

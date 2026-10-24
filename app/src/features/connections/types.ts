@@ -118,6 +118,9 @@ export type AppIngestState = {
   cursor: string | null;
   backfilledItems: number;
   lastPolledAt: Date | null;
+  // When the app's watch runs out (ADR-0026): null when none was started, and in the past once
+  // it lapsed.
+  watchExpiresAt: Date | null;
 };
 
 /**
@@ -166,6 +169,7 @@ export type IngestStateUpdate = {
   backfilledItems?: number;
   cursor?: string;
   lastPolledAt?: Date;
+  watchExpiresAt?: Date;
 };
 
 /** The user who made a connection, or `removed` once they're no longer a user of the org. */

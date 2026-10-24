@@ -1,9 +1,9 @@
 // A fake Gmail mailbox, served through the fake Nango's proxy. It answers the Gmail API calls
 // Mycel makes (users.getProfile, users.messages.list and get, users.history.list,
-// users.threads.get, users.labels.list, users.drafts.list and get, and the writes in
-// fake-gmail-writes.ts) in the shapes Google documents, from messages a test seeds. A test can
-// also send or delete a draft, and trash or delete a message, itself, as the person would in
-// Gmail.
+// users.threads.get, users.labels.list, users.drafts.list and get, the writes in
+// fake-gmail-writes.ts, and users.watch in fake-gmail-watch.ts) in the shapes Google documents,
+// from messages a test seeds. A test can also send or delete a draft, and trash or delete a
+// message, itself, as the person would in Gmail.
 import { HttpResponse } from "msw";
 import {
   draftMessage,
@@ -21,6 +21,7 @@ import {
   type FakeDraft,
   type WritableMailbox,
 } from "./fake-gmail-writes";
+import { FakeGmailWatches } from "./fake-gmail-watch";
 
 export type { FakeMessageInput, GmailMessage };
 
@@ -55,6 +56,8 @@ export class FakeMailbox implements WritableMailbox {
   private draftMessages: GmailMessage[] = [];
   /** Its labels and drafts, and the writes it was asked for. */
   readonly writes = new FakeGmailWrites();
+  /** The watches asked of it (users.watch). */
+  readonly watches = new FakeGmailWatches();
   private history: HistoryRecord[] = [];
   // History IDs below this one have expired: Gmail keeps history for about a week.
   private oldestHistoryId = 0;

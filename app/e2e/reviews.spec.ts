@@ -157,8 +157,8 @@ test("the Workflows page counts how reviews ended: a member's own, an admin's pe
   await expect(page).toHaveURL("/reviews");
 
   // Waiting, approved, edited, declined, sent from Gmail, gone, the share, escalations, held
-  // sends.
-  const approvedOnce = ["0", "1", "0", "0", "0", "0", "100%", "None", "None"];
+  // sends, meetings.
+  const approvedOnce = ["0", "1", "0", "0", "0", "0", "100%", "None", "None", "None"];
   await page.goto("/workflows");
   const own = page.getByRole("table", { name: "Review counts" });
   await expect(page.getByRole("link", { name: "Last 7 days" })).toHaveAttribute(

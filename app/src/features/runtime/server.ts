@@ -22,8 +22,8 @@ export { readMessage, searchMessages } from "./lib/gmail";
 // Called by the triggers' fan-out jobs and tests, as the org's system ctx: the runs one new
 // inbound message, or one new invite, starts.
 export { startInviteRuns, startTriggeredRuns } from "./lib/trigger";
-// The Calendar trigger: polling one connection's calendar for new invites, as the org's system
-// ctx, and, called only by its cron (which has no ctx until it picks an org, ADR-0009), which
-// connections are due a poll.
+// The Calendar poll: polling one connection's calendar for new invites, and for what memory
+// follows once it has started (ADR-0029), as the org's system ctx, and, called only by its cron
+// (which has no ctx until it picks an org, ADR-0009), which connections are due a poll.
 export { pollCalendar } from "./lib/calendar-poll";
 export { calendarsDue } from "./lib/calendar-due";

@@ -48,6 +48,8 @@ export type LedgerEntry = {
   runId: string | null;
   dryRun: boolean;
   purpose: CreditPurpose | null;
+  /** A grant's note from our team ("October allowance"); null for usage. */
+  note: string | null;
   /**
    * A failed call's correction: the usage entry whose billed cost it records, with the same
    * attribution and time. Null for every other entry.
@@ -61,6 +63,111 @@ export type UncostedFailedCall = { id: string; generationId: string; createdAt: 
 
 /** Which spending `getSpending` adds up: one purpose's usage from a time on. */
 export type SpendingQuery = { purpose: CreditPurpose; since: Date };
+
+/** A stretch of time the Credits page adds up: from `from`, up to but not including `to`. */
+export type SpendingRange = { from: Date; to: Date };
+
+export const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** The calendar month (UTC) `now` falls in: what "this month" counts, as budgets do. */
+export function monthRange(now: Date): SpendingRange {
+  return {
+    from: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)),
+    to: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)),
+  };
+}
+
+/** Each UTC day that starts in `range`, by its start. */
+export function daysOf(range: SpendingRange): Date[] {
+  const start = Date.UTC(
+    range.from.getUTCFullYear(),
+    range.from.getUTCMonth(),
+    range.from.getUTCDate(),
+  );
+  const days: Date[] = [];
+  for (let at = start; at < range.to.getTime(); at += DAY_MS) days.push(new Date(at));
+  return days;
+}
+
+/** Credits spent by each kind of use. */
+export type SpendingByKind = Record<SpendingKind, number>;
+
+/** One UTC day of a range: what was spent, by kind, and granted. */
+export type DailySpending = {
+  /** The day's start (UTC). */
+  day: Date;
+  byKind: SpendingByKind;
+  /** All usage that day: the kinds' sum. */
+  spent: number;
+  granted: number;
+};
+
+/** One workflow's live-run spending over a range, and on each of its days. */
+export type WorkflowSpending = {
+  workflowId: string;
+  spent: number;
+  /** By day, in the order of the summary's `days`. */
+  daily: number[];
+};
+
+/**
+ * What the Credits page shows of a range: spending by kind of use, by workflow (live runs only)
+ * and by day, and what was granted. Credits are positive here: 12 spent, not -12.
+ */
+export type SpendingSummary = {
+  range: SpendingRange;
+  /** The balance as the range began. */
+  openingBalance: number;
+  spent: number;
+  granted: number;
+  byKind: SpendingByKind;
+  /** Most spent first. Try it and builder turns about a workflow aren't its spending. */
+  byWorkflow: WorkflowSpending[];
+  /** Every UTC day of the range, the days still to come included. */
+  days: DailySpending[];
+};
+
+/**
+ * How long the balance lasts at the last 7 days' average daily usage. With no usage in those
+ * days there's no rate and no runway: `dailyRate`, `days` and `zeroAt` are null.
+ */
+export type Runway = {
+  balance: number;
+  dailyRate: number | null;
+  /** Days left at that rate (fractional); 0 once the balance is gone. */
+  days: number | null;
+  /** When the balance reaches zero at that rate. */
+  zeroAt: Date | null;
+};
+
+/**
+ * A workflow's line on the Credits page: its spending, with its name and published budget,
+ * which the page joins in from workflows (credits can't import workflows: workflows reads
+ * credits for its pauses).
+ */
+export type WorkflowSpendingLine = WorkflowSpending & {
+  name: string;
+  /** Its monthly budget; null for none. */
+  monthlyBudget: number | null;
+  /** This month's live runs have spent its budget: it's paused, budget reached. */
+  budgetReached: boolean;
+};
+
+/** What the Credits page's chart plots: the balance, spending by kind, or by workflow. */
+export type ChartLens = "balance" | "kinds" | "workflows";
+
+/** A ledger entry on the Credits page, with its workflow's name joined in. */
+export type LedgerLine = LedgerEntry & { workflowName: string | null };
+
+/** Which ledger entries `listLedger` returns, newest first. */
+export type LedgerFilter = {
+  /** At most this many (100 by default). */
+  limit?: number;
+  kind?: LedgerEntry["kind"];
+  workflowId?: string;
+  /** Only entries made in this range. */
+  range?: SpendingRange;
+};
 
 // The kind of use each purpose is: a person's summaries are memory's on the Credits page,
 // though memory's budget adds up only learning.

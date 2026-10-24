@@ -18,6 +18,7 @@ import {
   orgBVersionUnstartable,
   versionsOfOrgBUnread,
 } from "./isolation-seeds";
+import { workflowBudgetsStayInOrg } from "./isolation-budgets";
 import { draftSpec, labelSpec } from "./specs";
 
 export const isolationCases = defineIsolationCases(server, {
@@ -189,6 +190,8 @@ export const isolationCases = defineIsolationCases(server, {
       expect([...names]).toEqual([[own.id, "A"]]);
     }
   },
+
+  listWorkflowBudgets: workflowBudgetsStayInOrg,
 
   // In isolation-seeds.ts, for this file's length.
   versionsById: versionsOfOrgBUnread,

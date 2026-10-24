@@ -40,6 +40,8 @@ export const creditLedger = pgTable(
     // What the usage was spent on when no run or Try it made it: memory's learning, a person's
     // summary, or the builder chat.
     purpose: text("purpose", { enum: CREDIT_PURPOSES }),
+    // Grants only: what our team granted it for ("October allowance"), shown on the Credits page.
+    note: text("note"),
     // A correction: the failed call's usage entry whose billed cost this entry records, with the
     // same attribution. At most one per failed call, however often its lookup is retried.
     correctsId: text("corrects_id"),

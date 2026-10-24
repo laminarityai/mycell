@@ -42,6 +42,9 @@ export { startableVersion } from "./lib/startable-version";
 // For any role: workflows' names, to show beside what another feature lets the caller see,
 // their current versions' IDs, to count by, and versions by ID, to describe a run's steps by.
 export { currentVersionIds, versionsById, workflowNames } from "./lib/names";
+// For admins: every workflow's name and published monthly budget, which the Credits page shows
+// each workflow's spending against.
+export { listWorkflowBudgets } from "./lib/budgets";
 // For any role: whether the caller sees each workflow through its tags, and whether its latest
 // version lets a review be handed on. Reviews decides from it who sees an org review.
 export { reviewSharing } from "./lib/review-sharing";

@@ -4,16 +4,17 @@
 import { and, eq, gte, inArray, isNotNull } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
 import { type Ctx, requireRole } from "@/lib/ctx";
+import { monthRange } from "../types";
 import { creditLedger } from "./schema";
 
 /** The start of this calendar month, UTC: when this month's budgets began. */
 export function monthStart(now = new Date()): Date {
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  return monthRange(now).from;
 }
 
 /** The start of the next calendar month, UTC: when a budget pause ends by itself. */
 export function nextMonthStart(now = new Date()): Date {
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+  return monthRange(now).to;
 }
 
 /**

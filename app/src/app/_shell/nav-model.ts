@@ -5,6 +5,7 @@ import {
   Bot,
   Brain,
   Building2,
+  Coins,
   GitPullRequestArrow,
   History,
   Inbox,
@@ -22,6 +23,7 @@ export type NavKey =
   | "workflows"
   | "runs"
   | "builder"
+  | "credits"
   | "custom-actions"
   | "capability-requests"
   | "tags"
@@ -69,6 +71,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Company",
     items: [
       { key: "builder", label: "Builder chat", href: "/builder", icon: Bot, admin: true },
+      { key: "credits", label: "Credits", href: "/credits", icon: Coins, admin: true },
       {
         key: "custom-actions",
         label: "Custom actions",

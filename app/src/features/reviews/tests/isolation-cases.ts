@@ -55,6 +55,16 @@ export const isolationCases = defineIsolationCases(server, {
     await untouched(orgs, b);
   },
 
+  listOwnReviews: async (orgs) => {
+    const b = await orgBReview(orgs);
+
+    for (const ctx of orgAUsers(orgs)) {
+      expect(await server.listOwnReviews(ctx)).toEqual([]);
+    }
+    expect(await server.listOwnReviews(orgs.orgB.member.ctx)).toEqual([b.review]);
+    await untouched(orgs, b);
+  },
+
   countWaitingReviews: async (orgs) => {
     const b = await orgBReview(orgs);
 

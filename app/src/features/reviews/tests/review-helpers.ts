@@ -191,8 +191,9 @@ async function draftReview(
     text: options.draft ?? REPLY,
   });
   if (draft === undefined) throw new Error("no draft");
+  const runId = randomUUID();
   await createReview(system, {
-    runId: randomUUID(),
+    runId,
     connectionId: google.id,
     workflowId: options.workflowId,
     workflowVersionId: options.versionId,
@@ -201,7 +202,7 @@ async function draftReview(
     threadRef: message.threadId,
     sourceRef: message.id,
   });
-  return { google, mailbox: google.mailbox, message, draft };
+  return { google, mailbox: google.mailbox, message, draft, runId };
 }
 
 /** A member-credential spec that drafts a reply and waits for its review. */

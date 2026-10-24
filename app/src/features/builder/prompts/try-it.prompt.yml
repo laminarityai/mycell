@@ -5,7 +5,7 @@
 
 # How the agent reads them.
 summary: |-
-  [I tried the workflow's working spec on one real message (Try it). Nothing was written to any app. What each step did:]
+  [I tried the workflow's working spec on one real message or invite (Try it). Nothing was written to any app. What each step did:]
 summaryLine: |-
   - {{line}}
 
@@ -71,7 +71,7 @@ checkFailed: |-
 succeeded: |-
   It ran to the end.
 skipped: |-
-  It stopped at a branch: the workflow would do nothing more with this message.
+  It stopped at a branch: the workflow would do nothing more with it.
 escalated: |-
   It escalated: the workflow would hand this message to a person.
 failed: |-

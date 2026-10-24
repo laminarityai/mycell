@@ -1,10 +1,10 @@
 // Review counts as the Workflows page lists them: a row per workflow, and for admins each
 // person's under it. The periods the page offers are counted back from now here.
 import { type Ctx, isAdmin, isSystem } from "@/lib/ctx";
+import { DAY_MS } from "@/lib/time";
 import type { ReviewCountsRow, ReviewPeriod, ReviewStatsQuery } from "../types";
 import { reviewStatsByWorkflow } from "./stats";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
 const PERIOD_DAYS = { "2d": 2, "7d": 7, "30d": 30 } as const;
 
 /**

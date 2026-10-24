@@ -1,11 +1,12 @@
 // The APIs the fake Nango's proxy serves, each by its host and path prefix, answering from the
-// connection's own fake: Google's (its Gmail mailbox, its Drive or its spreadsheets), and the
-// registered app Microsoft 365, through Microsoft Graph. Like Google, an API answers 403 to a
-// connection whose token holds none of the scopes it accepts (for a write, none of the scopes
-// its writes accept), and a host answers 404 for a path it doesn't serve.
+// connection's own fake: Google's (its Gmail mailbox, its Drive, its spreadsheets or its
+// calendar), and the registered app Microsoft 365, through Microsoft Graph. Like Google, an API
+// answers 403 to a connection whose token holds none of the scopes it accepts (for a write, none
+// of the scopes its writes accept), and a host answers 404 for a path it doesn't serve.
 import { HttpResponse } from "msw";
 import { REGISTERED_APPS } from "@/features/connections/registered-apps";
 import { GOOGLE_APP_SCOPES } from "@/features/connections/types";
+import { calendarError, calendarResponse } from "./fake-calendar";
 import { driveError, driveResponse } from "./fake-drive";
 import { gmailError, gmailResponse, gmailWrite } from "./fake-gmail";
 import type { FakeConnection } from "./fake-nango";
@@ -48,6 +49,9 @@ const DRIVE_READONLY = GOOGLE_APP_SCOPES.drive;
 const DRIVE = "https://www.googleapis.com/auth/drive";
 const DRIVE_FILE = "https://www.googleapis.com/auth/drive.file";
 const SPREADSHEETS_READONLY = "https://www.googleapis.com/auth/spreadsheets.readonly";
+const CALENDAR_READS = ["calendar", "calendar.readonly", "calendar.events.readonly"].map(
+  (name) => `https://www.googleapis.com/auth/${name}`,
+);
 // Which Graph resources need which scope isn't modelled: any token that can sign in reads, and
 // any that can write something writes.
 const GRAPH_WRITE_SCOPES = REGISTERED_APPS.microsoft.scopes.filter((scope) =>
@@ -82,6 +86,14 @@ export const PROXIED_SOURCES: ProxiedSource[] = [
     scopes: [DRIVE_READONLY, DRIVE],
     respond: (connection, path, params) => driveResponse(connection.drive, path, params),
     rateLimited: () => driveError(429),
+  },
+  {
+    host: "https://www.googleapis.com",
+    prefix: "/calendar/v3",
+    // Reading events takes any Calendar scope.
+    scopes: [GOOGLE_APP_SCOPES.calendar, ...CALENDAR_READS],
+    respond: (connection, path, params) => calendarResponse(connection.calendar, path, params),
+    rateLimited: () => calendarError(429, "rateLimitExceeded", "Rate Limit Exceeded"),
   },
   {
     host: "https://sheets.googleapis.com",

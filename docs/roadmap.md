@@ -1,23 +1,27 @@
 # Mycel roadmap (v1)
 
-Build order for the v1 full loop, dogfooded on our own Google Workspace. Every milestone ends with something we can actually use ourselves. `docs/architecture.md` holds the architecture and invariants. This file only covers sequencing.
+Build order, dogfooded on our own Google Workspace. **v1 is complete after M9**; M2, M4 and M10 come after it. Every milestone ends with something we can actually use ourselves. `docs/architecture.md` holds the architecture and invariants. This file only covers sequencing.
 
 The builder chat is primary (ADR-0007), so it comes before mining. Milestones keep their numbers as stable names and are listed in build order: **M0 → M1 → M3 → M6 → M12 → M5 → M11 → M13 → M14 → M7 → M8 → M9 → M2 → M4 → M10.**
 
-## Status (2026-10-21)
+## Status (2026-10-23)
 
-| Milestone | State       | Spec | Notes                                                                                                                                         |
-| --------- | ----------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| M0        | Done        | #1   |                                                                                                                                               |
-| M1        | In progress | #11  | Merged: connect, org connections, disconnect cascade, Gmail backfill, polling #15, reconciliation #16, Drive #17 (PR #59). Open: dogfood #19. |
-| M3        | Done        | #33  | Spec, policy and runtime (PR #74). Open: dogfood check #42. Decisions in ADR-0010 to ADR-0012 and ADR-0014.                                   |
-| M6        | Done        | #43  | Builder chat (PR #76). Open: dogfood check #50. Capability requests moved to M13 (#101).                                                      |
-| M12       | Done        | #77  | Branches and the workflow graph (PR #88). Open: dogfood check #87. Decisions in ADR-0015.                                                     |
-| M5        | Done        | #51  | Publish, tags, member toggles and the Reviews page (PR #89). Open: dogfood check #57.                                                         |
-| M11       | Ready       | #67  | Calendar, Docs and Tasks, each through its pending form (ADR-0013); tickets ready for agents.                                                 |
-| M13       | Ready       | #91  | Custom actions made by the builder chat. Decisions in ADR-0018 to ADR-0021; research in `docs/research/integrations/`. Tickets to cut.        |
-| M14       | Ready       | #92  | Memory foundation. Decisions in ADR-0022 to ADR-0025; research in `docs/research/memory-layer.md`. Tickets to cut.                            |
-| M7 onward | Not started |      | Build order after M14: M7, M8, M9 (the agent), then M2 (discovery) and M4, then M10.                                                          |
+| Milestone | State    | Spec | Notes                                                                                                                                                 |
+| --------- | -------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M0        | Done     | #1   |                                                                                                                                                       |
+| M1        | Done     | #11  | Connect, org connections, disconnect cascade, Gmail backfill, polling #15, reconciliation #16, Drive #17 (PR #59). Its dogfood checks moved into #42. |
+| M3        | Done     | #33  | Spec, policy and runtime (PR #74). Open: dogfood check #42. Decisions in ADR-0010 to ADR-0012 and ADR-0014.                                           |
+| M6        | Done     | #43  | Builder chat (PR #76). Open: dogfood check #50. Capability requests moved to M13 (#101).                                                              |
+| M12       | Done     | #77  | Branches and the workflow graph (PR #88). Open: dogfood check #87. Decisions in ADR-0015.                                                             |
+| M5        | Done     | #51  | Publish, tags, member toggles and the Reviews page (PR #89). Open: dogfood check #57.                                                                 |
+| M11       | Ready    | #67  | Calendar, Docs and Tasks, each through its pending form (ADR-0013); tickets ready for agents.                                                         |
+| M13       | Done     | #91  | Custom actions made by the builder chat (PR #117). Open: dogfood check #102. Decisions in ADR-0018 to ADR-0021.                                       |
+| M14       | Done     | #92  | Memory foundation (PR #117). Open: dogfood check #116. Decisions in ADR-0022 to ADR-0025.                                                             |
+| M15       | Ready    | #142 | Push ingest: Gmail, then Drive, tell Mycel when something changes, and polling becomes a 15-minute sweep (ADR-0026). Tickets #143 to #147.            |
+| M7        | Ready    | #152 | Credits and budgets: the Credits page, out-of-credits and budget pauses, real failed-call costs.                                                      |
+| M8        | Ready    | #153 | Runs page and run pages, retry, auto-pause after 3 failures, alerts in the app (no email).                                                            |
+| M9        | Ready    | #154 | The agent ("Ask Mycel"): each person's own view of memory, "remember this", runs on a picked message. v1 is complete after M9.                        |
+| M2 onward | After v1 |      | M2 (discovery) and M4, then M10.                                                                                                                      |
 
 ## M0: Scaffold and tenancy
 
@@ -105,17 +109,32 @@ Planned in this order, each its own milestone or part of one, after M12:
 - Memory feeds workflows and the builder chat's context (company-wide memory only, since builder conversations are shared among admins).
 - **Done when:** a workflow on one of our inboxes uses a fact about a customer drawn from another source its member can see, a member never sees a fact from a source they can't, and forgetting a person removes everything memory keyed by their address and learns nothing more from their mail (by address only: facts that name them without it stay, ADR-0024).
 
+## M15: Push ingest
+
+Independent of the milestones around it; any time before M10, sooner if Inngest's execution count or the minute of trigger latency starts to hurt.
+
+- A watch on each app that can notify: Gmail through our Pub/Sub topic and a push subscription, then Drive through a `changes.watch` channel. A notification only starts that connection's poll (ADR-0026).
+- The minute cron becomes a sweep: an app with a live watch is polled every 15 minutes, one without every minute (every 5 once Drive has push).
+- **Done when:** on our Workspace, a new email is stored and starts its runs within about 10 seconds, a dropped notification is still caught by the sweep, and a day's Inngest executions per connection fall about tenfold (#146).
+
 ## M7: Credits and budgets
 
-- Hard stop, per-workflow budgets, discovery cost estimate, real pricing. The ledger and pre-flight check already arrive in M3 (ADR-0010).
+- Hard stop, per-workflow budgets, real failed-call costs, real pricing, and an admin Credits page. The ledger and pre-flight check already arrive in M3 (ADR-0010). Discovery's cost estimate waits for M2. Spec #152.
+- **Done when:** on our org, running out of credits pauses every workflow with its reason shown to members, a grant resumes them, and a workflow over its monthly budget pauses until the month turns or the budget is raised.
 
 ## M8: Observability and failure handling
 
-- Admin runs/traces view, retries, auto-pause after 3 consecutive failures, admin alerts in the app (Mycel sends no email in v1 unless decided otherwise), member "paused" badge.
+- Runs page and run pages (admins see colleagues' runs without their content), retry, auto-pause after 3 consecutive failures, alerts in the app (Mycel sends no email in v1), the member "paused" badge with every reason. Spec #153.
+- **Done when:** a workflow broken on purpose pauses after three failed runs, an admin sees the alert, finds the cause on the run's page, fixes it and resumes, and a member saw "Paused: failing" meanwhile.
 
 ## M9: The agent
 
-- A Mycel agent in each person's own view of memory (ADR-0023): it reads memory, acts only through workflows and the Reviews page, and turns "remember this" into a fact owned by that person. **To grill when scoping M9.**
+- A Mycel agent in each person's own view of memory (ADR-0023): it reads memory, acts only through workflows and the Reviews page, and turns "remember this" into a fact owned by that person. Spec #154.
+- **Done when:** a member asks their agent about a customer and gets an answer cited from sources they can see and none they can't, tells it something that their own workflow then uses, and runs a workflow on a message they pick, whose draft waits on the Reviews page.
+
+## After v1
+
+The milestones below follow v1, in this order.
 
 ## M2: Mining and suggestions
 

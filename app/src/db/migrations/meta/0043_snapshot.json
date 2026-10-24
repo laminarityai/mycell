@@ -1,5 +1,5 @@
 {
-  "id": "c68c9585-c907-43da-8b71-ed759fe78efa",
+  "id": "eeb51252-076d-4e71-bc92-003d67220675",
   "prevId": "c5511de3-2e46-4f86-aac5-96a265285da4",
   "version": "7",
   "dialect": "postgresql",
@@ -1314,12 +1314,6 @@
         },
         "last_polled_at": {
           "name": "last_polled_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "watch_expires_at": {
-          "name": "watch_expires_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
@@ -4266,6 +4260,33 @@
               "expression": "workflow_id",
               "isExpression": false,
               "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "runs_org_id_started_at_id_idx": {
+          "name": "runs_org_id_started_at_id_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "started_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": false,
               "nulls": "last"
             }
           ],

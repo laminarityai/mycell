@@ -104,8 +104,17 @@ const NOT_RUN: Record<"not_checked" | "not_needed", string> = {
   not_needed: "Not needed: another path applied",
 };
 
-/** Whether a Try it took the path, and why: each check passed or failed, with its reason. */
-export function PathRunSummary({ run }: { run: GraphPath["run"] }) {
+/**
+ * Whether a Try it or a run took the path, and why: each check passed or failed, with its
+ * reason. A run redacted for the viewer gives no checks, so a named path just says taken.
+ */
+export function PathRunSummary({
+  run,
+  otherwise = false,
+}: {
+  run: GraphPath["run"];
+  otherwise?: boolean;
+}) {
   if (run === null) return null;
   if (run.status === "not_checked" || run.status === "not_needed") {
     return (
@@ -128,11 +137,7 @@ export function PathRunSummary({ run }: { run: GraphPath["run"] }) {
         ) : (
           <CircleX aria-hidden className="size-3" />
         )}
-        {taken
-          ? run.checks.length === 0
-            ? "Taken: no other path applied"
-            : "Taken"
-          : "Didn't apply"}
+        {taken ? (otherwise ? "Taken: no other path applied" : "Taken") : "Didn't apply"}
       </p>
       {run.checks.map((check, index) => (
         <p

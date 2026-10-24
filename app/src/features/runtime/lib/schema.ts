@@ -23,7 +23,7 @@ import { reviews } from "@/features/reviews/lib/schema";
 import { customActions } from "@/features/custom-actions/lib/schema";
 import { modelRoleSchema, stepTypes, type ModelRole, type StepType } from "@/features/spec/types";
 import { enablements, workflowVersions } from "@/features/workflows/lib/schema";
-import { runErrorCodes, runStatuses, runStepStatuses } from "../types";
+import { runErrorCodes, runStartedBy, runStatuses, runStepStatuses } from "../types";
 
 const modelRoleEnum = modelRoleSchema.options as [ModelRole, ...ModelRole[]];
 
@@ -38,15 +38,18 @@ export const runs = pgTable(
     ownerScope: text("owner_scope", { enum: ["member", "org"] }).notNull(),
     workflowId: text("workflow_id").notNull(),
     workflowVersionId: text("workflow_version_id").notNull(),
-    // What started it: an admin by hand, a member workflow's enablement, or an org workflow's
-    // switch. A triggered run goes on only while what started it is still on.
-    startedBy: text("started_by", { enum: ["manual", "enablement", "org_switch"] })
-      .notNull()
-      .default("manual"),
+    // What started it: an admin by hand, a member workflow's enablement, an org workflow's
+    // switch, or a retry of a failed run. A triggered run goes on only while what started it is
+    // still on.
+    startedBy: text("started_by", { enum: runStartedBy }).notNull().default("manual"),
+    // The failed run a retry retries, on the same connection and message. A run is retried at
+    // most once; a retry that fails is retried in turn. Null for any other run, and once the run
+    // it retried is gone.
+    retryOfRunId: text("retry_of_run_id"),
     // The enablement that started it. Null for an org workflow or a manual run, and once the
     // enablement is switched off.
     enablementId: text("enablement_id"),
-    // The triggering Gmail message's ID.
+    // The triggering item's ID: a Gmail message's, or a calendar event's.
     sourceRef: text("source_ref").notNull(),
     // A triggered run's (enablement or org workflow, source_ref), so one message starts at most
     // one run of each. Null for a manual run, which may be repeated.
@@ -63,7 +66,16 @@ export const runs = pgTable(
     unique("runs_org_id_id_unique").on(table.orgId, table.id),
     unique("runs_org_id_trigger_key_unique").on(table.orgId, table.triggerKey),
     index("runs_org_id_workflow_id_idx").on(table.orgId, table.workflowId),
+    // The Runs page's keyset paging: newest first, by start time and then ID.
+    index("runs_org_id_started_at_id_idx").on(table.orgId, table.startedAt.desc(), table.id.desc()),
     index("runs_enablement_id_idx").on(table.enablementId),
+    // One retry a run: a second click or a resent request finds the first.
+    unique("runs_retry_of_run_id_unique").on(table.retryOfRunId),
+    foreignKey({
+      name: "runs_retry_of_fk",
+      columns: [table.retryOfRunId],
+      foreignColumns: [table.id],
+    }).onDelete("set null"),
     // On the enablement's ID alone, so switching off nulls it and the run's row stays: the run
     // then ends `cancelled` before its next step.
     foreignKey({
@@ -126,6 +138,32 @@ export const runSteps = pgTable(
     index("run_steps_org_id_connection_id_idx").on(table.orgId, table.connectionId),
     foreignKey({
       name: "run_steps_connection_fk",
+      columns: [table.orgId, table.connectionId],
+      foreignColumns: [connections.orgId, connections.id],
+    }).onDelete("cascade"),
+  ],
+);
+
+/**
+ * Where a trigger that polls its app resumes on one connection: for the Calendar trigger, the
+ * sync token of the connection's primary calendar. Only the token is kept, never the events it
+ * listed (invariant 8), and it cascades from its connection (invariant 3).
+ */
+export const triggerCursors = pgTable(
+  "trigger_cursors",
+  {
+    id: text("id").primaryKey(),
+    orgId: text("org_id").notNull(),
+    connectionId: text("connection_id").notNull(),
+    trigger: text("trigger", { enum: ["calendar.invite_received"] }).notNull(),
+    cursor: text("cursor").notNull(),
+    // When the poll that stored the cursor finished.
+    polledAt: timestamp("polled_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    unique("trigger_cursors_connection_id_trigger_unique").on(table.connectionId, table.trigger),
+    foreignKey({
+      name: "trigger_cursors_connection_fk",
       columns: [table.orgId, table.connectionId],
       foreignColumns: [connections.orgId, connections.id],
     }).onDelete("cascade"),

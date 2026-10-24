@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { graphView } from "../graph";
-import { layoutTree, type LayoutNode } from "../layout";
+import { boxLabel, layoutTree, type LayoutNode } from "../layout";
 import type { Spec } from "../types";
 import { validateSpec } from "../validate";
 import { pathOf, triageSpec, triageWithPaths } from "./triage-spec";
@@ -94,6 +94,35 @@ describe("layoutTree", () => {
       const target = byId(layout.nodes, edge.target);
       expect(target.y).toBeGreaterThanOrEqual(source.y + source.height);
     }
+  });
+
+  it("lists its boxes in reading order, the order a keyboard reaches them in", () => {
+    const layout = layoutTree(graphView(parsed(triageSpec())));
+
+    expect(layout.nodes.map((node) => node.id)).toEqual([
+      "trigger",
+      "step:kind",
+      "step:details",
+      "step:route",
+      "path:complaint",
+      "step:to-person",
+      "end:complaint",
+      "path:pricing",
+      "step:reply",
+      "end:pricing",
+      "path:rest",
+      "end:rest",
+    ]);
+  });
+
+  it("names each box but an end for a screen reader", () => {
+    const { nodes } = layoutTree(graphView(parsed(triageSpec())));
+
+    expect(
+      ["trigger", "step:kind", "path:pricing", "path:rest", "end:pricing"].map((id) =>
+        boxLabel(byId(nodes, id)),
+      ),
+    ).toEqual(["Trigger", "Step kind", "Path Pricing", "Path Otherwise", undefined]);
   });
 
   it("keeps a branch's paths side by side, left to right in the order they're checked", () => {

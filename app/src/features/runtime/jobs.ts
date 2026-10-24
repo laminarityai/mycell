@@ -3,12 +3,16 @@
 import "server-only";
 import { systemCtx } from "@/lib/ctx";
 import { gmailMessageReceived } from "@/lib/events";
-import { inngest, stepRunner } from "@/lib/inngest";
-import { runRequested } from "./lib/events";
-import { executeRun, failCrashedRun, startTriggeredRuns } from "./server";
-
-// At most this many runs execute at once for one org, as for ingest.
-const PER_ORG_LIMIT = 3;
+import { inngest, PER_ORG_LIMIT, stepRunner } from "@/lib/inngest";
+import { calendarInviteReceived, calendarPollDue, runRequested } from "./lib/events";
+import {
+  calendarsDue,
+  executeRun,
+  failCrashedRun,
+  pollCalendar,
+  startInviteRuns,
+  startTriggeredRuns,
+} from "./server";
 
 /**
  * Starts the runs one new inbound message starts: one per enablement or org workflow switched
@@ -26,6 +30,49 @@ export const fanOutMessageJob = inngest.createFunction(
   },
   async ({ event, step }) =>
     step.run("start-runs", () => startTriggeredRuns(systemCtx(event.data.orgId), event.data)),
+);
+
+/** Starts the runs one new invite starts, as the message fan-out does for a new message. */
+export const fanOutInviteJob = inngest.createFunction(
+  {
+    id: "fan-out-invite",
+    triggers: [calendarInviteReceived],
+    concurrency: [
+      { scope: "env", key: '"fan-out-connection-" + event.data.connectionId', limit: 1 },
+      { scope: "env", key: '"fan-out-org-" + event.data.orgId', limit: PER_ORG_LIMIT },
+    ],
+  },
+  async ({ event, step }) =>
+    step.run("start-runs", () => startInviteRuns(systemCtx(event.data.orgId), event.data)),
+);
+
+/** Every minute, sends one poll event per calendar a Calendar-triggered workflow watches. */
+export const calendarPollCron = inngest.createFunction(
+  { id: "poll-calendars", triggers: [{ cron: "* * * * *" }] },
+  async ({ step }) => {
+    const due = await step.run("list-calendars", () => calendarsDue());
+    if (due.length > 0) {
+      await step.sendEvent(
+        "fan-out",
+        due.map((calendar) => calendarPollDue.create(calendar)),
+      );
+    }
+    return { polls: due.length };
+  },
+);
+
+/** Polls one connection's calendar for new invites, one at a time per connection. */
+export const calendarPollJob = inngest.createFunction(
+  {
+    id: "poll-calendar",
+    triggers: [calendarPollDue],
+    concurrency: [
+      { scope: "env", key: '"calendar-poll-" + event.data.connectionId', limit: 1 },
+      { scope: "env", key: '"calendar-poll-org-" + event.data.orgId', limit: PER_ORG_LIMIT },
+    ],
+  },
+  async ({ event, step }) =>
+    pollCalendar(systemCtx(event.data.orgId), event.data.connectionId, stepRunner(step)),
 );
 
 /**

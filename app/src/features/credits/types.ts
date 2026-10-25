@@ -5,15 +5,16 @@ import type { ModelRole } from "@/features/spec/types";
 /**
  * What a usage was spent on, when no run or Try it made it: `memory`, learning from the
  * company's apps, which memory's monthly budget caps (ADR-0022); `memory_summary`, a person's
- * own summary of what memory knows, outside that budget; or `builder`, the builder chat's turns
- * and what they ask for. A run's usage names its workflow and run instead, and Try it's is
- * marked `dryRun`.
+ * own summary of what memory knows, outside that budget; `builder`, the builder chat's turns
+ * and what they ask for; or `agent`, a person's Ask Mycel turns and what they ask for (the
+ * injection screen of what its tools read, say). A run's usage names its workflow and run
+ * instead, and Try it's is marked `dryRun`.
  */
-export const CREDIT_PURPOSES = ["memory", "memory_summary", "builder"] as const;
+export const CREDIT_PURPOSES = ["memory", "memory_summary", "builder", "agent"] as const;
 export type CreditPurpose = (typeof CREDIT_PURPOSES)[number];
 
 /** The kinds of use the Credits page splits spending into. */
-export const SPENDING_KINDS = ["workflow", "memory", "builder", "try_it"] as const;
+export const SPENDING_KINDS = ["workflow", "memory", "builder", "agent", "try_it"] as const;
 export type SpendingKind = (typeof SPENDING_KINDS)[number];
 
 /** One model call's usage, as the gateway client (or the injection screen) records it. */
@@ -249,6 +250,7 @@ const KIND_OF_PURPOSE: Record<CreditPurpose, SpendingKind> = {
   memory: "memory",
   memory_summary: "memory",
   builder: "builder",
+  agent: "agent",
 };
 
 /**

@@ -1,0 +1,2 @@
+ALTER TABLE "agent_messages" ADD COLUMN "keywords" "tsvector" GENERATED ALWAYS AS (jsonb_to_tsvector('english', jsonb_path_query_array(parts, '$[*] ? (@.type == "text").text'), '["string"]')) STORED NOT NULL;--> statement-breakpoint
+CREATE INDEX "agent_messages_keywords_idx" ON "agent_messages" USING gin ("keywords");

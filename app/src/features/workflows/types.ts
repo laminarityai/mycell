@@ -204,6 +204,18 @@ export type WorkflowSwitch = {
 };
 
 /**
+ * The caller's own enablement of a member-credential workflow that may start a run now, with
+ * the latest version that run would run and the connection it's on: what Ask Mycel runs.
+ */
+export type StartableEnablement = {
+  workflowId: string;
+  name: string;
+  versionId: string;
+  enablementId: string;
+  connectionId: string;
+};
+
+/**
  * What the workflow page's Health tab checks (M7): whether it would run, what stops it, the
  * company's balance, whether its runs' failures paused it (M8), and what its live runs spent
  * this calendar month (UTC) against its latest version's budget.
@@ -257,6 +269,19 @@ export type WorkflowPausedReason = Extract<PausedReason, "failures">;
  * paused it, newest first.
  */
 export type FailurePause = { pausedAt: Date; runIds: string[] };
+
+/**
+ * An unarchived workflow paused for its runs' failures, or whose live runs have reached its
+ * latest version's monthly budget this month, or both: what admins' alerts name (M8).
+ */
+export type PausedWorkflow = {
+  id: string;
+  name: string;
+  /** Its failure pause; null while its runs' failures don't pause it. */
+  failurePause: FailurePause | null;
+  /** Its budget and the UTC day its live runs reached it this month; null while under it. */
+  budgetReached: { monthlyCredits: number; reachedOn: Date } | null;
+};
 
 /**
  * One of the runs that paused a workflow, as its Health check lists it: when it ended, whose
@@ -313,6 +338,17 @@ export type EnablementSummary = {
   /** Every pause that holds, in `PAUSED_REASONS`' order; empty while it runs. */
   pauses: PausedReason[];
   since: Date;
+};
+
+/** One of the caller's own enablements, as Ask Mycel lists them. */
+export type OwnEnablement = {
+  workflowId: string;
+  name: string;
+  since: Date;
+  /** Every pause that holds, in `PAUSED_REASONS`' order; empty while it runs. */
+  pauses: PausedReason[];
+  /** What a `needs_reenable` pause is about; null while on. */
+  pausedChange: PausedChange | null;
 };
 
 /** What switched a workflow on: one admin's enablement, or an org workflow's org switch. */

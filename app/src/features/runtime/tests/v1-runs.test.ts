@@ -15,9 +15,9 @@ import {
   connectInbox,
   extractWith,
   pricingQuestion,
-  recordingStepRunner,
   threadSpec,
 } from "./run-helpers";
+import { recordingStepRunner } from "@/testing/recording-step-runner";
 
 beforeEach(resetDatabase);
 

@@ -81,6 +81,8 @@ describe("learning from a Drive doc", () => {
             app: "drive",
             connectionId: drive.id,
             sourceRef: `${file.id}@${file.modifiedTime}`,
+            // Every version of the doc shares its file ID.
+            itemKey: file.id,
             occurredAt: new Date(file.modifiedTime),
           },
         ]);

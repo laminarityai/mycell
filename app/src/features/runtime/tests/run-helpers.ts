@@ -9,8 +9,8 @@ import type { FakeMessageInput } from "@/testing/fake-gmail";
 import { fakeNango } from "@/testing/fake-nango";
 import { storedStepOutput } from "@/testing/inngest-step-state";
 import { startRun } from "../server";
-import type { RetryPolicy, RunRecord } from "../types";
-import type { RunStep } from "@/lib/inngest";
+import type { RunRecord } from "../types";
+import type { RunSleep, RunStep } from "@/lib/inngest";
 
 /**
  * What a run's records hold, as JSON, for a scan for content: its record from `getRun` without
@@ -35,41 +35,6 @@ export async function publish(admin: Ctx, spec: Record<string, unknown>): Promis
   const workflow = await getWorkflow(admin, id);
   if (workflow.versions.length === 0) throw new Error("not published");
   return id;
-}
-
-/**
- * A step runner like Inngest's: it records each step ID it's asked for and memoizes results by
- * ID, so running again replays finished steps instead of re-running them. `crashAt` makes it
- * throw before running that step, as an invocation that dies part-way would.
- */
-export function recordingStepRunner() {
-  const ids: string[] = [];
-  const results = new Map<string, unknown>();
-  let crashAt: string | undefined;
-  const runStep: RunStep = async (id, run) => {
-    ids.push(id);
-    if (results.has(id)) return results.get(id) as Awaited<ReturnType<typeof run>>;
-    if (id === crashAt) {
-      crashAt = undefined;
-      throw new Error(`crashed before ${id}`);
-    }
-    const result = await run();
-    results.set(id, JSON.parse(JSON.stringify(result)) as unknown);
-    return result;
-  };
-  return {
-    runStep,
-    ids,
-    /** What the step state holds: each finished step's result, by step ID. */
-    results: () => Object.fromEntries(results),
-    crashAt: (id: string) => {
-      crashAt = id;
-    },
-    /** Holds `result` for step `id` as if an earlier invocation had finished it. */
-    memoize: (id: string, result: unknown) => {
-      results.set(id, result);
-    },
-  };
 }
 
 /**
@@ -119,17 +84,21 @@ function serializedError(error: unknown): unknown {
   };
 }
 
-/** The default attempts, with the waits recorded instead of slept. */
-export function recordedBackoff(): RetryPolicy & { waits: number[] } {
+/**
+ * A RunSleep for `executeRun` that records each retry's wait instead of waiting: its length in
+ * `waits`, its step ID in `ids`.
+ */
+export function recordedBackoff(): { sleep: RunSleep; waits: number[]; ids: string[] } {
   const waits: number[] = [];
+  const ids: string[] = [];
   return {
-    attempts: 3,
-    delayMs: (attempt) => 1000 * 2 ** (attempt - 1),
-    sleep: (ms) => {
+    sleep: (id, ms) => {
+      ids.push(id);
       waits.push(ms);
       return Promise.resolve();
     },
     waits,
+    ids,
   };
 }
 

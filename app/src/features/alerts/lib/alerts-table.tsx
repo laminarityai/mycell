@@ -1,7 +1,7 @@
 // The Alerts page's table: one row per open alert, under a heading row for how much its cause
 // stops (everything, one workflow or inbox, nothing yet). Each row says what kind it is, what
 // it's about, what happened, when it started, what clears it, and has its one fix.
-import { Ban, Coins, History, type LucideIcon, Unplug } from "lucide-react";
+import { Ban, CirclePause, Coins, Gauge, History, type LucideIcon, Unplug } from "lucide-react";
 import Link from "next/link";
 import { DateTime } from "@/components/date-time";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,8 @@ import {
 
 const KINDS: Record<AlertKind, { label: string; icon: LucideIcon }> = {
   credits_out: { label: "Out of credits", icon: Ban },
+  workflow_failing: { label: "Paused: failing", icon: CirclePause },
+  budget_reached: { label: "Budget reached", icon: Gauge },
   connection_reconnect: { label: "Needs reconnecting", icon: Unplug },
   backfill_failed: { label: "Backfill failed", icon: History },
   credits_low: { label: "Credits low", icon: Coins },
@@ -132,7 +134,8 @@ function AlertRow({ alert }: { alert: Alert }) {
       </TableCell>
       <TableCell className="whitespace-normal">
         {alert.startedAt !== null ? (
-          <DateTime value={alert.startedAt} />
+          // A budget reached is known only to the UTC day.
+          <DateTime value={alert.startedAt} day={alert.kind === "budget_reached"} />
         ) : (
           <span className="text-muted-foreground">
             {alert.kind === "credits_low" ? "Worked out from this week's usage" : "Not recorded"}
@@ -156,6 +159,9 @@ function aboutOf(alert: Alert): { name: string; note: string; href: string } {
   const { subject } = alert;
   if (subject.type === "credits") {
     return { name: "Credits", note: "Company balance", href: "/credits" };
+  }
+  if (subject.type === "workflow") {
+    return { name: subject.name, note: "Workflow", href: `/workflows/${subject.id}` };
   }
   return {
     name: subject.accountEmail,

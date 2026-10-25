@@ -11,6 +11,7 @@ import {
   History,
   Inbox,
   type LucideIcon,
+  MessagesSquare,
   Plug,
   Tags,
   Workflow,
@@ -24,6 +25,7 @@ export type NavKey =
   | "workflows"
   | "alerts"
   | "runs"
+  | "ask"
   | "builder"
   | "credits"
   | "custom-actions"
@@ -66,6 +68,8 @@ const NAV_GROUPS: NavGroup[] = [
       },
       { key: "workflows", label: "Workflows", href: "/workflows", icon: Workflow, admin: false },
       { key: "runs", label: "Runs", href: "/runs", icon: Activity, admin: false },
+      // Everyone's own private chat with Mycel (the agent).
+      { key: "ask", label: "Ask Mycel", href: "/ask", icon: MessagesSquare, admin: false },
     ],
   },
   {

@@ -10,7 +10,8 @@ import { systemCtx } from "@/lib/ctx";
 import { connectGoogle } from "@/testing/connect-helpers";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import { executeRun, getRun, listRuns, startRun } from "../server";
-import { pricingQuestion, publish, recordedBackoff, recordingStepRunner } from "./run-helpers";
+import { pricingQuestion, publish, recordedBackoff } from "./run-helpers";
+import { recordingStepRunner } from "@/testing/recording-step-runner";
 
 beforeEach(resetDatabase);
 
@@ -113,7 +114,7 @@ describe("a workflow that labels an email and adds a follow-up task", () => {
     scriptDetails();
     tasks.loseNextAnswer();
 
-    expect(await executeRun(system, runId, undefined, recordedBackoff())).toEqual({
+    expect(await executeRun(system, runId, undefined, recordedBackoff().sleep)).toEqual({
       status: "succeeded",
     });
 
@@ -132,12 +133,14 @@ describe("a workflow that labels an email and adds a follow-up task", () => {
     const retry = recordedBackoff();
     // Before the retry, the person ticks the task off in Google's app, which hides it.
     const wait = retry.sleep;
-    retry.sleep = async (ms) => {
+    retry.sleep = async (id, ms) => {
       for (const task of tasks.tasks()) tasks.completeInApp(task.id);
-      await wait(ms);
+      await wait(id, ms);
     };
 
-    expect(await executeRun(system, runId, undefined, retry)).toEqual({ status: "succeeded" });
+    expect(await executeRun(system, runId, undefined, retry.sleep)).toEqual({
+      status: "succeeded",
+    });
 
     expect(retry.waits).toHaveLength(1);
     expect(tasks.writes.filter((write) => write.method === "POST")).toHaveLength(1);
@@ -248,7 +251,9 @@ describe("the update-task action", () => {
       const workflowId = await publish(admin, spec([updateStep(task.id)]));
       const { runId } = await startRun(admin, workflowId, google.id, message.id);
 
-      expect(await executeRun(systemCtx(orgA.id), runId, undefined, recordedBackoff())).toEqual({
+      expect(
+        await executeRun(systemCtx(orgA.id), runId, undefined, recordedBackoff().sleep),
+      ).toEqual({
         status: "failed",
       });
 
@@ -268,7 +273,7 @@ describe("the update-task action", () => {
     const workflowId = await publish(admin, spec([updateStep("no-such-task")]));
     const { runId } = await startRun(admin, workflowId, google.id, message.id);
 
-    await executeRun(systemCtx(orgA.id), runId, undefined, recordedBackoff());
+    await executeRun(systemCtx(orgA.id), runId, undefined, recordedBackoff().sleep);
 
     expect(google.tasks.writes).toEqual([]);
     expect((await getRun(admin, runId)).steps).toMatchObject([

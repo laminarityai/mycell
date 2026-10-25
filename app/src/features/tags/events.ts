@@ -1,10 +1,10 @@
 // The Inngest events the tags feature sends when what workflows name or reach may have changed.
 // The workflows feature's jobs trigger on them, to remove enablements nobody can see any more
-// and to follow a renamed tag in working specs; tags itself knows nothing of workflows.
+// and to follow a renamed tag in working specs; tags itself knows nothing of workflows. Tags
+// writes them to the outbox with the change (ADR-0027), each under an ID derived from that
+// change. Definitions only, no IO: the outbox reads them to check what it sends.
 import { eventType } from "inngest";
 import { z } from "zod";
-import type { Ctx } from "@/lib/ctx";
-import { inngest } from "@/lib/inngest";
 
 /** Sent when a user loses a tag: they may no longer see workflows published to it. */
 export const tagAssignmentRemoved = eventType("tags/assignment.removed", {
@@ -32,15 +32,3 @@ export const tagRenamed = eventType("tags/tag.renamed", {
     to: z.string().min(1),
   }),
 });
-
-export async function sendAssignmentRemoved(ctx: Ctx, tagId: string, userId: string) {
-  await inngest.send(tagAssignmentRemoved.create({ orgId: ctx.orgId, tagId, userId }));
-}
-
-export async function sendTagDeleted(ctx: Ctx, tagId: string) {
-  await inngest.send(tagDeleted.create({ orgId: ctx.orgId, tagId }));
-}
-
-export async function sendTagRenamed(ctx: Ctx, tagId: string, from: string, to: string) {
-  await inngest.send(tagRenamed.create({ orgId: ctx.orgId, tagId, from, to }));
-}

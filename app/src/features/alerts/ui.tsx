@@ -36,9 +36,9 @@ function AlertsEmpty() {
       <div className="flex flex-col gap-1">
         <p className="font-medium">Nothing needs you.</p>
         <p className="max-w-prose text-sm text-muted-foreground">
-          An alert appears here when credits run low or out, or a connection needs reconnecting or
-          couldn&apos;t read its history. Each one goes away once its cause is fixed; there&apos;s
-          nothing to dismiss.
+          An alert appears here when credits run low or out, a workflow is paused for failing or has
+          used its monthly budget, or a connection needs reconnecting or couldn&apos;t read its
+          history. Each one goes away once its cause is fixed; there&apos;s nothing to dismiss.
         </p>
       </div>
     </div>

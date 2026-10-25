@@ -6,14 +6,8 @@ import { spendingKindOf } from "@/features/credits/types";
 import { systemCtx } from "@/lib/ctx";
 import { fakeAiGateway } from "@/testing/fake-ai-gateway";
 import { executeRun, getRun, startRun } from "../server";
-import {
-  connectInbox,
-  pricingQuestion,
-  publish,
-  recordedBackoff,
-  recordingStepRunner,
-  recordsOf,
-} from "./run-helpers";
+import { connectInbox, pricingQuestion, publish, recordedBackoff, recordsOf } from "./run-helpers";
+import { recordingStepRunner } from "@/testing/recording-step-runner";
 
 beforeEach(resetDatabase);
 
@@ -180,7 +174,7 @@ describe("the draft step", () => {
     fakeAiGateway.text(REPLY);
     mailbox.writes.loseNextAnswer();
 
-    expect(await executeRun(system, runId, undefined, recordedBackoff())).toEqual({
+    expect(await executeRun(system, runId, undefined, recordedBackoff().sleep)).toEqual({
       status: "succeeded",
     });
 

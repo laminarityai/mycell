@@ -1,4 +1,5 @@
 import { expect } from "vitest";
+import { forOrg } from "@/db/for-org";
 import { defineIsolationCases, notTenantScoped } from "@/db/testing/isolation";
 import type { TwoOrgs } from "@/db/testing/two-org-fixture";
 import { systemCtx } from "@/lib/ctx";
@@ -58,6 +59,22 @@ export const isolationCases = defineIsolationCases(server, {
       costUsd: 0.02,
       outcome: "succeeded",
     });
+
+    expect(await server.listLedger(orgs.orgB.admin.ctx)).toEqual(before);
+  },
+
+  recordUsageIn: async (orgs) => {
+    const { before } = await seedOrgBLedger(orgs);
+    const ctx = orgs.orgA.admin.ctx;
+
+    await forOrg(ctx).transaction((tx) =>
+      server.recordUsageIn(ctx, tx, {
+        role: "smart",
+        modelId: "openai/y",
+        costUsd: 0.02,
+        outcome: "succeeded",
+      }),
+    );
 
     expect(await server.listLedger(orgs.orgB.admin.ctx)).toEqual(before);
   },
@@ -166,6 +183,17 @@ export const isolationCases = defineIsolationCases(server, {
 
     expect(await server.budgetsReached(orgs.orgA.member.ctx, budgets)).toEqual(new Set());
     expect(await server.budgetsReached(orgs.orgB.member.ctx, budgets)).toEqual(new Set(["wf-b"]));
+  },
+
+  budgetsReachedOn: async (orgs) => {
+    await seedOrgBWorkflowRun(orgs);
+    const budgets = new Map([["wf-b", 5]]);
+
+    expect(await server.budgetsReachedOn(orgs.orgA.admin.ctx, budgets)).toEqual(new Map());
+    expect(await server.budgetsReachedOn(systemCtx(orgs.orgA.id), budgets)).toEqual(new Map());
+    expect([...(await server.budgetsReachedOn(orgs.orgB.admin.ctx, budgets)).keys()]).toEqual([
+      "wf-b",
+    ]);
   },
 
   nextMonthStart: notTenantScoped("a date worked out from the clock alone"),

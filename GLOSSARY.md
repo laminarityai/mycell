@@ -54,6 +54,10 @@ _Avoid_: Promotion (replaced), ACL, permissions
 One normalized thing that happened in a source, such as an email received or sent or a Drive file created or modified, kept as its provenance and shape (time, people, thread, attachment metadata, MIME type) without its content. The code's type is `IngestedEvent`, to stay clear of the DOM's `Event`.
 _Avoid_: Activity, message, record
 
+**Outbox**:
+Where a change's Inngest events wait, saved in the same transaction as the change, until Inngest has them: sent right after the change is saved, or a minute or two later by the outbox job when that send fails (ADR-0027). Each event has a fixed ID, so Inngest takes it once.
+_Avoid_: Event queue, pending events, held send (that's a write waiting for a review)
+
 **Backfill**:
 Ingesting a connection's last 90 days when it's recorded, before polling picks up what's new.
 _Avoid_: Import, initial sync
@@ -102,7 +106,7 @@ _Avoid_: Level, tier, autonomy level
 
 **Workflow**:
 An automation an admin creates and publishes to tags, defined by a spec.
-_Avoid_: Automation, agent, bot, flow
+_Avoid_: Automation, agent (each person's chat with Mycel), bot, flow
 
 **Spec**:
 The declarative definition of a workflow: its trigger, steps, credentials, budget, and rung.
@@ -208,7 +212,7 @@ _Avoid_: Approval for the review itself (it's the step, and the kind of review t
 
 **Held send**:
 A custom write's request, which Mycel holds, encrypted with the org's key, until a person approves or declines its review, or for 30 days, when it expires (ADR-0020). Approving sends it once, with any edits to its editable text; if its app never confirms the send, the review ends unconfirmed and it is never sent again.
-_Avoid_: Queued message, outbox, staged send
+_Avoid_: Queued message, outbox (that's the events a change sends), staged send
 
 **Shared review**:
 A review from an org connection's run, seen by everyone who can see its workflow through its tags and by every admin. The first to act on it wins.
@@ -231,11 +235,15 @@ Code the builder chat drafts when a custom action can't do the job, sent to our 
 _Avoid_: Feature request
 
 **Agent**:
-Each person's own private chat with Mycel. It answers from what that person can see in memory and in their own mail, remembers what they tell it, and acts only by running their own workflows, whose actions still wait as reviews.
-_Avoid_: Assistant, copilot, bot
+Each person's own private chat with Mycel, labelled "Ask Mycel". It answers from what that person can see in memory and in their own mail, remembers what they tell it, and acts only by running their own workflows, whose actions still wait as reviews.
+_Avoid_: Assistant, copilot, bot, Ask Mycel (the label people see, not the term)
+
+**Pending run**:
+A run the agent offered: one of the person's own switched-on workflows on a message in their own mail, waiting for them to press Run. Nothing starts until they do, and the run's drafts then wait on their Reviews page like any run's.
+_Avoid_: Proposal (the builder chat's), queued run
 
 **Builder chat**:
-The admin-only agent that turns descriptions and suggestions into proposed spec changes. It reads only company-wide memory, since its conversations are shared among admins.
+The admin-only chat that turns descriptions and suggestions into proposed spec changes. It isn't an agent: an agent is one person's own, and builder conversations are shared among admins. It reads only company-wide memory, since its conversations are shared among admins.
 _Avoid_: Copilot, assistant
 
 **Builder conversation**:
@@ -267,8 +275,12 @@ _Avoid_: Limit, quota
 ### Memory
 
 **Fact**:
-A short statement about an object that a source states or a person told Mycel, linked to the sources it came from.
+A short statement about an object that a source states, linked to the sources it came from, or that a person told Mycel (a told fact).
 _Avoid_: Memory (for a single item), note, insight, inference
+
+**Told fact**:
+A fact a person told Mycel through their agent ("remember this"). It has no sources, and only that person sees it, in their answers and their own workflows. Their newer told fact on the same point replaces their older one, kept as history. It goes when they leave the company, or when an admin forgets the person it's about.
+_Avoid_: Note, annotation, comment
 
 **Source record**:
 Mycel's record of one item memory learned from, such as an email, a version of a Drive doc or a version of a Calendar invite, as one connection holds it, with the item's access list and a pointer to re-fetch it, never its content.

@@ -5,7 +5,6 @@ import { z } from "zod";
 import { getBalance, grantCredits } from "@/features/credits/server";
 import { listOrgIds } from "@/features/orgs/server";
 import { systemCtx } from "@/lib/ctx";
-import { sendCreditsGranted } from "@/lib/events";
 
 export const USAGE = [
   "Usage: pnpm credits:grant <orgId> <credits> <note>",
@@ -27,10 +26,10 @@ export async function runGrantCreditsCommand(args: string[]): Promise<CommandRes
     return { exitCode: 1, output: `No org has the ID ${orgId}.` };
   }
   const ctx = systemCtx(orgId);
+  // Work that stopped for want of credits goes on: the grant announces itself, so memory learns
+  // what it postponed, and paused workflows start again, since a pause for credits is read from
+  // the balance.
   await grantCredits(ctx, credits, note);
-  // Work that stopped for want of credits goes on: memory learns what it postponed, and paused
-  // workflows start again, since a pause for credits is read from the balance.
-  await sendCreditsGranted(orgId);
   return {
     exitCode: 0,
     output: `Granted ${String(credits)} credits (${note}). Org ${orgId} now has ${String(await getBalance(ctx))}.`,

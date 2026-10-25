@@ -4,9 +4,9 @@
 // retried at most once: asked again while its retry is running, it asks for that retry again,
 // as the trigger's fan-out does, so a lost request or a second click starts nothing twice.
 import { randomUUID } from "node:crypto";
-import { forOrg } from "@/db/for-org";
 import { getConnection } from "@/features/connections/server";
 import type { ConnectionOwnership } from "@/features/connections/types";
+import { saveWithEvents } from "@/features/outbox/server";
 import { startableVersion } from "@/features/workflows/server";
 import { isAdmin, type Ctx } from "@/lib/ctx";
 import {
@@ -18,7 +18,7 @@ import {
   ValidationError,
 } from "@/lib/errors";
 import type { RetryCheck } from "../types";
-import { sendRunRequested } from "./events";
+import { requestRun } from "./request-run";
 import { visibleRuns } from "./run-list";
 import { findRetry, findRun } from "./runs";
 import { runs } from "./schema";
@@ -37,29 +37,33 @@ export async function retryRun(ctx: Ctx, runId: string): Promise<{ runId: string
   const { run, retry } = await failedRun(ctx, runId);
   if (retry !== undefined) return requestAgain(ctx, retry);
   const { versionId, ownerScope } = await startable(ctx, run);
-  const created = await forOrg(ctx).insert(
-    runs,
-    {
-      id: randomUUID(),
-      connectionId: run.connectionId,
-      ownerScope,
-      workflowId: run.workflowId,
-      workflowVersionId: versionId,
-      startedBy: "retry",
-      retryOfRunId: run.id,
-      sourceRef: run.sourceRef,
-      status: "running",
-    },
-    // Another request retried it meanwhile: that retry is the one.
-    { onConflictDoNothing: true },
-  );
-  const started = created.at(0);
+  // The retry and its request are saved together (ADR-0027).
+  const started = await saveWithEvents(ctx, async (tx, emit) => {
+    const created = await tx.insert(
+      runs,
+      {
+        id: randomUUID(),
+        connectionId: run.connectionId,
+        ownerScope,
+        workflowId: run.workflowId,
+        workflowVersionId: versionId,
+        startedBy: "retry",
+        retryOfRunId: run.id,
+        sourceRef: run.sourceRef,
+        status: "running",
+      },
+      // Another request retried it meanwhile: that retry is the one.
+      { onConflictDoNothing: true },
+    );
+    const retry = created.at(0);
+    if (retry !== undefined) requestRun(ctx, emit, retry);
+    return retry;
+  });
   if (started === undefined) {
     const other = await findRetry(ctx, run.id);
     if (other === undefined) throw new InvariantError("A retry conflicted with no other retry.");
     return requestAgain(ctx, other);
   }
-  await sendRunRequested({ orgId: ctx.orgId, runId: started.id, connectionId: run.connectionId });
   return { runId: started.id };
 }
 
@@ -128,6 +132,9 @@ async function startable(
 // (its event ID makes Inngest execute it once).
 async function requestAgain(ctx: Ctx, retry: Run): Promise<{ runId: string }> {
   if (retry.status !== "running") throw new ConflictError(RETRIED);
-  await sendRunRequested({ orgId: ctx.orgId, runId: retry.id, connectionId: retry.connectionId });
+  await saveWithEvents(ctx, (_tx, emit) => {
+    requestRun(ctx, emit, retry);
+    return Promise.resolve();
+  });
   return { runId: retry.id };
 }

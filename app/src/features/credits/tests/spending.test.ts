@@ -49,7 +49,7 @@ describe("getSpendingSummary", () => {
       openingBalance: 0,
       spent: 45,
       granted: 1000,
-      byKind: { workflow: 35, memory: 3, builder: 4, try_it: 3 },
+      byKind: { workflow: 35, memory: 3, builder: 4, agent: 0, try_it: 3 },
     });
     expect(summary.byWorkflow.map(({ workflowId, spent }) => ({ workflowId, spent }))).toEqual([
       { workflowId: "wf_2", spent: 20 },
@@ -78,7 +78,7 @@ describe("getSpendingSummary", () => {
     expect(days.length).toBe(Math.round((range.to.getTime() - range.from.getTime()) / DAY_MS));
     expect(days[today]).toEqual({
       day: startOfDay(new Date()),
-      byKind: { workflow: 35, memory: 3, builder: 4, try_it: 3 },
+      byKind: { workflow: 35, memory: 3, builder: 4, agent: 0, try_it: 3 },
       spent: 45,
       granted: 1000,
     });

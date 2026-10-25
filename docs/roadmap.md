@@ -4,24 +4,24 @@ Build order, dogfooded on our own Google Workspace. **v1 is complete after M9**;
 
 The builder chat is primary (ADR-0007), so it comes before mining. Milestones keep their numbers as stable names and are listed in build order: **M0 → M1 → M3 → M6 → M12 → M5 → M11 → M13 → M14 → M7 → M8 → M9 → M2 → M4 → M10.**
 
-## Status (2026-10-23)
+## Status (2026-10-24)
 
-| Milestone | State    | Spec | Notes                                                                                                                                                        |
-| --------- | -------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| M0        | Done     | #1   |                                                                                                                                                              |
-| M1        | Done     | #11  | Connect, org connections, disconnect cascade, Gmail backfill, polling #15, reconciliation #16, Drive #17 (PR #59). Its dogfood checks moved into #42.        |
-| M3        | Done     | #33  | Spec, policy and runtime (PR #74). Open: dogfood check #42. Decisions in ADR-0010 to ADR-0012 and ADR-0014.                                                  |
-| M6        | Done     | #43  | Builder chat (PR #76). Open: dogfood check #50. Capability requests moved to M13 (#101).                                                                     |
-| M12       | Done     | #77  | Branches and the workflow graph (PR #88). Open: dogfood check #87. Decisions in ADR-0015.                                                                    |
-| M5        | Done     | #51  | Publish, tags, member toggles and the Reviews page (PR #89). Open: dogfood check #57.                                                                        |
-| M11       | Ready    | #67  | Calendar, Docs and Tasks, each through its pending form (ADR-0013); tickets ready for agents.                                                                |
-| M13       | Done     | #91  | Custom actions made by the builder chat (PR #117). Open: dogfood check #102. Decisions in ADR-0018 to ADR-0021.                                              |
-| M14       | Done     | #92  | Memory foundation (PR #117). Open: dogfood check #116. Decisions in ADR-0022 to ADR-0025.                                                                    |
-| M15       | Ready    | #142 | Push ingest: Gmail, then Drive, tell Mycel when something changes, and polling becomes a 15-minute sweep (ADR-0026). Tickets #143 to #147.                   |
-| M7        | Ready    | #152 | Credits and budgets: the Credits page, out-of-credits and budget pauses, real failed-call costs.                                                             |
-| M8        | Ready    | #153 | Runs page and run pages, retry, auto-pause after 3 failures, alerts in the app (no email).                                                                   |
-| M9        | Ready    | #154 | The agent ("Ask Mycel"): each person's own view of memory, "remember this", runs on a picked message. Chat with cited answers #179. v1 is complete after M9. |
-| M2 onward | After v1 |      | M2 (discovery) and M4, then M10.                                                                                                                             |
+| Milestone | State    | Spec | Notes                                                                                                                                                                                 |
+| --------- | -------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M0        | Done     | #1   |                                                                                                                                                                                       |
+| M1        | Done     | #11  | Connect, org connections, disconnect cascade, Gmail backfill, polling #15, reconciliation #16, Drive #17 (PR #59). Its dogfood checks moved into #42.                                 |
+| M3        | Done     | #33  | Spec, policy and runtime (PR #74). Open: dogfood check #42. Decisions in ADR-0010 to ADR-0012 and ADR-0014.                                                                           |
+| M6        | Done     | #43  | Builder chat (PR #76). Open: dogfood check #50. Capability requests moved to M13 (#101).                                                                                              |
+| M12       | Done     | #77  | Branches and the workflow graph (PR #88). Open: dogfood check #87. Decisions in ADR-0015.                                                                                             |
+| M5        | Done     | #51  | Publish, tags, member toggles and the Reviews page (PR #89). Open: dogfood check #57.                                                                                                 |
+| M11       | Done     | #67  | Calendar, Docs and Tasks, each through its pending form (ADR-0013): Tasks #222, Calendar #223, Docs #224, the Calendar trigger #140, invites in memory #226. Open: dogfood check #72. |
+| M13       | Done     | #91  | Custom actions made by the builder chat (PR #117). Open: dogfood check #102. Decisions in ADR-0018 to ADR-0021.                                                                       |
+| M14       | Done     | #92  | Memory foundation (PR #117). Open: dogfood check #116. Decisions in ADR-0022 to ADR-0025.                                                                                             |
+| M15       | Done     | #142 | Push ingest (ADR-0026): Gmail push #204, watches #207, the 15-minute sweep #208, Drive push #210. Open: dogfood check #146.                                                           |
+| M7        | Done     | #152 | Credits and budgets: the Credits page, out-of-credits and budget pauses, real failed-call costs, real pricing (`docs/credit-pricing.md`). Open: dogfood check #168.                   |
+| M8        | Done     | #153 | Runs page and run pages, retry, auto-pause after 3 failures, alerts in the app (no email). Open: dogfood check #177.                                                                  |
+| M9        | Done     | #154 | The agent ("Ask Mycel", PR #218): each person's own view of memory, "remember this", runs on a picked message. Open: dogfood check #186. v1 is complete.                              |
+| M2 onward | After v1 |      | M2 (discovery) and M4, then M10.                                                                                                                                                      |
 
 ## M0: Scaffold and tenancy
 

@@ -318,3 +318,59 @@ describe("a removed reply", () => {
     expect(await tablesHolding("MARKER-185-G")).toEqual([]);
   });
 });
+
+describe("a reply that found messages", () => {
+  /** Org A, funded, the member's own mailbox holding one email from Ada; a conversation. */
+  async function memberWithMail() {
+    const { orgA } = await seedTwoOrgs();
+    await fundOrg(orgA.id);
+    const member = orgA.member.ctx;
+    const own = await connectMailbox(member, orgA.member.email, [
+      { from: "Ada <ada@acme.example>", subject: "SUBJECT-237 oak chairs", at: daysAgo(2) },
+    ]);
+    const { id } = await startConversation(member);
+    return { member, own, id };
+  }
+
+  /** One turn: the agent searches the person's mail from `from`, then answers `answer`. */
+  async function findFrom(ctx: Ctx, conversationId: string, from: string, answer: string) {
+    fakeAiGateway.reply({ toolCalls: [{ name: "find_messages", input: { from } }] });
+    fakeAiGateway.reply({ text: answer });
+    await readTurn(await streamTurn(ctx, conversationId, `Find mail from ${from}`));
+  }
+
+  it("goes when the mailbox it found them in goes, though it cited no fact", async () => {
+    const { member, own, id } = await memberWithMail();
+    await findFrom(member, id, "ada@acme.example", "MARKER-237-A: Ada wrote SUBJECT-237.");
+
+    await disconnect(member, own.id);
+
+    expect((await partsOf(member, id))[1]).toEqual(REMOVED);
+    expect(await tablesHolding("MARKER-237-A")).toEqual([]);
+  });
+
+  it("takes later replies with it, since the model read its words", async () => {
+    const { member, own, id } = await memberWithMail();
+    await findFrom(member, id, "ada@acme.example", "Ada wrote SUBJECT-237.");
+    fakeAiGateway.reply({ text: "MARKER-237-B: as I said, SUBJECT-237." });
+    await readTurn(await streamTurn(member, id, "Say that again?"));
+
+    await disconnect(member, own.id);
+
+    const parts = await partsOf(member, id);
+    expect([parts[1], parts[3]]).toEqual([REMOVED, REMOVED]);
+    expect(await tablesHolding("MARKER-237-B")).toEqual([]);
+  });
+
+  it("stays when the search found nothing in that mailbox", async () => {
+    const { member, own, id } = await memberWithMail();
+    await findFrom(member, id, "nobody@else.example", "MARKER-237-C: nothing from them.");
+
+    await disconnect(member, own.id);
+
+    expect((await partsOf(member, id))[1]).toContainEqual({
+      type: "text",
+      text: "MARKER-237-C: nothing from them.",
+    });
+  });
+});

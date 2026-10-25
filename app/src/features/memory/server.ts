@@ -1,13 +1,14 @@
 // The memory feature (ADR-0022, ADR-0023): objects and short facts learned from the company's
 // apps, each fact visible to whoever can see one of its sources. Discovery tells memory what it
-// stored through Inngest events and never imports it.
+// stored, and runtime's Calendar poll what changed on each calendar, through Inngest events.
 import "server-only";
 
 // Called only by memory's job (and tests), as the org's system ctx.
 export { learnFromItem } from "./lib/learn";
-// Following the apps, as the org's system ctx: an item deleted there, a Drive file's sharing
-// changed, and the nightly re-read of every Drive file's sharing.
-export { deleteRemovedItem, rereadAccess, rereadDriveAccess } from "./lib/source-changes";
+// Following the apps, as the org's system ctx: an item deleted there, a Drive file's sharing or a
+// Calendar event's guests changed, and the nightly re-read of every Drive file's and Calendar
+// event's access.
+export { deleteRemovedItem, rereadAccess, rereadAllAccess } from "./lib/source-changes";
 // Every read is logged (ADR-0024), as the reader its caller names: the person by default, the
 // builder chat, or a workflow run.
 export { readObject } from "./lib/logged-reads";
@@ -20,6 +21,17 @@ export { searchCompanyWideMemory } from "./lib/logged-reads";
 // A summary of one object, from only the facts the caller can see: one metered `fast` call, its
 // read logged as the reader named, and nothing stored.
 export { summarizeObject } from "./lib/summarize";
+// Where facts a reader already read came from, for Ask Mycel's footnotes: their sources and
+// markers in the reader's view, never what they say, so not logged again.
+export { citeFacts } from "./lib/cite";
+// "Remember this" (M9): a person tells Mycel a fact, screened, filed by one metered `fast` call
+// and embedded, all charged to the agent, and seen by them alone. Refuses the do-not-learn list
+// and what isn't a work fact.
+export { tellFact } from "./lib/tell";
+// "What I've told Mycel": a person's own told facts, listed (logged as their read), deleted at
+// once from every read, and brought back within the undo window. Anyone else gets
+// NotFoundError. The org's system ctx deletes for good those past their window.
+export { deleteToldFact, listToldFacts, purgeDeletedToldFacts, restoreToldFact } from "./lib/told";
 // The access log: admins see the company's, members the reads of facts from their own sources.
 // Pruned nightly, as the org's system ctx.
 export { listAccessLog, pruneAccessLog } from "./lib/access-log";
@@ -41,6 +53,9 @@ export { addExclusion, removeExclusion } from "./lib/exclusions";
 // stored once memory starts, the items postponed for the budget when they're due again, and
 // forgetting what a new exclusion covers.
 export { queueStoredItems, resumePostponed } from "./lib/budget";
+// Whether memory has started, as the org's system ctx: the Calendar poll reads every calendar
+// for memory once it has (ADR-0029).
+export { hasMemoryStarted } from "./lib/budget";
 export { forgetExcluded } from "./lib/exclusions";
 // How long memory keeps things (ADR-0024): admins set the retention window, and a nightly job
 // applies it as the org's system ctx.

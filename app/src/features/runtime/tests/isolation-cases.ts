@@ -25,6 +25,18 @@ async function seedOrgBRun({ orgB }: TwoOrgs) {
   return { connectionId: inbox.connectionId, workflowId, runId };
 }
 
+// Org B's admin has a workflow switched on for their own inbox, which holds one message: what
+// Ask Mycel would run there.
+async function seedOrgBEnabled({ orgB }: TwoOrgs) {
+  await grantCredits(systemCtx(orgB.id), FUNDED_CREDITS);
+  const inbox = await connectInbox(orgB.admin.ctx, orgB.admin.email, [pricingQuestion()]);
+  const workflowId = await publish(orgB.admin.ctx, threadSpec());
+  await switchWorkflowOn(orgB.admin.ctx, workflowId, inbox.connectionId);
+  return { workflowId, connectionId: inbox.connectionId, messageId: inbox.messages[0].id };
+}
+
+const orgAPeople = ({ orgA }: TwoOrgs) => [orgA.admin.ctx, orgA.member.ctx];
+
 // Org B's run failed (its job crashed), and org B has credits to retry it.
 async function failedOrgBRun(orgs: TwoOrgs) {
   const seeded = await seedOrgBRun(orgs);
@@ -34,6 +46,50 @@ async function failedOrgBRun(orgs: TwoOrgs) {
 }
 
 export const isolationCases = defineIsolationCases(server, {
+  checkRunFromAgent: async (orgs) => {
+    const b = await seedOrgBEnabled(orgs);
+
+    for (const ctx of orgAPeople(orgs)) {
+      await expect(server.checkRunFromAgent(ctx, b.workflowId, b.messageId)).rejects.toThrow(
+        NotFoundError,
+      );
+    }
+    expect(
+      await server.checkRunFromAgent(orgs.orgB.admin.ctx, b.workflowId, b.messageId),
+    ).toMatchObject({ workflowId: b.workflowId, connectionId: b.connectionId });
+  },
+
+  startRunFromAgent: async (orgs) => {
+    const b = await seedOrgBEnabled(orgs);
+
+    for (const ctx of orgAPeople(orgs)) {
+      await expect(server.startRunFromAgent(ctx, b.workflowId, b.messageId)).rejects.toThrow(
+        NotFoundError,
+      );
+    }
+    expect((await server.listRuns(orgs.orgB.admin.ctx, {})).runs).toEqual([]);
+  },
+
+  agentRunDetails: async (orgs) => {
+    const b = await seedOrgBEnabled(orgs);
+    const { runId } = await server.startRunFromAgent(
+      orgs.orgB.admin.ctx,
+      b.workflowId,
+      b.messageId,
+    );
+    const offer = { connectionId: b.connectionId, sourceRef: b.messageId, runId };
+
+    for (const ctx of orgAPeople(orgs)) {
+      expect(await server.agentRunDetails(ctx, [offer])).toEqual([{ message: null, run: null }]);
+    }
+    expect(await server.agentRunDetails(orgs.orgB.admin.ctx, [offer])).toEqual([
+      {
+        message: expect.objectContaining({ subject: "Quote for 30 oak chairs" }) as unknown,
+        run: { id: runId, status: "running" },
+      },
+    ]);
+  },
+
   startRun: async (orgs) => {
     const orgB = await seedOrgBRun(orgs);
     const admin = orgs.orgA.admin.ctx;
@@ -91,6 +147,14 @@ export const isolationCases = defineIsolationCases(server, {
     expect((await server.listRunFilters(orgs.orgB.admin.ctx)).workflows).toHaveLength(1);
   },
 
+  pausingRuns: async (orgs) => {
+    const { runId } = await seedOrgBRun(orgs);
+    await server.failCrashedRun(systemCtx(orgs.orgB.id), runId);
+
+    expect(await server.pausingRuns(orgs.orgA.admin.ctx, [runId])).toEqual([]);
+    expect(await server.pausingRuns(orgs.orgB.admin.ctx, [runId])).toHaveLength(1);
+  },
+
   startTriggeredRuns: async (orgs) => {
     // Org B's workflow is switched on for its admin's inbox; org A's fan-out is handed org B's
     // connection, as a forged or misrouted event would.
@@ -143,6 +207,31 @@ export const isolationCases = defineIsolationCases(server, {
     expect(
       await server.searchMessages(orgs.orgB.admin.ctx, orgB.connectionId, "pricing", 5),
     ).toHaveLength(1);
+  },
+
+  searchMessageHeaders: async (orgs) => {
+    const orgB = await seedOrgBRun(orgs);
+
+    for (const ctx of [orgs.orgA.admin.ctx, orgs.orgA.member.ctx]) {
+      await expect(
+        server.searchMessageHeaders(ctx, orgB.connectionId, { limit: 5 }),
+      ).rejects.toThrow(NotFoundError);
+    }
+    expect(
+      await server.searchMessageHeaders(orgs.orgB.admin.ctx, orgB.connectionId, { limit: 5 }),
+    ).toHaveLength(1);
+  },
+
+  readMessageHeaders: async (orgs) => {
+    const orgB = await seedOrgBRun(orgs);
+    const refs = (await server.searchMessages(orgs.orgB.admin.ctx, orgB.connectionId, "", 1)).map(
+      (ref) => ({ connectionId: orgB.connectionId, sourceRef: ref.id }),
+    );
+
+    for (const ctx of [orgs.orgA.admin.ctx, orgs.orgA.member.ctx]) {
+      expect(await server.readMessageHeaders(ctx, refs)).toEqual([]);
+    }
+    expect(await server.readMessageHeaders(orgs.orgB.admin.ctx, refs)).toHaveLength(1);
   },
 
   readMessage: async (orgs) => {

@@ -4,7 +4,7 @@ import { expect } from "vitest";
 import { FUNDED_CREDITS, type TwoOrgs } from "@/db/testing/two-org-fixture";
 import { grantCredits } from "@/features/credits/server";
 import { listTags } from "@/features/tags/server";
-import { systemCtx } from "@/lib/ctx";
+import { systemCtx, type Ctx } from "@/lib/ctx";
 import { NotFoundError } from "@/lib/errors";
 import { connectGmail, connectMailbox } from "@/testing/connect-helpers";
 import { publishTo, tagUsers } from "@/testing/visibility-helpers";
@@ -18,6 +18,15 @@ export async function seedOrgBWorkflow({ orgA, orgB }: TwoOrgs) {
   const { id } = await server.saveWorkflow(orgB.admin.ctx, { name: "B", spec: draftSpec() });
   const version = await server.publishWorkflow(orgB.admin.ctx, id);
   return { id, version, before: await server.getWorkflow(orgB.admin.ctx, id) };
+}
+
+/** A case for an admin read of one workflow: org A's admin finds org B's workflow not there. */
+export function orgBWorkflowNotFound(read: (ctx: Ctx, workflowId: string) => Promise<unknown>) {
+  return async (orgs: TwoOrgs) => {
+    const { id } = await seedOrgBWorkflow(orgs);
+
+    await expect(read(orgs.orgA.admin.ctx, id)).rejects.toThrow(NotFoundError);
+  };
 }
 
 // Org B's admin has a member workflow switched on for their own connection, and credits to run it.
@@ -53,6 +62,28 @@ export async function versionsOfOrgBUnread(orgs: TwoOrgs) {
   }
   const own = await server.versionsById(orgs.orgB.member.ctx, [b.version.id]);
   expect([...own.keys()]).toEqual([b.version.id]);
+}
+
+// findWorkflowBySpecId's isolation case: org B's workflow has the spec ID "pricing-replies";
+// org A has none.
+export async function specIdOfOrgBUnfound(orgs: TwoOrgs) {
+  await seedOrgBWorkflow(orgs);
+
+  expect(await server.findWorkflowBySpecId(orgs.orgA.admin.ctx, "pricing-replies")).toBeNull();
+}
+
+// startableEnablement's isolation case: org B's admin's enablement is no one's in org A, and
+// org B's admin gets it.
+export async function startableEnablementOfOrgBUnread(orgs: TwoOrgs) {
+  const b = await switchedOnInOrgB(orgs);
+
+  for (const ctx of [orgs.orgA.admin.ctx, orgs.orgA.member.ctx]) {
+    await expect(server.startableEnablement(ctx, b.workflowId)).rejects.toThrow(NotFoundError);
+  }
+  expect(await server.startableEnablement(orgs.orgB.admin.ctx, b.workflowId)).toMatchObject({
+    workflowId: b.workflowId,
+    connectionId: b.connectionId,
+  });
 }
 
 // startableVersion's isolation case: org A can't start org B's workflow, admin or member, and

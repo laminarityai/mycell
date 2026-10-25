@@ -66,6 +66,8 @@ export async function startableVersion(
 
 // What to do before starting it, for each pause but running out of credits.
 const LIFT_FIRST: Record<Exclude<PausedReason, "out_of_credits">, string> = {
+  failures: "An admin has to resume it first.",
+  budget_reached: "It starts again next month, or once an admin raises or removes its budget.",
   needs_reenable: "Switch it on again first.",
 };
 

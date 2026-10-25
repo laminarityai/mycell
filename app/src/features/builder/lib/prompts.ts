@@ -1,6 +1,7 @@
 // The builder feature's prompts (builder/prompts/), each template with the variables it takes.
 import { definePrompts } from "@/lib/prompts";
 import contextFile from "../prompts/context.prompt.yml";
+import historyFile from "../prompts/history.prompt.yml";
 import rulesFile from "../prompts/rules.prompt.yml";
 import toolResultsFile from "../prompts/tool-results.prompt.yml";
 import toolsFile from "../prompts/tools.prompt.yml";
@@ -101,6 +102,14 @@ export const toolResultPrompts = definePrompts(toolResultsFile, {
   customActionNameTaken: ["name"],
 });
 
+export const historyPrompts = definePrompts(historyFile, {
+  summaryInstructions: [],
+  summarize: ["transcript"],
+  summarizeAgain: ["summary", "transcript"],
+  earlierTitle: [],
+  earlier: ["summary"],
+});
+
 export const tryItPrompts = definePrompts(tryItFile, {
   summary: [],
   summaryLine: ["line"],
@@ -111,6 +120,9 @@ export const tryItPrompts = definePrompts(tryItFile, {
   drafted: ["step"],
   wouldLabel: ["step", "label"],
   wouldAppendRow: ["step", "range"],
+  wouldSuggestEdits: ["step", "count", "document"],
+  wouldAddTask: ["step"],
+  wouldUpdateTask: ["step", "task"],
   readRows: ["step", "count", "range"],
   chose: ["step", "label", "p"],
   tookOtherwise: ["step"],

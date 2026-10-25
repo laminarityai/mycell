@@ -7,7 +7,7 @@ import { NotFoundError } from "@/lib/errors";
 import { connectDrive, connectMailbox, daysAgo } from "@/testing/connect-helpers";
 import type { FakeDrive, FakeFileInput } from "@/testing/fake-drive";
 import type { FakeMailbox, FakeMessageInput } from "@/testing/fake-gmail";
-import { readObject, rereadDriveAccess } from "../server";
+import { readObject, rereadAllAccess } from "../server";
 import {
   followAppChanges,
   learnStoredItems,
@@ -257,7 +257,7 @@ describe("the nightly re-read of Drive access", () => {
     // Unshared from Lee, and shared with the admin, with no poll to see either.
     drive.drive.unshare(file.id, lee.email);
     drive.drive.share(file.id, { type: "user", emailAddress: orgA.admin.email });
-    expect(await rereadDriveAccess(systemCtx(orgA.id))).toEqual({ files: 1, removed: 0 });
+    expect(await rereadAllAccess(systemCtx(orgA.id))).toEqual({ items: 1, removed: 0 });
 
     await expect(readObject(lee.ctx, byAcme)).rejects.toThrow(NotFoundError);
     expect(await statements(orgA.admin.ctx)).toEqual([RENEWAL]);
@@ -272,7 +272,7 @@ describe("the nightly re-read of Drive access", () => {
     await learnStoredItems(orgA.id);
 
     drive.drive.remove(drive.files[0].id);
-    expect(await rereadDriveAccess(systemCtx(orgA.id))).toEqual({ files: 1, removed: 1 });
+    expect(await rereadAllAccess(systemCtx(orgA.id))).toEqual({ items: 1, removed: 1 });
 
     await expect(readObject(orgA.member.ctx, byAcme)).rejects.toThrow(NotFoundError);
   });
@@ -284,7 +284,7 @@ describe("the nightly re-read of Drive access", () => {
     scriptDocLearning(RENEWAL_ONLY);
     await learnStoredItems(orgA.id);
 
-    expect(await rereadDriveAccess(systemCtx(orgB.id))).toEqual({ files: 0, removed: 0 });
-    await expect(rereadDriveAccess(orgA.admin.ctx)).rejects.toThrow();
+    expect(await rereadAllAccess(systemCtx(orgB.id))).toEqual({ items: 0, removed: 0 });
+    await expect(rereadAllAccess(orgA.admin.ctx)).rejects.toThrow();
   });
 });

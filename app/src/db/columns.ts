@@ -27,6 +27,9 @@ export function zodJsonb<Schema extends z.ZodType>(name: string, schema: Schema)
   })(name);
 }
 
+/** A full-text search document (Postgres's `tsvector`): a keyword index's words, stemmed. */
+export const tsvector = customType<{ data: string }>({ dataType: () => "tsvector" });
+
 function fit<Schema extends z.ZodType>(
   name: string,
   schema: Schema,

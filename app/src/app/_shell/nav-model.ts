@@ -2,13 +2,16 @@
 // sidebar (a client component), the error page and the tests all read the same list.
 import {
   Activity,
+  Bell,
   Bot,
   Brain,
   Building2,
+  Coins,
   GitPullRequestArrow,
   History,
   Inbox,
   type LucideIcon,
+  MessagesSquare,
   Plug,
   Tags,
   Workflow,
@@ -20,8 +23,11 @@ export type NavGroupKey = "work" | "company" | "accounts";
 export type NavKey =
   | "reviews"
   | "workflows"
+  | "alerts"
   | "runs"
+  | "ask"
   | "builder"
+  | "credits"
   | "custom-actions"
   | "capability-requests"
   | "tags"
@@ -62,13 +68,24 @@ const NAV_GROUPS: NavGroup[] = [
       },
       { key: "workflows", label: "Workflows", href: "/workflows", icon: Workflow, admin: false },
       { key: "runs", label: "Runs", href: "/runs", icon: Activity, admin: false },
+      // Everyone's own private chat with Mycel (the agent).
+      { key: "ask", label: "Ask Mycel", href: "/ask", icon: MessagesSquare, admin: false },
     ],
   },
   {
     key: "company",
     label: "Company",
     items: [
+      {
+        key: "alerts",
+        label: "Alerts",
+        href: "/alerts",
+        icon: Bell,
+        admin: true,
+        counts: { label: "open", tone: "destructive" },
+      },
       { key: "builder", label: "Builder chat", href: "/builder", icon: Bot, admin: true },
+      { key: "credits", label: "Credits", href: "/credits", icon: Coins, admin: true },
       {
         key: "custom-actions",
         label: "Custom actions",

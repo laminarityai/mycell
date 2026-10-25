@@ -8,7 +8,7 @@ import { organization } from "better-auth/plugins/organization";
 import * as authSchema from "@/db/auth-schema";
 import { getDb } from "@/db/client";
 import { env } from "@/env";
-import { WorkspaceAccountRequiredError } from "@/lib/errors";
+import { RemovedFromOrgError, WorkspaceAccountRequiredError } from "@/lib/errors";
 import { signIn } from "./sign-in";
 import { verifiedGoogleProfile } from "./verified-google-profile";
 
@@ -45,13 +45,21 @@ function createAuth() {
             try {
               await signIn(await verifiedGoogleProfile(session.userId));
             } catch (error) {
-              if (!(error instanceof WorkspaceAccountRequiredError)) throw error;
               // This hook is the sign-in route's error boundary: Better Auth redirects to the
-              // sign-in page with this code as `?error=`.
-              throw new APIError("FORBIDDEN", {
-                code: workspaceAccountRequired.error,
-                message: workspaceAccountRequired.errorDescription,
-              });
+              // sign-in page with the code as `?error=`.
+              if (error instanceof WorkspaceAccountRequiredError) {
+                throw new APIError("FORBIDDEN", {
+                  code: workspaceAccountRequired.error,
+                  message: workspaceAccountRequired.errorDescription,
+                });
+              }
+              if (error instanceof RemovedFromOrgError) {
+                throw new APIError("FORBIDDEN", {
+                  code: RemovedFromOrgError.code,
+                  message: error.message,
+                });
+              }
+              throw error;
             }
           },
         },

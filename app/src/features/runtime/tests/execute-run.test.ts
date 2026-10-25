@@ -10,13 +10,8 @@ import { fakeInngest } from "@/testing/fake-inngest";
 import { fakeNango } from "@/testing/fake-nango";
 import { executeRun, getRun, listRuns, startRun } from "../server";
 import type { RunStep } from "@/lib/inngest";
-import {
-  connectInbox,
-  pricingQuestion,
-  publish,
-  recordingStepRunner,
-  threadSpec,
-} from "./run-helpers";
+import { connectInbox, pricingQuestion, publish, threadSpec } from "./run-helpers";
+import { recordingStepRunner } from "@/testing/recording-step-runner";
 
 beforeEach(resetDatabase);
 

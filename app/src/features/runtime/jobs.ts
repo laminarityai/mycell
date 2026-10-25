@@ -3,8 +3,8 @@
 import "server-only";
 import { systemCtx } from "@/lib/ctx";
 import { gmailMessageReceived } from "@/lib/events";
-import { inngest, PER_ORG_LIMIT, stepRunner } from "@/lib/inngest";
-import { calendarInviteReceived, calendarPollDue, runRequested } from "./lib/events";
+import { inngest, PER_ORG_LIMIT, stepRunner, stepSleeper } from "@/lib/inngest";
+import { calendarInviteReceived, calendarPollDue, runRequested } from "./events";
 import {
   calendarsDue,
   executeRun,
@@ -46,7 +46,10 @@ export const fanOutInviteJob = inngest.createFunction(
     step.run("start-runs", () => startInviteRuns(systemCtx(event.data.orgId), event.data)),
 );
 
-/** Every minute, sends one poll event per calendar a Calendar-triggered workflow watches. */
+/**
+ * Every minute, sends one poll event per calendar a Calendar-triggered workflow watches, and per
+ * calendar in an org where memory has started (ADR-0029).
+ */
 export const calendarPollCron = inngest.createFunction(
   { id: "poll-calendars", triggers: [{ cron: "* * * * *" }] },
   async ({ step }) => {
@@ -61,7 +64,10 @@ export const calendarPollCron = inngest.createFunction(
   },
 );
 
-/** Polls one connection's calendar for new invites, one at a time per connection. */
+/**
+ * Polls one connection's calendar for new invites and what memory follows, one at a time per
+ * connection.
+ */
 export const calendarPollJob = inngest.createFunction(
   {
     id: "poll-calendar",
@@ -96,5 +102,5 @@ export const runWorkflowJob = inngest.createFunction(
     },
   },
   async ({ event, step }) =>
-    executeRun(systemCtx(event.data.orgId), event.data.runId, stepRunner(step)),
+    executeRun(systemCtx(event.data.orgId), event.data.runId, stepRunner(step), stepSleeper(step)),
 );

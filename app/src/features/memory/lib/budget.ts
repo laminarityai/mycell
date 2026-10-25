@@ -9,9 +9,12 @@ import { forOrg } from "@/db/for-org";
 import { getSpending } from "@/features/credits/server";
 import { countStoredItems, listStoredItems } from "@/features/discovery/server";
 import { CREDIT_ESTIMATES, estimateScreenCredits } from "@/features/models/server";
+import { saveWithEvents } from "@/features/outbox/server";
 import { type Ctx, requireRole, requireSystem } from "@/lib/ctx";
 import { ConflictError, ValidationError } from "@/lib/errors";
 import type { RunStep } from "@/lib/inngest";
+import { itemQueued, memoryStarted, postponedDue } from "../events";
+import { now as clockNow } from "@/lib/time";
 import {
   memoryBudgetSchema,
   POSTPONE_REASONS,
@@ -20,7 +23,8 @@ import {
   type MemoryEstimate,
   type PostponeReason,
 } from "../types";
-import { sendItemsQueued, sendMemoryStarted, sendPostponedDue } from "./events";
+import { MAX_INVITE_CHARS } from "./calendar";
+import { sendItemsQueued } from "./events";
 import { GOOGLE_DOC, MAX_DOC_CHARS } from "./drive";
 import { MAX_TEXT_CHARS } from "./gmail";
 import { memorySettings, postponedItems } from "./schema";
@@ -29,7 +33,7 @@ import { memorySettings, postponedItems } from "./schema";
 export const MEMORY_USAGE = { purpose: "memory" } as const;
 
 /** The start of this calendar month, UTC: when this month's budget began. */
-export function monthStart(now = new Date()): Date {
+export function monthStart(now = clockNow()): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 }
 
@@ -37,13 +41,13 @@ export function monthStart(now = new Date()): Date {
 const LEARNABLE = { driveMimeType: GOOGLE_DOC };
 
 /**
- * The most learning one item costs: two injection screens (a doc is screened again before
- * extraction, since it can change) of the longest text memory reads, `classify`, extraction and
- * embedding.
+ * The most learning one item costs: two injection screens (a doc or an invite is screened again
+ * before extraction, since it can change) of the longest text memory reads, `classify`,
+ * extraction and embedding.
  */
 export function creditsPerItem(): number {
   return (
-    2 * estimateScreenCredits(Math.max(MAX_TEXT_CHARS, MAX_DOC_CHARS)) +
+    2 * estimateScreenCredits(Math.max(MAX_TEXT_CHARS, MAX_DOC_CHARS, MAX_INVITE_CHARS)) +
     CREDIT_ESTIMATES.classify +
     CREDIT_ESTIMATES.fast +
     CREDIT_ESTIMATES.embed
@@ -54,6 +58,15 @@ export async function estimate(ctx: Ctx): Promise<MemoryEstimate> {
   const items = await countStoredItems(ctx, LEARNABLE);
   const perItem = creditsPerItem();
   return { items, creditsPerItem: perItem, credits: items * perItem };
+}
+
+/**
+ * Whether an admin has started memory in the org: the Calendar poll then reads every calendar
+ * for memory (ADR-0029). Jobs only.
+ */
+export async function hasMemoryStarted(ctx: Ctx): Promise<boolean> {
+  requireSystem(ctx);
+  return (await forOrg(ctx).count(memorySettings)) > 0;
 }
 
 export async function settingsOf(ctx: Ctx) {
@@ -72,25 +85,32 @@ export async function spentThisMonth(ctx: Ctx): Promise<number> {
 export async function startMemory(ctx: Ctx, input: MemoryBudget): Promise<void> {
   requireRole(ctx, "admin", "system");
   const monthlyBudget = budgetOf(input);
-  const inserted = await forOrg(ctx).insert(
-    memorySettings,
-    { monthlyBudget, startedAt: new Date(), startedByUserId: ctx.userId },
-    { onConflictDoNothing: true },
-  );
-  if (inserted.length === 0) throw new ConflictError("Memory has already started.");
-  await sendMemoryStarted(ctx.orgId);
+  await saveWithEvents(ctx, async (tx, emit) => {
+    const inserted = await tx.insert(
+      memorySettings,
+      { monthlyBudget, startedAt: clockNow(), startedByUserId: ctx.userId },
+      { onConflictDoNothing: true },
+    );
+    if (inserted.length === 0) throw new ConflictError("Memory has already started.");
+    // Memory starts once in an org, so its start is one event.
+    emit(memoryStarted, { orgId: ctx.orgId }, `memory-started-${ctx.orgId}`);
+  });
 }
 
 /** Changes the monthly budget. Items postponed under the old one are tried again. */
 export async function setMemoryBudget(ctx: Ctx, input: MemoryBudget): Promise<void> {
   requireRole(ctx, "admin", "system");
   const monthlyBudget = budgetOf(input);
-  const updated = await forOrg(ctx).update(memorySettings, {
-    monthlyBudget,
-    updatedAt: new Date(),
+  await saveWithEvents(ctx, async (tx, emit) => {
+    const updatedAt = clockNow();
+    const updated = await tx.update(memorySettings, { monthlyBudget, updatedAt });
+    if (updated.length === 0) throw new ConflictError("Memory hasn't started yet.");
+    emit(
+      postponedDue,
+      { orgId: ctx.orgId },
+      `memory-budget-${ctx.orgId}-${String(updatedAt.getTime())}`,
+    );
   });
-  if (updated.length === 0) throw new ConflictError("Memory hasn't started yet.");
-  await sendPostponedDue([ctx.orgId]);
 }
 
 function budgetOf(input: MemoryBudget): number {
@@ -162,7 +182,7 @@ export async function resumePostponed(
 ): Promise<{ queued: number }> {
   requireSystem(ctx);
   const db = forOrg(ctx);
-  const began = new Date();
+  const began = clockNow();
   let queued = 0;
   for (;;) {
     const items = await db.select(postponedItems, {
@@ -174,15 +194,22 @@ export async function resumePostponed(
     });
     if (items.length === 0) return { queued };
     const keys = items.map((item) => sql`(${item.connectionId}, ${item.app}, ${item.sourceRef})`);
-    await db.delete(
-      postponedItems,
-      sql`(${postponedItems.connectionId}, ${postponedItems.app}, ${postponedItems.sourceRef}) in (${sql.join(keys, sql`, `)})`,
-    );
-    await sendItemsQueued(
-      ctx.orgId,
-      items.map(({ connectionId, app, sourceRef }) => ({ connectionId, app, sourceRef })),
-    );
-    queued += items.length;
+    // Each item leaves the list in the same transaction as its event is written (ADR-0027), so
+    // a failed send loses no item. The event's ID names when it was postponed.
+    queued += await saveWithEvents(ctx, async (tx, emit) => {
+      const resumed = await tx.delete(
+        postponedItems,
+        sql`(${postponedItems.connectionId}, ${postponedItems.app}, ${postponedItems.sourceRef}) in (${sql.join(keys, sql`, `)})`,
+      );
+      for (const { connectionId, app, sourceRef, postponedAt } of resumed) {
+        emit(
+          itemQueued,
+          { orgId: ctx.orgId, connectionId, app, sourceRef },
+          `memory-resumed-${connectionId}-${app}-${sourceRef}-${String(postponedAt.getTime())}`,
+        );
+      }
+      return resumed.length;
+    });
   }
 }
 

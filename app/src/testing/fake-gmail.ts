@@ -1,9 +1,9 @@
 // A fake Gmail mailbox, served through the fake Nango's proxy. It answers the Gmail API calls
 // Mycel makes (users.getProfile, users.messages.list and get, users.history.list,
-// users.threads.get, users.labels.list, users.drafts.list and get, and the writes in
-// fake-gmail-writes.ts) in the shapes Google documents, from messages a test seeds. A test can
-// also send or delete a draft, and trash or delete a message, itself, as the person would in
-// Gmail.
+// users.threads.get, users.labels.list, users.drafts.list and get, the writes in
+// fake-gmail-writes.ts, and users.watch in fake-gmail-watch.ts) in the shapes Google documents,
+// from messages a test seeds. A test can also send or delete a draft, and trash or delete a
+// message, itself, as the person would in Gmail.
 import { HttpResponse } from "msw";
 import {
   draftMessage,
@@ -21,6 +21,7 @@ import {
   type FakeDraft,
   type WritableMailbox,
 } from "./fake-gmail-writes";
+import { FakeGmailWatches } from "./fake-gmail-watch";
 
 export type { FakeMessageInput, GmailMessage };
 
@@ -55,6 +56,8 @@ export class FakeMailbox implements WritableMailbox {
   private draftMessages: GmailMessage[] = [];
   /** Its labels and drafts, and the writes it was asked for. */
   readonly writes = new FakeGmailWrites();
+  /** The watches asked of it (users.watch). */
+  readonly watches = new FakeGmailWatches();
   private history: HistoryRecord[] = [];
   // History IDs below this one have expired: Gmail keeps history for about a week.
   private oldestHistoryId = 0;
@@ -119,17 +122,33 @@ export class FakeMailbox implements WritableMailbox {
   }
 
   /**
-   * users.messages.list: newest first, filtered by `q=after:<epoch seconds>` and to messages
-   * with every label in `labelIds`, paged. Like Gmail, it leaves out spam and trash unless
-   * `includeSpamTrash=true`, and lists drafts.
+   * users.messages.list: newest first, filtered by `q` and to messages with every label in
+   * `labelIds`, paged. Of `q` it reads `after:` and `before:` with epoch seconds, and `from:` and
+   * `subject:` with a quoted phrase, which matches a header holding its words in order, as
+   * Gmail matches words regardless of case and punctuation; other words it ignores. Like Gmail,
+   * it leaves out spam and trash unless `includeSpamTrash=true`, and lists drafts.
    */
   list(params: URLSearchParams) {
-    const after = /after:(\d+)/.exec(params.get("q") ?? "")?.[1];
+    const q = params.get("q") ?? "";
+    const after = /after:(\d+)/.exec(q)?.[1];
+    const before = /before:(\d+)/.exec(q)?.[1];
+    const phrases = [...q.matchAll(/(from|subject):"([^"]*)"/g)].map(([, header, words]) => ({
+      header: header === "from" ? "From" : "Subject",
+      words: searchWords(words),
+    }));
     const spamTrash = params.get("includeSpamTrash") === "true";
     const labelIds = params.getAll("labelIds");
     const matching = this.messages
       .filter((m) => spamTrash || !m.labelIds.some((l) => l === "SPAM" || l === "TRASH"))
       .filter((m) => after === undefined || Number(m.internalDate) > Number(after) * 1000)
+      .filter((m) => before === undefined || Number(m.internalDate) < Number(before) * 1000)
+      .filter((m) =>
+        phrases.every(({ header, words }) =>
+          m.payload.headers.some(
+            (h) => h.name === header && ` ${searchWords(h.value)} `.includes(` ${words} `),
+          ),
+        ),
+      )
       .filter((m) => labelIds.every((id) => m.labelIds.includes(id)))
       .sort((a, b) => Number(b.internalDate) - Number(a.internalDate));
     const pageSize = Math.min(Number(params.get("maxResults") ?? 100), 500);
@@ -342,4 +361,13 @@ function minimal(message: GmailMessage) {
 export function gmailError(code: 404 | 429, status: string) {
   const message = code === 404 ? "Requested entity was not found." : "User-rate limit exceeded.";
   return HttpResponse.json({ error: { code, message, status } }, { status: code });
+}
+
+// Text as Gmail's search matches it: its words, lower case, without punctuation.
+function searchWords(text: string): string {
+  return text
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((word) => word !== "")
+    .join(" ");
 }

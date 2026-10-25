@@ -6,6 +6,7 @@ import { env, modelIdSchema } from "@/env";
 import type { ModelRole } from "@/features/spec/types";
 import { requireAdmin, type Ctx } from "@/lib/ctx";
 import { ValidationError } from "@/lib/errors";
+import { now } from "@/lib/time";
 import { modelRoles } from "./schema";
 
 const DEFAULT_MODELS: Record<ModelRole, string> = {
@@ -15,6 +16,23 @@ const DEFAULT_MODELS: Record<ModelRole, string> = {
   judge: env.MODEL_JUDGE,
   embed: env.MODEL_EMBED,
 };
+
+/**
+ * Each role's context window in tokens, from config: the most its model reads at once. Per role,
+ * not per model, like the credit estimates; an org's own model for a role keeps the role's figure.
+ */
+export const CONTEXT_WINDOWS: Record<ModelRole, number> = {
+  classify: env.CONTEXT_WINDOW_CLASSIFY,
+  fast: env.CONTEXT_WINDOW_FAST,
+  smart: env.CONTEXT_WINDOW_SMART,
+  judge: env.CONTEXT_WINDOW_JUDGE,
+  embed: env.CONTEXT_WINDOW_EMBED,
+};
+
+/** Whether a model is a decision model, asked through experimental_decide (config lists them). */
+export function isDecisionModel(modelId: string): boolean {
+  return env.MODEL_DECISION_PREFIXES.some((prefix) => modelId.startsWith(prefix));
+}
 
 /** The gateway model ID the role names in the caller's org. */
 export async function resolveModel(ctx: Ctx, role: ModelRole): Promise<string> {
@@ -30,7 +48,7 @@ export async function setModelRole(ctx: Ctx, role: ModelRole, modelId: string): 
 
   const db = forOrg(ctx);
   const where = eq(modelRoles.role, role);
-  const set = { modelId: parsed.data, updatedAt: new Date() };
+  const set = { modelId: parsed.data, updatedAt: now() };
   if ((await db.update(modelRoles, set, where)).length > 0) return;
   const inserted = await db.insert(modelRoles, { role, ...set }, { onConflictDoNothing: true });
   // Another write inserted the row first: this one still wins, as the latest.

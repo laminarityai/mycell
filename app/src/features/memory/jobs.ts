@@ -3,7 +3,14 @@ import "server-only";
 import { cron } from "inngest";
 import { listOrgIds } from "@/features/orgs/server";
 import { systemCtx } from "@/lib/ctx";
-import { creditsGranted, itemChanged, itemRemoved, itemStored } from "@/lib/events";
+import {
+  calendarEventChanged,
+  calendarEventRemoved,
+  creditsGranted,
+  itemChanged,
+  itemRemoved,
+  itemStored,
+} from "@/lib/events";
 import { inngest, stepRunner } from "@/lib/inngest";
 import {
   exclusionAdded,
@@ -12,9 +19,9 @@ import {
   personForgotten,
   postponedDue,
   retentionDue,
-  sendPostponedDue,
-  sendRetentionDue,
-} from "./lib/events";
+  toldFactDeleted,
+} from "./events";
+import { sendPostponedDue, sendRetentionDue } from "./lib/events";
 import {
   applyRetention,
   deleteRemovedItem,
@@ -22,9 +29,10 @@ import {
   forgetPersonAgain,
   learnFromItem,
   pruneAccessLog,
+  purgeDeletedToldFacts,
   queueStoredItems,
   rereadAccess,
-  rereadDriveAccess,
+  rereadAllAccess,
   resumePostponed,
 } from "./server";
 
@@ -40,12 +48,17 @@ const PER_ORG = [{ scope: "env", key: '"memory-org-" + event.data.orgId', limit:
 const DEFAULT_ATTEMPTS = 5;
 
 /**
- * Learns from each item discovery stores, and each item memory queues itself. One item at a
- * time per org, so two items never race to create the same object. On its last attempt, an
+ * Learns from each item discovery stores, each Calendar event the Calendar poll finds made or
+ * changed (a version learned already is skipped), and each item memory queues itself. One item
+ * at a time per org, so two items never race to create the same object. On its last attempt, an
  * item the injection screen still fails on is postponed rather than lost.
  */
 export const learnJob = inngest.createFunction(
-  { id: "memory-learn-item", triggers: [itemStored, itemQueued], concurrency: [...PER_ORG] },
+  {
+    id: "memory-learn-item",
+    triggers: [itemStored, itemQueued, calendarEventChanged],
+    concurrency: [...PER_ORG],
+  },
   async ({ event, step, attempt, maxAttempts }) =>
     learnFromItem(
       systemCtx(event.data.orgId),
@@ -126,9 +139,13 @@ export const pruneAccessLogJob = inngest.createFunction(
   },
 );
 
-/** Deletes what memory learned from each item discovery finds gone from its app. */
+/** Deletes what memory learned from each item discovery, or the Calendar poll, finds gone. */
 export const deleteRemovedItemJob = inngest.createFunction(
-  { id: "memory-delete-removed-item", triggers: [itemRemoved], concurrency: [...PER_ORG] },
+  {
+    id: "memory-delete-removed-item",
+    triggers: [itemRemoved, calendarEventRemoved],
+    concurrency: [...PER_ORG],
+  },
   async ({ event, step }) =>
     step.run("delete", () =>
       deleteRemovedItem(systemCtx(event.data.orgId), {
@@ -139,9 +156,16 @@ export const deleteRemovedItemJob = inngest.createFunction(
     ),
 );
 
-/** Reads again who may see each Drive file discovery finds changed in place. */
+/**
+ * Reads again who may see each Drive file discovery finds changed in place, and each Calendar
+ * event the Calendar poll finds changed (its guests, perhaps, which leave its version as it was).
+ */
 export const rereadAccessJob = inngest.createFunction(
-  { id: "memory-reread-access", triggers: [itemChanged], concurrency: [...PER_ORG] },
+  {
+    id: "memory-reread-access",
+    triggers: [itemChanged, calendarEventChanged],
+    concurrency: [...PER_ORG],
+  },
   async ({ event, step }) =>
     step.run("reread", () =>
       rereadAccess(systemCtx(event.data.orgId), {
@@ -153,12 +177,13 @@ export const rereadAccessJob = inngest.createFunction(
 );
 
 /**
- * Every night at 04:30 UTC, reads again who may see each Drive file memory learned from, in
- * each org: the backstop for a sharing change or removal the changes feed missed.
+ * Every night at 04:30 UTC, reads again who may see each Drive file and Calendar event memory
+ * learned from, in each org: the backstop for a sharing change or removal the changes feed, or
+ * the Calendar poll, missed.
  */
-export const rereadDriveAccessJob = inngest.createFunction(
+export const rereadAllAccessJob = inngest.createFunction(
   {
-    id: "memory-reread-drive-access",
+    id: "memory-reread-access-nightly",
     triggers: [cron("TZ=UTC 30 4 * * *")],
     // One run at a time: a slow run must not overlap the next.
     concurrency: [{ limit: 1 }],
@@ -166,14 +191,14 @@ export const rereadDriveAccessJob = inngest.createFunction(
   async ({ step }) => {
     const orgIds = await step.run("list-orgs", () => listOrgIds());
     const run = stepRunner(step);
-    let files = 0;
+    let items = 0;
     for (const orgId of orgIds) {
-      const done = await rereadDriveAccess(systemCtx(orgId), (id, work) =>
+      const done = await rereadAllAccess(systemCtx(orgId), (id, work) =>
         run(`${orgId}-${id}`, work),
       );
-      files += done.files;
+      items += done.items;
     }
-    return { orgs: orgIds.length, files };
+    return { orgs: orgIds.length, items };
   },
 );
 
@@ -206,5 +231,19 @@ export const retentionCron = inngest.createFunction(
  */
 export const applyRetentionJob = inngest.createFunction(
   { id: "memory-apply-retention", triggers: [retentionDue], concurrency: [...PER_ORG] },
-  async ({ event, step }) => step.run("apply", () => applyRetention(systemCtx(event.data.orgId))),
+  async ({ event, step }) => {
+    const applied = await step.run("apply", () => applyRetention(systemCtx(event.data.orgId)));
+    // The backstop for a deleted told fact whose own job didn't run.
+    await step.run("purge-deleted-notes", () => purgeDeletedToldFacts(systemCtx(event.data.orgId)));
+    return applied;
+  },
+);
+
+/** Once a deleted told fact's undo window ends, deletes the org's past theirs for good. */
+export const purgeDeletedToldFactsJob = inngest.createFunction(
+  { id: "memory-purge-deleted-told-facts", triggers: [toldFactDeleted], concurrency: [...PER_ORG] },
+  async ({ event, step }) => {
+    await step.sleepUntil("undo-window", event.data.purgeAt);
+    return step.run("purge", () => purgeDeletedToldFacts(systemCtx(event.data.orgId)));
+  },
 );

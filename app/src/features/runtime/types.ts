@@ -5,16 +5,6 @@ import type { ModelRole, Spec, StepType } from "@/features/spec/types";
 import type { Json } from "@/lib/inngest";
 import { z } from "zod";
 
-/**
- * How often a failing step is tried, and how long it waits before attempt `attempt + 1`. The
- * attempts run inside the step, so each one is counted on the step's record.
- */
-export type RetryPolicy = {
-  attempts: number;
-  delayMs: (attempt: number) => number;
-  sleep: (ms: number) => Promise<void>;
-};
-
 export const runStatuses = [
   "running",
   "succeeded",
@@ -142,10 +132,11 @@ export type RunRecord = {
 };
 
 /**
- * What started a run: an admin by hand, a member's enablement, an org workflow's switch, or a
- * retry of a failed run by its inbox's reader.
+ * What started a run: an admin by hand, a member's enablement, an org workflow's switch, a
+ * retry of a failed run by its inbox's reader, or a person from Ask Mycel (`agent`), on a
+ * message they picked, under their enablement.
  */
-export const runStartedBy = ["manual", "enablement", "org_switch", "retry"] as const;
+export const runStartedBy = ["manual", "enablement", "org_switch", "retry", "agent"] as const;
 export type RunStartedBy = (typeof runStartedBy)[number];
 
 /**
@@ -153,6 +144,31 @@ export type RunStartedBy = (typeof runStartedBy)[number];
  * words for the run page, the message `retryRun` would refuse with.
  */
 export type RetryCheck = { allowed: true } | { allowed: false; why: string };
+
+/**
+ * A run Ask Mycel may start (`checkRunFromAgent`): the person's own switched-on workflow, the
+ * inbox it runs on (theirs) and the message in it.
+ */
+export type AgentRunStart = {
+  workflowId: string;
+  workflowName: string;
+  connectionId: string;
+  sourceRef: string;
+};
+
+/** One run Ask Mycel offered: the message it's on, and the run it started, if one did. */
+export type AgentRunOffer = { connectionId: string; sourceRef: string; runId: string | null };
+
+/**
+ * What Ask Mycel shows of a run it offered (`agentRunDetails`): the message's sender, subject and
+ * date, fetched from Gmail for display only and never stored (invariant 8), and the run, once
+ * one started. `message` is null when Gmail no longer has it or the inbox isn't the caller's;
+ * `run` is null before it started, or when the caller may not read it.
+ */
+export type AgentRunDetail = {
+  message: { from: string; subject: string; receivedAt: Date } | null;
+  run: { id: string; status: RunStatus } | null;
+};
 
 /** Which runs `listRuns` lists: each filter left out lets every value through. */
 export type RunFilters = { workflowId?: string; status?: RunStatus; connectionId?: string };
@@ -262,15 +278,70 @@ export type RunFilterOptions = {
 export type RunPage = { runs: RunListItem[]; newer: string | null; older: string | null };
 
 /**
+ * What edits suggested in a Doc need for their approval that Docs doesn't show Mycel: the IDs of
+ * the suggestions the step made, which tell them from the person's own (ADR-0017). IDs only,
+ * never the suggested text (invariant 8).
+ */
+export const suggestedEditsDetailsSchema = z.object({
+  kind: z.literal("suggested_edits"),
+  suggestionIds: z.array(z.string().min(1)).min(1),
+});
+export type SuggestedEditsDetails = z.infer<typeof suggestedEditsDetailsSchema>;
+
+/**
+ * What a booked Calendar event needs for its approval that Calendar doesn't hold yet: the guests
+ * to invite and how the event shows once approved. Addresses and settings only, never the
+ * event's title or description (invariant 8).
+ */
+export const calendarEventDetailsSchema = z.object({
+  kind: z.literal("calendar_event"),
+  guests: z.array(z.string().min(1)).min(1),
+  visibility: z.enum(["default", "public", "private", "confidential"]),
+  transparency: z.enum(["opaque", "transparent"]),
+});
+export type CalendarEventDetails = z.infer<typeof calendarEventDetailsSchema>;
+
+/**
+ * What a waiting item's approval needs that its app doesn't show or hold yet, kept on its review,
+ * told apart by its kind: a Doc's suggestions or a meeting's guests and settings.
+ */
+export const pendingDetailsSchema = z.discriminatedUnion("kind", [
+  suggestedEditsDetailsSchema,
+  calendarEventDetailsSchema,
+]);
+export type PendingDetails = z.infer<typeof pendingDetailsSchema>;
+
+/**
  * What one step of a dry run read or would have written, shown to the admin who tried it and
  * never stored (invariant 8): the rows a read-range read, the draft it would have made, the
  * label or row it would have added, the review it would have waited for.
  */
 export type DryRunEffect =
   | { kind: "rows_read"; range: string; rows: string[][] }
+  /** A booking, as it would wait on the calendar until approved (nothing is made). */
+  | {
+      kind: "event";
+      title: string;
+      start: string;
+      end: string;
+      guests: string[];
+      meet: boolean;
+    }
   | { kind: "draft"; to: string; subject: string; text: string }
   | { kind: "label"; label: string }
   | { kind: "row"; range: string; values: (string | number | boolean | null)[] }
+  /** Edits a step would suggest in a Doc: its title, and each request's kind and text. */
+  | { kind: "suggestions"; documentId: string; title: string; requests: string[] }
+  /** A task it would add to the default list: its title, notes as written, and due date. */
+  | { kind: "task"; title: string; notes: string; due: string | null }
+  /** What it would change on a task; null for what it leaves as it is. */
+  | {
+      kind: "task_update";
+      title: string | null;
+      notes: string | null;
+      due: string | null;
+      done: boolean | null;
+    }
   | { kind: "review"; channel: string }
   /** A custom write's request, exactly as it would be sent once approved (nothing is sent). */
   | {
@@ -349,6 +420,33 @@ export type RecentMessages = {
   kind: "member" | "org";
   messages: { sourceRef: string; subject: string; from: string; date: string }[];
   unavailable: boolean;
+};
+
+/**
+ * A search of one mailbox by its messages' headers: a sender and a subject, each matched as
+ * words, and when it arrived (from `after`, until before `before`). Nothing given finds the
+ * newest messages.
+ */
+export type MessageSearch = {
+  from?: string;
+  subject?: string;
+  after?: Date;
+  before?: Date;
+  limit: number;
+};
+
+/** Where a message is: its connection and its Gmail ID. */
+export type MessageRef = { connectionId: string; sourceRef: string };
+
+/**
+ * A message's sender and subject, as its headers give them, and when Gmail received it, with
+ * the account whose mailbox holds it. Fetched to show or hand a model, never stored.
+ */
+export type MessageHeaders = MessageRef & {
+  accountEmail: string;
+  from: string;
+  subject: string;
+  receivedAt: Date;
 };
 
 /** Whether runtime can execute each catalog action and step type yet. */

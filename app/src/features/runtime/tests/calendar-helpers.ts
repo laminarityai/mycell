@@ -7,7 +7,7 @@ import { systemCtx } from "@/lib/ctx";
 import { connectGoogle } from "@/testing/connect-helpers";
 import { fakeInngest } from "@/testing/fake-inngest";
 import { publishTo, tagUsers } from "@/testing/visibility-helpers";
-import type { CalendarInviteReceived } from "../lib/events";
+import type { CalendarInviteReceived } from "../events";
 
 /** The organizer's domain this spec's first path takes. */
 export const CUSTOMER_DOMAIN = "customer.test";

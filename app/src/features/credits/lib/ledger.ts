@@ -1,12 +1,14 @@
 // Credits first (invariant 7): every model call checks the balance before it's made, and records
 // what it cost after. The balance is the sum of the org's ledger.
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, gte } from "drizzle-orm";
-import { forOrg } from "@/db/for-org";
+import { and, desc, eq, gte, lt, type SQL } from "drizzle-orm";
+import { forOrg, type OrgScopedDb } from "@/db/for-org";
 import { env } from "@/env";
+import { saveWithEvents } from "@/features/outbox/server";
 import { type Ctx, requireRole, requireSystem } from "@/lib/ctx";
 import { InvariantError, OutOfCreditsError, ValidationError } from "@/lib/errors";
-import type { LedgerEntry, SpendingQuery, Usage } from "../types";
+import { creditsGranted } from "@/lib/events";
+import type { LedgerEntry, LedgerFilter, SpendingQuery, SpendingRange, Usage } from "../types";
 import { creditLedger } from "./schema";
 
 /** The org's credits left. */
@@ -47,7 +49,19 @@ export async function checkCredits(ctx: Ctx, estimate: number): Promise<void> {
 
 /** Records one model call's cost against the org, converted to credits by the config ratio. */
 export async function recordUsage(ctx: Ctx, usage: Usage): Promise<LedgerEntry> {
-  const inserted = await forOrg(ctx).insert(creditLedger, {
+  return recordUsageIn(ctx, forOrg(ctx), usage);
+}
+
+/**
+ * recordUsage, through a transaction of the caller's: how `models` records a failed call's
+ * usage with the event that looks up what it was billed (ADR-0027).
+ */
+export async function recordUsageIn(
+  _ctx: Ctx,
+  tx: OrgScopedDb,
+  usage: Usage,
+): Promise<LedgerEntry> {
+  const inserted = await tx.insert(creditLedger, {
     id: randomUUID(),
     kind: "usage",
     amount: usageAmount(usage.costUsd),
@@ -73,31 +87,59 @@ export function usageAmount(costUsd: number): number {
   return -(costUsd * env.CREDITS_PER_USD) || 0;
 }
 
-/** Adds credits to the org. Our team only, through the grant script's system ctx. */
-export async function grantCredits(ctx: Ctx, amount: number): Promise<LedgerEntry> {
+/** The longest note a grant keeps. */
+const NOTE_MAX = 200;
+
+/**
+ * Adds credits to the org, with what they're for ("October allowance"), which the Credits page
+ * shows, and announces it (`credits/granted`, through the outbox, ADR-0027): work that stopped
+ * for want of credits goes on. Our team only, through the grant script's system ctx, which
+ * always passes a note.
+ */
+export async function grantCredits(ctx: Ctx, amount: number, note?: string): Promise<LedgerEntry> {
   requireSystem(ctx);
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new ValidationError("A grant is a positive number of credits.");
   }
-  const inserted = await forOrg(ctx).insert(creditLedger, {
-    id: randomUUID(),
-    kind: "grant",
-    amount,
+  const trimmed = note?.trim();
+  if (trimmed !== undefined && (trimmed === "" || trimmed.length > NOTE_MAX)) {
+    throw new ValidationError(`A grant's note is 1 to ${String(NOTE_MAX)} characters.`);
+  }
+  const row = await saveWithEvents(ctx, async (tx, emit) => {
+    const inserted = await tx.insert(creditLedger, {
+      id: randomUUID(),
+      kind: "grant",
+      amount,
+      note: trimmed ?? null,
+    });
+    const grant = inserted.at(0);
+    // A bug, as above.
+    if (grant === undefined) throw new InvariantError("The grant wasn't recorded.");
+    emit(creditsGranted, { orgId: ctx.orgId }, `credits-granted-${grant.id}`);
+    return grant;
   });
-  const row = inserted.at(0);
-  // A bug, as above.
-  if (row === undefined) throw new InvariantError("The grant wasn't recorded.");
   return toEntry(row);
 }
 
-/** The org's ledger, newest first. Admins (and jobs) only. */
-export async function listLedger(ctx: Ctx, limit = 100): Promise<LedgerEntry[]> {
+/** The org's ledger, newest first, filtered. Admins (and jobs) only. */
+export async function listLedger(ctx: Ctx, filter: LedgerFilter = {}): Promise<LedgerEntry[]> {
   requireRole(ctx, "admin", "system");
+  const { kind, workflowId, range } = filter;
   const rows = await forOrg(ctx).select(creditLedger, {
+    where: and(
+      kind === undefined ? undefined : eq(creditLedger.kind, kind),
+      workflowId === undefined ? undefined : eq(creditLedger.workflowId, workflowId),
+      range === undefined ? undefined : inRange(range),
+    ),
     orderBy: [desc(creditLedger.createdAt), desc(creditLedger.id)],
-    limit,
+    limit: filter.limit ?? 100,
   });
   return rows.map(toEntry);
+}
+
+/** The ledger's entries made in `range`. */
+export function inRange(range: SpendingRange): SQL | undefined {
+  return and(gte(creditLedger.createdAt, range.from), lt(creditLedger.createdAt, range.to));
 }
 
 export function toEntry(row: typeof creditLedger.$inferSelect): LedgerEntry {
@@ -114,6 +156,7 @@ export function toEntry(row: typeof creditLedger.$inferSelect): LedgerEntry {
     runId: row.runId,
     dryRun: row.dryRun,
     purpose: row.purpose,
+    note: row.note,
     correctsId: row.correctsId,
     createdAt: row.createdAt,
   };

@@ -165,6 +165,27 @@ describe("read_examples", () => {
     }
   });
 
+  it("tells the agent in every request to describe the examples, never quote them (ADR-0028)", async () => {
+    const { orgA } = await seedTwoOrgs();
+    const inbox = await connectGoogle(orgA.admin.ctx, "support@org-a.test", {
+      kind: "org",
+      messages: [pricingQuestion],
+    });
+    const { conversationId } = await readExamplesTurn(orgA, inbox.id);
+    fakeAiGateway.reply({ text: "Shall I draft it?" });
+    await readTurn(await streamTurn(orgA.admin.ctx, conversationId, "Go on"));
+
+    // The turn's request before the call, the one after it, and the next turn's.
+    const requests = fakeAiGateway.requests("language");
+    expect(requests).toHaveLength(3);
+    for (const request of requests) {
+      // The prompt's lines are wrapped, so its words are compared without the line breaks.
+      const text = JSON.stringify(request.body).replace(/\\n\s*/g, " ");
+      expect(text).toContain("Describe them in your own words and never quote them");
+      expect(text).toContain("never quote what you read");
+    }
+  });
+
   it("doesn't fetch the messages again when the conversation goes on", async () => {
     const { orgA } = await seedTwoOrgs();
     const inbox = await connectGoogle(orgA.admin.ctx, "support@org-a.test", {

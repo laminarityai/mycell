@@ -4,8 +4,10 @@ import { member, organization } from "@/db/auth-schema";
 import { getDb } from "@/db/client";
 import type { Ctx, Role } from "@/lib/ctx";
 import { InvariantError, WorkspaceAccountRequiredError } from "@/lib/errors";
+import { now } from "@/lib/time";
 import type { VerifiedGoogleProfile } from "../types";
 import { findCtx } from "./find-ctx";
+import { assertNotRemoved } from "./removed-users";
 
 export async function signIn(profile: VerifiedGoogleProfile): Promise<Ctx> {
   if (profile.hd === undefined || profile.hd === "") throw new WorkspaceAccountRequiredError();
@@ -20,7 +22,7 @@ export async function signIn(profile: VerifiedGoogleProfile): Promise<Ctx> {
         name: domain,
         slug: domain,
         workspaceDomain: domain,
-        createdAt: new Date(),
+        createdAt: now(),
       })
       // No conflict target: the slug is the domain too, and a racing first sign-in can trip
       // its unique constraint before the domain's. Any conflict means the org exists, so this
@@ -30,12 +32,14 @@ export async function signIn(profile: VerifiedGoogleProfile): Promise<Ctx> {
     const created = inserted.at(0);
     const role: Role = created === undefined ? "member" : "admin";
     const orgId = created?.id ?? (await orgIdForDomain(tx, domain));
+    // Someone an admin removed doesn't rejoin until an admin re-adds them.
+    if (created === undefined) await assertNotRemoved(tx, orgId, profile.userId);
     await tx.insert(member).values({
       id: randomUUID(),
       organizationId: orgId,
       userId: profile.userId,
       role,
-      createdAt: new Date(),
+      createdAt: now(),
     });
     return { orgId, userId: profile.userId, role };
   });

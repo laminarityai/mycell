@@ -7,12 +7,14 @@ import {
   findUncostedFailedCall,
   recordFailedCallCost,
   recordUsage,
+  recordUsageIn,
 } from "@/features/credits/server";
 import type { Usage } from "@/features/credits/types";
+import { saveWithEvents } from "@/features/outbox/server";
 import { type Ctx, requireSystem } from "@/lib/ctx";
-import { DAY_MS } from "@/lib/time";
+import { DAY_MS, now } from "@/lib/time";
+import { failedCallRecorded } from "../events";
 import type { FailedCallCostOutcome } from "../types";
-import { sendFailedCallRecorded } from "./events";
 import { lookUpGenerationCost } from "./generation-lookup";
 
 /** How long after a failed call its billed cost is looked for, before giving up. */
@@ -23,16 +25,16 @@ const LOOKUP_WINDOW_MS = DAY_MS;
  * the lookup of what it was billed.
  */
 export async function recordCallUsage(ctx: Ctx, usage: Usage): Promise<void> {
-  const entry = await recordUsage(ctx, usage);
   if (usage.outcome !== "failed" || usage.costUsd !== 0 || usage.generationId === undefined) {
+    await recordUsage(ctx, usage);
     return;
   }
-  try {
-    await sendFailedCallRecorded(ctx.orgId, entry.id);
-  } catch {
-    // The call failed already, and its entry stands; Inngest's event API failing too must not
-    // replace the call's own error. The entry then stays at 0, as with no generation ID.
-  }
+  // The entry and its lookup are saved together (ADR-0027). Inngest's event API failing too
+  // doesn't replace the call's own error: the outbox job sends the lookup a minute later.
+  await saveWithEvents(ctx, async (tx, emit) => {
+    const entry = await recordUsageIn(ctx, tx, usage);
+    emit(failedCallRecorded, { orgId: ctx.orgId, entryId: entry.id }, `failed-call-${entry.id}`);
+  });
 }
 
 /**
@@ -46,7 +48,7 @@ export async function correctFailedCallCost(
   requireSystem(ctx);
   const call = await findUncostedFailedCall(ctx, entryId);
   if (call === undefined) return "nothing_to_correct";
-  if (Date.now() - call.createdAt.getTime() > LOOKUP_WINDOW_MS) return "given_up";
+  if (now().getTime() - call.createdAt.getTime() > LOOKUP_WINDOW_MS) return "given_up";
   const costUsd = await lookUpGenerationCost(call.generationId);
   if (costUsd === undefined) return "not_billed_yet";
   const correction = await recordFailedCallCost(ctx, call.id, costUsd);

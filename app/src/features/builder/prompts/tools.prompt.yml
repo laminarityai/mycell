@@ -23,7 +23,7 @@ proposeSpecSummary: |-
   One or two plain sentences on what it does or changes.
 
 readExamples: |-
-  Search the mail of one connection listed under Connections, with Gmail's search syntax (from:, subject:, newer_than:7d, free words), and read up to 5 of the newest matches: sender, date, subject and the start of the body. Only for grounding a workflow in real messages; you won't see them again later in the conversation unless you search again.
+  Search the mail of one connection listed under Connections, with Gmail's search syntax (from:, subject:, newer_than:7d, free words), and read up to 5 of the newest matches: sender, date, subject and the start of the body. Only for grounding a workflow in real messages: describe them in your own words and never quote what you read. You won't see them again later in the conversation unless you search again.
 
 searchMemory: |-
   Search the company's memory: short facts about the people, companies, deals, projects and documents in the company's mail and files, each from a source everyone in the company can see (no one's private mail). Use it to learn how the company works before proposing a workflow. It finds facts by their words, by a name, or by an email address or domain in the query.

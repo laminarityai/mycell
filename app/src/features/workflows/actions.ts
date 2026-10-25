@@ -11,6 +11,7 @@ import {
   enable,
   publishWorkflow,
   restoreWorkflow,
+  resumeWorkflow,
   saveWorkflow,
   switchWorkflowOff,
   switchWorkflowOn,
@@ -127,6 +128,19 @@ export async function restoreWorkflowAction(
     form,
     workflowForm,
     (ctx, { workflowId }) => restoreWorkflow(ctx, workflowId),
+    { after: refresh },
+  );
+}
+
+/** Resumes a workflow its runs' failures paused: new messages start runs again. */
+export async function resumeWorkflowAction(
+  _previous: ActionResult,
+  form: FormData,
+): Promise<ActionResult> {
+  return runFormAction(
+    form,
+    workflowForm,
+    (ctx, { workflowId }) => resumeWorkflow(ctx, workflowId),
     { after: refresh },
   );
 }

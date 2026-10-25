@@ -33,6 +33,8 @@ process.env.MODEL_FAST = "test/fast-default";
 process.env.MODEL_SMART = "test/smart-default";
 process.env.MODEL_JUDGE = "test/judge-default";
 process.env.MODEL_EMBED = "test/embed-default";
+// A small `smart` window, so a builder test summarizes a conversation of a few long messages.
+process.env.CONTEXT_WINDOW_SMART = "10000";
 // The injection screen reaches the fake Model Armor (src/testing/fake-model-armor.ts), which also
 // plays Google's token exchange: it accepts this Vercel OIDC token (an unsigned JWT that expires
 // in 2100) for this pool provider and service account.
@@ -52,6 +54,9 @@ process.env.VERCEL_OIDC_TOKEN = [
 process.env.GMAIL_PUSH_TOPIC = "projects/mycel-test/topics/gmail-push";
 process.env.GOOGLE_PUSH_AUDIENCE = "http://localhost:3000/api/google/gmail-push";
 process.env.GOOGLE_PUSH_SERVICE_ACCOUNT = "gmail-push-sender@mycel-test.iam.gserviceaccount.com";
+// Drive push is configured too: Drive's channels post to BETTER_AUTH_URL's /api/google/drive-push
+// with tokens signed under this secret (src/testing/fake-drive-channels.ts posts them there).
+process.env.DRIVE_PUSH_SECRET = "drive-push-test-secret-0123456789abcdef";
 // The key store reaches the fake KMS (src/testing/fake-kms.ts) at AWS's regional endpoint, and
 // the fake checks requests are signed with this access key.
 process.env.KMS_REGION = "us-east-1";

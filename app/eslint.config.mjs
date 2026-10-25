@@ -132,10 +132,76 @@ const modelCalls = {
   message:
     "Call models through @/features/models/server: it checks credits first and records the usage (invariant 7).",
 };
+// The outbox is the one place a Server Action or server function sends Inngest events
+// (ADR-0027): a change emits them in `saveWithEvents`, which saves them with it. Two kinds of send
+// stay direct: a job's own sends, made inside a step Inngest retries, and webhook handlers', which
+// send before they answer, so a failed send is delivered again.
+const processEnv = {
+  object: "process",
+  property: "env",
+  message: "Import `env` from the env module instead; it is the only place that reads process.env.",
+};
+const inngestSend = {
+  object: "inngest",
+  property: "send",
+  message:
+    "Send events through the outbox: emit them in saveWithEvents from @/features/outbox/server, with the change (ADR-0027).",
+};
+const DIRECT_SENDERS = [
+  // The outbox itself.
+  "src/features/outbox/lib/outbox.ts",
+  // Jobs' sends from inside their own steps: discovery's and the Calendar poll's announcements,
+  // memory's start and its crons' fan-outs, the Calendar trigger's invites.
+  "src/lib/events.ts",
+  "src/features/memory/lib/events.ts",
+  "src/features/runtime/lib/events.ts",
+  // Webhook handlers: Nango's connection webhooks, and Gmail's and Drive's push.
+  "src/features/connections/lib/events.ts",
+  "src/features/discovery/lib/{gmail,drive}-push.ts",
+];
+
 const MODEL_CALLERS = [
   "src/features/models/lib/{call-model,chat-tools,chat-turn,classify,embed,gateway}.ts",
   // Its tests drive the SDK against the fake AI Gateway, as its calls do.
   "src/features/models/tests/**",
+];
+
+// Server code reads the time from now() (src/lib/time.ts), which a test can set, never from
+// `new Date()` or `Date.now()`; and only tests set it. A client component ("use client") reads
+// the browser's own clock, so it's left alone.
+const clockRule = {
+  meta: {
+    type: "problem",
+    schema: [],
+    messages: {
+      clock: "Read the time with now() from @/lib/time, so a test can set it.",
+      setter: "Only tests set the clock.",
+    },
+  },
+  create(context) {
+    const isClient = context.sourceCode.ast.body.some(
+      (node) => node.type === "ExpressionStatement" && node.directive === "use client",
+    );
+    if (isClient) return {};
+    const report = (messageId) => (node) => {
+      context.report({ node, messageId });
+    };
+    return {
+      "NewExpression[callee.name='Date'][arguments.length=0]": report("clock"),
+      "CallExpression[callee.object.name='Date'][callee.property.name='now']": report("clock"),
+      "ImportDeclaration[source.value='@/lib/time'] > ImportSpecifier[imported.name=/^(setNow|resetNow)$/]":
+        report("setter"),
+    };
+  },
+};
+const CLOCK_ALLOWED = [
+  "src/lib/time.ts",
+  "src/testing/**",
+  "src/db/testing/**",
+  "src/**/tests/**",
+  "src/**/*.test.{ts,tsx}",
+  // Better Auth's generated schema, as `npx auth generate` writes it.
+  "src/db/auth-schema.ts",
 ];
 
 export default defineConfig([
@@ -177,18 +243,15 @@ export default defineConfig([
   {
     files: ["src/**/*.{ts,tsx}", "e2e/**/*.ts", "scripts/**/*.ts"],
     rules: {
-      "max-lines": ["error", { max: 300, skipBlankLines: true, skipComments: true }],
+      "max-lines": ["error", { max: 400, skipBlankLines: true, skipComments: true }],
       "import/no-default-export": "error",
-      "no-restricted-properties": [
-        "error",
-        {
-          object: "process",
-          property: "env",
-          message:
-            "Import `env` from the env module instead; it is the only place that reads process.env.",
-        },
-      ],
+      "no-restricted-properties": ["error", processEnv, inngestSend],
     },
+  },
+  {
+    // A rule's options replace, not merge: here process.env is banned without inngest.send.
+    files: DIRECT_SENDERS,
+    rules: { "no-restricted-properties": ["error", processEnv] },
   },
   {
     files: ["src/**/*.{ts,tsx}", "e2e/**/*.ts", "scripts/**/*.ts"],
@@ -201,7 +264,13 @@ export default defineConfig([
     files: ["src/**/*.{ts,tsx}"],
     // Better Auth's tables key the org as organization_id, so forOrg can't reach them. The orgs
     // feature owns them and queries them directly (docs/conventions.md, "Data access").
-    ignores: ["src/db/**", "src/features/orgs/lib/**", "src/features/*/lib/schema.ts"],
+    // The outbox job's one cross-org read, which orgs with waiting events (ADR-0027), likewise.
+    ignores: [
+      "src/db/**",
+      "src/features/orgs/lib/**",
+      "src/features/outbox/lib/waiting-orgs.ts",
+      "src/features/*/lib/schema.ts",
+    ],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -286,6 +355,12 @@ export default defineConfig([
     // Where the role helpers compare roles.
     files: ["src/lib/ctx.ts"],
     rules: { "no-restricted-syntax": ["error", ...dateFormatting, ...plainErrors, ...promptCasts] },
+  },
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: CLOCK_ALLOWED,
+    plugins: { mycel: { rules: { clock: clockRule } } },
+    rules: { "mycel/clock": "error" },
   },
   { files: ["src/env.ts"], rules: { "no-restricted-properties": "off" } },
   { files: [NEXT_DEFAULT_EXPORT_FILES], rules: { "import/no-default-export": "off" } },

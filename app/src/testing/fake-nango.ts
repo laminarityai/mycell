@@ -1,9 +1,10 @@
 // The fake Nango: an in-memory Nango Cloud behind msw's fetch interception, so tests run the
 // real Nango client without network or secrets. Only the endpoints Mycel calls, as documented.
 import { createHmac, randomUUID } from "node:crypto";
-import { http, HttpResponse } from "msw";
+import { delay, http, HttpResponse } from "msw";
 import { env } from "@/env";
 import { FakeCalendar } from "./fake-calendar";
+import { FakeDocs } from "./fake-docs";
 import { FakeDrive } from "./fake-drive";
 import { FakeMailbox } from "./fake-gmail";
 import { connectionsApiHandlers, type ListingBehaviour } from "./fake-nango-connections";
@@ -14,6 +15,7 @@ import { FakeMicrosoft } from "./fake-microsoft";
 import { type FakeReconnectSession, type FakeSession, FakeSessions } from "./fake-nango-sessions";
 import { DEFAULT_SCOPES } from "./fake-proxied-sources";
 import { FakeSheets } from "./fake-sheets";
+import { FakeTasks } from "./fake-tasks";
 
 /** What the connected account looks like from inside its source. */
 export type FakeAccount = { emailAddress: string };
@@ -28,19 +30,27 @@ export type FakeConnection = {
   account: FakeAccount;
   // The OAuth scopes the app granted, as Nango reports them in the token response.
   scopes: readonly string[];
-  // The account's Gmail mailbox, Drive, spreadsheets and primary calendar, and its Microsoft 365.
-  // The proxy reaches each through its API's host, if the connection's scopes allow that API.
+  // The account's Gmail mailbox, Drive, spreadsheets, primary calendar, documents and task lists,
+  // and its Microsoft 365. The proxy reaches each through its API's host, if the connection's
+  // scopes allow that API.
   mailbox: FakeMailbox;
   drive: FakeDrive;
   sheets: FakeSheets;
   calendar: FakeCalendar;
+  docs: FakeDocs;
+  tasks: FakeTasks;
   microsoft: FakeMicrosoft;
   // The app refused the refresh token (access revoked): the proxy can't call the source.
   refreshFails?: boolean;
 };
 
-/** Runs before the fake proxies a request to a source, given the source API path. */
-export type ProxyHook = (path: string) => void | Promise<void>;
+/**
+ * Runs before the fake proxies a request to a source, given the source API path, and the
+ * request's query and Nango connection ID.
+ */
+export type ProxyHook = (path: string, request: ProxiedRequest) => void | Promise<void>;
+
+export type ProxiedRequest = { query: URLSearchParams; connectionId: string };
 
 /** A webhook as Nango delivers it: the raw body and the headers that sign it. */
 export type FakeWebhook = { rawBody: string; headers: Headers };
@@ -50,6 +60,8 @@ class FakeNango {
   private connections = new Map<string, FakeConnection>();
   private deletesFail = false;
   private answering = true;
+  // Set while Nango takes requests and never answers: called as each one arrives.
+  private hanging: (() => void) | undefined;
   private rateLimitsLeft = 0;
   private rateLimitsServed = 0;
   private writeFailuresLeft = 0;
@@ -67,6 +79,7 @@ class FakeNango {
     this.connections.clear();
     this.deletesFail = false;
     this.answering = true;
+    this.hanging = undefined;
     this.rateLimitsLeft = 0;
     this.rateLimitsServed = 0;
     this.writeFailuresLeft = 0;
@@ -87,6 +100,11 @@ class FakeNango {
 
   /** The connected account's primary calendar, for seeding invites. */
   calendar = (connectionId: string): FakeCalendar => this.connection(connectionId).calendar;
+
+  /** The connected account's documents, for seeding docs and reading what was suggested. */
+  docs = (connectionId: string): FakeDocs => this.connection(connectionId).docs;
+  /** The connected account's task lists, for seeding tasks. */
+  tasks = (connectionId: string): FakeTasks => this.connection(connectionId).tasks;
 
   /** The connected account's Microsoft 365, for reading what was sent to it. */
   microsoft = (connectionId: string): FakeMicrosoft => this.connection(connectionId).microsoft;
@@ -136,6 +154,16 @@ class FakeNango {
    */
   stopAnswering(): void {
     this.answering = false;
+  }
+
+  /**
+   * Nango takes every request to its API, the proxy's included, and never answers (a hung
+   * connection), until the next reset. Resolves when the first such request arrives.
+   */
+  hang(): Promise<void> {
+    return new Promise((arrived) => {
+      this.hanging = arrived;
+    });
   }
 
   /** Serves at most `size` connections per page of the list endpoint, whatever is asked. */
@@ -189,6 +217,7 @@ class FakeNango {
     scopes: readonly string[] | undefined,
   ): string {
     const connectionId = randomUUID();
+    const drive = new FakeDrive(account.emailAddress);
     this.connections.set(connectionId, {
       id: this.nextId++,
       created: new Date().toISOString(),
@@ -198,9 +227,11 @@ class FakeNango {
       account,
       scopes: scopes ?? DEFAULT_SCOPES[integration] ?? [],
       mailbox: new FakeMailbox(account.emailAddress),
-      drive: new FakeDrive(account.emailAddress),
+      drive,
       sheets: new FakeSheets(),
       calendar: new FakeCalendar(account.emailAddress),
+      docs: new FakeDocs(drive),
+      tasks: new FakeTasks(),
       microsoft: new FakeMicrosoft(account.emailAddress),
     });
     return connectionId;
@@ -215,8 +246,8 @@ class FakeNango {
    * A user finishes OAuth in Connect UI opened with a reconnect session: Nango replaces the
    * connection's credentials and returns the `override` webhook it then sends. Choosing a
    * different account than before swaps in that account's (empty) mailbox, Drive, spreadsheets,
-   * calendar and Microsoft 365. The new token refreshes again, so a revoked connection reaches
-   * its source.
+   * calendar, documents, task lists and Microsoft 365. The new token refreshes again, so a
+   * revoked connection reaches its source.
    * `scopes`, when given, are what the new token was granted; otherwise they stay as they were.
    */
   completeReconnect(token: string, account?: FakeAccount, scopes?: readonly string[]): FakeWebhook {
@@ -231,6 +262,8 @@ class FakeNango {
       connection.drive = new FakeDrive(account.emailAddress);
       connection.sheets = new FakeSheets();
       connection.calendar = new FakeCalendar(account.emailAddress);
+      connection.docs = new FakeDocs(connection.drive);
+      connection.tasks = new FakeTasks();
       connection.microsoft = new FakeMicrosoft(account.emailAddress);
     }
     return this.authWebhook(session.connectionId, "override", true);
@@ -288,7 +321,13 @@ class FakeNango {
 
   readonly handlers = [
     // Checked first; a resolver that returns nothing hands the request on to the next.
-    http.all(`${NANGO_API}/*`, () => (this.answering ? undefined : HttpResponse.error())),
+    http.all(`${NANGO_API}/*`, async () => {
+      if (this.hanging !== undefined) {
+        this.hanging();
+        await delay("infinite");
+      }
+      return this.answering ? undefined : HttpResponse.error();
+    }),
     ...connectionsApiHandlers(
       () => [...this.connections.values()],
       () => this.listing,
@@ -313,7 +352,7 @@ class FakeNango {
 
     ...proxyHandlers({
       connection: (connectionId) => this.connections.get(connectionId),
-      beforeProxy: (path) => this.proxyHook?.(path),
+      beforeProxy: (path, request) => this.proxyHook?.(path, request),
       takeRateLimit: () => {
         if (this.rateLimitsLeft === 0) return false;
         this.rateLimitsLeft -= 1;

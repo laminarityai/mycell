@@ -7,15 +7,21 @@ import { connectGmail, connectMailbox } from "@/testing/connect-helpers";
 import { renameTag, unassignTag } from "@/features/tags/server";
 import { publishTo, tagUsers } from "@/testing/visibility-helpers";
 import * as server from "../server";
+import { failurePauseIsolationCases } from "./failure-pause-isolation-cases";
+import { enablementCases } from "./isolation-enablement-cases";
 import {
   currentVersionsOfOrgBUnread,
   orgBTags,
+  orgBWorkflowNotFound,
   publishedToSalesInOrgB,
   seedOrgBWorkflow,
+  specIdOfOrgBUnfound,
+  startableEnablementOfOrgBUnread,
   switchedOnInOrgB,
   orgBVersionUnstartable,
   versionsOfOrgBUnread,
 } from "./isolation-seeds";
+import { workflowBudgetsStayInOrg } from "./isolation-budgets";
 import { draftSpec, labelSpec } from "./specs";
 
 export const isolationCases = defineIsolationCases(server, {
@@ -67,11 +73,9 @@ export const isolationCases = defineIsolationCases(server, {
     expect((await server.listWorkflows(orgs.orgA.admin.ctx)).map((w) => w.id)).toEqual([own.id]);
   },
 
-  getWorkflow: async (orgs) => {
-    const { id } = await seedOrgBWorkflow(orgs);
+  getWorkflow: orgBWorkflowNotFound(server.getWorkflow),
 
-    await expect(server.getWorkflow(orgs.orgA.admin.ctx, id)).rejects.toThrow(NotFoundError);
-  },
+  getWorkflowHealth: orgBWorkflowNotFound(server.getWorkflowHealth),
 
   publishWorkflow: async (orgs) => {
     const { id, before } = await seedOrgBWorkflow(orgs);
@@ -145,6 +149,8 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await server.listStartable(systemCtx(orgs.orgB.id), b.connectionId)).toHaveLength(1);
   },
 
+  startableEnablement: startableEnablementOfOrgBUnread,
+
   enable: async (orgs) => {
     const { orgA, orgB } = orgs;
     const b = await publishedToSalesInOrgB(orgs);
@@ -168,17 +174,7 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await server.listEnablements(orgB.admin.ctx, b.workflowId)).toEqual(before);
   },
 
-  listEnablements: async (orgs) => {
-    const { orgA, orgB } = orgs;
-    const b = await publishedToSalesInOrgB(orgs);
-    await connectMailbox(orgB.member.ctx, orgB.member.email);
-    await server.enable(orgB.member.ctx, b.workflowId);
-
-    await expect(server.listEnablements(orgA.admin.ctx, b.workflowId)).rejects.toThrow(
-      NotFoundError,
-    );
-    expect(await server.listEnablements(orgB.admin.ctx, b.workflowId)).toHaveLength(1);
-  },
+  ...enablementCases,
 
   workflowNames: async (orgs) => {
     const b = await seedOrgBWorkflow(orgs);
@@ -189,6 +185,8 @@ export const isolationCases = defineIsolationCases(server, {
       expect([...names]).toEqual([[own.id, "A"]]);
     }
   },
+
+  listWorkflowBudgets: workflowBudgetsStayInOrg,
 
   // In isolation-seeds.ts, for this file's length.
   versionsById: versionsOfOrgBUnread,
@@ -282,6 +280,8 @@ export const isolationCases = defineIsolationCases(server, {
     expect(await server.listVisibleWorkflows(orgB.member.ctx)).toEqual([]);
   },
 
+  ...failurePauseIsolationCases,
+
   removeInvisibleEnablements: async (orgs) => {
     const { orgA, orgB } = orgs;
     const b = await publishedToSalesInOrgB(orgs);
@@ -359,10 +359,5 @@ export const isolationCases = defineIsolationCases(server, {
     expect((await server.listWorkingSpecs(orgs.orgA.admin.ctx)).map((w) => w.id)).toEqual([own.id]);
   },
 
-  findWorkflowBySpecId: async (orgs) => {
-    // Org B's workflow has the spec ID "pricing-replies"; org A has none.
-    await seedOrgBWorkflow(orgs);
-
-    expect(await server.findWorkflowBySpecId(orgs.orgA.admin.ctx, "pricing-replies")).toBeNull();
-  },
+  findWorkflowBySpecId: specIdOfOrgBUnfound,
 });

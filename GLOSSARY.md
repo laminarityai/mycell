@@ -18,6 +18,10 @@ _Avoid_: Owner, manager
 A user who can only see, enable, and disable workflows published to their tags.
 _Avoid_: End user, teammate, seat
 
+**Removal**:
+An admin taking someone out of the org. It's recorded, so signing in again with the same account or the same email address doesn't let them back in, until an admin **re-adds** them; they then join as a member the next time they sign in.
+_Avoid_: Ban, block, deactivation
+
 **Tag**:
 An admin-made label on users that decides which workflows each member can see.
 _Avoid_: Group, team, role
@@ -47,12 +51,16 @@ _Avoid_: Shared connection
 Whether a piece of data belongs to one member or to the whole org.
 
 **Access list**:
-Who Mycel saw can see an item, kept on Mycel's record of it: a doc's sharing list as the app gives it, or for an email the mailboxes holding it and, on one the company sent, everyone on it (never just the addresses its sender wrote). A fact is visible to anyone who can see one of its sources.
+Who Mycel saw can see an item, kept on Mycel's record of it: a doc's sharing list as the app gives it; for an email the mailboxes holding it and, on one the company sent, everyone on it; for an invite the calendars holding it and, on one a colleague organised, everyone on it (never just the addresses its sender or organizer wrote). A fact is visible to anyone who can see one of its sources.
 _Avoid_: Promotion (replaced), ACL, permissions
 
 **Event**:
 One normalized thing that happened in a source, such as an email received or sent or a Drive file created or modified, kept as its provenance and shape (time, people, thread, attachment metadata, MIME type) without its content. The code's type is `IngestedEvent`, to stay clear of the DOM's `Event`.
 _Avoid_: Activity, message, record
+
+**Outbox**:
+Where a change's Inngest events wait, saved in the same transaction as the change, until Inngest has them: sent right after the change is saved, or a minute or two later by the outbox job when that send fails (ADR-0027). Each event has a fixed ID, so Inngest takes it once.
+_Avoid_: Event queue, pending events, held send (that's a write waiting for a review)
 
 **Backfill**:
 Ingesting a connection's last 90 days when it's recorded, before polling picks up what's new.
@@ -102,7 +110,7 @@ _Avoid_: Level, tier, autonomy level
 
 **Workflow**:
 An automation an admin creates and publishes to tags, defined by a spec.
-_Avoid_: Automation, agent, bot, flow
+_Avoid_: Automation, agent (each person's chat with Mycel), bot, flow
 
 **Spec**:
 The declarative definition of a workflow: its trigger, steps, credentials, budget, and rung.
@@ -145,7 +153,7 @@ What starts a workflow's runs: a new message in Gmail, or a new invite on a pers
 _Avoid_: Hook, watcher, event (an event is what discovery ingests)
 
 **Invite**:
-An event on a person's calendar that someone else organised and that the person hasn't answered yet. A new one can start a run; Mycel keeps none of it.
+An event on a person's calendar with guests. A new one that someone else organised and the person hasn't answered yet can start a run (the Calendar trigger), and memory learns facts from any business one. Mycel keeps none of its content.
 _Avoid_: Meeting request, invitation, event
 
 **Run**:
@@ -160,9 +168,17 @@ _Avoid_: Test run, preview, simulation (a replay of past cases is a shadow eval)
 The kind of model a step or a model call asks for (`classify`, `fast`, `smart`, `judge` or `embed`), which each org maps to a concrete model. `embed` turns text into vectors for memory, and no step names it.
 _Avoid_: Model, model tier
 
+**Decision model**:
+A model that answers a question by picking one of the offered labels, with how likely each is, rather than by writing text (Jev, Laya). Config lists them. When an org's `classify` model isn't one, `fast` answers instead.
+_Avoid_: Classifier model
+
 **Paused**:
 The state of a workflow or enablement that will not run, always shown together with its reason.
 _Avoid_: Disabled, suspended, stopped
+
+**Alert**:
+A notice in Mycel telling admins something needs them, such as a workflow paused for failing or credits running out. It goes away by itself once the cause is fixed.
+_Avoid_: Notification, warning, email
 
 **Archived**:
 A workflow an admin has stopped everywhere and hidden from members. Its enablements and org switch are kept, so restoring it brings them back as they were. It isn't paused: nothing about it waits on anyone else.
@@ -171,6 +187,10 @@ _Avoid_: Deleted, retired
 **Catalog action**:
 One operation on an external source that a workflow is allowed to call, with a fixed risk level.
 _Avoid_: Tool, integration, capability
+
+**Default list**:
+The Google Tasks list a person's own tasks go to, the first of their lists. Mycel's Tasks actions act only on it, and leave alone any task on it that someone assigned from Docs or Chat.
+_Avoid_: My Tasks, task list (any list)
 
 **Risk level**:
 The fixed danger class of a catalog action: read, internal-reversible, external-send, financial, or destructive.
@@ -182,13 +202,21 @@ An unsent Gmail message a workflow prepared, waiting for a person to send it; Gm
 An app's own way of holding an action until a person approves it, such as a Gmail draft, a Calendar event with no guests yet, or suggested edits in a Doc.
 _Avoid_: Staged action, preview
 
+**Suggested edits**:
+Edits a workflow made to a Google Doc as suggestions, visible in the doc but not applied, as a person in suggesting mode makes them; Docs' pending form. They carry the person's name, since Mycel writes as them, so their review keeps the IDs Docs gave them. Approving accepts them all and declining rejects them all; picking among them happens in Docs (ADR-0017).
+_Avoid_: Suggestion (that's discovery's), proposal (that's the builder chat's), tracked changes
+
+**Meeting**:
+An event a workflow booked on a person's calendar, waiting there with no guests, private and not blocking time, until a person approves it; Calendar's pending form. Approving invites its guests, and declining deletes it.
+_Avoid_: Appointment, booking (for the waiting event; booking is what the step does), invite (that's an event someone else sent)
+
 **Review**:
-One action waiting for a person's decision, shown on their Reviews page, which points at the waiting item in its app, or holds it when the app can't (ADR-0020). Its kind names what it waits on: `approval` (a draft an approval step left waiting), `escalation` (a message an escalate step handed over) or `held_send` (a held send).
+One action waiting for a person's decision, shown on their Reviews page, which points at the waiting item in its app, or holds it when the app can't (ADR-0020). Its kind names what it waits on: `approval` (a draft an approval step left waiting), `escalation` (a message an escalate step handed over), `held_send` (a held send), `suggested_edits` (suggested edits in a Doc) or `calendar_event` (a meeting).
 _Avoid_: Approval for the review itself (it's the step, and the kind of review that step makes), task (a Google Tasks item), notification
 
 **Held send**:
 A custom write's request, which Mycel holds, encrypted with the org's key, until a person approves or declines its review, or for 30 days, when it expires (ADR-0020). Approving sends it once, with any edits to its editable text; if its app never confirms the send, the review ends unconfirmed and it is never sent again.
-_Avoid_: Queued message, outbox, staged send
+_Avoid_: Queued message, outbox (that's the events a change sends), staged send
 
 **Shared review**:
 A review from an org connection's run, seen by everyone who can see its workflow through its tags and by every admin. The first to act on it wins.
@@ -211,16 +239,24 @@ Code the builder chat drafts when a custom action can't do the job, sent to our 
 _Avoid_: Feature request
 
 **Agent**:
-Each person's own private chat with Mycel. It answers from what that person can see in memory and in their own mail, remembers what they tell it, and acts only by running their own workflows, whose actions still wait as reviews.
-_Avoid_: Assistant, copilot, bot
+Each person's own private chat with Mycel, labelled "Ask Mycel". It answers from what that person can see in memory and in their own mail, remembers what they tell it, and acts only by running their own workflows, whose actions still wait as reviews.
+_Avoid_: Assistant, copilot, bot, Ask Mycel (the label people see, not the term)
+
+**Pending run**:
+A run the agent offered: one of the person's own switched-on workflows on a message in their own mail, waiting for them to press Run. Nothing starts until they do, and the run's drafts then wait on their Reviews page like any run's.
+_Avoid_: Proposal (the builder chat's), queued run
 
 **Builder chat**:
-The admin-only agent that turns descriptions and suggestions into proposed spec changes. It reads only company-wide memory, since its conversations are shared among admins.
+The admin-only chat that turns descriptions and suggestions into proposed spec changes. It isn't an agent: an agent is one person's own, and builder conversations are shared among admins. It reads only company-wide memory, since its conversations are shared among admins.
 _Avoid_: Copilot, assistant
 
 **Builder conversation**:
 One chat between admins and the builder chat, optionally about one workflow.
 _Avoid_: Thread (an email thread), session
+
+**History summary**:
+A short account of a long builder conversation's earlier messages, which the builder chat reads instead of them. The admins still see every message, with a line marking where the summary ends.
+_Avoid_: Conversation summary (a row of the conversation list), compaction
 
 **Proposal**:
 A change to a workflow that the builder chat suggests and an admin accepts or rejects.
@@ -243,15 +279,19 @@ _Avoid_: Limit, quota
 ### Memory
 
 **Fact**:
-A short statement about an object that a source states or a person told Mycel, linked to the sources it came from.
+A short statement about an object that a source states, linked to the sources it came from, or that a person told Mycel (a told fact).
 _Avoid_: Memory (for a single item), note, insight, inference
 
+**Told fact**:
+A fact a person told Mycel through their agent ("remember this"). It has no sources, and only that person sees it, in their answers and their own workflows. Their newer told fact on the same point replaces their older one, kept as history. It goes when they leave the company, or when an admin forgets the person it's about.
+_Avoid_: Note, annotation, comment
+
 **Source record**:
-Mycel's record of one item memory learned from, such as an email or a version of a Drive doc, as one connection holds it, with the item's access list and a pointer to re-fetch it, never its content.
+Mycel's record of one item memory learned from, such as an email, a version of a Drive doc or a version of a Calendar invite, as one connection holds it, with the item's access list and a pointer to re-fetch it, never its content.
 _Avoid_: Document, source (the app), evidence
 
 **Item key**:
-What every copy of one item shares, such as an email's Message-ID or a Drive file's ID, so copies in several mailboxes or Drives are known to be the same item.
+What every copy of one item shares, such as an email's Message-ID, a Drive file's ID or an invite's iCalUID, so copies in several mailboxes, Drives or calendars are known to be the same item.
 
 **Object key**:
 An exact identifier of an object, such as a person's email address or a company's domain, unique in an org; objects with the same key are one object.

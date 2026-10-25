@@ -3,6 +3,7 @@ import { resetDatabase } from "@/db/testing/reset";
 import { seedTwoOrgs } from "@/db/testing/two-org-fixture";
 import { grantCredits, listLedger } from "@/features/credits/server";
 import { backfillConnection, pollConnection } from "@/features/discovery/server";
+import { sendWaitingEvents } from "@/features/outbox/server";
 import { systemCtx } from "@/lib/ctx";
 import { ConflictError, ForbiddenError } from "@/lib/errors";
 import { connectGoogle, connectMailbox, daysAgo } from "@/testing/connect-helpers";
@@ -189,6 +190,24 @@ describe("the monthly budget", () => {
       { orgId: orgA.id },
     ]);
     expect(await resumePostponed(systemCtx(orgA.id))).toEqual({ queued: 1 });
+    classifiedAs("newsletter");
+    expect(await learnStoredItems(orgA.id)).toEqual([
+      { outcome: "skipped", reason: "not_business" },
+    ]);
+  });
+
+  it("loses nothing it resumed when the send fails: the outbox job queues it", async () => {
+    const { orgA } = await spentBudget();
+    await learnStoredItems(orgA.id);
+    await setMemoryBudget(orgA.admin.ctx, { monthlyBudget: 100 });
+    fakeInngest.failSends();
+
+    // The item leaves the postponed list with its event, which waits in the outbox.
+    expect(await resumePostponed(systemCtx(orgA.id))).toEqual({ queued: 1 });
+    fakeInngest.failSends(false);
+    expect(await learnStoredItems(orgA.id)).toEqual([]);
+    await sendWaitingEvents(systemCtx(orgA.id), new Date(Date.now() + 61_000));
+
     classifiedAs("newsletter");
     expect(await learnStoredItems(orgA.id)).toEqual([
       { outcome: "skipped", reason: "not_business" },

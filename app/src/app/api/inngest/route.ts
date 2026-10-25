@@ -20,6 +20,7 @@ import {
   startJob,
 } from "@/features/memory/jobs";
 import { failedCallCostJob } from "@/features/models/jobs";
+import { sendWaitingEventsCron } from "@/features/outbox/jobs";
 import { checkWaitingReviewsJob, endedInGmailJob } from "@/features/reviews/jobs";
 import {
   calendarPollCron,
@@ -73,5 +74,6 @@ export const { GET, POST, PUT } = serve({
     purgeDeletedToldFactsJob,
     failedCallCostJob,
     deleteIdleConversationsJob,
+    sendWaitingEventsCron,
   ],
 });

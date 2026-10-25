@@ -13,6 +13,7 @@
 // only it was about goes too.
 import { and, desc, eq, inArray, isNotNull, isNull, lt } from "drizzle-orm";
 import { forOrg } from "@/db/for-org";
+import { saveWithEvents } from "@/features/outbox/server";
 import { type Ctx, requireRole, requireSystem } from "@/lib/ctx";
 import { ConflictError, NotFoundError, ValidationError } from "@/lib/errors";
 import { now } from "@/lib/time";
@@ -25,8 +26,8 @@ import {
   type ToldNote,
   type ToldNotes,
 } from "../types";
+import { toldFactDeleted } from "../events";
 import { loggedReader, logRead } from "./access-log";
-import { sendToldFactDeleted } from "./events";
 import { facts, memoryObjects, objectKeys } from "./schema";
 
 const UNDO_MS = TOLD_UNDO_MINUTES * 60_000;
@@ -140,16 +141,25 @@ async function subjectsOf(ctx: Ctx, ids: string[]): Promise<Map<string, ToldNote
 export async function deleteToldFact(ctx: Ctx, id: string): Promise<DeletedToldFact> {
   requireRole(ctx, "admin", "member");
   const deletedAt = now();
-  const row = (
-    await forOrg(ctx).update(
-      facts,
-      { deletedAt },
-      and(eq(facts.id, id), eq(facts.toldByUserId, ctx.userId), isNull(facts.deletedAt)),
-    )
-  ).at(0);
-  if (row === undefined) throw new NotFoundError("note");
   const undoUntil = new Date(deletedAt.getTime() + UNDO_MS);
-  await sendToldFactDeleted(ctx.orgId, undoUntil);
+  // The delete and the purge it schedules are saved together (ADR-0027). The event's ID is this
+  // delete's own, so deleting a note again after an undo schedules its purge again.
+  const row = await saveWithEvents(ctx, async (tx, emit) => {
+    const updated = (
+      await tx.update(
+        facts,
+        { deletedAt },
+        and(eq(facts.id, id), eq(facts.toldByUserId, ctx.userId), isNull(facts.deletedAt)),
+      )
+    ).at(0);
+    if (updated === undefined) throw new NotFoundError("note");
+    emit(
+      toldFactDeleted,
+      { orgId: ctx.orgId, purgeAt: undoUntil.toISOString() },
+      `told-fact-deleted-${updated.id}-${String(deletedAt.getTime())}`,
+    );
+    return updated;
+  });
   return { id: row.id, statement: row.statement, undoUntil };
 }
 

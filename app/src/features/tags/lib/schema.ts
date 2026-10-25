@@ -4,6 +4,7 @@ import "server-only";
 import {
   foreignKey,
   index,
+  integer,
   pgTable,
   primaryKey,
   text,
@@ -19,6 +20,8 @@ export const tags = pgTable(
     orgId: text("org_id").notNull(),
     // A normalized slug (tagNameSchema), so uniqueness is case-insensitive by construction.
     name: text("name").notNull(),
+    // Counts the tag's renames: a rename's event ID names the revision it made (ADR-0027).
+    revision: integer("revision").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [

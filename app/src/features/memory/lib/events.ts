@@ -1,78 +1,22 @@
-// The Inngest events memory sends itself: an admin started it, so it learns what discovery had
-// stored already; an item to learn, queued then or when a postponed item's month comes; an
-// exclusion was added, so what it covers is forgotten; postponed items are due again; a person
-// was forgotten, so they're swept again; a night's retention is due.
-import { eventType } from "inngest";
-import { z } from "zod";
+// The events memory's jobs send from inside their steps, which Inngest retries: the items its
+// start job queues, page by page, and the crons' fan-outs to every org. They save no change
+// before sending, so a retried step sends the same again. What a change sends goes through the
+// outbox with the change instead (ADR-0027).
 import { inngest } from "@/lib/inngest";
-import { MEMORY_APPS, POSTPONE_REASONS, type ItemToLearn, type PostponeReason } from "../types";
-
-const org = z.object({ orgId: z.string().min(1) });
-
-/** An admin confirmed the estimate and started memory: it queues what's stored already. */
-export const memoryStarted = eventType("memory/started", { schema: org });
-
-/** One item for memory to learn, queued by memory itself; learned like `discovery/item.stored`. */
-export const itemQueued = eventType("memory/item.queued", {
-  schema: z.object({
-    orgId: z.string().min(1),
-    connectionId: z.string().min(1),
-    app: z.enum(MEMORY_APPS),
-    sourceRef: z.string().min(1),
-  }),
-});
-
-/** An admin added an exclusion: what memory learned from items it covers is forgotten. */
-export const exclusionAdded = eventType("memory/exclusion.added", {
-  schema: z.object({ orgId: z.string().min(1), exclusionId: z.string().min(1) }),
-});
-
-/**
- * Items postponed are due again: for the budget, a new month began or the budget changed (every
- * reason then); for the injection screen, the hourly retry. Credits granted resume their own
- * (`credits/granted`).
- */
-export const postponedDue = eventType("memory/postponed.due", {
-  schema: z.object({
-    orgId: z.string().min(1),
-    reasons: z.array(z.enum(POSTPONE_REASONS)).optional(),
-  }),
-});
-
-/**
- * An admin forgot a person: the objects keyed by their address are deleted again once learning
- * in progress is done. The address is encrypted for the org (the key store), never plain.
- */
-export const personForgotten = eventType("memory/person.forgotten", {
-  schema: z.object({ orgId: z.string().min(1), address: z.string().min(1) }),
-});
-
-/**
- * A person deleted a told fact: once its undo window ends (`purgeAt`), the org's deleted told
- * facts past their window are deleted for good.
- */
-export const toldFactDeleted = eventType("memory/told-fact.deleted", {
-  schema: z.object({ orgId: z.string().min(1), purgeAt: z.iso.datetime() }),
-});
-
-export async function sendToldFactDeleted(orgId: string, purgeAt: Date): Promise<void> {
-  await inngest.send(toldFactDeleted.create({ orgId, purgeAt: purgeAt.toISOString() }));
-}
-
-/** A night's retention is due for the org: what's past its window goes. */
-export const retentionDue = eventType("memory/retention.due", { schema: org });
+import { itemQueued, postponedDue, retentionDue } from "../events";
+import type { ItemToLearn, PostponeReason } from "../types";
 
 // Inngest takes up to 5,000 events a send; fewer keeps each request small.
 const BATCH = 500;
 
 /**
- * Queues items for learning. `idPrefix` makes a resend queue nothing new (Inngest drops an
- * event ID it saw in the last 24 hours); without it, every send queues them again.
+ * Queues items for learning, under IDs starting `idPrefix`, so a resend queues nothing new
+ * (Inngest drops an event ID it saw in the last 24 hours).
  */
 export async function sendItemsQueued(
   orgId: string,
   items: ItemToLearn[],
-  idPrefix?: string,
+  idPrefix: string,
 ): Promise<void> {
   for (let i = 0; i < items.length; i += BATCH) {
     await inngest.send(
@@ -81,25 +25,11 @@ export async function sendItemsQueued(
         .map((item) =>
           itemQueued.create(
             { orgId, connectionId: item.connectionId, app: item.app, sourceRef: item.sourceRef },
-            idPrefix === undefined
-              ? undefined
-              : { id: `${idPrefix}-${item.connectionId}-${item.app}-${item.sourceRef}` },
+            { id: `${idPrefix}-${item.connectionId}-${item.app}-${item.sourceRef}` },
           ),
         ),
     );
   }
-}
-
-export async function sendMemoryStarted(orgId: string): Promise<void> {
-  await inngest.send(memoryStarted.create({ orgId }));
-}
-
-export async function sendExclusionAdded(orgId: string, exclusionId: string): Promise<void> {
-  await inngest.send(exclusionAdded.create({ orgId, exclusionId }));
-}
-
-export async function sendPersonForgotten(orgId: string, address: string): Promise<void> {
-  await inngest.send(personForgotten.create({ orgId, address }));
 }
 
 export async function sendRetentionDue(orgIds: string[]): Promise<void> {

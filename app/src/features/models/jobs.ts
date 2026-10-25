@@ -3,7 +3,7 @@
 import "server-only";
 import { systemCtx } from "@/lib/ctx";
 import { inngest } from "@/lib/inngest";
-import { failedCallRecorded } from "./lib/events";
+import { failedCallRecorded } from "./events";
 import { correctFailedCallCost } from "./server";
 
 // The gateway ingests a generation's usage a while after the call: the first lookup waits a few

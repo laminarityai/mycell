@@ -19,10 +19,9 @@ import {
   personForgotten,
   postponedDue,
   retentionDue,
-  sendPostponedDue,
-  sendRetentionDue,
   toldFactDeleted,
-} from "./lib/events";
+} from "./events";
+import { sendPostponedDue, sendRetentionDue } from "./lib/events";
 import {
   applyRetention,
   deleteRemovedItem,

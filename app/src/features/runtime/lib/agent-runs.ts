@@ -11,12 +11,13 @@ import { forOrg } from "@/db/for-org";
 import { GMAIL, messageSchema } from "@/features/connections/gmail";
 import { getConnection, proxyGet } from "@/features/connections/server";
 import { SourceRequestError } from "@/features/connections/types";
+import { saveWithEvents } from "@/features/outbox/server";
 import { startableEnablement } from "@/features/workflows/server";
 import type { StartableEnablement } from "@/features/workflows/types";
 import type { Ctx } from "@/lib/ctx";
 import { ConflictError, ValidationError } from "@/lib/errors";
 import type { AgentRunStart } from "../types";
-import { sendRunRequested } from "./events";
+import { requestRun } from "./request-run";
 import { runs } from "./schema";
 
 const NOT_IN_MAIL = "That message isn't in your mail.";
@@ -51,16 +52,20 @@ export async function startRunFromAgent(
   const { start, own } = await startable(ctx, workflowId, sourceRef);
   const runId = randomUUID();
   try {
-    await forOrg(ctx).insert(runs, {
-      id: runId,
-      connectionId: own.connectionId,
-      ownerScope: "member",
-      workflowId: own.workflowId,
-      workflowVersionId: own.versionId,
-      startedBy: "agent",
-      enablementId: own.enablementId,
-      sourceRef: start.sourceRef,
-      status: "running",
+    // The run and its request are saved together (ADR-0027).
+    await saveWithEvents(ctx, async (tx, emit) => {
+      await tx.insert(runs, {
+        id: runId,
+        connectionId: own.connectionId,
+        ownerScope: "member",
+        workflowId: own.workflowId,
+        workflowVersionId: own.versionId,
+        startedBy: "agent",
+        enablementId: own.enablementId,
+        sourceRef: start.sourceRef,
+        status: "running",
+      });
+      requestRun(ctx, emit, { id: runId, connectionId: own.connectionId });
     });
   } catch (error) {
     if (isUniqueViolation(error, "runs_agent_running_unique")) throw alreadyRunning(own.name);
@@ -68,7 +73,6 @@ export async function startRunFromAgent(
     if (isForeignKeyViolation(error, "runs_enablement_fk")) throw notOn(own.name);
     throw error;
   }
-  await sendRunRequested({ orgId: ctx.orgId, runId, connectionId: own.connectionId });
   return { runId };
 }
 

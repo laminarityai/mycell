@@ -1,7 +1,8 @@
 // What an Ask Mycel reply drew on, stored beside it so the reply goes when that does
-// (invariant 3, #185): the facts its tools read, and the connections those facts came from as
-// the person saw them (memory's `citeFacts`). A fact can outlive one of its connections, through
-// another copy of its email, so both are kept. The rows cascade with the connection or the fact,
+// (invariant 3, #185): the facts its tools read, the connections those facts came from as the
+// person saw them (memory's `citeFacts`), and the mailboxes its searches found messages in,
+// whose senders and subjects it may repeat (#237). A fact can outlive one of its connections,
+// through another copy of its email, so both are kept. The rows cascade with the connection or the fact,
 // and a trigger then replaces the reply with a tombstone (`schema.ts`).
 //
 // A reply also inherits what the conversation's earlier replies drew on: the model read their
@@ -15,6 +16,7 @@ import type { Ctx } from "@/lib/ctx";
 import type { AgentMessage, StoredPart } from "../types";
 import { readFactIds } from "./citations";
 import { appendMessage, type ConversationRow } from "./conversations";
+import { foundConnectionIds } from "./mail-tools";
 import { agentMessageConnections, agentMessageFacts } from "./schema";
 
 /** A removed reply: its only part. The trigger writes the same. */
@@ -76,7 +78,10 @@ async function drewOn(
   if (cited.length < read.length) return null;
   const own: DrewOn = {
     factIds: read,
-    connectionIds: cited.flatMap((fact) => fact.sources.map((source) => source.connectionId)),
+    connectionIds: [
+      ...cited.flatMap((fact) => fact.sources.map((source) => source.connectionId)),
+      ...foundConnectionIds(parts),
+    ],
   };
   // A notice alone (out of credits) is ours, not the model's: it repeats nothing.
   if (parts.every((part) => part.type === "notice")) return distinct(own);

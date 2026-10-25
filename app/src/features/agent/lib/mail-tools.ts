@@ -11,6 +11,7 @@ import { searchMessageHeaders } from "@/features/runtime/server";
 import type { MessageHeaders, MessageRef, MessageSearch } from "@/features/runtime/types";
 import type { Ctx } from "@/lib/ctx";
 import { DAY_MS } from "@/lib/time";
+import type { StoredPart } from "../types";
 import { toolPrompts } from "./prompts";
 import { noteFor, screenItems } from "./screen";
 import type { AgentToolDefinition } from "./tools";
@@ -57,6 +58,19 @@ export const storedFindSchema = z.union([
   }),
 ]);
 type StoredFind = z.infer<typeof storedFindSchema>;
+
+/**
+ * The mailboxes a reply's searches found messages in. The model read those messages' senders
+ * and subjects, and the reply may repeat them, so it goes with those connections (#237).
+ */
+export function foundConnectionIds(parts: StoredPart[]): string[] {
+  return parts.flatMap((part) => {
+    if (part.type !== "tool" || part.isError || part.toolName !== "find_messages") return [];
+    const parsed = storedFindSchema.safeParse(part.output);
+    if (!parsed.success || !("messages" in parsed.data)) return [];
+    return parsed.data.messages.map((message) => message.connectionId);
+  });
+}
 
 export const findMessagesTool: AgentToolDefinition<
   z.infer<typeof findInput>,

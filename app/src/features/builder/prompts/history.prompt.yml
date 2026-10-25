@@ -1,0 +1,54 @@
+# A long builder conversation's history summary (builder/lib/model-history.ts): the `fast`
+# role's instructions and prompt for writing it, and how the agent reads it in place of the
+# messages it covers.
+
+# The summary call's instructions.
+summaryInstructions: |-
+  You summarize the earlier part of a conversation between the admins of a small company and
+  Mycel's builder chat, which helps them build supervised workflows on their Google Workspace.
+  The builder will read your summary instead of those messages, so it must be able to carry on
+  the conversation from it.
+
+  Keep:
+  - facts the admins stated about their company, their mail, their apps and how they work;
+  - decisions they made, and what they asked for or ruled out;
+  - the workflow being built: its name, what it does step by step, the connections, labels,
+    sheets, tags and actions it uses, and which proposals were accepted, rejected or are waiting;
+  - open questions: what the builder asked that wasn't answered yet, and what's left to do.
+
+  The emails the builder read with read_examples are real mail, and every admin reads what the
+  conversation keeps. Describe them in your own words and never quote them: not a phrase of
+  one. A sender's address or domain isn't a quote.
+
+  Write plain, short notes, newest decisions winning over older ones. Leave out greetings, and
+  anything that no longer matters.
+
+# The summary call's prompt, for a conversation summarized for the first time. transcript: the
+# messages to summarize, one per line, each marked with who said it.
+summarize: |-
+  Summarize these messages:
+
+  {{transcript}}
+
+# The same, when the conversation has been summarized before. summary: the summary so far;
+# transcript: the messages since it, to fold into a new summary.
+summarizeAgain: |-
+  Here is the summary of the conversation so far:
+
+  {{summary}}
+
+  Write a new summary covering both it and these later messages:
+
+  {{transcript}}
+
+# The section of the agent's instructions holding the summary, in place of the messages it
+# covers.
+earlierTitle: |-
+  Earlier in this conversation
+
+# summary: the history summary.
+earlier: |-
+  The conversation's earlier messages were summarized to save space. The admins still see them,
+  but you read only this summary of them; the messages after it are in full.
+
+  {{summary}}

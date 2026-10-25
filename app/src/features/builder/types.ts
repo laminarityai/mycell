@@ -47,8 +47,13 @@ export type ConversationSummary = {
 
 export type BuilderConversation = ConversationSummary & {
   createdAt: Date;
-  /** Oldest first. */
+  /** Oldest first: every message, summarized or not. */
   messages: BuilderMessage[];
+  /**
+   * The last message the history summary covers, which the agent now reads only as that
+   * summary; the chat page marks the cut after it. Null while nothing is summarized.
+   */
+  summarizedThrough: string | null;
 };
 
 /** A try-it summary as the conversation keeps it: content-free lines, and what it cost. */

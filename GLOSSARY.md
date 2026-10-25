@@ -250,6 +250,10 @@ _Avoid_: Copilot, assistant
 One chat between admins and the builder chat, optionally about one workflow.
 _Avoid_: Thread (an email thread), session
 
+**History summary**:
+A short account of a long builder conversation's earlier messages, which the builder chat reads instead of them. The admins still see every message, with a line marking where the summary ends.
+_Avoid_: Conversation summary (a row of the conversation list), compaction
+
 **Proposal**:
 A change to a workflow that the builder chat suggests and an admin accepts or rejects.
 _Avoid_: Spec diff, suggestion (a suggestion comes from discovery)

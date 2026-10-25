@@ -24,6 +24,13 @@ export { recentInvites } from "./lib/recent-invites";
 // For the builder's read_examples: a Gmail search and each message's fields, held in memory by
 // the caller (invariant 8).
 export { readMessage, searchMessages } from "./lib/gmail";
+// For Ask Mycel: the caller's own mail searched and read by sender, subject and date, headers
+// only, never a body.
+export { readMessageHeaders, searchMessageHeaders } from "./lib/message-headers";
+// Ask Mycel's runs: a person runs one of their own switched-on workflows on a message in their
+// own mail, checked first as fan-out would; and what the chat shows of the runs it offered.
+export { checkRunFromAgent, startRunFromAgent } from "./lib/agent-runs";
+export { agentRunDetails } from "./lib/agent-run-details";
 // Called by the triggers' fan-out jobs and tests, as the org's system ctx: the runs one new
 // inbound message, or one new invite, starts.
 export { startInviteRuns, startTriggeredRuns } from "./lib/trigger";

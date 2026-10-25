@@ -1,9 +1,10 @@
 // A streamed model call's metering, for callers that run `streamText` themselves (the builder
 // chat's turns). Opening one resolves the role to the org's model (invariant 6) and passes the
 // credit check before anything is sent; the caller meters each model step as it ends, and the
-// error of a step that fails, and finishes once, which records exactly one usage entry with the
-// steps' summed gateway cost, however the stream ended (invariant 7). A failed step's cost is
-// looked up later under the generation ID its error carries (`failed-call-costs.ts`).
+// error of a step that fails, and finishes once, which records the steps' summed gateway cost,
+// however the stream ended (invariant 7). A failed step reports no cost, so its cost is looked
+// up later under the generation ID its error carries (`failed-call-costs.ts`): when earlier
+// steps reported a cost, the failed step gets an entry of its own at 0, which is looked up.
 import { checkCredits } from "@/features/credits/server";
 import type { ModelRole } from "@/features/spec/types";
 import type { Ctx } from "@/lib/ctx";
@@ -28,7 +29,8 @@ export async function openMeteredStream(
   // would hold back a stream. A streamed step reports its cost on its finish part instead.
   const provider = gatewayProvider();
   let costUsd = 0;
-  let generationId: string | undefined;
+  let stepGenerationId: string | undefined;
+  let failedGenerationId: string | undefined;
   let finished = false;
   return {
     modelId,
@@ -36,15 +38,29 @@ export async function openMeteredStream(
     meterStep(providerMetadata) {
       const metering = meteringOf({ providerMetadata });
       costUsd += metering.costUsd;
-      generationId = metering.generationId ?? generationId;
+      stepGenerationId = metering.generationId ?? stepGenerationId;
     },
     meterError(error) {
-      generationId = generationIdOf(error) ?? generationId;
+      failedGenerationId = generationIdOf(error) ?? failedGenerationId;
     },
     async finish(outcome) {
       if (finished) return;
       finished = true;
-      await recordCallUsage(ctx, { role, modelId, costUsd, generationId, outcome, ...attribution });
+      const call = { role, modelId, outcome, ...attribution };
+      if (failedGenerationId === undefined || costUsd === 0) {
+        const generationId = failedGenerationId ?? stepGenerationId;
+        await recordCallUsage(ctx, { ...call, costUsd, generationId });
+        return;
+      }
+      // An entry above 0 is never looked up, so the failed step, which reported no cost, gets
+      // its own entry at 0 under its generation ID, apart from the steps that reported theirs.
+      await recordCallUsage(ctx, { ...call, costUsd, generationId: stepGenerationId });
+      await recordCallUsage(ctx, {
+        ...call,
+        costUsd: 0,
+        generationId: failedGenerationId,
+        outcome: "failed",
+      });
     },
   };
 }

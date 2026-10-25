@@ -3,3 +3,8 @@
 # Any tool call that failed with an error other than one of ours.
 toolFailed: |-
   That tool call failed.
+
+# An older turn's tool result, which a chat that keeps only its last turns' results (the builder
+# chat) sends in its place. toolName: the tool that was called.
+toolResultDropped: |-
+  This result was dropped from the conversation to save space. Call {{toolName}} again if you need it.

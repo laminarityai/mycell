@@ -4,12 +4,23 @@
 // the people in the chat only and never reach the model.
 import type { AssistantModelMessage, JSONValue, ModelMessage, ToolModelMessage } from "ai";
 import type { ChatMessage, ChatPart, ChatUIPart } from "../types";
+import { chatTurnPrompts } from "./prompts";
 
 const CHAT_PART_TYPES: ReadonlySet<string> = new Set<ChatPart["type"]>(["text", "tool", "notice"]);
 
 function isChatPart(part: { type: string }): part is ChatPart {
   return CHAT_PART_TYPES.has(part.type);
 }
+
+/** How much of a conversation's tool results reach the model. */
+export type ChatHistoryOptions = {
+  /**
+   * Only the tool results of this many last turns (a turn starts at each person's message) are
+   * sent; an older call is still sent, its result replaced by a line saying it was dropped and
+   * may be asked for again. Every result is sent when it's left out.
+   */
+  toolResultTurns?: number;
+};
 
 /**
  * The conversation so far, as the model sees it: each person's words, and each model step's
@@ -19,8 +30,10 @@ function isChatPart(part: { type: string }): part is ChatPart {
 export function chatModelMessages<P extends { type: string }>(
   messages: ChatMessage<ChatPart | P>[],
   ownText: (part: P) => string | undefined,
+  options: ChatHistoryOptions = {},
 ): ModelMessage[] {
-  return messages.flatMap((message) => {
+  const keepFrom = resultsKeptFrom(messages, options.toolResultTurns);
+  return messages.flatMap((message, index) => {
     if (message.role === "user") {
       const text = message.parts
         .flatMap((part) => {
@@ -31,8 +44,16 @@ export function chatModelMessages<P extends { type: string }>(
         .join("\n");
       return text === "" ? [] : [{ role: "user" as const, content: text }];
     }
-    return modelSteps(message.parts, ownText);
+    return modelSteps(message.parts, ownText, index < keepFrom);
   });
+}
+
+// The index of the first message whose tool results are sent: the start of the last `turns`
+// turns, or 0 when there are no more turns than that.
+function resultsKeptFrom(messages: { role: string }[], turns: number | undefined): number {
+  if (turns === undefined) return 0;
+  const starts = messages.flatMap((message, index) => (message.role === "user" ? [index] : []));
+  return starts.length <= turns ? 0 : (starts.at(-turns) ?? 0);
 }
 
 // The model's message is a run of steps: text and tool calls, each step's results answered by
@@ -40,6 +61,7 @@ export function chatModelMessages<P extends { type: string }>(
 function modelSteps<P extends { type: string }>(
   stored: (ChatPart | P)[],
   ownText: (part: P) => string | undefined,
+  dropResults: boolean,
 ): ModelMessage[] {
   const out: ModelMessage[] = [];
   let assistant: AssistantModelMessage | undefined;
@@ -72,9 +94,11 @@ function modelSteps<P extends { type: string }>(
       type: "tool-result",
       toolCallId: part.toolCallId,
       toolName: part.toolName,
-      output: part.isError
-        ? { type: "error-text", value: String(part.output) }
-        : { type: "json", value: (part.output ?? null) as JSONValue },
+      output: dropResults
+        ? { type: "text", value: chatTurnPrompts.toolResultDropped({ toolName: part.toolName }) }
+        : part.isError
+          ? { type: "error-text", value: String(part.output) }
+          : { type: "json", value: (part.output ?? null) as JSONValue },
     });
   }
   flush();

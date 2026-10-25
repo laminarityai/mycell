@@ -81,7 +81,7 @@ async function runOnce(system: Ctx, inbox: Inbox, answer: keyof typeof ANSWERS) 
   const runId = (await arrives(system, inbox)).at(0);
   if (runId === undefined) throw new Error("no run started");
   ANSWERS[answer]();
-  const { status } = await executeRun(system, runId, undefined, recordedBackoff());
+  const { status } = await executeRun(system, runId, undefined, recordedBackoff().sleep);
   return { runId, status };
 }
 
@@ -240,7 +240,9 @@ describe("failures that don't count", () => {
         costUsd: 1000,
         outcome: "succeeded",
       });
-      expect((await executeRun(system, runId, undefined, recordedBackoff())).status).toBe("failed");
+      expect((await executeRun(system, runId, undefined, recordedBackoff().sleep)).status).toBe(
+        "failed",
+      );
       expect((await getRun(admin.ctx, runId)).steps).toMatchObject([
         { errorCode: "out_of_credits" },
       ]);

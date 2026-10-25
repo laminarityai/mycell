@@ -13,12 +13,19 @@ export {
   isOutOfCredits,
   listLedger,
   recordUsage,
+  recordUsageIn,
 } from "./lib/ledger";
 // For the Credits page (admins): a range's spending by kind, workflow and day, where the
 // ledger starts, and the runway.
 export { getLedgerStart, getRunway, getSpendingSummary } from "./lib/spending";
 // What workflow budgets count: each workflow's live run usage this calendar month (UTC), for
-// admins and jobs, and which workflows have reached their budget, for anyone (M7).
-export { budgetsReached, nextMonthStart, spentThisMonthByWorkflow } from "./lib/workflow-spending";
+// admins and jobs, and which workflows have reached their budget, for anyone (M7), or with the
+// day each did, for admins' alerts (M8).
+export {
+  budgetsReached,
+  budgetsReachedOn,
+  nextMonthStart,
+  spentThisMonthByWorkflow,
+} from "./lib/workflow-spending";
 // A failed call's real cost, which `models` looks up in the gateway and records as a correction.
 export { findUncostedFailedCall, recordFailedCallCost } from "./lib/corrections";

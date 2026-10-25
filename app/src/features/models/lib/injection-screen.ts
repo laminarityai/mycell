@@ -31,6 +31,14 @@ function configuredScreen(): InjectionScreen | null {
   return modelArmorScreen({ template, workloadIdentityProvider, serviceAccountEmail });
 }
 
+/**
+ * Whether a screen is configured, so a caller can skip fetching what it couldn't screen (Ask
+ * Mycel's memory tools, which then say memory is unavailable rather than read it).
+ */
+export function injectionScreenConfigured(): boolean {
+  return configuredScreen() !== null;
+}
+
 /** What screening a text of `characters` characters costs, in credits; 0 with no screen. */
 export function estimateScreenCredits(characters: number): number {
   return (configuredScreen()?.costUsd(characters) ?? 0) * env.CREDITS_PER_USD;

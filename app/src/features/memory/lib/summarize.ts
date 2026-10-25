@@ -49,8 +49,9 @@ function line(fact: MemoryFact): PromptText {
 
 /**
  * A summary is charged to whatever asked for it: a workflow's run, like the run's other model
- * calls; the builder chat; or, for a person's own, `memory_summary`, which the Credits page
- * counts as memory's but memory's budget, which caps learning, doesn't add up.
+ * calls; the builder chat; a person's agent (Ask Mycel), like its turns; or, for a person's
+ * own, `memory_summary`, which the Credits page counts as memory's but memory's budget, which
+ * caps learning, doesn't add up.
  */
 function attributionOf(reader: MemoryReader): CallAttribution {
   switch (reader.kind) {
@@ -58,6 +59,8 @@ function attributionOf(reader: MemoryReader): CallAttribution {
       return { runId: reader.runId, workflowId: reader.workflowId };
     case "builder":
       return { purpose: "builder" };
+    case "agent":
+      return { purpose: "agent" };
     case "person":
       return { purpose: "memory_summary" };
   }

@@ -31,6 +31,12 @@ export const builderConversations = pgTable(
     workflowId: text("workflow_id"),
     // The first words of its first message, for the conversation list. Null until then.
     title: text("title"),
+    // The history summary (#132): a `fast` account of the messages up to and including
+    // `history_summarized_through`, which the agent reads in their place. Null until the history
+    // first grows past half the `smart` window. The admins' and agent's words, never a quote of
+    // source content (invariant 8).
+    historySummary: text("history_summary"),
+    historySummarizedThrough: text("history_summarized_through"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },

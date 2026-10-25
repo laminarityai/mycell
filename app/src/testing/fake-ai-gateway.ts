@@ -31,6 +31,8 @@ export type { FakeStreamedReply };
 type ScriptOptions = {
   /** The cost the gateway reports, in US dollars (sent as a string, like the real one). */
   costUsd?: number;
+  /** The generation ID the gateway reports beside the cost. */
+  generationId?: string;
   /** Answer only a request for this model; by default, the next request to the endpoint. */
   model?: string;
 };
@@ -81,7 +83,7 @@ class FakeAiGateway {
         // Every request asks one question, under one ID; the fake answers that ID.
         answers: { [this.lastQuestionId()]: questionAnswer },
         usage: { inputTokens: 40, outputTokens: 0 },
-        providerMetadata: costMetadata(options.costUsd),
+        providerMetadata: costMetadata(options.costUsd, options.generationId),
       });
     });
   }
@@ -101,7 +103,7 @@ class FakeAiGateway {
           inputTokens: { total: 10, noCache: 10, cacheRead: 0, cacheWrite: 0 },
           outputTokens: { total: 5, text: 5, reasoning: 0 },
         },
-        providerMetadata: costMetadata(options.costUsd),
+        providerMetadata: costMetadata(options.costUsd, options.generationId),
         warnings: [],
       }),
     );
@@ -113,7 +115,7 @@ class FakeAiGateway {
       HttpResponse.json({
         embeddings: vectors,
         usage: { tokens: 8 },
-        providerMetadata: costMetadata(options.costUsd),
+        providerMetadata: costMetadata(options.costUsd, options.generationId),
       }),
     );
   }
@@ -124,7 +126,7 @@ class FakeAiGateway {
    * reply with tool calls makes the AI SDK run them and ask again, so script that next step too.
    */
   reply(reply: FakeStreamedReply, options: ScriptOptions = {}): void {
-    this.script("language", options.model, () => streamedResponse(reply, options.costUsd), true);
+    this.script("language", options.model, () => streamedResponse(reply, options), true);
   }
 
   /** The next request to the endpoint fails, as the gateway reports errors. */
@@ -244,8 +246,8 @@ function unauthorized(): Response {
   );
 }
 
-function streamedResponse(reply: FakeStreamedReply, costUsd: number | undefined): Response {
-  return new HttpResponse(streamedReplyEvents(reply, costUsd), {
+function streamedResponse(reply: FakeStreamedReply, options: ScriptOptions): Response {
+  return new HttpResponse(streamedReplyEvents(reply, options.costUsd, options.generationId), {
     headers: { "content-type": "text/event-stream" },
   });
 }

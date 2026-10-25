@@ -3,8 +3,8 @@
 import "server-only";
 import { systemCtx } from "@/lib/ctx";
 import { gmailMessageReceived } from "@/lib/events";
-import { inngest, PER_ORG_LIMIT, stepRunner } from "@/lib/inngest";
-import { calendarInviteReceived, calendarPollDue, runRequested } from "./lib/events";
+import { inngest, PER_ORG_LIMIT, stepRunner, stepSleeper } from "@/lib/inngest";
+import { calendarInviteReceived, calendarPollDue, runRequested } from "./events";
 import {
   calendarsDue,
   executeRun,
@@ -102,5 +102,5 @@ export const runWorkflowJob = inngest.createFunction(
     },
   },
   async ({ event, step }) =>
-    executeRun(systemCtx(event.data.orgId), event.data.runId, stepRunner(step)),
+    executeRun(systemCtx(event.data.orgId), event.data.runId, stepRunner(step), stepSleeper(step)),
 );

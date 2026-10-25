@@ -87,6 +87,14 @@ module.exports = {
       to: { path: `^${R}/memory/` },
     },
     {
+      name: "nothing-imports-agent",
+      comment:
+        "The agent (Ask Mycel, M9) sits on top: it imports memory, models, connections and the rest, and no feature imports it, so a person's private conversations never become another feature's data. Only its own routes and pages reach it.",
+      severity: "error",
+      from: { path: `^${R}/`, pathNot: `^${R}/agent/` },
+      to: { path: `^${R}/agent/` },
+    },
+    {
       name: "no-feature-imports-alerts",
       comment:
         "Alerts read workflows', credits' and connections' entry files to work out what needs admins; no feature reads alerts back (pages and the app shell do), so it can read any of them without a cycle.",

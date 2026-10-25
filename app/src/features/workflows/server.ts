@@ -17,8 +17,14 @@ export { archiveWorkflow, restoreWorkflow } from "./lib/archiving";
 // Pausing after the runs' failures (M8): the run job, as the system ctx, reads when the count
 // starts and pauses with the three runs it counted; an admin resumes it.
 export { failureStreakStart, pauseForFailures, resumeWorkflow } from "./lib/failure-pauses";
+// For admins' alerts: every workflow paused for failing or at its budget, in three queries.
+export { listPausedWorkflows } from "./lib/paused-workflows";
 // Members switching a workflow they can see on and off for their own Google connection.
 export { disable, enable, listEnablements } from "./lib/enablements";
+// For Ask Mycel: what the caller has switched on for their own inbox, and why each one that's
+// paused is, in the Workflows page's words.
+export { listOwnEnablements } from "./lib/own-enablements";
+export { pausedText } from "./lib/paused-text";
 // For the Workflows page: every workflow's enablements and runnable connections, read together.
 export { listEnablementsFor } from "./lib/enablements";
 export { runnableConnectionsFor } from "./lib/runnable-connections";
@@ -39,6 +45,9 @@ export { listStartable } from "./lib/startable";
 // For admins and members: the version a run they start by hand on a connection runs now (a
 // retry), refused while the workflow is archived, paused there or no longer theirs to see.
 export { startableVersion } from "./lib/startable-version";
+// For a person running one of their own workflows by name (Ask Mycel): their enablement, if a run
+// may start now, refused in words otherwise.
+export { startableEnablement } from "./lib/startable-enablement";
 // For any role: workflows' names, to show beside what another feature lets the caller see,
 // their current versions' IDs, to count by, and versions by ID, to describe a run's steps by.
 export { currentVersionIds, versionsById, workflowNames } from "./lib/names";

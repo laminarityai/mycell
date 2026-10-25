@@ -29,7 +29,7 @@ export async function createConnectSession(request: ConnectSessionRequest): Prom
     body: JSON.stringify({ allowed_integrations: [request.integration], tags: request.tags }),
   });
   if (!response.ok) throw new NangoRequestError("connect session", response.status);
-  return connectSessionResponse.parse(await response.json()).data.token;
+  return connectSessionResponse.parse(jsonOf(response)).data.token;
 }
 
 /**
@@ -45,7 +45,7 @@ export async function createReconnectSession(
     body: JSON.stringify({ connection_id: connectionId, integration_id: integration }),
   });
   if (!response.ok) throw new NangoRequestError("reconnect session", response.status);
-  return connectSessionResponse.parse(await response.json()).data.token;
+  return connectSessionResponse.parse(jsonOf(response)).data.token;
 }
 
 // Nango's API path for one connection of an integration.
@@ -103,7 +103,7 @@ export async function listNangoConnections(): Promise<ListedNangoConnection[]> {
       method: "GET",
     });
     if (!response.ok) throw new NangoRequestError("connection list", response.status);
-    const { connections } = connectionsPage.parse(await response.json());
+    const { connections } = connectionsPage.parse(jsonOf(response));
     if (connections.length === 0) return [...listed.values()];
     let added = 0;
     for (const connection of connections) {
@@ -138,11 +138,13 @@ export async function nangoConnectionExists(
   connectionId: string,
   integration: string,
 ): Promise<boolean> {
-  // The response carries credentials; only the status is read, and nothing is kept.
-  const response = await nangoFetch("connection read", connectionPath(connectionId, integration), {
-    method: "GET",
-  });
-  await response.body?.cancel();
+  // The response carries credentials; only the status is read, and the body is dropped unread.
+  const response = await nangoFetch(
+    "connection read",
+    connectionPath(connectionId, integration),
+    { method: "GET" },
+    "status",
+  );
   // 424: Nango has the connection, but its token refresh is exhausted.
   if (response.ok || response.status === 424) return true;
   if (response.status === 404) return false;
@@ -171,7 +173,7 @@ export async function readGrantedScopes(
   });
   if (response.status === 404) throw new NangoConnectionGoneError();
   if (!response.ok) throw new NangoRequestError("connection read", response.status);
-  const { credentials } = connectionCredentials.parse(await response.json());
+  const { credentials } = connectionCredentials.parse(jsonOf(response));
   return (credentials.raw?.scope ?? "").split(/\s+/).filter((scope) => scope !== "");
 }
 
@@ -302,8 +304,8 @@ async function nangoProxy<T>(
       ...(baseUrl === undefined ? {} : { "Base-Url-Override": baseUrl }),
     },
   });
-  if (response.ok) return parse(await response.text());
-  const raw: unknown = await response.json().catch(() => undefined);
+  if (response.ok) return parse(response.text);
+  const raw = jsonOrUndefined(response.text);
   if (
     nangoError.safeParse(raw).success &&
     !(await nangoConnectionExists(connection.connectionId, connection.integration))
@@ -326,15 +328,60 @@ export function isSignedByNango(rawBody: string, signature: string | null): bool
 
 export const NANGO_SIGNATURE_HEADER = "x-nango-hmac-sha256";
 
-// A request to Nango's API. Nothing answering (Nango down, or the network on the way to it) is
-// NangoRequestError, named as `call`, like an error status; anything else thrown is Mycel's own.
-async function nangoFetch(call: string, path: string, init: RequestInit): Promise<Response> {
+/**
+ * How long a request to Nango's API may take, its answer read whole included: a minute. A proxied
+ * GET asks Nango to retry the source's 429s and 5xx 3 times, which fits well inside it, and a
+ * job's step, which runs many requests, still ends long before the Inngest route's maxDuration.
+ */
+const NANGO_TIMEOUT_MS = 60_000;
+
+// Nango's answer, read whole: its status, and its body as text ("" when only the status was
+// read).
+type NangoAnswer = { ok: boolean; status: number; text: string };
+
+// An answer's body as JSON; a body that isn't JSON throws, as Response.json() does.
+function jsonOf(answer: NangoAnswer): unknown {
+  return JSON.parse(answer.text);
+}
+
+function jsonOrUndefined(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
+// A request to Nango's API, its answer read whole (or, for "status", its body dropped unread).
+// Nothing answering (Nango down, or the network on the way to it) and no whole answer within
+// NANGO_TIMEOUT_MS are NangoRequestError, named as `call`, like an error status; anything else
+// thrown (a header no request can carry, say) is Mycel's own.
+async function nangoFetch(
+  call: string,
+  path: string,
+  init: RequestInit,
+  read: "body" | "status" = "body",
+): Promise<NangoAnswer> {
   const headers = new Headers(init.headers);
   headers.set("Authorization", `Bearer ${env.NANGO_API_KEY}`);
   if (init.body !== undefined) headers.set("Content-Type", "application/json");
+  // A timer of its own rather than AbortSignal.timeout, so a test's fake clock can run it out.
+  const timeout = new AbortController();
+  const timer = setTimeout(() => {
+    timeout.abort();
+  }, NANGO_TIMEOUT_MS);
   try {
-    return await fetch(`${env.NANGO_API_URL}${path}`, { ...init, headers });
+    const response = await fetch(`${env.NANGO_API_URL}${path}`, {
+      ...init,
+      headers,
+      signal: timeout.signal,
+    });
+    if (read === "status") await response.body?.cancel();
+    const text = read === "status" ? "" : await response.text();
+    return { ok: response.ok, status: response.status, text };
   } catch {
     throw new NangoRequestError(call);
+  } finally {
+    clearTimeout(timer);
   }
 }

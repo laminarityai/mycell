@@ -33,6 +33,8 @@ process.env.MODEL_FAST = "test/fast-default";
 process.env.MODEL_SMART = "test/smart-default";
 process.env.MODEL_JUDGE = "test/judge-default";
 process.env.MODEL_EMBED = "test/embed-default";
+// A small `smart` window, so a builder test summarizes a conversation of a few long messages.
+process.env.CONTEXT_WINDOW_SMART = "10000";
 // The injection screen reaches the fake Model Armor (src/testing/fake-model-armor.ts), which also
 // plays Google's token exchange: it accepts this Vercel OIDC token (an unsigned JWT that expires
 // in 2100) for this pool provider and service account.

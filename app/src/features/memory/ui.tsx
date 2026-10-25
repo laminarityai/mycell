@@ -24,6 +24,7 @@ import {
 const OPERATIONS: Record<MemoryReadOperation, string> = {
   search: "Searched",
   read_object: "Read",
+  list_told: "Listed what they told Mycel about",
 };
 
 /**
@@ -90,6 +91,8 @@ function Reader({
       return <>{name}</>;
     case "builder":
       return <>The builder chat, for {name}</>;
+    case "agent":
+      return <>Ask Mycel, for {name}</>;
     case "workflow_run": {
       const workflow = workflowNames.get(reader.workflowId ?? "") ?? "A workflow";
       return (

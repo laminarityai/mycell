@@ -2,10 +2,12 @@
 // what it cost after. The balance is the sum of the org's ledger.
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, gte, lt, type SQL } from "drizzle-orm";
-import { forOrg } from "@/db/for-org";
+import { forOrg, type OrgScopedDb } from "@/db/for-org";
 import { env } from "@/env";
+import { saveWithEvents } from "@/features/outbox/server";
 import { type Ctx, requireRole, requireSystem } from "@/lib/ctx";
 import { InvariantError, OutOfCreditsError, ValidationError } from "@/lib/errors";
+import { creditsGranted } from "@/lib/events";
 import type { LedgerEntry, LedgerFilter, SpendingQuery, SpendingRange, Usage } from "../types";
 import { creditLedger } from "./schema";
 
@@ -47,7 +49,19 @@ export async function checkCredits(ctx: Ctx, estimate: number): Promise<void> {
 
 /** Records one model call's cost against the org, converted to credits by the config ratio. */
 export async function recordUsage(ctx: Ctx, usage: Usage): Promise<LedgerEntry> {
-  const inserted = await forOrg(ctx).insert(creditLedger, {
+  return recordUsageIn(ctx, forOrg(ctx), usage);
+}
+
+/**
+ * recordUsage, through a transaction of the caller's: how `models` records a failed call's
+ * usage with the event that looks up what it was billed (ADR-0027).
+ */
+export async function recordUsageIn(
+  _ctx: Ctx,
+  tx: OrgScopedDb,
+  usage: Usage,
+): Promise<LedgerEntry> {
+  const inserted = await tx.insert(creditLedger, {
     id: randomUUID(),
     kind: "usage",
     amount: usageAmount(usage.costUsd),
@@ -78,7 +92,9 @@ const NOTE_MAX = 200;
 
 /**
  * Adds credits to the org, with what they're for ("October allowance"), which the Credits page
- * shows. Our team only, through the grant script's system ctx, which always passes a note.
+ * shows, and announces it (`credits/granted`, through the outbox, ADR-0027): work that stopped
+ * for want of credits goes on. Our team only, through the grant script's system ctx, which
+ * always passes a note.
  */
 export async function grantCredits(ctx: Ctx, amount: number, note?: string): Promise<LedgerEntry> {
   requireSystem(ctx);
@@ -89,15 +105,19 @@ export async function grantCredits(ctx: Ctx, amount: number, note?: string): Pro
   if (trimmed !== undefined && (trimmed === "" || trimmed.length > NOTE_MAX)) {
     throw new ValidationError(`A grant's note is 1 to ${String(NOTE_MAX)} characters.`);
   }
-  const inserted = await forOrg(ctx).insert(creditLedger, {
-    id: randomUUID(),
-    kind: "grant",
-    amount,
-    note: trimmed ?? null,
+  const row = await saveWithEvents(ctx, async (tx, emit) => {
+    const inserted = await tx.insert(creditLedger, {
+      id: randomUUID(),
+      kind: "grant",
+      amount,
+      note: trimmed ?? null,
+    });
+    const grant = inserted.at(0);
+    // A bug, as above.
+    if (grant === undefined) throw new InvariantError("The grant wasn't recorded.");
+    emit(creditsGranted, { orgId: ctx.orgId }, `credits-granted-${grant.id}`);
+    return grant;
   });
-  const row = inserted.at(0);
-  // A bug, as above.
-  if (row === undefined) throw new InvariantError("The grant wasn't recorded.");
   return toEntry(row);
 }
 

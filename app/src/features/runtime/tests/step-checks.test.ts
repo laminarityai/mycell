@@ -12,7 +12,7 @@ describe("a step's checks", () => {
     fakeAiGateway.decision({ choice: "yes", probabilities: { yes: 0.9, no: 0.1 } }, { costUsd: 0 });
     const backoff = recordedBackoff();
 
-    expect(await executeRun(system, runId, undefined, backoff)).toEqual({ status: "failed" });
+    expect(await executeRun(system, runId, undefined, backoff.sleep)).toEqual({ status: "failed" });
 
     expect(backoff.waits).toEqual([]);
     expect(fakeAiGateway.requests()).toHaveLength(1);
@@ -43,7 +43,7 @@ describe("a step's checks", () => {
     fakeAiGateway.object({ quantity: 0, city: "Hull", deadline: null }, { costUsd: 0 });
     const backoff = recordedBackoff();
 
-    expect(await executeRun(system, runId, undefined, backoff)).toEqual({ status: "failed" });
+    expect(await executeRun(system, runId, undefined, backoff.sleep)).toEqual({ status: "failed" });
 
     expect(backoff.waits).toEqual([]);
     expect(fakeAiGateway.requests()).toHaveLength(1);
@@ -79,7 +79,7 @@ describe("a step's checks", () => {
     fakeAiGateway.object({ quantity: OFF_SCHEMA, city: "Leeds" }, { costUsd: 0 });
     const backoff = recordedBackoff();
 
-    expect(await executeRun(system, runId, undefined, backoff)).toEqual({ status: "failed" });
+    expect(await executeRun(system, runId, undefined, backoff.sleep)).toEqual({ status: "failed" });
 
     expect(backoff.waits).toEqual([]);
     expect(fakeAiGateway.requests()).toHaveLength(1);
@@ -101,7 +101,7 @@ describe("a step's checks", () => {
     fakeAiGateway.object({ quantity: 30, city: "", deadline: null }, { costUsd: 0 });
     const backoff = recordedBackoff();
 
-    expect(await executeRun(system, runId, undefined, backoff)).toEqual({ status: "failed" });
+    expect(await executeRun(system, runId, undefined, backoff.sleep)).toEqual({ status: "failed" });
 
     expect(backoff.waits).toEqual([]);
     expect(fakeAiGateway.requests()).toHaveLength(1);
@@ -124,9 +124,8 @@ describe("a model answer off the step's schema, with no schema check", () => {
       fakeAiGateway.object({ quantity: OFF_SCHEMA }, { costUsd: 0 });
     }
     // Real waits, short, so the last attempt begins measurably after the first.
-    const backoff = { ...recordedBackoff(), sleep: realSleep };
 
-    expect(await executeRun(system, runId, undefined, backoff)).toEqual({ status: "failed" });
+    expect(await executeRun(system, runId, undefined, realSleep)).toEqual({ status: "failed" });
 
     expect(fakeAiGateway.requests()).toHaveLength(3);
     const run = await getRun(admin, runId);

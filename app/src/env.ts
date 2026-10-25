@@ -68,13 +68,22 @@ const envSchema = z.object({
     )
     .pipe(z.array(modelIdSchema)),
   // Credits (ADR-0010): how many credits one US dollar of gateway cost uses up, and the per-role
-  // estimate a call must find in the balance before it is made. Placeholders until M7's pricing.
+  // estimate a call must find in the balance before it is made. The defaults are the placeholders
+  // the tests are written against; the real values are in docs/credit-pricing.md and .env.example.
   CREDITS_PER_USD: positiveNumber("1000"),
   CREDIT_ESTIMATE_CLASSIFY: positiveNumber("1"),
   CREDIT_ESTIMATE_FAST: positiveNumber("5"),
   CREDIT_ESTIMATE_SMART: positiveNumber("50"),
   CREDIT_ESTIMATE_JUDGE: positiveNumber("50"),
   CREDIT_ESTIMATE_EMBED: positiveNumber("1"),
+  // Each role's context window, in tokens: the most its default model reads at once. The builder
+  // chat summarizes a conversation's history past half the `smart` window. An org that points a
+  // role at another model keeps the role's figure, so set it for the smallest window in use.
+  CONTEXT_WINDOW_CLASSIFY: positiveNumber("32000"),
+  CONTEXT_WINDOW_FAST: positiveNumber("400000"),
+  CONTEXT_WINDOW_SMART: positiveNumber("200000"),
+  CONTEXT_WINDOW_JUDGE: positiveNumber("200000"),
+  CONTEXT_WINDOW_EMBED: positiveNumber("8192"),
   // The injection screen (Google Cloud Model Armor): content fetched for a model is screened for
   // prompt injection before any model reads it. Unset, nothing is screened and memory learns
   // nothing, so CI and local dev start without Google Cloud. The template is its full resource

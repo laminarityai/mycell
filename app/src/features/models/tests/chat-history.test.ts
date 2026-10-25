@@ -87,6 +87,49 @@ describe("chatModelMessages", () => {
       content: [{ output: { type: "error-text", value: "That tool call failed." } }],
     });
   });
+
+  it("sends only the last turns' tool results, and says the older ones were dropped (#132)", () => {
+    // Three turns, each the person's words and a reply with one tool call.
+    const messages: ChatMessage<AskPart>[] = [1, 2, 3].flatMap((n) => [
+      {
+        id: `u${String(n)}`,
+        role: "user" as const,
+        parts: [{ type: "text", text: `Ask ${String(n)}` }],
+      },
+      {
+        id: `a${String(n)}`,
+        role: "assistant" as const,
+        parts: [
+          tool(`call-${String(n)}`, { objectId: `object-${String(n)}` }, n === 1),
+          { type: "text", text: `Answer ${String(n)}` },
+        ],
+      },
+    ]);
+
+    const sent = chatModelMessages(messages, pendingText, { toolResultTurns: 2 });
+
+    const outputs = sent.flatMap((message) =>
+      message.role === "tool"
+        ? message.content.flatMap((part) => (part.type === "tool-result" ? [part.output] : []))
+        : [],
+    );
+    expect(outputs.slice(1)).toEqual([
+      { type: "json", value: { objectId: "object-2" } },
+      { type: "json", value: { objectId: "object-3" } },
+    ]);
+    expect(outputs[0]?.type).toBe("text");
+    const dropped = JSON.stringify(outputs[0]);
+    expect(dropped).toContain("dropped");
+    expect(dropped).toContain("look_up again");
+    expect(dropped).not.toContain("object-1");
+    // Every call, and everything said, is still sent.
+    const calls = sent.flatMap((message) =>
+      message.role === "assistant" && typeof message.content !== "string" ? message.content : [],
+    );
+    expect(calls.filter((part) => part.type === "tool-call")).toHaveLength(3);
+    expect(JSON.stringify(sent)).toContain("Answer 1");
+    expect(JSON.stringify(sent)).toContain("Ask 1");
+  });
 });
 
 describe("chatUIPart", () => {

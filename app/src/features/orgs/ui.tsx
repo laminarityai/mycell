@@ -7,10 +7,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { DateTime } from "@/components/date-time";
 import { isAdmin, type Ctx, type Role } from "@/lib/ctx";
-import { WorkspaceAccountRequiredError } from "@/lib/errors";
+import { RemovedFromOrgError, WorkspaceAccountRequiredError } from "@/lib/errors";
+import { ReAddControl } from "./lib/re-add-control";
 import { UserControls } from "./lib/user-controls";
-import type { OrgUser } from "./types";
+import type { OrgUser, RemovedUser } from "./types";
 
 export { SignInWithGoogleButton, SignOutButton } from "./lib/auth-buttons";
 
@@ -19,7 +21,9 @@ export function SignInError({ code }: { code: string }) {
   const message =
     code === WorkspaceAccountRequiredError.code
       ? new WorkspaceAccountRequiredError().message
-      : "Sign-in didn't work. Please try again.";
+      : code === RemovedFromOrgError.code
+        ? new RemovedFromOrgError().message
+        : "Sign-in didn't work. Please try again.";
   return (
     <p role="alert" className="text-sm text-destructive">
       {message}
@@ -36,7 +40,7 @@ const roleBadges = {
 export function OrgUsersTable({ users, viewer }: { users: OrgUser[]; viewer: Ctx }) {
   const canManage = isAdmin(viewer);
   return (
-    <Table>
+    <Table aria-label="People">
       <TableHeader>
         <TableRow>
           <TableHead>Name</TableHead>
@@ -66,5 +70,48 @@ export function OrgUsersTable({ users, viewer }: { users: OrgUser[]; viewer: Ctx
         ))}
       </TableBody>
     </Table>
+  );
+}
+
+/**
+ * The people admins removed from the org, for an admin: none of them can rejoin by signing in
+ * until an admin re-adds them. Nothing when no one is removed.
+ */
+export function RemovedUsersTable({ removed }: { removed: RemovedUser[] }) {
+  if (removed.length === 0) return null;
+  return (
+    <section className="flex flex-col gap-2">
+      <h2 className="text-sm font-medium">Removed people</h2>
+      <p className="text-sm text-muted-foreground">
+        They can&apos;t rejoin by signing in. Re-add someone to let them join again as a member the
+        next time they sign in.
+      </p>
+      <Table aria-label="Removed people">
+        <TableHeader>
+          <TableRow>
+            <TableHead>Email</TableHead>
+            <TableHead>Removed by</TableHead>
+            <TableHead>Removed</TableHead>
+            <TableHead>
+              <span className="sr-only">Actions</span>
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {removed.map((person) => (
+            <TableRow key={person.id}>
+              <TableCell>{person.email}</TableCell>
+              <TableCell>{person.removedByName}</TableCell>
+              <TableCell>
+                <DateTime value={person.removedAt} />
+              </TableCell>
+              <TableCell className="text-right">
+                <ReAddControl removed={person} />
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </section>
   );
 }

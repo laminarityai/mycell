@@ -18,6 +18,10 @@ _Avoid_: Owner, manager
 A user who can only see, enable, and disable workflows published to their tags.
 _Avoid_: End user, teammate, seat
 
+**Removal**:
+An admin taking someone out of the org. It's recorded, so signing in again with the same account or the same email address doesn't let them back in, until an admin **re-adds** them; they then join as a member the next time they sign in.
+_Avoid_: Ban, block, deactivation
+
 **Tag**:
 An admin-made label on users that decides which workflows each member can see.
 _Avoid_: Group, team, role

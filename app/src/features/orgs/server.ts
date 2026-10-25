@@ -17,6 +17,8 @@ export { listOrgIds } from "./lib/list-org-ids";
 export { findOrgIdForAddress } from "./lib/org-for-address";
 export { getOrgSettings, getWorkspaceDomain } from "./lib/workspace-domain";
 export { removeUser, setRole } from "./lib/manage-users";
+// Who was removed, kept from rejoining by sign-in until an admin re-adds them.
+export { listRemovedUsers, reAddUser } from "./lib/removed-users";
 // Called only by Better Auth's session hook (lib/auth.ts) and tests: it trusts its profile.
 export { signIn } from "./lib/sign-in";
 // For callers holding a user ID that something trusted vouched for, such as a signed Nango

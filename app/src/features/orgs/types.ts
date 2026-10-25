@@ -23,5 +23,19 @@ export type OrgUser = {
   role: Role;
 };
 
+/**
+ * Someone an admin removed from the org, who can't rejoin by signing in until an admin re-adds
+ * them. `email` is their address as it was then, trimmed and lowercased; `removedBy` is the
+ * admin's user ID, and `removedByName` what to call them.
+ */
+export type RemovedUser = {
+  id: string;
+  userId: string;
+  email: string;
+  removedBy: string;
+  removedByName: string;
+  removedAt: Date;
+};
+
 /** What a user is called wherever Mycel names them, by user ID (`userNames`). */
 export type UserNames = (userId: string) => string;
